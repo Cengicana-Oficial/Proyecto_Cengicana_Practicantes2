@@ -1,0 +1,10 @@
+.git
+.gitignore
+**/.env
+**/vendor
+**/node_modules
+**/_Respaldo
+Pruebas/uploads
+laboratorio/outputs
+*.sql.gz
+
