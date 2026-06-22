@@ -11,3 +11,24 @@ services:
       - "127.0.0.1:8085:80"
     environment:
       TZ: America/Guatemala
+    volumes:
+      - ./deploy/env/login.env:/var/www/html/login/.env:ro
+      - ./deploy/env/cengicursos.env:/var/www/html/cengicursos/.env:ro
+    depends_on:
+      - mysql
+
+  mysql:
+    image: mysql:8.0
+    container_name: modulos-cengicana-mysql
+    restart: unless-stopped
+    env_file:
+      - ./deploy/env/mysql.env
+    command: --default-authentication-plugin=mysql_native_password
+    ports:
+      - "127.0.0.1:33063:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./deploy/mysql/init:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  mysql-data:

@@ -1,4 +1,5 @@
 **/.env
+deploy/env/*.env
 vendor/
 node_modules/
 laboratorio/.env
