@@ -10,24 +10,36 @@
 
   function ensureProgressBar() {
     var bar = document.getElementById(progressId);
+    var parent = document.body || document.documentElement;
+
+    if (!parent) {
+      return null;
+    }
+
     if (!bar) {
       bar = document.createElement('div');
       bar.id = progressId;
-      document.body.appendChild(bar);
+      parent.appendChild(bar);
     }
     return bar;
   }
 
   function setLoading(isLoading) {
     var bar = ensureProgressBar();
+    var body = document.body;
+
+    if (!bar || !body) {
+      return;
+    }
+
     if (isLoading) {
-      document.body.classList.add('cengi-nav-loading');
+      body.classList.add('cengi-nav-loading');
       bar.classList.add('is-visible');
       requestAnimationFrame(function () {
         bar.classList.add('is-active');
       });
     } else {
-      document.body.classList.remove('cengi-nav-loading');
+      body.classList.remove('cengi-nav-loading');
       bar.classList.remove('is-active');
       setTimeout(function () {
         bar.classList.remove('is-visible');

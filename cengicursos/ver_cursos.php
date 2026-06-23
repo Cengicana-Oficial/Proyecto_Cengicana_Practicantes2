@@ -87,6 +87,11 @@ if ($esEstudiante) {
 
 $stmt = $db->prepare($sql);
 $stmt->execute($params);
+
+function cengi_curso_html($valor)
+{
+    return htmlspecialchars((string)($valor ?? ''), ENT_QUOTES, 'UTF-8');
+}
 ?>
 
 <html lang="es">
@@ -98,6 +103,13 @@ $stmt->execute($params);
     <script src="js/bootstrap.min.js"></script>
     <meta charset="utf-8">
     <style>
+        @media (min-width: 1200px) {
+            .cengi-courses-page {
+                width: calc(100% - 48px);
+                max-width: 1480px;
+            }
+        }
+
         .cengi-courses-toolbar {
             display: flex;
             flex-wrap: wrap;
@@ -128,7 +140,8 @@ $stmt->execute($params);
         }
 
         .cengi-courses-table {
-            min-width: 1080px;
+            width: 100%;
+            min-width: 1160px;
             margin-bottom: 0;
             table-layout: fixed;
         }
@@ -153,42 +166,42 @@ $stmt->execute($params);
         }
 
         .cengi-courses-table .col-id {
-            width: 58px;
+            width: 52px;
             text-align: center;
         }
 
         .cengi-courses-table .col-course {
-            width: 250px;
+            width: 210px;
         }
 
         .cengi-courses-table .col-category {
-            width: 130px;
+            width: 125px;
         }
 
         .cengi-courses-table .col-ingenio {
-            width: 135px;
+            width: 125px;
         }
 
         .cengi-courses-table .col-jornada {
-            width: 120px;
+            width: 110px;
         }
 
         .cengi-courses-table .col-days {
-            width: 150px;
+            width: 140px;
         }
 
         .cengi-courses-table .col-time {
-            width: 130px;
+            width: 135px;
         }
 
         .cengi-courses-table .col-date {
-            width: 115px;
+            width: 105px;
             white-space: nowrap;
         }
 
         .cengi-courses-table .col-actions,
         .cengi-courses-table td.col-actions {
-            width: 110px;
+            width: 115px;
             text-align: center;
             white-space: nowrap;
         }
@@ -233,7 +246,7 @@ $stmt->execute($params);
 
 <body>
     <?php menu_render(); ?>
-    <div class="container">
+    <div class="container cengi-courses-page">
         <div class="cengi-hero">
             <span class="cengi-chip">Cursos</span>
             <h2><?php echo $esEstudiante ? 'Mis cursos asignados' : 'Cursos registrados'; ?></h2>
@@ -255,7 +268,7 @@ $stmt->execute($params);
                         <a href="agregar_cursos.php" class="btn btn-primary">Nuevo registro</a>
                     <?php endif; ?>
                     <form action="<?php $_SERVER['PHP_SELF']; ?>" method="POST">
-                        <input type="text" placeholder="Nombre del curso" class="form-control" name="campo" id="campo" value="<?php echo htmlspecialchars($campo); ?>">
+                        <input type="text" placeholder="Nombre del curso" class="form-control" name="campo" id="campo" value="<?php echo cengi_curso_html($campo); ?>">
                         <input type="submit" name="enviar" id="enviar" value="Buscar" class="btn btn-success">
                     </form>
                 </div>
@@ -292,20 +305,20 @@ $stmt->execute($params);
                     <tbody>
                         <?php while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { ?>
                             <tr>
-                                <td class="col-id"><?php echo htmlspecialchars($row['idcurso']); ?></td>
-                                <td class="col-course"><?php echo htmlspecialchars($row['nombre_cursos']); ?></td>
-                                <td class="col-category"><?php echo htmlspecialchars($row['descripcion_categorias_cursos']); ?></td>
-                                <td class="col-ingenio"><?php echo htmlspecialchars($row['nombre_ingenios']); ?></td>
-                                <td class="col-jornada"><?php echo htmlspecialchars($row['jornada_cursos']); ?></td>
+                                <td class="col-id"><?php echo cengi_curso_html($row['idcurso']); ?></td>
+                                <td class="col-course"><?php echo cengi_curso_html($row['nombre_cursos']); ?></td>
+                                <td class="col-category"><?php echo cengi_curso_html($row['descripcion_categorias_cursos']); ?></td>
+                                <td class="col-ingenio"><?php echo cengi_curso_html($row['nombre_ingenios']); ?></td>
+                                <td class="col-jornada"><?php echo cengi_curso_html($row['jornada_cursos']); ?></td>
                                 <?php if ($esEstudiante): ?>
-                                    <td class="col-date"><?php echo htmlspecialchars($row['inicio']); ?></td>
-                                    <td class="col-date"><?php echo htmlspecialchars($row['fin']); ?></td>
-                                    <td class="col-date"><strong><?php echo htmlspecialchars($row['nota']); ?></strong></td>
+                                    <td class="col-date"><?php echo cengi_curso_html($row['inicio']); ?></td>
+                                    <td class="col-date"><?php echo cengi_curso_html($row['fin']); ?></td>
+                                    <td class="col-date"><strong><?php echo cengi_curso_html($row['nota']); ?></strong></td>
                                 <?php else: ?>
-                                    <td class="col-days"><?php echo htmlspecialchars($row['dias']); ?></td>
-                                    <td class="col-time"><?php echo htmlspecialchars($row['horario']); ?></td>
-                                    <td class="col-date"><?php echo htmlspecialchars($row['inicio']); ?></td>
-                                    <td class="col-date"><?php echo htmlspecialchars($row['fin']); ?></td>
+                                    <td class="col-days"><?php echo cengi_curso_html($row['dias']); ?></td>
+                                    <td class="col-time"><?php echo cengi_curso_html($row['horario']); ?></td>
+                                    <td class="col-date"><?php echo cengi_curso_html($row['inicio']); ?></td>
+                                    <td class="col-date"><?php echo cengi_curso_html($row['fin']); ?></td>
                                     <?php if ($puedeGestionar || $puedeCalificar): ?>
                                         <td class="col-actions">
                                             <?php if ($puedeGestionar): ?>
