@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . "/config/session.php";
+cengi_session_start();
 require_once("config/conexion.php");
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

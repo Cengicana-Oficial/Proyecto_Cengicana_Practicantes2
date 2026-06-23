@@ -62,6 +62,10 @@
       return false;
     }
 
+    if (/logout\.php$/i.test(url.pathname) || url.searchParams.get('act') === 'logout') {
+      return false;
+    }
+
     return /\/cengicursos\//i.test(url.pathname);
   }
 
