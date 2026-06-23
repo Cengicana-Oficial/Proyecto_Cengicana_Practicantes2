@@ -97,6 +97,138 @@ $stmt->execute($params);
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
     <meta charset="utf-8">
+    <style>
+        .cengi-courses-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-end;
+            margin-bottom: 18px;
+        }
+
+        .cengi-courses-toolbar form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            margin: 0;
+        }
+
+        .cengi-courses-toolbar .form-control {
+            width: 360px;
+            max-width: 360px;
+        }
+
+        .cengi-table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid #d9e5d4;
+            border-radius: 6px;
+            background: #fff;
+        }
+
+        .cengi-courses-table {
+            min-width: 1080px;
+            margin-bottom: 0;
+            table-layout: fixed;
+        }
+
+        .cengi-courses-table > thead > tr > th {
+            background: #eef8ea;
+            color: #4b9600;
+            font-size: 13px;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        .cengi-courses-table > tbody > tr > td {
+            color: #07303a;
+            font-size: 14px;
+            line-height: 1.35;
+            vertical-align: middle;
+            word-break: normal;
+            overflow-wrap: break-word;
+        }
+
+        .cengi-courses-table .col-id {
+            width: 58px;
+            text-align: center;
+        }
+
+        .cengi-courses-table .col-course {
+            width: 250px;
+        }
+
+        .cengi-courses-table .col-category {
+            width: 130px;
+        }
+
+        .cengi-courses-table .col-ingenio {
+            width: 135px;
+        }
+
+        .cengi-courses-table .col-jornada {
+            width: 120px;
+        }
+
+        .cengi-courses-table .col-days {
+            width: 150px;
+        }
+
+        .cengi-courses-table .col-time {
+            width: 130px;
+        }
+
+        .cengi-courses-table .col-date {
+            width: 115px;
+            white-space: nowrap;
+        }
+
+        .cengi-courses-table .col-actions,
+        .cengi-courses-table td.col-actions {
+            width: 110px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .cengi-courses-table td.col-actions a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            margin: 0 2px;
+            color: #4b9600;
+            border: 1px solid #d7e9cf;
+            border-radius: 4px;
+            text-decoration: none;
+        }
+
+        .cengi-courses-table td.col-actions a:hover {
+            color: #fff;
+            background: #61bd18;
+            border-color: #61bd18;
+        }
+
+        @media (max-width: 767px) {
+            .cengi-courses-toolbar {
+                display: block;
+            }
+
+            .cengi-courses-toolbar .btn,
+            .cengi-courses-toolbar .form-control {
+                width: 100%;
+                max-width: none;
+                margin-bottom: 10px;
+            }
+
+            .cengi-courses-toolbar form {
+                display: block;
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -118,74 +250,64 @@ $stmt->execute($params);
             </div>
 
             <div class="panel-body">
-                <?php if ($puedeGestionar): ?>
-                    <div class="row">
-                        <div class="col-sm-6">
-                            <a href="agregar_cursos.php" class="btn btn-primary">Nuevo registro</a>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-                <div class="row">
+                <div class="cengi-courses-toolbar">
+                    <?php if ($puedeGestionar): ?>
+                        <a href="agregar_cursos.php" class="btn btn-primary">Nuevo registro</a>
+                    <?php endif; ?>
                     <form action="<?php $_SERVER['PHP_SELF']; ?>" method="POST">
-                        <div class="col-sm-4">
-                            <input type="text" placeholder="Nombre del curso" class="form-control" name="campo" id="campo" value="<?php echo htmlspecialchars($campo); ?>">
-                        </div>
-                        <div class="col-sm-2">
-                            <input type="submit" name="enviar" id="enviar" value="Buscar" class="btn btn-success">
-                        </div>
+                        <input type="text" placeholder="Nombre del curso" class="form-control" name="campo" id="campo" value="<?php echo htmlspecialchars($campo); ?>">
+                        <input type="submit" name="enviar" id="enviar" value="Buscar" class="btn btn-success">
                     </form>
                 </div>
 
-                <br>
-
-                <table class="table table-striped table-bordered table-hover">
+                <div class="cengi-table-wrap">
+                <table class="table table-striped table-bordered table-hover cengi-courses-table">
                     <thead>
                     <?php if ($esEstudiante): ?>
                         <tr>
-                            <th>ID</th>
-                            <th>Curso</th>
-                            <th>Categoria</th>
-                            <th>Ingenio</th>
-                            <th>Jornada</th>
-                            <th>Inicio</th>
-                            <th>Fin</th>
-                            <th>Nota</th>
+                            <th class="col-id">ID</th>
+                            <th class="col-course">Curso</th>
+                            <th class="col-category">Categoria</th>
+                            <th class="col-ingenio">Ingenio</th>
+                            <th class="col-jornada">Jornada</th>
+                            <th class="col-date">Inicio</th>
+                            <th class="col-date">Fin</th>
+                            <th class="col-date">Nota</th>
                         </tr>
                     <?php else: ?>
                         <tr>
-                            <th>ID</th>
-                            <th>Curso</th>
-                            <th>Categoria</th>
-                            <th>Ingenio</th>
-                            <th>Jornada</th>
-                            <th>Dias</th>
-                            <th>Horario</th>
-                            <th>Inicio</th>
-                            <th>Fin</th>
-                            <?php if ($puedeGestionar || $puedeCalificar): ?><th>Acciones</th><?php endif; ?>
+                            <th class="col-id">ID</th>
+                            <th class="col-course">Curso</th>
+                            <th class="col-category">Categoria</th>
+                            <th class="col-ingenio">Ingenio</th>
+                            <th class="col-jornada">Jornada</th>
+                            <th class="col-days">Dias</th>
+                            <th class="col-time">Horario</th>
+                            <th class="col-date">Inicio</th>
+                            <th class="col-date">Fin</th>
+                            <?php if ($puedeGestionar || $puedeCalificar): ?><th class="col-actions">Acciones</th><?php endif; ?>
                         </tr>
                     <?php endif; ?>
                     </thead>
                     <tbody>
                         <?php while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { ?>
                             <tr>
-                                <td><?php echo htmlspecialchars($row['idcurso']); ?></td>
-                                <td><?php echo htmlspecialchars($row['nombre_cursos']); ?></td>
-                                <td><?php echo htmlspecialchars($row['descripcion_categorias_cursos']); ?></td>
-                                <td><?php echo htmlspecialchars($row['nombre_ingenios']); ?></td>
-                                <td><?php echo htmlspecialchars($row['jornada_cursos']); ?></td>
+                                <td class="col-id"><?php echo htmlspecialchars($row['idcurso']); ?></td>
+                                <td class="col-course"><?php echo htmlspecialchars($row['nombre_cursos']); ?></td>
+                                <td class="col-category"><?php echo htmlspecialchars($row['descripcion_categorias_cursos']); ?></td>
+                                <td class="col-ingenio"><?php echo htmlspecialchars($row['nombre_ingenios']); ?></td>
+                                <td class="col-jornada"><?php echo htmlspecialchars($row['jornada_cursos']); ?></td>
                                 <?php if ($esEstudiante): ?>
-                                    <td><?php echo htmlspecialchars($row['inicio']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['fin']); ?></td>
-                                    <td><strong><?php echo htmlspecialchars($row['nota']); ?></strong></td>
+                                    <td class="col-date"><?php echo htmlspecialchars($row['inicio']); ?></td>
+                                    <td class="col-date"><?php echo htmlspecialchars($row['fin']); ?></td>
+                                    <td class="col-date"><strong><?php echo htmlspecialchars($row['nota']); ?></strong></td>
                                 <?php else: ?>
-                                    <td><?php echo htmlspecialchars($row['dias']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['horario']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['inicio']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['fin']); ?></td>
+                                    <td class="col-days"><?php echo htmlspecialchars($row['dias']); ?></td>
+                                    <td class="col-time"><?php echo htmlspecialchars($row['horario']); ?></td>
+                                    <td class="col-date"><?php echo htmlspecialchars($row['inicio']); ?></td>
+                                    <td class="col-date"><?php echo htmlspecialchars($row['fin']); ?></td>
                                     <?php if ($puedeGestionar || $puedeCalificar): ?>
-                                        <td>
+                                        <td class="col-actions">
                                             <?php if ($puedeGestionar): ?>
                                                 <a href="modificar_cursos.php?id=<?php echo (int) $row['idcurso']; ?>"><span class="glyphicon glyphicon-pencil"></span></a>
                                                 &nbsp;
@@ -199,6 +321,7 @@ $stmt->execute($params);
                         <?php } ?>
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </div>
