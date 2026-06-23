@@ -141,7 +141,7 @@ function cengi_curso_html($valor)
 
         .cengi-courses-table {
             width: 100%;
-            min-width: 1160px;
+            min-width: 1040px;
             margin-bottom: 0;
             table-layout: fixed;
         }
@@ -158,7 +158,7 @@ function cengi_curso_html($valor)
 
         .cengi-courses-table > tbody > tr > td {
             color: #07303a;
-            font-size: 14px;
+            font-size: 13px;
             line-height: 1.35;
             vertical-align: middle;
             word-break: normal;
@@ -166,42 +166,42 @@ function cengi_curso_html($valor)
         }
 
         .cengi-courses-table .col-id {
-            width: 52px;
+            width: 46px;
             text-align: center;
         }
 
         .cengi-courses-table .col-course {
-            width: 210px;
+            width: 185px;
         }
 
         .cengi-courses-table .col-category {
-            width: 125px;
-        }
-
-        .cengi-courses-table .col-ingenio {
-            width: 125px;
-        }
-
-        .cengi-courses-table .col-jornada {
             width: 110px;
         }
 
+        .cengi-courses-table .col-ingenio {
+            width: 112px;
+        }
+
+        .cengi-courses-table .col-jornada {
+            width: 96px;
+        }
+
         .cengi-courses-table .col-days {
-            width: 140px;
+            width: 124px;
         }
 
         .cengi-courses-table .col-time {
-            width: 135px;
+            width: 116px;
         }
 
         .cengi-courses-table .col-date {
-            width: 105px;
+            width: 92px;
             white-space: nowrap;
         }
 
         .cengi-courses-table .col-actions,
         .cengi-courses-table td.col-actions {
-            width: 115px;
+            width: 104px;
             text-align: center;
             white-space: nowrap;
         }
@@ -212,7 +212,7 @@ function cengi_curso_html($valor)
             justify-content: center;
             width: 28px;
             height: 28px;
-            margin: 0 2px;
+            margin: 0 1px;
             color: #4b9600;
             border: 1px solid #d7e9cf;
             border-radius: 4px;
