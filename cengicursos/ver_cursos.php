@@ -141,7 +141,7 @@ function cengi_curso_html($valor)
 
         .cengi-courses-table {
             width: 100%;
-            min-width: 1040px;
+            min-width: 1080px;
             margin-bottom: 0;
             table-layout: fixed;
         }
@@ -171,19 +171,19 @@ function cengi_curso_html($valor)
         }
 
         .cengi-courses-table .col-course {
-            width: 185px;
+            width: 175px;
         }
 
         .cengi-courses-table .col-category {
-            width: 110px;
+            width: 105px;
         }
 
         .cengi-courses-table .col-ingenio {
-            width: 112px;
+            width: 106px;
         }
 
         .cengi-courses-table .col-jornada {
-            width: 96px;
+            width: 92px;
         }
 
         .cengi-courses-table .col-days {
@@ -201,9 +201,14 @@ function cengi_curso_html($valor)
 
         .cengi-courses-table .col-actions,
         .cengi-courses-table td.col-actions {
-            width: 104px;
+            width: 138px;
             text-align: center;
             white-space: nowrap;
+        }
+
+        .cengi-courses-table td.col-actions {
+            padding-left: 8px;
+            padding-right: 8px;
         }
 
         .cengi-courses-table td.col-actions a {
@@ -212,7 +217,7 @@ function cengi_curso_html($valor)
             justify-content: center;
             width: 28px;
             height: 28px;
-            margin: 0 1px;
+            margin: 0 3px;
             color: #4b9600;
             border: 1px solid #d7e9cf;
             border-radius: 4px;
