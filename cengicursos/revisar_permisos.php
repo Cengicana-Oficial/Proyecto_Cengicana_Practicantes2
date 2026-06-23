@@ -460,4 +460,3 @@ if (!usuario_tiene_modulo_cursos()) {
 if (!isset($_SESSION['CMenus'])) {
     $_SESSION['CMenus'] = $_SESSION['rol'] ?? 'Usuario';
 }
-?>
