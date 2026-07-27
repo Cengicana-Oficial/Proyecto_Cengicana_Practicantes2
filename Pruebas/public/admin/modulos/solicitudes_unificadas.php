@@ -2,6 +2,7 @@
 $conn = conexion::conectar();
 
 $canManageSolicitudes = can_access('gestionar_solicitudes');
+$canManageReservaSalones = can_access('gestionar_reserva_salones');
 $canSendMail = can_access_any(['gestionar_solicitudes', 'enviar_correos']);
 $canHideSolicitudes = can_access_any(['gestionar_solicitudes', 'ocultar_solicitudes']);
 $onlyApproved = can_access('ver_solicitudes_aprobadas') && !$canManageSolicitudes && !can_access('ver_solicitudes');
@@ -322,6 +323,15 @@ foreach ($datos as $filaResumen) {
                                 <?php else: ?>
                                     <span class="mail-status sent">Enviado</span>
                                 <?php endif; ?>
+                            <?php endif; ?>
+                            <?php if ($canManageReservaSalones): ?>
+                                <a
+                                    href="reserva_salones.php?id_solicitud=<?= (int) $row['id_solicitud'] ?>"
+                                    class="btn-reserva"
+                                    title="Abrir apartado de reserva de salones"
+                                >
+                                    Reserva salones
+                                </a>
                             <?php endif; ?>
                             <?php if ($canHideSolicitudes): ?>
                                 <form method="POST" action="modulos/eliminar_solicitud.php" style="display:inline-block;">
