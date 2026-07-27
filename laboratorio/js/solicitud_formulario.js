@@ -1,4 +1,4 @@
-﻿const SOLICITUDES_DB = readJsonData("solicitudes-db", []);
+const SOLICITUDES_DB = readJsonData("solicitudes-db", []);
 const CORRELATIVOS_DB = readJsonData("correlativos-db", []);
 const PDF_LOGO_URL = "../../assets/Marca%20Cengica%C3%B1a/SinFondo_logo_cengicana_Vertical.png";
 let solicitudSeleccionada = null;
@@ -201,6 +201,8 @@ function updateNumeroLaboratorio() {
 
   if (!inicioInput || !finInput || !ocultoInput) return;
 
+  sincronizarFechasSolicitudVisuales(tipoActivo);
+
   const inicial = getInicialTipo(tipoActivo);
   const inicioGuardado = solicitudSeleccionada?.inicio_laboratorio ? parseInt(solicitudSeleccionada.inicio_laboratorio, 10) : null;
   const loteInicial = inicioGuardado || getSiguienteNumeroPorPrefijo(inicial);
@@ -223,6 +225,116 @@ function updateNumeroLaboratorio() {
   ocultoInput.value = `${codigoInicio} / ${codigoFin}`;
 }
 
+function formatearFechaVisual(fecha) {
+  if (!(fecha instanceof Date) || Number.isNaN(fecha.getTime())) {
+    return "";
+  }
+
+  const dia = String(fecha.getDate()).padStart(2, "0");
+  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+  const anio = String(fecha.getFullYear());
+
+  return `${dia}/${mes}/${anio}`;
+}
+
+function obtenerFechaVisualActual() {
+  return formatearFechaVisual(new Date());
+}
+
+function formatearFechaBaseAVisual(fechaTexto) {
+  const texto = String(fechaTexto || "").trim();
+  if (!texto) {
+    return "";
+  }
+
+  const partes = texto.split("-");
+  if (partes.length === 3 && partes[0].length === 4) {
+    const [anio, mes, dia] = partes;
+    return `${dia.padStart(2, "0")}/${mes.padStart(2, "0")}/${anio}`;
+  }
+
+  return texto;
+}
+
+function parsearFechaVisual(fechaTexto) {
+  const partes = String(fechaTexto || "").trim().split("/");
+  if (partes.length !== 3) {
+    return null;
+  }
+
+  const dia = parseInt(partes[0], 10);
+  const mes = parseInt(partes[1], 10);
+  const anio = parseInt(partes[2], 10);
+
+  if (Number.isNaN(dia) || Number.isNaN(mes) || Number.isNaN(anio)) {
+    return null;
+  }
+
+  const fecha = new Date(anio, mes - 1, dia);
+  if (
+    Number.isNaN(fecha.getTime()) ||
+    fecha.getFullYear() !== anio ||
+    fecha.getMonth() !== mes - 1 ||
+    fecha.getDate() !== dia
+  ) {
+    return null;
+  }
+
+  return fecha;
+}
+
+function obtenerDiasCompromisoVisual(tipo) {
+  switch (String(tipo || "").toLowerCase()) {
+    case "suelos":
+    case "foliares":
+      return 28;
+    case "agua":
+      return 15;
+    case "cana":
+    case "miel":
+      return 9;
+    default:
+      return 0;
+  }
+}
+
+function calcularFechaEstimadaVisual(fechaIngresoTexto, tipo) {
+  const fechaIngreso = parsearFechaVisual(fechaIngresoTexto);
+  const diasCompromiso = obtenerDiasCompromisoVisual(tipo);
+
+  if (!fechaIngreso || diasCompromiso <= 0) {
+    return "";
+  }
+
+  fechaIngreso.setDate(fechaIngreso.getDate() + diasCompromiso);
+  return formatearFechaVisual(fechaIngreso);
+}
+
+function sincronizarFechasSolicitudVisuales(tipoForzado = null) {
+  const fechaIngresoInput = document.getElementById("fecha_ingreso");
+  const fechaEstimadaInput = document.getElementById("fecha_estimada");
+
+  if (!fechaIngresoInput || !fechaEstimadaInput) {
+    return;
+  }
+
+  if (solicitudSeleccionada) {
+    if (solicitudSeleccionada.fecha_ingreso) {
+      fechaIngresoInput.value = formatearFechaBaseAVisual(solicitudSeleccionada.fecha_ingreso);
+    } else if (!fechaIngresoInput.value) {
+      fechaIngresoInput.value = obtenerFechaVisualActual();
+    }
+  } else {
+    fechaIngresoInput.value = obtenerFechaVisualActual();
+  }
+
+  const tipoActivo = tipoForzado || document.querySelector(".tipo-btn.active")?.dataset.tipo || "suelos";
+  if (solicitudSeleccionada?.fecha_estimada) {
+    fechaEstimadaInput.value = formatearFechaBaseAVisual(solicitudSeleccionada.fecha_estimada);
+  } else {
+    fechaEstimadaInput.value = calcularFechaEstimadaVisual(fechaIngresoInput.value, tipoActivo);
+  }
+}
 function setCamposReadonly(readonly) {
   ["numero_de_muestra", "lote", "fecha_muestreo", "numero_muestras"].forEach(id => {
     const input = document.getElementById(id);
@@ -271,6 +383,17 @@ function aplicarSolicitudDb(idSolicitud) {
   document.getElementById("numero_muestras").value = solicitudSeleccionada.numero_muestras || "";
   setCamposReadonly(true);
   updateNumeroLaboratorio();
+
+  const fechaIngresoInput = document.getElementById("fecha_ingreso");
+  const fechaEstimadaInput = document.getElementById("fecha_estimada");
+
+  if (fechaIngresoInput) {
+    fechaIngresoInput.value = formatearFechaBaseAVisual(solicitudSeleccionada.fecha_ingreso) || fechaIngresoInput.value || "";
+  }
+
+  if (fechaEstimadaInput) {
+    fechaEstimadaInput.value = formatearFechaBaseAVisual(solicitudSeleccionada.fecha_estimada) || fechaEstimadaInput.value || "";
+  }
 }
 
 function initTipoButtons() {
@@ -446,8 +569,9 @@ function getInputValue(selector) {
 function getAnalisisSeleccionados() {
   return Array.from(document.querySelectorAll('input[name="analisis[]"]:checked')).map(input => {
     const row = input.closest("tr");
+    const nombre = row?.querySelector(".name")?.textContent || input.getAttribute("aria-label") || input.value;
     return {
-      nombre: limpiarTextoPdf(input.value),
+      nombre: limpiarTextoPdf(nombre.replace(/^Solicitar\s+/i, "")),
       tipo: limpiarTextoPdf(row?.querySelector(".analisis-tag")?.textContent || ""),
     };
   });
@@ -497,7 +621,6 @@ function syncFirmaInputs() {
 }
 
 function getDatosSolicitudPdf() {
-  updateNumeroLaboratorio();
   syncFirmaInputs();
 
   return {
@@ -507,6 +630,7 @@ function getDatosSolicitudPdf() {
     numeroMuestras: getInputValue("#numero_muestras"),
     numeroLaboratorioInicio: getInputValue("#n_laboratorio_inicio"),
     numeroLaboratorioFin: getInputValue("#n_laboratorio_fin"),
+    fechaIngreso: getInputValue("#fecha_ingreso"),
     fechaEstimada: getInputValue("#fecha_estimada"),
     ingresadoPor: getInputValue('input[name="ingresado_por"]'),
     correoIngresadoPor: getInputValue('input[name="correo_ingresado_por"]'),
@@ -635,6 +759,7 @@ async function enviarPdfPorCorreo(pdfBytes, fileName, datos) {
         numero_muestras: datos.numeroMuestras,
         laboratorio_inicio: datos.numeroLaboratorioInicio,
         laboratorio_fin: datos.numeroLaboratorioFin,
+        fecha_ingreso: datos.fechaIngreso,
         fecha_estimada: datos.fechaEstimada,
         ingresado_por: datos.ingresadoPor,
         correo_ingresado_por: datos.correoIngresadoPor,
@@ -888,10 +1013,11 @@ async function generarPdfSolicitud(options = {}) {
       ["Tipo de muestra", datos.tipo],
       ["Numero de lote", datos.lote],
       ["Fecha de muestreo", datos.fechaMuestreo],
+      ["Fecha de ingreso", datos.fechaIngreso],
+      ["Fecha estimada", datos.fechaEstimada],
       ["Numero de muestras", datos.numeroMuestras],
       ["Laboratorio inicio", datos.numeroLaboratorioInicio],
       ["Laboratorio fin", datos.numeroLaboratorioFin],
-      ["Fecha estimada", datos.fechaEstimada],
     ]);
 
     drawSection("Analisis solicitados");
@@ -988,6 +1114,7 @@ function initFirmaSubmitSync() {
 initTipoButtons();
 initLaboratorioInputs();
 const solicitudSelect = initSolicitudSelect();
+sincronizarFechasSolicitudVisuales();
 initTipoDesdeQuery();
 initSolicitudDesdeQuery(solicitudSelect);
 initFirmas();

@@ -9,7 +9,7 @@ require_once __DIR__ . '/../../models/Cana/humedad_model.php';
 $conexion = new Conexion();
 $conn = $conexion->conectar();
 
-$resultado = null;
+$resultado = lab_analysis_take_flash();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -49,5 +49,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $resultado['porcentaje_humedad'] = $porcentaje_humedad;
 }
 
+lab_analysis_redirect_after_success($resultado);
 require_once __DIR__ . '/../../view/Cana/humedad_view.php';
 ?>

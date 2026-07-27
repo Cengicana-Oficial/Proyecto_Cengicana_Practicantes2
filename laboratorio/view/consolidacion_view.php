@@ -48,18 +48,6 @@ function diasDesdeIngresoConsolidacion($fecha)
     return (string) max(0, $dias);
 }
 
-function estadoIngresoConsolidacion(array $fila)
-{
-    $total = (int) ($fila['formularios_total'] ?? 0);
-    $aprobados = (int) ($fila['formularios_aprobados'] ?? 0);
-
-    if ($total <= 0) {
-        return 'Pendiente';
-    }
-
-    return $aprobados >= $total ? 'Aprobado' : 'Revisar';
-}
-
 function revisionUrlConsolidacion(array $fila)
 {
     if (empty($fila['id_rango'])) {
@@ -71,14 +59,18 @@ function revisionUrlConsolidacion(array $fila)
 
 function estadoHtmlConsolidacion(array $fila)
 {
-    $estado = estadoIngresoConsolidacion($fila);
+    $estado = labCalcularEstadoLote(
+        $fila['analisis_requeridos'] ?? 0,
+        $fila['analisis_ingresados'] ?? 0,
+        $fila['analisis_aprobados'] ?? 0
+    );
     $url = revisionUrlConsolidacion($fila);
 
-    if ($estado === 'Pendiente' || $url === '') {
-        return eConsolidacion($estado);
+    if ($estado['codigo'] === 'pendiente' || $url === '') {
+        return eConsolidacion($estado['texto']);
     }
 
-    return '<a class="estado-link estado-' . strtolower($estado) . '" href="' . eConsolidacion($url) . '">' . eConsolidacion($estado) . '</a>';
+    return '<a class="estado-link ' . eConsolidacion($estado['clase']) . '" href="' . eConsolidacion($url) . '">' . eConsolidacion($estado['texto']) . '</a>';
 }
 
 $filasPdf = [];
@@ -86,7 +78,11 @@ foreach ($filas as $fila) {
     $row = [
         fechaConsolidacion($fila['fecha_ingreso'] ?? null),
         diasDesdeIngresoConsolidacion($fila['fecha_ingreso'] ?? null),
-        estadoIngresoConsolidacion($fila),
+        labCalcularEstadoLote(
+            $fila['analisis_requeridos'] ?? 0,
+            $fila['analisis_ingresados'] ?? 0,
+            $fila['analisis_aprobados'] ?? 0
+        )['texto'],
         fechaConsolidacion($fila['fecha_finalizacion'] ?? null),
         $fila['codigo_lote'] ?? '-',
         $fila['numero_muestras'] ?? '-',

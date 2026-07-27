@@ -1,18 +1,21 @@
 <?php
 require_once __DIR__ . '/../conexion.php';
+require_once __DIR__ . '/../legacy_analysis_model_helper.php';
 
-function guardarConductividad($lectura_conductividad, $temperatura, $ce) {
-    global $conn;
+function guardarConductividad($lectura_conductividad, $temperatura, $ce, array $metadata = [])
+{
+    $conn = (new Conexion())->conectar();
 
-    $stmt = $conn->prepare(
-        "INSERT INTO agua_conductividad (lectura_conductividad, temperatura, ce)
-         VALUES (?, ?, ?)"
-    );
+    $id = labLegacyInsertAnalysisRow($conn, 'agua_conductividad', [
+        'lectura_conductividad' => $lectura_conductividad,
+        'temperatura' => $temperatura,
+        'ce' => $ce,
+    ], $metadata);
 
-    if ($stmt->execute([$lectura_conductividad, $temperatura, $ce])) {
-        return ["exito" => true, "mensaje" => "Conductividad Eléctrica de agua guardada correctamente."];
-    } else {
-        return ["exito" => false, "mensaje" => "Error al guardar."];
+    if ($id !== false) {
+        return ['exito' => true, 'mensaje' => 'Conductividad guardada correctamente.', 'id' => $id];
     }
+
+    return ['exito' => false, 'mensaje' => 'Error al guardar.'];
 }
 ?>

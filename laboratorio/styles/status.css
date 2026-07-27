@@ -1,0 +1,305 @@
+@import url('tokens.css');
+
+:root {
+  --status-text-size: var(--font-size-xs);
+  --status-text-weight: var(--font-weight-bold);
+  --status-line-height: 1;
+  --status-badge-min-height: 32px;
+  --status-pill-min-height: 28px;
+  --status-chip-min-height: 26px;
+  --status-counter-min-height: 32px;
+  --status-pill-padding-y: var(--space-2);
+  --status-pill-padding-x: var(--space-3);
+  --status-chip-padding-y: 0.3rem;
+  --status-chip-padding-x: 0.65rem;
+  --status-notice-radius: var(--radius-md);
+  --status-empty-radius: var(--radius-md);
+}
+
+:where(
+  .status-badge,
+  .status-pill,
+  .status-chip,
+  .status-label,
+  .status-counter,
+  .status-notice,
+  .status-alert,
+  .status-empty,
+  .alerta,
+  .alert-box,
+  .review-alert,
+  .message,
+  .notice,
+  .empty-state,
+  .no-results-card,
+  .empty-cell,
+  .table-empty,
+  .bc-empty,
+  .badge,
+  .count-pill,
+  .type-pill,
+  .mini-chip,
+  .meta-badge,
+  .estado-badge,
+  .revision-pill,
+  .role-badge,
+  .bc-count,
+  .bc-status,
+  .pill
+) {
+  box-sizing: border-box;
+}
+
+:where(
+  .status-badge,
+  .status-pill,
+  .status-chip,
+  .status-counter,
+  .badge,
+  .count-pill,
+  .type-pill,
+  .mini-chip,
+  .meta-badge,
+  .estado-badge,
+  .revision-pill,
+  .role-badge,
+  .bc-count,
+  .bc-status,
+  .pill
+) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--status-badge-min-height);
+  padding: var(--status-pill-padding-y) var(--status-pill-padding-x);
+  border: 1px solid var(--status-border-color, var(--green-200));
+  border-radius: var(--radius-pill);
+  background: var(--status-bg, linear-gradient(180deg, var(--white), var(--green-50)));
+  color: var(--status-color, var(--green-800));
+  box-shadow: var(--status-shadow, inset 0 1px 0 rgba(255, 255, 255, 0.75));
+  font-size: var(--status-text-size);
+  font-weight: var(--status-text-weight);
+  line-height: var(--status-line-height);
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: middle;
+  transition:
+    transform var(--transition-base),
+    background var(--transition-base),
+    border-color var(--transition-base),
+    color var(--transition-base),
+    box-shadow var(--transition-base);
+}
+
+:where(.status-badge, .badge, .estado-badge, .revision-pill, .role-badge, .bc-status) {
+  min-height: var(--status-badge-min-height);
+  padding-inline: var(--space-3);
+}
+
+:where(.status-pill, .count-pill, .type-pill, .pill) {
+  min-height: var(--status-pill-min-height);
+  padding-inline: var(--status-pill-padding-x);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+:where(.status-chip, .mini-chip, .meta-badge) {
+  min-height: var(--status-chip-min-height);
+  padding: var(--status-chip-padding-y) var(--status-chip-padding-x);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+:where(.status-counter, .count-pill, .bc-count, .code-chip) {
+  min-height: var(--status-counter-min-height);
+  padding-inline: var(--space-3);
+  font-variant-numeric: tabular-nums;
+}
+
+:where(.status-label) {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-main);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  text-transform: none;
+  white-space: normal;
+}
+
+:where(.status-notice, .status-alert, .alerta, .alert-box, .review-alert, .message, .notice, .info-callout) {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--status-border-color, var(--state-info-border));
+  border-radius: var(--status-notice-radius);
+  background: var(--status-bg, var(--state-info-bg));
+  color: var(--status-color, var(--state-info-text));
+  box-shadow: var(--shadow-soft);
+  white-space: normal;
+}
+
+:where(.status-alert, .alerta, .alert-box, .message).is-success,
+:where(.status-notice, .status-alert, .alerta, .alert-box, .review-alert, .message, .notice).success,
+:where(.status-notice, .status-alert, .alerta, .alert-box, .review-alert, .message, .notice).exito {
+  --status-border-color: var(--state-success-border);
+  --status-bg: var(--state-success-bg);
+  --status-color: var(--state-success-text);
+}
+
+:where(.status-alert, .alerta, .alert-box, .message).is-warning,
+:where(.status-notice, .status-alert, .alerta, .alert-box, .review-alert, .message, .notice).warning {
+  --status-border-color: var(--state-warning-border);
+  --status-bg: var(--state-warning-bg);
+  --status-color: var(--state-warning-text);
+}
+
+:where(.status-alert, .alerta, .alert-box, .message).is-danger,
+:where(.status-notice, .status-alert, .alerta, .alert-box, .review-alert, .message, .notice).error {
+  --status-border-color: var(--state-danger-border);
+  --status-bg: var(--state-danger-bg);
+  --status-color: var(--state-danger-text);
+}
+
+:where(.status-alert, .alerta, .alert-box, .message).is-info,
+:where(.status-notice, .status-alert, .alerta, .alert-box, .review-alert, .message, .notice).info {
+  --status-border-color: var(--state-info-border);
+  --status-bg: var(--state-info-bg);
+  --status-color: var(--state-info-text);
+}
+
+:where(.status-empty, .empty-state, .no-results-card, .empty-cell, .table-empty, .bc-empty) {
+  display: grid;
+  place-items: center;
+  gap: var(--space-2);
+  min-height: 96px;
+  padding: var(--space-6);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--status-empty-radius);
+  background: var(--white);
+  color: var(--text-mute);
+  text-align: center;
+  box-shadow: none;
+}
+
+:where(.status-empty, .empty-state, .no-results-card).compact {
+  min-height: 72px;
+  padding: var(--space-4);
+}
+
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-success,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).success,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).exito,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).estado-aprobado,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-activo,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).status-active,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-on,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).pill-on,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-allowed,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).status-aprobado {
+  --status-border-color: var(--state-success-border);
+  --status-bg: var(--state-success-bg);
+  --status-color: var(--state-success-text);
+  --status-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-warning,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).warning,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).estado-pendiente,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).estado-en-proceso,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-pending,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-processing,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-pending-review {
+  --status-border-color: var(--state-warning-border);
+  --status-bg: var(--state-warning-bg);
+  --status-color: var(--state-warning-text);
+}
+
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-info,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).info,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).estado-revision,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).estado-revisar,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-selected {
+  --status-border-color: var(--state-info-border);
+  --status-bg: var(--state-info-bg);
+  --status-color: var(--state-info-text);
+}
+
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-danger,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).error,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).estado-con-errores,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-restricted,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-disabled {
+  --status-border-color: var(--state-danger-border);
+  --status-bg: var(--state-danger-bg);
+  --status-color: var(--state-danger-text);
+}
+
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-neutral,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).status-inactive,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-inactive,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).pill-off,
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-default {
+  --status-border-color: var(--border-strong);
+  --status-bg: linear-gradient(180deg, var(--white), #f7f8f7);
+  --status-color: var(--text-mute);
+}
+
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-admin {
+  --status-border-color: #c4d6f4;
+  --status-bg: linear-gradient(180deg, #edf4ff, #e3ecff);
+  --status-color: #24548f;
+}
+
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-analyst {
+  --status-border-color: #dacaf2;
+  --status-bg: linear-gradient(180deg, #f4eeff, #ede2ff);
+  --status-color: #6d43a8;
+}
+
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-tech {
+  --status-border-color: #f3d2a7;
+  --status-bg: linear-gradient(180deg, #fff4e3, #ffe8c5);
+  --status-color: #9b5a05;
+}
+
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-default {
+  --status-border-color: var(--border-strong);
+  --status-bg: linear-gradient(180deg, var(--white), #f7f8f7);
+  --status-color: var(--text-mute);
+}
+
+:where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).is-compact {
+  min-height: 24px;
+  padding-block: 0.25rem;
+}
+
+:where(.status-counter, .count-pill, .bc-count, .code-chip) strong {
+  font-weight: var(--font-weight-extrabold);
+}
+
+:where(.status-counter, .count-pill, .bc-count, .code-chip, .mini-chip, .meta-badge) strong {
+  color: var(--text-main);
+}
+
+:where(.status-empty, .empty-state, .no-results-card, .empty-cell, .table-empty, .bc-empty) :is(h3, h4, p) {
+  margin: 0;
+}
+
+:where(.status-empty, .empty-state, .no-results-card, .empty-cell, .table-empty).compact {
+  min-height: 72px;
+  padding: var(--space-4);
+}
+
+@media (hover: hover) {
+  :where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill):hover:not(:disabled):not([aria-disabled="true"]) {
+    transform: translateY(-1px);
+  }
+}

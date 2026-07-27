@@ -4,7 +4,7 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/includes/catalogo_analisis_helper.php';
 
-lab_require_permission('laboratorio.analisis.ver');
+lab_require_permission('laboratorio.catalogo_analisis.ver');
 
 function catalogoAnalisisE($value): string
 {
@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($action === 'toggle') {
             $idTipo = isset($_POST['id_tipo']) ? (int) $_POST['id_tipo'] : 0;
-            $activo = isset($_POST['activo']) ? 1 : 0;
+            $activo = isset($_POST['activo']) ? (int) $_POST['activo'] : 0;
 
             if ($idTipo <= 0) {
                 throw new RuntimeException('No se encontró el análisis solicitado.');
@@ -138,6 +138,7 @@ foreach ($grupos as $clave => $grupo) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/button.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         :root {
@@ -313,31 +314,6 @@ foreach ($grupos as $clave => $grupo) {
             font-size: 13px;
         }
 
-        .message {
-            padding: 14px 16px;
-            border-radius: 14px;
-            border: 1px solid var(--border);
-            background: rgba(255, 255, 255, 0.86);
-        }
-
-        .message.success {
-            border-color: #c8e4cc;
-            background: #eef9ef;
-            color: #215a2c;
-        }
-
-        .message.error {
-            border-color: #f1c0b8;
-            background: var(--danger-soft);
-            color: #7b271c;
-        }
-
-        .message.warning {
-            border-color: #ecd59d;
-            background: #fff7df;
-            color: #795d10;
-        }
-
         .main-grid {
             display: grid;
             grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
@@ -423,37 +399,9 @@ foreach ($grupos as $clave => $grupo) {
             margin-top: 6px;
         }
 
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            min-height: 42px;
-            padding: 0 16px;
-            border: 1px solid transparent;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: 800;
-            transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-        }
-
-        .btn:hover,
         .action-pill:hover,
-        .row-link:hover,
-        .row-button:hover {
+        .row-link:hover {
             transform: translateY(-1px);
-        }
-
-        .btn-primary {
-            background: var(--brand);
-            color: #fff;
-            box-shadow: 0 14px 26px rgba(13, 92, 57, 0.18);
-        }
-
-        .btn-quiet {
-            background: #fff;
-            border-color: var(--border);
-            color: var(--text-main);
         }
 
         .catalog-panel {
@@ -530,76 +478,8 @@ foreach ($grupos as $clave => $grupo) {
             gap: 8px;
         }
 
-        .mini-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 7px 10px;
-            border-radius: 999px;
-            background: #fff;
-            border: 1px solid var(--border);
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--text-soft);
-        }
-
-        .mini-chip strong {
-            color: var(--text-main);
-        }
-
-        .module-table-wrap {
-            overflow-x: auto;
-            border-radius: 18px;
-            border: 1px solid var(--border);
-            background: #fff;
-        }
-
-        .module-table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 760px;
-        }
-
-        .module-table th,
-        .module-table td {
-            padding: 14px 16px;
-            border-bottom: 1px solid #edf2ec;
-            text-align: left;
-            vertical-align: middle;
-        }
-
-        .module-table th {
-            background: #f6faf5;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: var(--text-soft);
-        }
-
-        .module-table tbody tr:hover {
-            background: #f9fcf8;
-        }
-
         .module-table .center {
             text-align: center;
-        }
-
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            min-height: 30px;
-            padding: 0 10px;
-            border-radius: 999px;
-            background: #edf5ed;
-            color: #1f5d33;
-            font-size: 12px;
-            font-weight: 800;
-        }
-
-        .status-pill.is-off {
-            background: #f7ece8;
-            color: #9f3e2c;
         }
 
         .row-actions {
@@ -608,8 +488,7 @@ foreach ($grupos as $clave => $grupo) {
             gap: 8px;
         }
 
-        .row-link,
-        .row-button {
+        .row-link {
             display: inline-flex;
             align-items: center;
             gap: 6px;
@@ -619,22 +498,6 @@ foreach ($grupos as $clave => $grupo) {
             border: 1px solid var(--border);
             background: #fff;
             font-weight: 700;
-        }
-
-        .row-button {
-            cursor: pointer;
-        }
-
-        .row-button.danger {
-            border-color: #efc1b8;
-            background: #fff7f5;
-            color: var(--danger);
-        }
-
-        .row-button.success {
-            border-color: #bedcc2;
-            background: #f0faf2;
-            color: #236038;
         }
 
         .row-link {
@@ -653,12 +516,6 @@ foreach ($grupos as $clave => $grupo) {
 
         .table-row.is-editing {
             background: #eff8ef;
-        }
-
-        .empty-state {
-            padding: 20px;
-            color: var(--text-soft);
-            text-align: center;
         }
 
         .footer-note {
@@ -695,6 +552,7 @@ foreach ($grupos as $clave => $grupo) {
             }
         }
     </style>
+    <link rel="stylesheet" href="styles/tables.css">
 </head>
 <body>
     <div class="page-shell">
@@ -903,7 +761,6 @@ foreach ($grupos as $clave => $grupo) {
                             <table class="module-table">
                                 <thead>
                                     <tr>
-                                        <th style="width:80px">ID</th>
                                         <th>Nombre</th>
                                         <th style="width:140px">Estado</th>
                                         <th style="width:180px">Módulo</th>
@@ -915,7 +772,7 @@ foreach ($grupos as $clave => $grupo) {
                                 <tbody>
                                     <?php if (empty($rows)): ?>
                                         <tr>
-                                            <td colspan="<?= $canEdit ? 5 : 4 ?>" class="empty-state">
+                                            <td colspan="<?= $canEdit ? 4 : 3 ?>" class="empty-state">
                                                 No hay registros en este módulo.
                                             </td>
                                         </tr>
@@ -926,7 +783,6 @@ foreach ($grupos as $clave => $grupo) {
                                                 $isEditing = $editingRow && (int) $editingRow['id_tipo'] === (int) $row['id_tipo'];
                                             ?>
                                             <tr class="table-row<?= $isEditing ? ' is-editing' : '' ?>" data-searchable-row="<?= catalogoAnalisisE($row['nombre']) ?> <?= catalogoAnalisisE($section['label_plural']) ?> <?= catalogoAnalisisE($section['label']) ?>">
-                                                <td><?= (int) $row['id_tipo'] ?></td>
                                                 <td>
                                                     <strong><?= catalogoAnalisisE($row['nombre']) ?></strong>
                                                 </td>

@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/../includes/formulario_revision_helper.php';
+require_once __DIR__ . '/../includes/estado_lote_helper.php';
 
 $connConsolidacion = Conexion::conectar();
 labFormularioEnsureSchema();
@@ -77,26 +78,47 @@ function obtenerFilasConsolidacion($idTipo, $codigoLote = '')
             lr.id_rango,
             ff.fecha_finalizacion,
             ff.id_formulario_revision,
-            COALESCE(ff.formularios_total, 0) AS formularios_total,
-            COALESCE(ff.formularios_aprobados, 0) AS formularios_aprobados,
+            COALESCE(ar.analisis_requeridos, 0) AS analisis_requeridos,
+            COALESCE(ai.analisis_ingresados, 0) AS analisis_ingresados,
+            COALESCE(ai.analisis_aprobados, 0) AS analisis_aprobados,
             COALESCE(lr.inicio, m.min_muestra) AS inicio,
             COALESCE(lr.fin, m.max_muestra) AS fin
         FROM solicitud s
         LEFT JOIN lote l ON l.id_lote = s.id_lote
-        LEFT JOIN lote_rango lr ON lr.id_lote = l.id_lote
         LEFT JOIN (
             SELECT id_solicitud, MIN(numero_muestra) AS min_muestra, MAX(numero_muestra) AS max_muestra
               FROM muestra
              GROUP BY id_solicitud
         ) m ON m.id_solicitud = s.id_solicitud
+        LEFT JOIN lote_rango lr ON lr.id_lote = l.id_lote
+            AND lr.inicio = m.min_muestra
+            AND lr.fin = m.max_muestra
+        LEFT JOIN (
+            SELECT s.id_lote,
+                   COUNT(DISTINCT sa.id_tipo_analisis) AS analisis_requeridos
+              FROM solicitud s
+              INNER JOIN solicitud_analisis sa ON sa.id_solicitud = s.id_solicitud
+             GROUP BY s.id_lote
+        ) ar ON ar.id_lote = l.id_lote
+        LEFT JOIN (
+            SELECT lr2.id_lote,
+                   COUNT(DISTINCT f.id_tipo_analisis) AS analisis_ingresados,
+                   COUNT(
+                       DISTINCT CASE
+                           WHEN LOWER(COALESCE(ef.nombre, '')) = 'aprobado'
+                           THEN f.id_tipo_analisis
+                       END
+                   ) AS analisis_aprobados
+              FROM lote_rango lr2
+              LEFT JOIN formulario f ON f.id_rango = lr2.id_rango
+              LEFT JOIN estado_formulario ef ON ef.id_estado = f.id_estado
+             GROUP BY lr2.id_lote
+        ) ai ON ai.id_lote = l.id_lote
         LEFT JOIN (
             SELECT f.id_rango,
                    MAX(f.fecha) AS fecha_finalizacion,
-                   MAX(f.id_formulario) AS id_formulario_revision,
-                   COUNT(*) AS formularios_total,
-                   SUM(CASE WHEN LOWER(COALESCE(ef.nombre, '')) = 'aprobado' THEN 1 ELSE 0 END) AS formularios_aprobados
+                   MAX(f.id_formulario) AS id_formulario_revision
               FROM formulario f
-              LEFT JOIN estado_formulario ef ON ef.id_estado = f.id_estado
              GROUP BY f.id_rango
         ) ff ON ff.id_rango = lr.id_rango
         WHERE s.id_tipo = ?{$filtroLote}

@@ -6,7 +6,17 @@ require_once __DIR__ . '/../../includes/analisis_post_helper.php';
 require_once __DIR__ . '/../../models/conexion.php';
 require_once __DIR__ . '/../../models/Foliares/micros_model.php';
 
-$resultado = null;
+$labAnalysisContexto = [
+    'tipos' => ['foliares', 'foliar'],
+    'analisis' => ['Micro Nutrientes (Cu, Zn, Fe, Mn, K)'],
+    'label' => 'Micro Nutrientes Foliares',
+];
+$labAnalysisLegacyConfig = $labAnalysisContexto;
+$GLOBALS['labAnalysisContexto'] = $labAnalysisContexto;
+$GLOBALS['labAnalysisLegacyConfig'] = $labAnalysisLegacyConfig;
+$GLOBALS['labSkipFooterBaseSave'] = true;
+
+$resultado = lab_analysis_take_flash();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -64,5 +74,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $resultado['ppm_mn'] = $ppm_mn;
 }
 
+lab_analysis_redirect_after_success($resultado);
 require_once __DIR__ . '/../../view/Foliares/micros_view.php';
 ?>

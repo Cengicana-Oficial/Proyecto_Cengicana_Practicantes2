@@ -181,7 +181,7 @@ function columnasAnalisisRevision(array $tabla): array
                                                     <tr>
                                                         <td><?= $index + 1 ?></td>
                                                         <td><?= eRevision(columnaValorRevision($fila, ['lote', 'codigo_lote'], $resumenRango['codigo_lote'] ?? '-')) ?></td>
-                                                        <td><?= eRevision(columnaValorRevision($fila, ['numero_laboratorio', 'no_lab', 'numero_muestra'], '-')) ?></td>
+                                                        <td><?= eRevision(columnaValorRevision($fila, ['no_lab', 'numero_laboratorio', 'numero_muestra'], '-')) ?></td>
                                                         <?php foreach ($columnasAnalisis as $columna): ?>
                                                             <?php $valor = $fila[$columna] ?? ''; ?>
                                                             <td>

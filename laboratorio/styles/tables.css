@@ -1,0 +1,375 @@
+@import url('tokens.css');
+@import url('surfaces.css');
+
+:root {
+  --table-font-size: var(--font-size-sm);
+  --table-font-size-dense: var(--font-size-xs);
+  --table-cell-padding-y: var(--space-3);
+  --table-cell-padding-x: var(--space-4);
+  --table-cell-padding-y-dense: var(--space-2);
+  --table-cell-padding-x-dense: var(--space-3);
+  --table-head-font-size: var(--font-size-2xs);
+  --table-border: 1px solid var(--panel-border);
+  --table-head-bg: linear-gradient(180deg, var(--green-50), #eef6e1);
+  --table-row-alt-bg: #fafdf6;
+  --table-row-hover-bg: var(--green-50);
+  --table-row-selected-bg: #eef7df;
+  --table-radius: var(--surface-radius-panel);
+  --table-shadow: var(--surface-shadow-panel);
+  --table-empty-color: var(--text-mute);
+  --table-min-width-standard: 40rem;
+  --table-min-width-history: 35rem;
+  --table-min-width-administrative: 47.5rem;
+  --table-min-width-technical: 61rem;
+}
+
+:where(
+  .table-shell,
+  .table-wrap,
+  .table-container,
+  .table-scroll,
+  .table-frame,
+  .module-table-wrap,
+  .bc-table-wrap,
+  .review-table-shell,
+  .lab-entry-table-wrap,
+  .calibration-table-wrap
+) {
+  box-sizing: border-box;
+  overflow-x: auto;
+  background: var(--white);
+  border: var(--table-border);
+  border-radius: var(--table-radius);
+  box-shadow: var(--table-shadow);
+}
+
+:where(
+  .table-shell > table,
+  .table-wrap > table,
+  .table-container > table,
+  .table-scroll > table,
+  .table-frame > table,
+  .module-table,
+  .consolidacion-table,
+  .historial-table,
+  .bc-table,
+  .lotes-table,
+  .lab-entry-table,
+  .revision-entry-table,
+  .analisis-table,
+  .review-table
+) {
+  width: 100%;
+  min-width: var(--table-min-width, 0);
+  border-collapse: collapse;
+  table-layout: var(--table-layout, auto);
+  font-size: var(--table-font-size);
+  color: var(--text-main);
+}
+
+:where(
+  .table-shell > table,
+  .table-wrap > table,
+  .table-container > table,
+  .table-scroll > table,
+  .table-frame > table,
+  .module-table,
+  .consolidacion-table,
+  .historial-table,
+  .bc-table,
+  .lotes-table,
+  .lab-entry-table,
+  .revision-entry-table,
+  .analisis-table,
+  .review-table
+) :is(th, td) {
+  box-sizing: border-box;
+  padding: var(--table-cell-padding-y) var(--table-cell-padding-x);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+  word-break: normal;
+}
+
+:where(
+  .table-shell > table,
+  .table-wrap > table,
+  .table-container > table,
+  .table-scroll > table,
+  .table-frame > table,
+  .module-table,
+  .consolidacion-table,
+  .historial-table,
+  .bc-table,
+  .lotes-table,
+  .lab-entry-table,
+  .revision-entry-table,
+  .analisis-table,
+  .review-table
+) thead th {
+  background: var(--table-head-bg);
+  color: var(--green-800);
+  font-size: var(--table-head-font-size);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+:where(
+  .table-shell > table,
+  .table-wrap > table,
+  .table-container > table,
+  .table-scroll > table,
+  .table-frame > table,
+  .module-table,
+  .consolidacion-table,
+  .historial-table,
+  .bc-table,
+  .lotes-table,
+  .lab-entry-table,
+  .revision-entry-table,
+  .analisis-table,
+  .review-table
+) tbody tr:nth-child(even) td {
+  background: var(--table-row-alt-bg);
+}
+
+:where(
+  .table-shell > table,
+  .table-wrap > table,
+  .table-container > table,
+  .table-scroll > table,
+  .table-frame > table,
+  .module-table,
+  .consolidacion-table,
+  .historial-table,
+  .bc-table,
+  .lotes-table,
+  .lab-entry-table,
+  .revision-entry-table,
+  .analisis-table,
+  .review-table
+) tbody tr:hover td {
+  background: var(--table-row-hover-bg);
+}
+
+:where(
+  .table-shell > table,
+  .table-wrap > table,
+  .table-container > table,
+  .table-scroll > table,
+  .table-frame > table,
+  .module-table,
+  .consolidacion-table,
+  .historial-table,
+  .bc-table,
+  .lotes-table,
+  .lab-entry-table,
+  .revision-entry-table,
+  .analisis-table,
+  .review-table
+) tbody tr:last-child td {
+  border-bottom: none;
+}
+
+:where(
+  .table-shell > table,
+  .table-wrap > table,
+  .table-container > table,
+  .table-scroll > table,
+  .table-frame > table,
+  .module-table,
+  .consolidacion-table,
+  .historial-table,
+  .bc-table,
+  .lotes-table,
+  .lab-entry-table,
+  .revision-entry-table,
+  .analisis-table,
+  .review-table
+) tfoot th,
+:where(
+  .table-shell > table,
+  .table-wrap > table,
+  .table-container > table,
+  .table-scroll > table,
+  .table-frame > table,
+  .module-table,
+  .consolidacion-table,
+  .historial-table,
+  .bc-table,
+  .lotes-table,
+  .lab-entry-table,
+  .revision-entry-table,
+  .analisis-table,
+  .review-table
+) tfoot td {
+  background: var(--green-50);
+  color: var(--green-800);
+  font-weight: var(--font-weight-semibold);
+}
+
+:where(
+  .table-shell > table,
+  .table-wrap > table,
+  .table-container > table,
+  .table-scroll > table,
+  .table-frame > table,
+  .module-table,
+  .consolidacion-table,
+  .historial-table,
+  .bc-table,
+  .lotes-table,
+  .lab-entry-table,
+  .revision-entry-table,
+  .analisis-table,
+  .review-table
+) caption {
+  padding: var(--space-3) var(--space-4);
+  color: var(--green-800);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-extrabold);
+  text-align: left;
+  text-transform: uppercase;
+}
+
+:where(
+  .table-shell > table,
+  .table-wrap > table,
+  .table-container > table,
+  .table-scroll > table,
+  .table-frame > table,
+  .module-table,
+  .consolidacion-table,
+  .historial-table,
+  .bc-table,
+  .lotes-table,
+  .lab-entry-table,
+  .revision-entry-table,
+  .analisis-table,
+  .review-table
+) .table-empty,
+:where(.empty-state, .empty-cell).table-empty {
+  color: var(--table-empty-color);
+  text-align: center;
+}
+
+:where(.table-shell, .table-wrap, .table-container, .table-scroll, .table-frame) .table-empty,
+:where(.table-shell, .table-wrap, .table-container, .table-scroll, .table-frame) .empty-cell {
+  min-height: 72px;
+}
+
+:where(.table-actions, .row-actions, .bc-row-actions, .action-links, .actions, .review-actions, .lab-table-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+:where(.row-link, .estado-link, .bc-row-actions a, .action-links a, .actions a, .historial-table a) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 34px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--green-200);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--green-800);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition:
+    transform var(--transition-base),
+    background var(--transition-base),
+    border-color var(--transition-base),
+    color var(--transition-base),
+    box-shadow var(--transition-base);
+}
+
+:where(.row-link, .estado-link, .bc-row-actions a, .action-links a, .actions a, .historial-table a):hover {
+  transform: translateY(-1px);
+  border-color: var(--green-300);
+  background: var(--green-50);
+  color: var(--green-900);
+}
+
+:where(.estado-link, .row-link).is-off,
+:where(.estado-link).estado-revision,
+:where(.estado-link).estado-revisar,
+:where(.estado-link).estado-en-proceso,
+:where(.estado-link).estado-aprobado {
+  box-shadow: var(--shadow-soft);
+}
+
+:where(.table--standard, .table-shell > table, .table-wrap > table, .table-container > table, .table-frame > table, .module-table) {
+  --table-font-size: var(--font-size-sm);
+  --table-cell-padding-y: var(--space-3);
+  --table-cell-padding-x: var(--space-4);
+  --table-min-width: var(--table-min-width-standard);
+}
+
+:where(.table--administrative, .consolidacion-table, .bc-table, .lotes-table, .module-table) {
+  --table-font-size: var(--font-size-sm);
+  --table-cell-padding-y: var(--space-3);
+  --table-cell-padding-x: var(--space-4);
+  --table-min-width: var(--table-min-width-administrative);
+}
+
+:where(.table--history, .historial-table) {
+  --table-font-size: var(--font-size-sm);
+  --table-cell-padding-y: var(--space-3);
+  --table-cell-padding-x: var(--space-4);
+  --table-min-width: var(--table-min-width-history);
+}
+
+:where(.table--technical, .table--dense, .lab-entry-table, .revision-entry-table, .analisis-table, .review-table) {
+  --table-font-size: var(--table-font-size-dense);
+  --table-cell-padding-y: var(--table-cell-padding-y-dense);
+  --table-cell-padding-x: var(--table-cell-padding-x-dense);
+  --table-layout: fixed;
+  --table-min-width: var(--table-min-width-technical);
+}
+
+:where(.table--compact) {
+  --table-font-size: var(--table-font-size-dense);
+  --table-cell-padding-y: var(--space-2);
+  --table-cell-padding-x: var(--space-3);
+  --table-min-width: var(--table-min-width-standard);
+}
+
+:where(.lotes-table) {
+  --table-min-width: 52rem;
+}
+
+:where(.bc-table) {
+  --table-min-width: 47.5rem;
+}
+
+:where(.consolidacion-table) {
+  --table-min-width: 62rem;
+}
+
+:where(.historial-table) {
+  --table-min-width: 35rem;
+}
+
+:where(.lab-entry-table, .revision-entry-table) {
+  --table-min-width: 61rem;
+}
+
+:where(.analisis-table) {
+  --table-min-width: 100%;
+}
+
+@media (max-width: 1024px) {
+  :where(.table-shell, .table-wrap, .table-container, .table-scroll, .table-frame, .module-table-wrap, .bc-table-wrap, .review-table-shell, .lab-entry-table-wrap, .calibration-table-wrap) {
+    border-radius: var(--radius-sm);
+  }
+}

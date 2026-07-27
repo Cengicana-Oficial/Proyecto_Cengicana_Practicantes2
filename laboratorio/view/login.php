@@ -79,6 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login CENGICAÑA</title>
     <link rel="stylesheet" href="../../assets/login.css">
+    <link rel="stylesheet" href="../styles/button.css">
     <div class="logo-top">
     <img src="../../assets/img/logo.png" alt="Logo">
 </div>

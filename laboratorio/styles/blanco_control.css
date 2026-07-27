@@ -120,23 +120,6 @@ body {
     line-height: 1.2;
 }
 
-.bc-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 32px;
-    border-radius: 8px;
-    background: var(--green-50);
-    color: var(--green-800);
-    font-weight: 800;
-}
-
-.bc-count.accent {
-    background: var(--teal-50);
-    color: var(--teal-800);
-}
-
 .bc-form {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -154,45 +137,11 @@ body {
     grid-column: 1 / -1;
 }
 
-.bc-field span,
-.bc-check span {
-    color: #536a44;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: .05em;
-    text-transform: uppercase;
-}
-
-.bc-field input {
-    width: 100%;
-    min-height: 40px;
-    border: 1px solid #c8dba8;
-    border-radius: 8px;
-    background: #ffffff;
-    color: var(--text-main);
-    font: inherit;
-    font-size: 14px;
-    padding: 8px 11px;
-    transition: border-color .15s, box-shadow .15s;
-}
-
-.bc-field input:focus {
-    outline: none;
-    border-color: var(--teal-400);
-    box-shadow: 0 0 0 3px rgba(29, 158, 117, .14);
-}
-
 .bc-check {
     display: inline-flex;
     align-items: center;
     gap: 9px;
     min-height: 40px;
-}
-
-.bc-check input {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--teal-600);
 }
 
 .bc-actions {
@@ -252,50 +201,12 @@ body {
 
 .bc-table-panel {
     margin-top: 18px;
-    overflow: hidden;
 }
 
 .bc-table-head {
     padding: 16px 18px;
     border-bottom: 1px solid #d6e4c7;
     background: #fbfdf7;
-}
-
-.bc-table-wrap {
-    overflow-x: auto;
-}
-
-.bc-table {
-    width: 100%;
-    min-width: 760px;
-    border-collapse: collapse;
-    font-size: 14px;
-}
-
-.bc-table th,
-.bc-table td {
-    padding: 12px 14px;
-    border-bottom: 1px solid #dbe8cd;
-    text-align: left;
-    vertical-align: middle;
-}
-
-.bc-table th {
-    background: #f4f8ef;
-    color: var(--green-800);
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: .05em;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.bc-table tbody tr:hover td {
-    background: #f7fbf9;
-}
-
-.bc-table tbody tr:last-child td {
-    border-bottom: none;
 }
 
 .bc-row-actions {
@@ -317,31 +228,6 @@ body {
 
 .bc-row-actions .danger {
     color: #b54708;
-}
-
-.bc-status {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 42px;
-    min-height: 24px;
-    padding: 2px 9px;
-    border-radius: 8px;
-    background: #fff4e6;
-    color: #9a3412;
-    font-size: 12px;
-    font-weight: 800;
-}
-
-.bc-status.is-on {
-    background: var(--teal-50);
-    color: var(--teal-800);
-}
-
-.bc-empty {
-    height: 72px;
-    color: #62745a;
-    text-align: center;
 }
 
 @media (max-width: 900px) {

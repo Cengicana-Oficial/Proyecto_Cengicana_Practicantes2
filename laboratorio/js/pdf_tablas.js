@@ -124,6 +124,138 @@
     }
   }
 
+  function drawLandscapeHeader({ page, logo, bold, regular, pageSize, margin, y, title, subtitle, badgeLabel = "VF", badgeValue = "005" }) {
+    const pageWidth = pageSize[0];
+    const textX = logo ? margin + 48 : margin;
+
+    if (logo) {
+      const logoWidth = 30;
+      const logoHeight = logoWidth * (logo.height / logo.width);
+      page.drawImage(logo, {
+        x: margin,
+        y: y - 10 - logoHeight,
+        width: logoWidth,
+        height: logoHeight,
+      });
+    }
+
+    page.drawText("Laboratorio Agroindustrial", {
+      x: textX,
+      y,
+      size: 14,
+      font: bold,
+      color: green.dark,
+    });
+    page.drawText(normalizarTexto(title), {
+      x: textX,
+      y: y - 18,
+      size: 17,
+      font: bold,
+      color: green.mid,
+    });
+    if (subtitle) {
+      page.drawText(normalizarTexto(subtitle), {
+        x: textX,
+        y: y - 32,
+        size: 9,
+        font: regular,
+        color: green.muted,
+      });
+    }
+
+    page.drawRectangle({
+      x: pageWidth - margin - 78,
+      y: y - 26,
+      width: 78,
+      height: 34,
+      color: green.light,
+      borderColor: green.border,
+      borderWidth: 1,
+    });
+    page.drawText(badgeLabel, {
+      x: pageWidth - margin - 64,
+      y: y - 6,
+      size: 8,
+      font: bold,
+      color: green.muted,
+    });
+    page.drawText(badgeValue, {
+      x: pageWidth - margin - 64,
+      y: y - 20,
+      size: 12,
+      font: bold,
+      color: green.mid,
+    });
+
+    page.drawLine({
+      start: { x: margin, y: y - 43 },
+      end: { x: pageWidth - margin, y: y - 43 },
+      thickness: 0.6,
+      color: green.border,
+    });
+
+    return y - 58;
+  }
+
+  function drawLandscapeSummary({ page, bold, regular, items, y, margin, pageSize }) {
+    if (!items.length) {
+      return y;
+    }
+
+    const chipWidth = 180;
+    const gap = 10;
+    const chipsPerRow = Math.max(1, Math.floor((pageSize[0] - margin * 2 + gap) / (chipWidth + gap)));
+
+    items.forEach((item, index) => {
+      const row = Math.floor(index / chipsPerRow);
+      const col = index % chipsPerRow;
+      const chipX = margin + col * (chipWidth + gap);
+      const chipY = y - row * 34;
+
+      page.drawRectangle({
+        x: chipX,
+        y: chipY,
+        width: chipWidth,
+        height: 24,
+        color: green.white,
+        borderColor: green.border,
+        borderWidth: 1,
+      });
+      page.drawText(`${item.label}:`, {
+        x: chipX + 8,
+        y: chipY + 9,
+        size: 8,
+        font: bold,
+        color: green.dark,
+      });
+      page.drawText(normalizarTexto(item.value), {
+        x: chipX + 68,
+        y: chipY + 9,
+        size: 8,
+        font: regular,
+        color: green.text,
+      });
+    });
+
+    return y - (Math.ceil(items.length / chipsPerRow) * 34) - 8;
+  }
+
+  function drawLandscapeFooter({ page, regular, margin, pageSize, text = "Generado por TecnoBoris v2.1" }) {
+    page.drawLine({
+      start: { x: margin, y: 28 },
+      end: { x: pageSize[0] - margin, y: 28 },
+      thickness: 0.6,
+      color: green.border,
+    });
+    page.drawText(text, {
+      x: margin,
+      y: 13,
+      size: 8,
+      font: regular,
+      color: green.muted,
+    });
+  }
+
   async function crearPdf({ titulo, subtitulo, resumen = [], headers, rows, fileName }) {
     if (!window.PDFLib) {
       alert("No se pudo cargar la librería para generar PDF.");

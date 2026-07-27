@@ -44,7 +44,6 @@ $resultado = $resultado ?? [];
 
         <form method="POST" action="">
             <div class="form-body">
-
                 <div class="section-title">Datos de análisis</div>
                 <div class="field-group">
                     <div class="field">
@@ -56,18 +55,14 @@ $resultado = $resultado ?? [];
                         <input type="number" step="any" name="abs_blanco" id="abs_blanco" value="0.00" required>
                     </div>
                     <div class="field">
-                        <label for="control">Control</label>
-                        <input type="number" step="any" name="control" id="control" value="0.00" required>
-                    </div>
-                    <div class="field">
                         <label for="absorbancia">Absorbancia Muestra</label>
                         <input type="number" step="any" name="absorbancia" id="absorbancia" required>
                     </div>
                 </div>
 
                 <h3>Curva de Calibración</h3>
-                <div class="table-wrap">
-                    <table class="analisis-table">
+                <div class="table-wrap calibration-table-wrap">
+                    <table class="analisis-table calibration-table">
                         <thead>
                             <tr>
                                 <th>Punto Curva</th>
@@ -127,5 +122,64 @@ $resultado = $resultado ?? [];
     </div><!-- /.card -->
 
 </div><!-- /.page-wrap -->
+
+<template id="fosforo-control-row-template">
+    <tr class="lab-data-row lab-control-row" data-control-row="1">
+        <td class="lab-row-index"></td>
+        <td>
+            <strong>CONTROL</strong>
+            <input type="hidden" name="lote[]" value="CONTROL">
+        </td>
+        <td>
+            <strong>CONTROL</strong>
+            <input type="hidden" name="numero_laboratorio[]" value="CONTROL">
+            <input type="hidden" name="control[]" value="0.00">
+        </td>
+        <td>
+            <input type="number" step="any" name="peso[]" aria-label="Peso del control" required>
+        </td>
+        <td>
+            <input type="number" step="any" name="abs_blanco[]" aria-label="Absorbancia blanco del control" required>
+        </td>
+        <td>
+            <input type="number" step="any" name="absorbancia[]" aria-label="Absorbancia muestra del control" required>
+        </td>
+        <td></td>
+    </tr>
+</template>
+
+<script>
+(function () {
+    function renumberRows(tbody) {
+        Array.from(tbody.querySelectorAll('tr.lab-data-row')).forEach((row, index) => {
+            const indexCell = row.querySelector('.lab-row-index');
+            if (indexCell) {
+                indexCell.textContent = String(index + 1);
+            }
+        });
+    }
+
+    function insertControlRow() {
+        const template = document.getElementById('fosforo-control-row-template');
+        const table = document.querySelector('table.lab-entry-table');
+        const tbody = table ? table.querySelector('tbody') : null;
+
+        if (!template || !table || !tbody || tbody.querySelector('[data-control-row="1"]')) {
+            return;
+        }
+
+        const fragment = template.content.cloneNode(true);
+        const row = fragment.querySelector('tr');
+        if (!row) {
+            return;
+        }
+
+        tbody.insertBefore(row, tbody.firstChild);
+        renumberRows(tbody);
+    }
+
+    window.addEventListener('load', insertControlRow);
+})();
+</script>
 </body>
 </html>

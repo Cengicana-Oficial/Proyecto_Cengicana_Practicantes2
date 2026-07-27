@@ -1,3 +1,7 @@
+@import url("../styles/tokens.css");
+@import url("../styles/button.css");
+@import url("../styles/forms.css");
+@import url("../styles/surfaces.css");
 @import url("https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap");
 
 /* =========================================================
@@ -14,34 +18,6 @@
 
 /* =========================================================
    VARIABLES
-========================================================= */
-
-:root {
-  /* Green */
-  --green-50:  #EAF3DE;
-  --green-100: #C0DD97;
-  --green-200: #97C459;
-  --green-400: #639922;
-  --green-600: #3B6D11;
-  --green-800: #27500A;
-  --green-900: #173404;
-
-  /* Teal */
-  --teal-50:  #E1F5EE;
-  --teal-100: #9FE1CB;
-  --teal-400: #1D9E75;
-  --teal-600: #0F6E56;
-
-  /* Neutral */
-  --surface:   #f4f8ef;
-  --white:     #ffffff;
-  --text-main: #1a2e0d;
-  --text-mute: #5a7045;
-  --border:    #c8dba8;
-}
-
-/* =========================================================
-   BASE
 ========================================================= */
 
 body {
@@ -534,22 +510,13 @@ body {
         padding: 1.25rem;
     }
 
-    .field-group {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-
     .cards-container {
         grid-template-columns: 1fr;
         gap: 12px;
     }
 
-    .btn-submit {
-        width: 100%;
-    }
-
     .doc-header {
-        grid-template-columns: 1fr;
+      grid-template-columns: 1fr;
     }
 
     .doc-col + .doc-col {

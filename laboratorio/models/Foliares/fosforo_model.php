@@ -1,40 +1,39 @@
 <?php
 
 require_once __DIR__ . '/../conexion.php';
+require_once __DIR__ . '/../legacy_analysis_model_helper.php';
 $conexion = new Conexion();
 $conn = $conexion->conectar();
 
-// GUARDAR ANÁLISIS DE FÓSFORO EN FOLIARES
-function guardarFosforo($peso, $abs_blanco, $absorbancia, $ppm_p_sol, $porcentaje_p, $control) {
-
+function guardarFosforo($peso, $abs_blanco, $absorbancia, $ppm_p_sol, $porcentaje_p, $control, array $metadata = [])
+{
     global $conn;
 
-    $stmt = $conn->prepare(
-        "INSERT INTO foliar_fosforo
-        (peso, abs_blanco, absorbancia, ppm_p_sol, porcentaje_p, control)
-        VALUES (?, ?, ?, ?, ?, ?)"
-    );
+    $id = labLegacyInsertAnalysisRow($conn, 'foliar_fosforo', [
+        'peso' => $peso,
+        'abs_blanco' => $abs_blanco,
+        'absorbancia' => $absorbancia,
+        'ppm_p_sol' => $ppm_p_sol,
+        'porcentaje_p' => $porcentaje_p,
+        'control' => $control,
+    ], $metadata);
 
-    if ($stmt->execute([$peso, $abs_blanco, $absorbancia, $ppm_p_sol, $porcentaje_p, $control])) {
-
+    if ($id !== false) {
         return [
-            "exito" => true,
-            "mensaje" => "Fósforo guardado correctamente.",
-            "id" => (int) $conn->lastInsertId()
-        ];
-
-    } else {
-
-        return [
-            "exito" => false,
-            "mensaje" => "Error al guardar."
+            'exito' => true,
+            'mensaje' => 'Fosforo guardado correctamente.',
+            'id' => $id,
         ];
     }
+
+    return [
+        'exito' => false,
+        'mensaje' => 'Error al guardar.',
+    ];
 }
 
-// GUARDAR PUNTO DE CURVA
-function guardarCurvaFosforo($punto_curva, $absorbancia) {
-
+function guardarCurvaFosforo($punto_curva, $absorbancia)
+{
     global $conn;
 
     $stmt = $conn->prepare(
@@ -44,17 +43,14 @@ function guardarCurvaFosforo($punto_curva, $absorbancia) {
     );
 
     if ($stmt->execute([$punto_curva, $absorbancia])) {
-
         return (int) $conn->lastInsertId();
-
-    } else {
-
-        return false;
     }
-}
-// RELACIONAR Fósforo↔ CURVA
-function relacionarFosforoCurva($id_fosforo, $id_curva) {
 
+    return false;
+}
+
+function relacionarFosforoCurva($id_fosforo, $id_curva)
+{
     global $conn;
 
     $stmt = $conn->prepare(
@@ -66,8 +62,8 @@ function relacionarFosforoCurva($id_fosforo, $id_curva) {
     return $stmt->execute([$id_fosforo, $id_curva]);
 }
 
-function obtenerCurvaFosforo($id_fosforo) {
-
+function obtenerCurvaFosforo($id_fosforo)
+{
     global $conn;
 
     $sql = "
@@ -75,22 +71,19 @@ function obtenerCurvaFosforo($id_fosforo) {
             cf.punto_curva,
             cf.absorbancia
         FROM curva_fosforo_fo cf
-
         INNER JOIN foliar_fosforo_curva fcf
             ON cf.id_curva = fcf.id_curva_fosforo
-
         WHERE fcf.id_fosforo = ?
     ";
 
     $stmt = $conn->prepare($sql);
-
     $stmt->execute([$id_fosforo]);
 
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function obtenerHistorialFosforo() {
-
+function obtenerHistorialFosforo()
+{
     global $conn;
 
     $sql = "
@@ -101,7 +94,6 @@ function obtenerHistorialFosforo() {
             porcentaje_p,
             control
         FROM foliar_fosforo
-
         ORDER BY id DESC
     ";
 

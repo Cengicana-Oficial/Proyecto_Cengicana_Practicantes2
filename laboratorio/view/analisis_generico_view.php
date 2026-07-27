@@ -28,12 +28,17 @@ $resultado = $resultado ?? null;
         <div class="card">
             <?php include __DIR__ . '/../components/encabezado_doc.php'; ?>
 
-            <form method="POST" action="">
+            <form method="POST" action=""<?= !empty($config['shared_rows']) ? ' data-lab-shared-rows="1"' : '' ?>>
                 <div class="form-body">
                     <div class="section-title">Datos de análisis</div>
                     <div class="field-group">
                         <div class="field">
                             <?php foreach ($config['fields'] as $field): ?>
+                                <?php if (!empty($field['computed'])) { continue; } ?>
+                                <?php if (
+                                    (($config['key'] ?? '') === 'cana.peso_seco' && in_array(($field['name'] ?? ''), ['bandeja_humeda', 'torta_seca'], true))
+                                    || (($config['key'] ?? '') === 'cana.fibra' && ($field['name'] ?? '') === 'fibra')
+                                ) { continue; } ?>
                                 <?php $type = ($field['type'] ?? 'number') === 'text' ? 'text' : 'number'; ?>
                                 <label><?= htmlspecialchars($field['label'], ENT_QUOTES, 'UTF-8') ?>
                                     <input

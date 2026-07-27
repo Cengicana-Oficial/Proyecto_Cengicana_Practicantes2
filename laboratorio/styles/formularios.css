@@ -1,18 +1,5 @@
 @import url('base.css');
-
-:root {
-  --green-50: #f8fbf3;
-  --green-100: #d8e7bf;
-  --green-200: #a8c97a;
-  --green-400: #97c459;
-  --green-600: #24480a;
-  --green-800: #173404;
-  --surface: #f4f8ef;
-  --white: #ffffff;
-  --text-main: #1f3d0c;
-  --text-mute: #61744e;
-  --border: #d8e7bf;
-}
+@import url('tokens.css');
 
 body {
   padding: 2rem 2rem 4rem;
@@ -58,14 +45,6 @@ h3 {
   font-weight: 700;
 }
 
-.card {
-  overflow: hidden;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(59, 109, 17, .08);
-}
-
 .card form,
 .form-body {
   display: flex;
@@ -77,121 +56,75 @@ h3 {
   padding: 0;
 }
 
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 1.35rem 0 .85rem;
-  color: var(--green-800);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-}
-
-.section-title:first-child {
-  margin-top: 0;
-}
-
-.section-title::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--green-200);
-}
-
-.field-group {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 12px;
-  margin-bottom: 1rem;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.field label,
-label {
-  color: var(--green-800);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
-label:has(> input),
-label:has(> select),
-label:has(> textarea) {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.field input,
-.field select,
-.field textarea,
-label > input,
-label > select,
-label > textarea,
-td input,
-td select,
-td textarea {
-  width: 100%;
-  min-height: 42px;
-  padding: 8px 12px;
-  color: var(--text-main);
-  font: inherit;
-  font-size: 14px;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  transition: border-color .15s, box-shadow .15s;
-}
-
-.field input:focus,
-.field select:focus,
-.field textarea:focus,
-label > input:focus,
-label > select:focus,
-label > textarea:focus,
-td input:focus,
-td select:focus,
-td textarea:focus {
-  outline: none;
-  border-color: var(--green-400);
-  box-shadow: 0 0 0 3px rgba(151, 196, 89, .18);
-}
-
-.field textarea,
-label > textarea {
-  min-height: 86px;
-  resize: vertical;
-}
-
-.field-hint {
-  color: var(--text-mute);
-  font-size: 11px;
-  line-height: 1.3;
-}
-
 .divider {
   margin: 1.35rem 0;
   border: 0;
   border-top: 1px solid var(--green-100);
 }
 
-.table-wrap {
-  overflow-x: auto;
+.calibration-table-wrap {
+  align-self: flex-start;
+  width: min(100%, 280px);
+  margin-bottom: 1rem;
+}
+
+.calibration-layout {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 1rem;
+}
+
+.calibration-layout .calibration-table-wrap {
+  flex: 0 0 280px;
+  margin-bottom: 0;
+}
+
+.calibration-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  font-size: 11px;
+}
+
+.calibration-table input,
+.calibration-table select,
+.calibration-table textarea {
+  width: 78px;
+  min-width: 0 !important;
+  min-height: 28px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.calibration-chart-panel {
+  flex: 1 1 340px;
+  min-width: 280px;
+  max-width: 560px;
+  padding: 10px;
+  background: var(--white);
   border: 1px solid var(--border);
   border-radius: 8px;
 }
 
-table {
+.calibration-chart-canvas {
+  display: block;
   width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+  height: 220px;
+}
+
+.calibration-chart-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--text-mute);
+  font-size: 11px;
+}
+
+.calibration-chart-stats strong {
+  color: var(--green-800);
 }
 
 th {
@@ -218,64 +151,6 @@ tr:nth-child(even) td {
 
 tr:hover td {
   background: var(--green-50);
-}
-
-.btn-submit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 42px;
-  margin-top: 1.25rem;
-  padding: 10px 24px;
-  color: var(--white);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  background: var(--green-600);
-  border: 0;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(59, 109, 17, .22);
-  cursor: pointer;
-  transition: background .15s, transform .1s;
-}
-
-.btn-submit:hover {
-  background: var(--green-800);
-}
-
-.btn-submit:active {
-  transform: scale(.98);
-}
-
-.btn-submit.secondary {
-  color: var(--green-800);
-  background: var(--white);
-  border: 1px solid var(--border);
-  box-shadow: none;
-}
-
-.btn-submit.secondary:hover {
-  background: var(--green-50);
-}
-
-.alerta {
-  margin-bottom: 1rem;
-  padding: .8rem 1rem;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.alerta.exito {
-  color: var(--green-800);
-  background: var(--green-50);
-  border: 1px solid var(--green-200);
-}
-
-.alerta.error {
-  color: #7a1d1d;
-  background: #fff1f1;
-  border: 1px solid #f1b6b6;
 }
 
 .doc-header {
@@ -338,10 +213,6 @@ tr:hover td {
   grid-column: 1 / -1;
 }
 
-.form-footer .btn-submit {
-  align-self: flex-end;
-}
-
 .lab-original-field-hidden {
   display: none !important;
 }
@@ -367,29 +238,6 @@ tr:hover td {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.lab-table-button,
-.lab-table-icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 8px 12px;
-  color: var(--green-800);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.lab-table-button:hover,
-.lab-table-icon-button:hover {
-  background: var(--green-50);
-  border-color: var(--green-200);
 }
 
 .lab-entry-table-wrap {
@@ -438,22 +286,6 @@ tr:hover td {
   flex-wrap: wrap;
   gap: .5rem;
   margin: 0 0 1rem;
-}
-
-.review-summary span,
-.revision-pill,
-.revision-version-list span,
-.revision-version-list strong {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: .3rem .7rem;
-  color: var(--green-800);
-  font-size: 12px;
-  font-weight: 800;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 999px;
 }
 
 .revision-card {

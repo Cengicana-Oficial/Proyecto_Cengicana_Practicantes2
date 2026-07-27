@@ -1,40 +1,37 @@
 <?php
 
 require_once __DIR__ . '/../conexion.php';
+require_once __DIR__ . '/../legacy_analysis_model_helper.php';
 $conexion = new Conexion();
 $conn = $conexion->conectar();
 
-// GUARDAR ANÁLISIS DE FÓSFORO
-function guardarFosforo($abs_blanco, $absorbancia, $ppm_sol, $ppm_p) {
-
+function guardarFosforo($abs_blanco, $absorbancia, $ppm_sol, $ppm_p, array $metadata = [])
+{
     global $conn;
 
-    $stmt = $conn->prepare(
-        "INSERT INTO agua_fosforo
-        (abs_blanco, absorbancia, ppm_sol, ppm_p)
-        VALUES (?, ?, ?, ?)"
-    );
+    $id = labLegacyInsertAnalysisRow($conn, 'agua_fosforo', [
+        'abs_blanco' => $abs_blanco,
+        'absorbancia' => $absorbancia,
+        'ppm_sol' => $ppm_sol,
+        'ppm_p' => $ppm_p,
+    ], $metadata);
 
-    if ($stmt->execute([$abs_blanco, $absorbancia, $ppm_sol, $ppm_p])) {
-
+    if ($id !== false) {
         return [
-            "exito" => true,
-            "mensaje" => "Fósforo guardado correctamente.",
-            "id" => (int) $conn->lastInsertId()
-        ];
-
-    } else {
-
-        return [
-            "exito" => false,
-            "mensaje" => "Error al guardar el registro."
+            'exito' => true,
+            'mensaje' => 'Fosforo guardado correctamente.',
+            'id' => $id,
         ];
     }
+
+    return [
+        'exito' => false,
+        'mensaje' => 'Error al guardar el registro.',
+    ];
 }
 
-// GUARDAR PUNTO DE CURVA
-function guardarCurvaFosforo($punto_curva, $absorbancia) {
-
+function guardarCurvaFosforo($punto_curva, $absorbancia)
+{
     global $conn;
 
     $stmt = $conn->prepare(
@@ -44,17 +41,14 @@ function guardarCurvaFosforo($punto_curva, $absorbancia) {
     );
 
     if ($stmt->execute([$punto_curva, $absorbancia])) {
-
         return (int) $conn->lastInsertId();
-
-    } else {
-
-        return false;
     }
-}
-// RELACIONAR Fósforo↔ CURVA
-function relacionarFosforoCurva($id_fosforo, $id_curva) {
 
+    return false;
+}
+
+function relacionarFosforoCurva($id_fosforo, $id_curva)
+{
     global $conn;
 
     $stmt = $conn->prepare(
@@ -66,8 +60,8 @@ function relacionarFosforoCurva($id_fosforo, $id_curva) {
     return $stmt->execute([$id_fosforo, $id_curva]);
 }
 
-function obtenerCurvaFosforo($id_fosforo) {
-
+function obtenerCurvaFosforo($id_fosforo)
+{
     global $conn;
 
     $sql = "
@@ -75,22 +69,19 @@ function obtenerCurvaFosforo($id_fosforo) {
             cag.punto_curva,
             cag.absorbancia
         FROM curva_fosforo_ag cag
-
         INNER JOIN agua_fosforo_curva agc
             ON cag.id_curva = agc.id_curva_fosforo
-
         WHERE agc.id_fosforo = ?
     ";
 
     $stmt = $conn->prepare($sql);
-
     $stmt->execute([$id_fosforo]);
 
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function obtenerHistorialFosforo() {
-
+function obtenerHistorialFosforo()
+{
     global $conn;
 
     $sql = "
@@ -101,7 +92,6 @@ function obtenerHistorialFosforo() {
             ppm_sol,
             ppm_p
         FROM agua_fosforo
-
         ORDER BY id DESC
     ";
 
