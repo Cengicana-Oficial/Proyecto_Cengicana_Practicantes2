@@ -1,6 +1,5 @@
 <?php
-require_once __DIR__ . "/config/session.php";
-cengi_session_start();
+session_start();
 require_once(__DIR__ . "/config/conexion.php");
 
 // 🔒 Validar sesión
@@ -13,6 +12,17 @@ $titulo = "Plataforma de Gestión";
 
 $conn = Conexion::conectar();
 $id_usuario = $_SESSION['id_usuario'];
+
+$stmtEnsureModulo = $conn->prepare("
+    INSERT INTO modulos (nombre)
+    SELECT ?
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM modulos
+        WHERE LOWER(nombre) = LOWER(?)
+    )
+");
+$stmtEnsureModulo->execute(['Solicitudes internas', 'Solicitudes internas']);
 
 // 🔍 Obtener datos del usuario
 $stmtUser = $conn->prepare("
@@ -347,6 +357,9 @@ if (trim(strtolower($modulo)) == "cursos") {
  } elseif (in_array(trim(strtolower($modulo)), ["laboratorio", "laboratorios"], true)) {
     $ruta = "../Laboratorio/index.php";
     $icono = "science";
+} elseif (trim(strtolower($modulo)) == "solicitudes internas") {
+    $ruta = "../sistema_de_solicitudes/index.php";
+    $icono = "assignment";
 } elseif ($_SESSION['es_superadmin']) {
 
     if ($modulo == "Solicitud de visitas") {
@@ -591,6 +604,8 @@ if (trim(strtolower($modulo)) == "cursos") {
     $ruta = "../cengicursos/index.php";
 } elseif (in_array(trim(strtolower($modulo)), ["laboratorio", "laboratorios"], true)) {
     $ruta = "../Laboratorio/index.php";
+} elseif (trim(strtolower($modulo)) == "solicitudes internas") {
+    $ruta = "../sistema_de_solicitudes/index.php";
 } elseif ($_SESSION['es_superadmin']) {
 
     if ($modulo == "Solicitud de visitas") {
