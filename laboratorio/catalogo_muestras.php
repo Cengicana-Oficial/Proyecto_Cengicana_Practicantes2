@@ -5,7 +5,7 @@ require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/includes/catalogo_muestras_helper.php';
 
 lab_require_module_access();
-lab_require_permission('laboratorio.analisis.ver');
+lab_require_permission('laboratorio.catalogo_muestras.ver');
 
 labCatalogoMuestrasAsegurarEsquema($conexion);
 
@@ -174,32 +174,6 @@ $sampleVisuals = [
             gap: 10px;
             margin-top: 18px;
         }
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 11px 16px;
-            border-radius: 12px;
-            border: 1px solid transparent;
-            text-decoration: none;
-            font-weight: 700;
-            transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
-        }
-        .btn:hover { transform: translateY(-1px); }
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary), var(--primary-2));
-            color: #fff;
-        }
-        .btn-secondary {
-            background: #fff;
-            color: var(--text);
-            border-color: var(--border);
-        }
-        .btn-muted {
-            background: #edf4ea;
-            color: var(--muted);
-            cursor: not-allowed;
-        }
         .stats {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -268,48 +242,6 @@ $sampleVisuals = [
         .panel-header small {
             color: var(--muted);
         }
-        .table-wrap {
-            overflow: auto;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        thead th {
-            text-align: left;
-            font-size: .8rem;
-            text-transform: uppercase;
-            letter-spacing: .06em;
-            color: var(--muted);
-            padding: 14px 20px;
-            background: #fbfcfa;
-            border-bottom: 1px solid var(--border);
-        }
-        tbody td {
-            padding: 16px 20px;
-            border-bottom: 1px solid #edf2e9;
-            vertical-align: middle;
-        }
-        tbody tr:hover {
-            background: #fafcf8;
-        }
-        .pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            border-radius: 999px;
-            padding: 7px 10px;
-            font-size: .82rem;
-            font-weight: 700;
-        }
-        .pill-on {
-            background: rgba(31, 94, 22, 0.12);
-            color: var(--primary);
-        }
-        .pill-off {
-            background: rgba(180, 51, 51, 0.12);
-            color: #9f2e2e;
-        }
         .actions {
             display: flex;
             gap: 8px;
@@ -353,19 +285,6 @@ $sampleVisuals = [
             background: #f6f9f4;
             color: #526051;
         }
-        .notice {
-            padding: 12px 14px;
-            border-radius: 12px;
-            border: 1px solid #d5e7cf;
-            background: #f3fbf0;
-            color: #24521c;
-            margin-bottom: 14px;
-        }
-        .notice.error {
-            background: #fff5f5;
-            border-color: #f0c3c3;
-            color: #9a2d2d;
-        }
         .meta-list {
             display: grid;
             gap: 10px;
@@ -380,11 +299,6 @@ $sampleVisuals = [
             background: #f8fbf6;
             color: #415041;
         }
-        .empty-state {
-            padding: 28px;
-            text-align: center;
-            color: var(--muted);
-        }
         @media (max-width: 1024px) {
             .hero, .layout {
                 grid-template-columns: 1fr;
@@ -396,6 +310,7 @@ $sampleVisuals = [
             tbody td, thead th { padding-left: 14px; padding-right: 14px; }
         }
     </style>
+    <link rel="stylesheet" href="styles/tables.css">
 </head>
 <body>
     <div class="page">

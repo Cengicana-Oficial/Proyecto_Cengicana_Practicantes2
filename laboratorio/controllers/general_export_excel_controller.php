@@ -228,21 +228,21 @@ function aguas_get_consolidated_data(PDO $pdo, int $idLote, array $reporte): arr
             'numero_laboratorio' => suelos_get_lab_code($pdo, $idLote, $numLab) ?: $numLab,
         ];
 
-        $ce = suelos_fetch_latest($pdo, 'agua_conductividad', $idLote, $numLab);
-        $ph = suelos_fetch_latest($pdo, 'agua_ph', $idLote, $numLab);
-        $tds = suelos_fetch_latest($pdo, 'agua_tds', $idLote, $numLab);
-        $cloruros = suelos_fetch_latest($pdo, 'agua_cloruros', $idLote, $numLab);
-        $dureza = suelos_fetch_latest($pdo, 'agua_dureza', $idLote, $numLab);
-        $alcalinidad = suelos_fetch_latest($pdo, 'agua_alcalinidad', $idLote, $numLab);
-        $carbonatos = suelos_fetch_latest($pdo, 'agua_carbonatos', $idLote, $numLab);
-        $bicarbonatos = suelos_fetch_latest($pdo, 'agua_bicarbonatos', $idLote, $numLab);
-        $ras = suelos_fetch_latest($pdo, 'agua_ras', $idLote, $numLab);
-        $resistividad = suelos_fetch_latest($pdo, 'agua_resistividad', $idLote, $numLab);
-        $salinidad = suelos_fetch_latest($pdo, 'agua_salinidad', $idLote, $numLab);
-        $fosforo = suelos_fetch_latest($pdo, 'agua_fosforo', $idLote, $numLab);
-        $boro = suelos_fetch_latest($pdo, 'agua_boro', $idLote, $numLab);
-        $macros = suelos_fetch_latest($pdo, 'agua_macros', $idLote, $numLab);
-        $micros = suelos_fetch_latest($pdo, 'agua_micros', $idLote, $numLab);
+        $ce = suelos_fetch_latest_with_fallback($pdo, 'agua_conductividad', $idLote, $numLab);
+        $ph = suelos_fetch_latest_with_fallback($pdo, 'agua_ph', $idLote, $numLab);
+        $tds = suelos_fetch_latest_with_fallback($pdo, 'agua_tds', $idLote, $numLab);
+        $cloruros = suelos_fetch_latest_with_fallback($pdo, 'agua_cloruros', $idLote, $numLab);
+        $dureza = suelos_fetch_latest_with_fallback($pdo, 'agua_dureza', $idLote, $numLab);
+        $alcalinidad = suelos_fetch_latest_with_fallback($pdo, 'agua_alcalinidad', $idLote, $numLab);
+        $carbonatos = suelos_fetch_latest_with_fallback($pdo, 'agua_carbonatos', $idLote, $numLab);
+        $bicarbonatos = suelos_fetch_latest_with_fallback($pdo, 'agua_bicarbonatos', $idLote, $numLab);
+        $ras = suelos_fetch_latest_with_fallback($pdo, 'agua_ras', $idLote, $numLab);
+        $resistividad = suelos_fetch_latest_with_fallback($pdo, 'agua_resistividad', $idLote, $numLab);
+        $salinidad = suelos_fetch_latest_with_fallback($pdo, 'agua_salinidad', $idLote, $numLab);
+        $fosforo = suelos_fetch_latest_with_fallback($pdo, 'agua_fosforo', $idLote, $numLab);
+        $boro = suelos_fetch_latest_with_fallback($pdo, 'agua_boro', $idLote, $numLab);
+        $macros = suelos_fetch_latest_with_fallback($pdo, 'agua_macros', $idLote, $numLab);
+        $micros = suelos_fetch_latest_with_fallback($pdo, 'agua_micros', $idLote, $numLab);
 
         $row += [
             'ce' => suelos_first_value($ce['ce'] ?? null),

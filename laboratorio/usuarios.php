@@ -96,6 +96,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/button.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         :root {
@@ -290,44 +291,6 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             padding: 12px 18px 18px;
         }
 
-        .table-shell {
-            overflow: hidden;
-            border: 1px solid rgba(217, 228, 216, 0.86);
-            border-radius: 18px;
-            background: #fff;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        thead th {
-            padding: 16px 18px;
-            background: #fbfdfb;
-            border-bottom: 1px solid var(--border);
-            color: var(--text-main);
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            text-align: left;
-        }
-
-        tbody td {
-            padding: 16px 18px;
-            border-bottom: 1px solid #edf2ec;
-            vertical-align: middle;
-        }
-
-        tbody tr:last-child td {
-            border-bottom: 0;
-        }
-
-        tbody tr:hover {
-            background: #fbfdfb;
-        }
-
         .user-cell {
             display: flex;
             align-items: center;
@@ -365,58 +328,6 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             min-width: 210px;
             color: var(--text-soft);
             font-size: 14px;
-        }
-
-        .role-badge,
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: 700;
-            line-height: 1;
-            white-space: nowrap;
-        }
-
-        .role-admin {
-            background: #e8f1ff;
-            color: #24548f;
-        }
-
-        .role-analyst {
-            background: #efe8ff;
-            color: #6d43a8;
-        }
-
-        .role-tech {
-            background: #fff1df;
-            color: #9b5a05;
-        }
-
-        .role-default {
-            background: #edf4ed;
-            color: #476456;
-        }
-
-        .status-badge::before {
-            content: '';
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: currentColor;
-            opacity: 0.9;
-        }
-
-        .status-active {
-            background: #e3f5e9;
-            color: #23754a;
-        }
-
-        .status-inactive {
-            background: #f0f1f1;
-            color: #7a8181;
         }
 
         .action-links {
@@ -496,20 +407,6 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             font-weight: 800;
         }
 
-        .empty-state,
-        .table-empty {
-            padding: 28px;
-            border: 1px dashed var(--border-strong);
-            border-radius: 18px;
-            background: #fff;
-            color: var(--text-soft);
-            text-align: center;
-        }
-
-        .table-empty {
-            margin-top: 12px;
-        }
-
         .modal {
             position: fixed;
             inset: 0;
@@ -551,29 +448,6 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             margin-top: 22px;
         }
 
-        .modal-buttons button,
-        .modal-buttons a {
-            flex: 1;
-            min-height: 44px;
-            border-radius: 12px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-        }
-
-        .modal-buttons button {
-            border: 1px solid var(--border);
-            background: #f6f8f6;
-            color: var(--text-main);
-            cursor: pointer;
-        }
-
-        .modal-buttons a {
-            background: var(--danger);
-            color: #fff;
-        }
-
         @media (max-width: 980px) {
             .panel-header {
                 flex-direction: column;
@@ -606,20 +480,13 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
                 grid-template-columns: 1fr;
             }
 
-            .table-shell {
-                overflow-x: auto;
-            }
-
-            table {
-                min-width: 760px;
-            }
-
             .table-footer {
                 flex-direction: column;
                 align-items: flex-start;
             }
         }
     </style>
+    <link rel="stylesheet" href="styles/tables.css">
 </head>
 <body>
     <div class="page-shell">
@@ -783,8 +650,8 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             <p>Esta accion eliminara el usuario del modulo de Laboratorio. Asegurese antes de continuar.</p>
 
             <div class="modal-buttons">
-                <button type="button" id="cancelBtn">Cancelar</button>
-                <a id="confirmDelete" href="#">Eliminar</a>
+                <button type="button" id="cancelBtn" class="btn-secondary">Cancelar</button>
+                <a id="confirmDelete" href="#" class="btn-delete">Eliminar</a>
             </div>
         </div>
     </div>

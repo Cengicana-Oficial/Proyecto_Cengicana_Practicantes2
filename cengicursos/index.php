@@ -1,6 +1,7 @@
-﻿<?php
-require_once "conexion.php";
-require_once "menu.php";
+<?php
+require_once __DIR__ . "/revisar_permisos.php";
+require_once __DIR__ . "/conexion.php";
+require_once __DIR__ . "/menu.php";
 $usuario = cengi_cargar_usuario_actual();
 $puedeGestionar = cengi_puede_gestionar();
 $esEstudiante = cengi_es_estudiante();

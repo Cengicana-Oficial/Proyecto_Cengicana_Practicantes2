@@ -107,26 +107,30 @@ function suelos_get_consolidated_data(PDO $pdo, int $idLote, array $reporte): ar
             'numero_laboratorio' => suelos_get_lab_code($pdo, $idLote, $numLab) ?: $numLab,
         ];
 
-        $ce = suelos_fetch_latest($pdo, 'suelo_ce', $idLote, $numLab);
-        $ph = suelos_fetch_latest($pdo, 'suelo_ph', $idLote, $numLab);
-        $nitrogeno = suelos_fetch_latest($pdo, 'suelo_nitrogeno', $idLote, $numLab);
-        $fosforo = suelos_fetch_latest($pdo, 'suelo_fosforo', $idLote, $numLab);
-        $macros = suelos_fetch_latest($pdo, 'suelo_macros', $idLote, $numLab);
-        $azufre = suelos_fetch_latest($pdo, 'suelo_azufre', $idLote, $numLab);
-        $micros = suelos_fetch_latest($pdo, 'suelo_micros', $idLote, $numLab);
-        $boro = suelos_fetch_latest($pdo, 'suelo_boro', $idLote, $numLab);
-        $materiaOrganica = suelos_fetch_latest($pdo, 'MO_Porcentaje', $idLote, $numLab);
-        $materiaOrganicaAlt = suelos_fetch_latest($pdo, 'suelo_materia_organica', $idLote, $numLab);
-        $cc = suelos_fetch_latest($pdo, 'suelo_cc', $idLote, $numLab);
-        $pmp = suelos_fetch_latest($pdo, 'suelo_pmp', $idLote, $numLab);
-        $dap = suelos_fetch_latest($pdo, 'suelo_dap', $idLote, $numLab);
-        $humedad = suelos_fetch_latest($pdo, 'suelo_humedad', $idLote, $numLab);
-        $textura = suelos_fetch_latest($pdo, 'analisis_textura', $idLote, $numLab);
-        $quimicos = suelos_fetch_latest($pdo, 'suelo_quimicos', $idLote, $numLab);
+        $ce = suelos_fetch_latest_with_fallback($pdo, 'suelo_ce', $idLote, $numLab);
+        $ph = suelos_fetch_latest_with_fallback($pdo, 'suelo_ph', $idLote, $numLab);
+        $phAlt = suelos_fetch_latest_with_fallback($pdo, 'suelo_ph_agua', $idLote, $numLab);
+        $nitrogeno = suelos_fetch_latest_with_fallback($pdo, 'suelo_nitrogeno', $idLote, $numLab);
+        $fosforo = suelos_fetch_latest_with_fallback($pdo, 'suelo_fosforo', $idLote, $numLab);
+        $macros = suelos_fetch_latest_with_fallback($pdo, 'suelo_macros', $idLote, $numLab);
+        $azufre = suelos_fetch_latest_with_fallback($pdo, 'suelo_azufre', $idLote, $numLab);
+        $micros = suelos_fetch_latest_with_fallback($pdo, 'suelo_micros', $idLote, $numLab);
+        $boro = suelos_fetch_latest_with_fallback($pdo, 'suelo_boro', $idLote, $numLab);
+        $materiaOrganica = suelos_fetch_latest_with_fallback($pdo, 'MO_Porcentaje', $idLote, $numLab);
+        $materiaOrganicaAlt = suelos_fetch_latest_with_fallback($pdo, 'suelo_materia_organica', $idLote, $numLab);
+        $cc = suelos_fetch_latest_with_fallback($pdo, 'suelo_cc', $idLote, $numLab);
+        $pmp = suelos_fetch_latest_with_fallback($pdo, 'suelo_pmp', $idLote, $numLab);
+        $dap = suelos_fetch_latest_with_fallback($pdo, 'suelo_dap', $idLote, $numLab);
+        $humedad = suelos_fetch_latest_with_fallback($pdo, 'laboratorio_humedad', $idLote, $numLab);
+        $humedadAlt = suelos_fetch_latest_with_fallback($pdo, 'suelo_humedad_gravimetrica', $idLote, $numLab);
+        $humedadResidual = suelos_fetch_latest_with_fallback($pdo, 'suelo_humedad_residual', $idLote, $numLab);
+        $humedadSimple = suelos_fetch_latest_with_fallback($pdo, 'suelo_humedad', $idLote, $numLab);
+        $textura = suelos_fetch_latest_with_fallback($pdo, 'analisis_textura', $idLote, $numLab);
+        $quimicos = suelos_fetch_latest_with_fallback($pdo, 'suelo_quimicos', $idLote, $numLab);
 
         $row += [
             'ce' => suelos_first_value($ce['ce'] ?? null),
-            'ph' => suelos_first_value($ph['ph'] ?? null),
+            'ph' => suelos_first_value($ph['ph'] ?? null, $phAlt['ph'] ?? null),
             'porcentaje_n' => suelos_first_value($nitrogeno['porcentaje_n'] ?? null, $quimicos['nitrogeno'] ?? null),
             'ppm_suelo' => suelos_first_value($fosforo['ppm_suelo'] ?? null, $quimicos['fosforo'] ?? null),
             'ppm_k' => suelos_first_value($macros['ppm_k'] ?? null, $quimicos['potasio'] ?? null),
@@ -151,7 +155,12 @@ function suelos_get_consolidated_data(PDO $pdo, int $idLote, array $reporte): ar
             'porcentaje_pmp' => suelos_first_value($pmp['porcentaje_pmp'] ?? null),
             'porcentaje_cc' => suelos_first_value($cc['porcentaje_cc'] ?? null),
             'densidad' => suelos_first_value($dap['densidad'] ?? null),
-            'humedad' => suelos_first_value($humedad['humedad'] ?? null),
+            'humedad' => suelos_first_value(
+                $humedad['PorHGrav'] ?? null,
+                $humedadAlt['h_grav'] ?? null,
+                $humedadResidual['humedad_residual'] ?? null,
+                $humedadSimple['humedad'] ?? null
+            ),
         ];
 
         $registros[] = $row;
@@ -164,6 +173,7 @@ function suelos_get_num_labs(PDO $pdo, int $idLote): array
 {
     $tables = [
         'suelo_ph',
+        'suelo_ph_agua',
         'suelo_ce',
         'suelo_nitrogeno',
         'suelo_fosforo',
@@ -178,19 +188,35 @@ function suelos_get_num_labs(PDO $pdo, int $idLote): array
         'suelo_pmp',
         'suelo_dap',
         'suelo_humedad',
+        'suelo_humedad_gravimetrica',
+        'suelo_humedad_residual',
         'analisis_textura',
+        'laboratorio_humedad',
     ];
 
     $parts = [];
     $params = [];
+    $formularioIds = suelos_get_formulario_ids_for_lote($pdo, $idLote);
+    $formPlaceholders = $formularioIds ? implode(', ', array_fill(0, count($formularioIds), '?')) : '';
+    $sampleKeys = suelos_get_sample_keys_for_lote($pdo, $idLote);
+    $samplePlaceholders = $sampleKeys ? implode(', ', array_fill(0, count($sampleKeys), '?')) : '';
 
     foreach ($tables as $table) {
-        if (!suelos_table_has_columns($pdo, $table, ['id_lote', 'numero_laboratorio'])) {
-            continue;
+        $columns = suelos_table_has_columns($pdo, $table, ['id_lote', 'numero_laboratorio']);
+        if ($columns) {
+            $parts[] = "SELECT DISTINCT numero_laboratorio FROM `$table` WHERE id_lote = ? AND numero_laboratorio IS NOT NULL";
+            $params[] = $idLote;
         }
 
-        $parts[] = "SELECT DISTINCT numero_laboratorio FROM `$table` WHERE id_lote = ? AND numero_laboratorio IS NOT NULL";
-        $params[] = $idLote;
+        if ($formularioIds && suelos_table_has_columns($pdo, $table, ['id_formulario', 'no_lab'])) {
+            $parts[] = "SELECT DISTINCT no_lab AS numero_laboratorio FROM `$table` WHERE id_formulario IN ($formPlaceholders) AND no_lab IS NOT NULL AND no_lab <> ''";
+            array_push($params, ...$formularioIds);
+        }
+
+        if ($sampleKeys && suelos_table_has_columns($pdo, $table, ['no_lab'])) {
+            $parts[] = "SELECT DISTINCT no_lab AS numero_laboratorio FROM `$table` WHERE no_lab IN ($samplePlaceholders)";
+            array_push($params, ...$sampleKeys);
+        }
     }
 
     if (!$parts) {
@@ -201,6 +227,53 @@ function suelos_get_num_labs(PDO $pdo, int $idLote): array
     $stmt->execute($params);
 
     return array_map(static fn($row) => $row['numero_laboratorio'], $stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+function suelos_get_sample_keys_for_lote(PDO $pdo, int $idLote): array
+{
+    try {
+        $stmt = $pdo->prepare("
+            SELECT DISTINCT CAST(m.numero_muestra AS CHAR) AS valor
+              FROM muestra m
+              INNER JOIN solicitud s ON s.id_solicitud = m.id_solicitud
+             WHERE s.id_lote = ?
+               AND m.numero_muestra IS NOT NULL
+            UNION
+            SELECT DISTINCT m.codigo_lab AS valor
+              FROM muestra m
+              INNER JOIN solicitud s ON s.id_solicitud = m.id_solicitud
+             WHERE s.id_lote = ?
+               AND m.codigo_lab IS NOT NULL
+               AND m.codigo_lab <> ''
+            ORDER BY valor
+        ");
+        $stmt->execute([$idLote, $idLote]);
+
+        return array_values(array_filter(array_map(static function ($row) {
+            return trim((string) ($row['valor'] ?? ''));
+        }, $stmt->fetchAll(PDO::FETCH_ASSOC))));
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function suelos_get_formulario_ids_for_lote(PDO $pdo, int $idLote): array
+{
+    try {
+        $stmt = $pdo->prepare("
+            SELECT DISTINCT f.id_formulario
+              FROM formulario f
+              INNER JOIN lote_rango lr ON lr.id_rango = f.id_rango
+             WHERE lr.id_lote = ?
+        ");
+        $stmt->execute([$idLote]);
+
+        return array_values(array_filter(array_map(static function ($row) {
+            return (int) ($row['id_formulario'] ?? 0);
+        }, $stmt->fetchAll(PDO::FETCH_ASSOC))));
+    } catch (Throwable $e) {
+        return [];
+    }
 }
 
 function suelos_fetch_latest(PDO $pdo, string $table, int $idLote, $numLab): array
@@ -216,6 +289,110 @@ function suelos_fetch_latest(PDO $pdo, string $table, int $idLote, $numLab): arr
     } catch (Throwable $e) {
         return [];
     }
+}
+
+function suelos_fetch_latest_by_solicitud(PDO $pdo, string $table, int $idSolicitud): array
+{
+    if ($idSolicitud <= 0 || !suelos_table_has_columns($pdo, $table, ['id_solicitud'])) {
+        return [];
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM `$table` WHERE id_solicitud = ? ORDER BY id DESC LIMIT 1");
+        $stmt->execute([$idSolicitud]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function suelos_fetch_latest_by_no_lab(PDO $pdo, string $table, int $idLote, $numLab): array
+{
+    if (!suelos_table_has_columns($pdo, $table, ['no_lab'])) {
+        return [];
+    }
+
+    $formularioIds = suelos_table_has_columns($pdo, $table, ['id_formulario'])
+        ? suelos_get_formulario_ids_for_lote($pdo, $idLote)
+        : [];
+
+    $identificadores = [];
+    $numero = trim((string) $numLab);
+    if ($numero !== '') {
+        $identificadores[] = $numero;
+    }
+
+    $codigoLab = suelos_get_lab_code($pdo, $idLote, $numLab);
+    if ($codigoLab !== '' && !in_array($codigoLab, $identificadores, true)) {
+        $identificadores[] = $codigoLab;
+    }
+
+    if (!$identificadores) {
+        return [];
+    }
+
+    $conds = [];
+    $params = [];
+
+    if ($formularioIds) {
+        $placeholders = implode(', ', array_fill(0, count($formularioIds), '?'));
+        $conds[] = "id_formulario IN ($placeholders)";
+        array_push($params, ...$formularioIds);
+    }
+
+    foreach ($identificadores as $identificador) {
+        $conds[] = 'no_lab = ?';
+        $params[] = $identificador;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM `$table` WHERE " . implode(' OR ', $conds) . " ORDER BY id DESC LIMIT 1");
+        $stmt->execute($params);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function suelos_get_solicitud_for_lab(PDO $pdo, int $idLote, $numLab): ?int
+{
+    try {
+        $stmt = $pdo->prepare("
+            SELECT s.id_solicitud
+              FROM solicitud s
+              INNER JOIN muestra m ON m.id_solicitud = s.id_solicitud
+             WHERE s.id_lote = ?
+               AND (m.numero_muestra = ? OR m.codigo_lab = ?)
+             ORDER BY s.id_solicitud DESC
+             LIMIT 1
+        ");
+        $stmt->execute([$idLote, $numLab, $numLab]);
+        $idSolicitud = $stmt->fetchColumn();
+
+        return $idSolicitud !== false ? (int) $idSolicitud : null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+function suelos_fetch_latest_with_fallback(PDO $pdo, string $table, int $idLote, $numLab): array
+{
+    $row = suelos_fetch_latest($pdo, $table, $idLote, $numLab);
+    if ($row) {
+        return $row;
+    }
+
+    $idSolicitud = suelos_get_solicitud_for_lab($pdo, $idLote, $numLab);
+    if ($idSolicitud === null) {
+        return suelos_fetch_latest_by_no_lab($pdo, $table, $idLote, $numLab);
+    }
+
+    $row = suelos_fetch_latest_by_solicitud($pdo, $table, $idSolicitud);
+    if ($row) {
+        return $row;
+    }
+
+    return suelos_fetch_latest_by_no_lab($pdo, $table, $idLote, $numLab);
 }
 
 function suelos_get_lab_code(PDO $pdo, int $idLote, $numLab): string

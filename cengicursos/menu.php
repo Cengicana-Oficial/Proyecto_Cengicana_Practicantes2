@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/revisar_permisos.php';
 
 function menu_render()
@@ -398,6 +398,4 @@ body.cengi-nav-loading {
 <script src="js/cengi-navigation.js"></script>
 <?php
 }
-?>
-
 

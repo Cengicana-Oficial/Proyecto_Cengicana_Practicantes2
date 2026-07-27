@@ -409,7 +409,8 @@ tbody tr:hover {
 }
 
 .btn-pdf,
-.btn-mail {
+.btn-mail,
+.btn-reserva {
   border: none;
   padding: 8px 14px;
   border-radius: 8px;
@@ -417,6 +418,10 @@ tbody tr:hover {
   font-size: 13px;
   font-weight: 600;
   transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-pdf {
@@ -436,6 +441,16 @@ tbody tr:hover {
 
 .btn-mail:hover {
   opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.btn-reserva {
+  background: #1d4ed8;
+  color: white;
+}
+
+.btn-reserva:hover {
+  background: #1e40af;
   transform: translateY(-1px);
 }
 

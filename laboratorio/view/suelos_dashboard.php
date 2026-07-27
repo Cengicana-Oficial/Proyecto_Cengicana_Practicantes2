@@ -15,7 +15,11 @@ $errorMensaje = '';
 $mapeoAnalisisSuelos = [
     'suelos-textura' => ['nombre' => 'Textura', 'tabla' => 'analisis_textura', 'tipo' => 'fisico'],
     'suelos-humedad' => ['nombre' => 'Humedad', 'tabla' => 'suelo_humedad', 'tipo' => 'fisico'],
-    'suelos-humedad-residual' => ['nombre' => 'Humedad Residual', 'tabla' => 'laboratorio_humedad', 'tipo' => 'fisico'],
+    'suelos-humedad-residual' => [
+        'nombre' => 'Humedad Gravimetrica',
+        'tablas' => ['laboratorio_humedad', 'suelo_humedad_gravimetrica', 'suelo_humedad_residual'],
+        'tipo' => 'fisico'
+    ],
     'suelos-dap' => ['nombre' => 'DAP (Densidad Aparente)', 'tabla' => 'suelo_dap', 'tipo' => 'fisico'],
     'suelos-cc' => ['nombre' => 'Capacidad de Campo', 'tabla' => 'suelo_cc', 'tipo' => 'fisico'],
     'suelos-pmp' => ['nombre' => 'Punto de Marchitez', 'tabla' => 'suelo_pmp', 'tipo' => 'fisico'],
@@ -30,6 +34,137 @@ $mapeoAnalisisSuelos = [
     'suelos-azufre' => ['nombre' => 'Azufre', 'tabla' => 'suelo_azufre', 'tipo' => 'quimico'],
     'suelos-fosforo' => ['nombre' => 'Fósforo', 'tabla' => 'suelo_fosforo', 'tipo' => 'quimico'],
 ];
+
+function suelosDashboardTableColumns(PDO $pdo, string $table): array
+{
+    static $cache = [];
+
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+        return [];
+    }
+
+    if (!array_key_exists($table, $cache)) {
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM `$table`");
+            $cache[$table] = $stmt ? ($stmt->fetchAll(PDO::FETCH_COLUMN) ?: []) : [];
+        } catch (Throwable $e) {
+            $cache[$table] = [];
+        }
+    }
+
+    return $cache[$table];
+}
+
+function suelosDashboardSampleKeys(PDO $pdo, int $idLote): array
+{
+    static $cache = [];
+
+    if ($idLote <= 0) {
+        return [];
+    }
+
+    if (!array_key_exists($idLote, $cache)) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT DISTINCT CAST(m.numero_muestra AS CHAR) AS valor
+                  FROM muestra m
+                  INNER JOIN solicitud s ON s.id_solicitud = m.id_solicitud
+                 WHERE s.id_lote = ?
+                   AND m.numero_muestra IS NOT NULL
+                UNION
+                SELECT DISTINCT m.codigo_lab AS valor
+                  FROM muestra m
+                  INNER JOIN solicitud s ON s.id_solicitud = m.id_solicitud
+                 WHERE s.id_lote = ?
+                   AND m.codigo_lab IS NOT NULL
+                   AND m.codigo_lab <> ''
+                ORDER BY valor
+            ");
+            $stmt->execute([$idLote, $idLote]);
+            $cache[$idLote] = array_values(array_filter(array_map(static function ($row) {
+                return trim((string) ($row['valor'] ?? ''));
+            }, $stmt->fetchAll(PDO::FETCH_ASSOC))));
+        } catch (Throwable $e) {
+            $cache[$idLote] = [];
+        }
+    }
+
+    return $cache[$idLote];
+}
+
+function suelosDashboardCountRows(PDO $pdo, $tables, int $idLote): int
+{
+    $tables = is_array($tables) ? $tables : [$tables];
+    $sampleKeys = null;
+
+    foreach ($tables as $table) {
+        $columns = suelosDashboardTableColumns($pdo, $table);
+        if (!$columns) {
+            continue;
+        }
+
+        $joins = [];
+        $conditions = [];
+        $params = [];
+
+        if (in_array('id_lote', $columns, true)) {
+            $conditions[] = 't.id_lote = ?';
+            $params[] = $idLote;
+        }
+
+        if (in_array('id_solicitud', $columns, true)) {
+            $joins['solicitud'] = 'LEFT JOIN solicitud s ON s.id_solicitud = t.id_solicitud';
+            $conditions[] = 's.id_lote = ?';
+            $params[] = $idLote;
+        }
+
+        if (in_array('id_formulario', $columns, true)) {
+            $joins['formulario'] = 'LEFT JOIN formulario f ON f.id_formulario = t.id_formulario';
+            $joins['lote_rango'] = 'LEFT JOIN lote_rango lr ON lr.id_rango = f.id_rango';
+            $conditions[] = 'lr.id_lote = ?';
+            $params[] = $idLote;
+        }
+
+        if (in_array('no_lab', $columns, true) || in_array('numero_laboratorio', $columns, true) || in_array('numero_muestra', $columns, true)) {
+            $sampleKeys ??= suelosDashboardSampleKeys($pdo, $idLote);
+            if ($sampleKeys) {
+                $placeholders = implode(', ', array_fill(0, count($sampleKeys), '?'));
+
+                if (in_array('no_lab', $columns, true)) {
+                    $conditions[] = "t.no_lab IN ($placeholders)";
+                    array_push($params, ...$sampleKeys);
+                } elseif (in_array('numero_laboratorio', $columns, true)) {
+                    $conditions[] = "CAST(t.numero_laboratorio AS CHAR) IN ($placeholders)";
+                    array_push($params, ...$sampleKeys);
+                } elseif (in_array('numero_muestra', $columns, true)) {
+                    $conditions[] = "CAST(t.numero_muestra AS CHAR) IN ($placeholders)";
+                    array_push($params, ...$sampleKeys);
+                }
+            }
+        }
+
+        if (!$conditions) {
+            continue;
+        }
+
+        $sql = 'SELECT COUNT(*) AS total FROM `' . $table . '` t '
+            . implode(' ', $joins)
+            . ' WHERE (' . implode(' OR ', $conditions) . ')';
+
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $total = (int) ($stmt->fetchColumn() ?: 0);
+            if ($total > 0) {
+                return $total;
+            }
+        } catch (Throwable $e) {
+            continue;
+        }
+    }
+
+    return 0;
+}
 
 // Obtener lista de lotes
 $stmtLotes = $pdo->query("SELECT DISTINCT l.id_lote, l.codigo_lote FROM lote l ORDER BY l.codigo_lote");
@@ -49,16 +184,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
         
         // Verificar qué análisis tienen datos para este lote
         foreach ($mapeoAnalisisSuelos as $key => $analisis) {
-            $tabla = $analisis['tabla'];
             try {
-                $sqlCheck = "SELECT COUNT(*) as total FROM `$tabla` WHERE id_lote = ? LIMIT 1";
-                $stmtCheck = $pdo->prepare($sqlCheck);
-                $stmtCheck->execute([$idLote]);
-                $result = $stmtCheck->fetch();
-                
-                if ($result && $result['total'] > 0) {
+                $tablas = $analisis['tablas'] ?? $analisis['tabla'];
+                $total = suelosDashboardCountRows($pdo, $tablas, $idLote);
+
+                if ($total > 0) {
                     $analisis['id'] = $key;
-                    $analisis['registros'] = $result['total'];
+                    $analisis['registros'] = $total;
                     
                     if ($analisis['tipo'] === 'fisico') {
                         $analisisFisicos[] = $analisis;
@@ -159,38 +291,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
             gap: 10px;
             margin-top: 15px;
         }
-        .btn-small {
-            padding: 6px 12px;
-            font-size: 12px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            text-align: center;
-            flex: 1;
-        }
-        .btn-view {
-            background: #2196F3;
-            color: white;
-        }
-        .btn-view:hover {
-            background: #0b7dda;
-        }
-        .btn-download-all {
-            padding: 12px 24px;
-            background: #ff9800;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 20px;
-        }
-        .btn-download-all:hover {
-            background: #e68900;
-        }
         .resumen {
             background: white;
             padding: 20px;
@@ -267,8 +367,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
             </div>
 
             <?php if (!empty($analisisFisicos) || !empty($analisisQuimicos)): ?>
-                <form method="POST" action="../controllers/suelos_export_excel_controller.php" style="display: inline;">
+                <form method="POST" action="../controllers/general_export_excel_controller.php" style="display: inline;">
                     <input type="hidden" name="id_lote" value="<?= (int)$loteSeleccionado['id_lote'] ?>">
+                    <input type="hidden" name="tipo_reporte" value="suelos">
                     <button type="submit" class="btn-download-all">
                         📥 Descargar Excel con Todos los Resultados
                     </button>

@@ -16,9 +16,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     ]);
 }
 
-require_once __DIR__ . '/../../vendor/phpmailer/phpmailer/src/Exception.php';
-require_once __DIR__ . '/../../vendor/phpmailer/phpmailer/src/PHPMailer.php';
-require_once __DIR__ . '/../../vendor/phpmailer/phpmailer/src/SMTP.php';
+require_once __DIR__ . '/../vendor/phpmailer/phpmailer/src/Exception.php';
+require_once __DIR__ . '/../vendor/phpmailer/phpmailer/src/PHPMailer.php';
+require_once __DIR__ . '/../vendor/phpmailer/phpmailer/src/SMTP.php';
 
 try {
     $payload = leerJsonEntrada();
@@ -291,7 +291,7 @@ function enviarCorreoSolicitud(array $emails, string $pdfBinario, string $nombre
 {
     $mail = new PHPMailer(true);
     $mail->CharSet = 'UTF-8';
-    $mail->setLanguage('es', __DIR__ . '/../../vendor/phpmailer/phpmailer/language/');
+    $mail->setLanguage('es', __DIR__ . '/../vendor/phpmailer/phpmailer/language/');
 
     $mailer = strtolower((string) envCorreo('MAIL_MAILER', 'smtp'));
     $host = envCorreo('MAIL_HOST');
@@ -306,7 +306,8 @@ function enviarCorreoSolicitud(array $emails, string $pdfBinario, string $nombre
         $mail->Port = (int) envCorreo('MAIL_PORT', '587');
         $mail->SMTPAuth = envCorreoBool('MAIL_SMTP_AUTH', true);
         $mail->Username = envCorreo('MAIL_USERNAME', '') ?? '';
-        $mail->Password = envCorreo('MAIL_PASSWORD', '') ?? '';
+        // Gmail app passwords often come copied with display spaces; strip them before auth.
+        $mail->Password = preg_replace('/\s+/', '', envCorreo('MAIL_PASSWORD', '') ?? '');
 
         if ($mail->SMTPAuth && ($mail->Username === '' || $mail->Password === '')) {
             throw new RuntimeException('SMTP no configurado: faltan MAIL_USERNAME y/o MAIL_PASSWORD en Laboratorio/.env.');

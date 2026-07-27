@@ -446,6 +446,7 @@ CREATE TABLE suelo_fosforo (
     absorbancia DECIMAL(10,4),
     ppm_solucion DECIMAL(10,4),
     ppm_suelo DECIMAL(10,4),
+    control DECIMAL(10,4),
     FOREIGN KEY (id_formulario) REFERENCES formulario(id_formulario)
 );
 
@@ -483,7 +484,9 @@ CREATE TABLE suelo_nitrogeno (
     hcl_blanco DECIMAL(10,4),
     hcl_muestra DECIMAL(10,4),
     porcentaje_n DECIMAL(10,4),
+    normalidad DECIMAL(10,4),
     x_nitrogeno VARCHAR(255),
+    control DECIMAL(10,4),
     FOREIGN KEY (id_formulario) REFERENCES formulario(id_formulario)
 );
 
@@ -598,3 +601,71 @@ CREATE TABLE mieles_brix (
 
 ```
 ```
+-- =====================================================
+-- MODIFICACION DE LA TABLA FOLIARES_MACROS
+-- =====================================================
+
+ALTER TABLE laboratorios_prueba.foliar_macros
+
+ADD COLUMN peso DECIMAL(10,4) NULL
+AFTER id_formulario,
+
+ADD COLUMN sodio DECIMAL(10,4) NULL
+AFTER potasio,
+
+ADD COLUMN blk_calcio DECIMAL(10,4) NULL
+AFTER sodio,
+
+ADD COLUMN blk_magnesio DECIMAL(10,4) NULL
+AFTER blk_calcio,
+
+ADD COLUMN blk_potasio DECIMAL(10,4) NULL
+AFTER blk_magnesio,
+
+ADD COLUMN blk_sodio DECIMAL(10,4) NULL
+AFTER blk_potasio,
+
+ADD COLUMN porcentaje_calcio DECIMAL(10,4) NULL
+AFTER blk_sodio,
+
+ADD COLUMN porcentaje_magnesio DECIMAL(10,4) NULL
+AFTER porcentaje_calcio,
+
+ADD COLUMN porcentaje_potasio DECIMAL(10,4) NULL
+AFTER porcentaje_magnesio,
+
+ADD COLUMN porcentaje_sodio DECIMAL(10,4) NULL
+AFTER porcentaje_potasio;
+
+
+
+-- =====================================================
+-- MODIFICACION DE LA TABLA FOLIAR_NITROGENO
+-- =====================================================
+
+
+
+ALTER TABLE laboratorios_prueba.foliar_nitrogeno
+
+ADD COLUMN peso DECIMAL(10,4) NULL
+AFTER id_formulario,
+
+ADD COLUMN ml_hcl_blanco DECIMAL(10,4) NULL
+AFTER peso,
+
+ADD COLUMN ml_hcl_muestra DECIMAL(10,4) NULL
+AFTER ml_hcl_blanco,
+
+ADD COLUMN porcentaje_nitrogeno DECIMAL(10,4) NULL
+AFTER ml_hcl_muestra;
+
+
+
+
+ALTER TABLE laboratorios_prueba.foliar_nitrogeno
+DROP COLUMN ml_gastado,
+DROP COLUMN normalidad,
+DROP COLUMN resultado;
+
+
+DESCRIBE laboratorios_prueba.foliar_nitrogeno;

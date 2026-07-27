@@ -10,7 +10,7 @@ $doc_edicion   = "03";
 $doc_vf        = "V2";
 
 $fecha_actual  = date('d-m-Y');
-$lote_actual   = "LT-2025-083";
+$lote_actual   = "";
 $tecnicos      = [
     ['id' => 1, 'nombre' => 'Ana López Méndez'],
     ['id' => 2, 'nombre' => 'Carlos Ruiz'],
@@ -50,11 +50,11 @@ $resultado = $resultado ?? [];
             <input type="number" step="any" name="ml_muestra" id="ml_muestra" value = "100" required>
         </label>
 
-        <label>ml de AgNO3 Blanco
+        <label>Blanco
             <input type="number" step="any" name="ml_agno3_blanco" id = "ml_agno3_blanco" required>
         </label>
 
-        <label>ml de AgNO3 Muestra
+        <label>Muestra
             <input type="number" step="any" name="ml_agno3_muestra" id = "ml_agno3_muestra" required>
         </label>
         </div>

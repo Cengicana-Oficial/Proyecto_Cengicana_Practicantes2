@@ -1,20 +1,23 @@
 <?php
 require_once __DIR__ . '/../conexion.php';
+require_once __DIR__ . '/../legacy_analysis_model_helper.php';
 
-function guardarBicarbonato($ml_acl, $ml_carbonatos, $normalidad_h2oso4, $volumen_muestra, 
-$bicarbonatos_mgl){
+function guardarBicarbonato($ml_acl, $ml_carbonatos, $normalidad_h2oso4, $volumen_muestra, $bicarbonatos_mgl, array $metadata = [])
+{
     $conn = (new Conexion())->conectar();
 
-    $stmt = $conn->prepare(
-        "INSERT INTO agua_bicarbonatos
-            (ml_hcl, ml_carbonatos, normalidad_h2so4, volumen_muestra, bicarbonatos_mgl)
-         VALUES (?, ?, ?, ?, ?)"
-    );
+    $id = labLegacyInsertAnalysisRow($conn, 'agua_bicarbonatos', [
+        'ml_hcl' => $ml_acl,
+        'ml_carbonatos' => $ml_carbonatos,
+        'normalidad_h2so4' => $normalidad_h2oso4,
+        'volumen_muestra' => $volumen_muestra,
+        'bicarbonatos_mgl' => $bicarbonatos_mgl,
+    ], $metadata);
 
-    if ($stmt->execute([$ml_acl, $ml_carbonatos, $normalidad_h2oso4, $volumen_muestra, $bicarbonatos_mgl])) {
-        return ["exito" => true, "mensaje" => "Cloruros guardados correctamente."];
-    } else {
-        return ["exito" => false, "mensaje" => "Error al guardar."];
+    if ($id !== false) {
+        return ['exito' => true, 'mensaje' => 'Bicarbonatos guardados correctamente.', 'id' => $id];
     }
+
+    return ['exito' => false, 'mensaje' => 'Error al guardar.'];
 }
 ?>

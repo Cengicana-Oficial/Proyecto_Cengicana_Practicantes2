@@ -51,10 +51,6 @@ $resultado = $resultado ?? [];
                         <label for="peso">Peso (g)</label>
                         <input type="number" step="any" name="peso" id="peso" required>
                     </div>
-                    <div class="field">
-                        <label for="control">Control</label>
-                        <input type="number" step="any" name="control" id="control" required>
-                    </div>
                 </div>
 
                 <h3>Concentraciones (CONC)</h3>
@@ -74,10 +70,6 @@ $resultado = $resultado ?? [];
                     <div class="field">
                         <label for="conc_mn">Mn</label>
                         <input type="number" step="any" name="conc_mn" id="conc_mn" value="0">
-                    </div>
-                    <div class="field">
-                        <label for="conc_k">K</label>
-                        <input type="number" step="any" name="conc_k" id="conc_k" value="0">
                     </div>
                 </div>
 
@@ -102,8 +94,8 @@ $resultado = $resultado ?? [];
                 </div>
 
                 <h3>Puntos de la curva</h3>
-                <div class="table-wrap">
-                    <table class="analisis-table">
+                <div class="table-wrap calibration-table-wrap">
+                    <table class="analisis-table calibration-table">
                         <thead>
                             <tr>
                                 <th>Patrón</th>
@@ -139,5 +131,82 @@ $resultado = $resultado ?? [];
     </div><!-- /.card -->
 
 </div><!-- /.page-wrap -->
+
+    <template id="micros-control-row-template">
+        <tr class="lab-data-row lab-control-row" data-control-row="1">
+            <td class="lab-row-index"></td>
+            <td>
+                <strong>CONTROL</strong>
+                <input type="hidden" name="lote[]" value="CONTROL">
+            </td>
+            <td>
+                <strong>CONTROL</strong>
+                <input type="hidden" name="numero_laboratorio[]" value="CONTROL">
+                <input type="hidden" name="control[]" value="0.00">
+            </td>
+            <td>
+                <input type="number" step="any" name="peso[]" aria-label="Peso del control" required>
+            </td>
+            <td>
+                <input type="number" step="any" name="conc_cu[]" aria-label="Concentracion Cu del control" value="0">
+            </td>
+            <td>
+                <input type="number" step="any" name="conc_zn[]" aria-label="Concentracion Zn del control" value="0">
+            </td>
+            <td>
+                <input type="number" step="any" name="conc_fe[]" aria-label="Concentracion Fe del control" value="0">
+            </td>
+            <td>
+                <input type="number" step="any" name="conc_mn[]" aria-label="Concentracion Mn del control" value="0">
+            </td>
+            <td>
+                <input type="number" step="any" name="blk_cu[]" aria-label="BLK Cu del control" value="0">
+            </td>
+            <td>
+                <input type="number" step="any" name="blk_zn[]" aria-label="BLK Zn del control" value="0">
+            </td>
+            <td>
+                <input type="number" step="any" name="blk_fe[]" aria-label="BLK Fe del control" value="0">
+            </td>
+            <td>
+                <input type="number" step="any" name="blk_mn[]" aria-label="BLK Mn del control" value="0">
+            </td>
+            <td></td>
+        </tr>
+    </template>
+
+    <script>
+    (function () {
+        function renumberRows(tbody) {
+            Array.from(tbody.querySelectorAll('tr.lab-data-row')).forEach((row, index) => {
+                const indexCell = row.querySelector('.lab-row-index');
+                if (indexCell) {
+                    indexCell.textContent = String(index + 1);
+                }
+            });
+        }
+
+        function insertControlRow() {
+            const template = document.getElementById('micros-control-row-template');
+            const table = document.querySelector('table.lab-entry-table');
+            const tbody = table ? table.querySelector('tbody') : null;
+
+            if (!template || !table || !tbody || tbody.querySelector('[data-control-row="1"]')) {
+                return;
+            }
+
+            const fragment = template.content.cloneNode(true);
+            const row = fragment.querySelector('tr');
+            if (!row) {
+                return;
+            }
+
+            tbody.insertBefore(row, tbody.firstChild);
+            renumberRows(tbody);
+        }
+
+        window.addEventListener('load', insertControlRow);
+    })();
+    </script>
 </body>
 </html>

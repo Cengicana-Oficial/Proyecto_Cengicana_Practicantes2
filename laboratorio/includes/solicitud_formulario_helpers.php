@@ -41,6 +41,67 @@ function normalizarFirmaSolicitud($firma): string
   return preg_match('/^data:image\/png;base64,[A-Za-z0-9+\/=]+$/', $firma) ? $firma : '';
 }
 
+function labSolicitudFormularioNormalizarTipoMuestra($tipoMuestra): string
+{
+  if (is_array($tipoMuestra)) {
+    if (!empty($tipoMuestra['clave'])) {
+      return labCatalogoMuestrasNormalizarTexto((string) $tipoMuestra['clave']);
+    }
+
+    if (!empty($tipoMuestra['prefijo']) || !empty($tipoMuestra['nombre'])) {
+      return labCatalogoMuestrasClaveDesdePrefijo(
+        isset($tipoMuestra['prefijo']) ? (string) $tipoMuestra['prefijo'] : null,
+        isset($tipoMuestra['nombre']) ? (string) $tipoMuestra['nombre'] : null
+      );
+    }
+  }
+
+  return labCatalogoMuestrasClaveDesdePrefijo(null, (string) $tipoMuestra);
+}
+
+function obtenerDiasCompromiso($tipoMuestra): int
+{
+  $claveTipo = labSolicitudFormularioNormalizarTipoMuestra($tipoMuestra);
+
+  switch ($claveTipo) {
+    case 'suelos':
+    case 'foliares':
+      return 28;
+    case 'agua':
+      return 15;
+    case 'cana':
+    case 'miel':
+      return 9;
+    default:
+      return 0;
+  }
+}
+
+function calcularFechaEstimadaSolicitud($fechaIngreso, $tipoMuestra): string
+{
+  $fechaIngreso = trim((string) $fechaIngreso);
+  if ($fechaIngreso === '') {
+    return '';
+  }
+
+  $diasCompromiso = obtenerDiasCompromiso($tipoMuestra);
+  if ($diasCompromiso <= 0) {
+    return '';
+  }
+
+  $fecha = DateTimeImmutable::createFromFormat('Y-m-d', $fechaIngreso);
+  if (!$fecha instanceof DateTimeImmutable) {
+    $timestamp = strtotime($fechaIngreso);
+    if ($timestamp === false) {
+      return '';
+    }
+
+    $fecha = (new DateTimeImmutable('@' . $timestamp))->setTimezone(new DateTimeZone(date_default_timezone_get()));
+  }
+
+  return $fecha->modify('+' . $diasCompromiso . ' days')->format('Y-m-d');
+}
+
 function tipoMuestraNombreDesdeClave($tipo)
 {
   $map = [

@@ -377,7 +377,7 @@ function lab_logout_url(): string
     $base = lab_base_path();
     $parent = $base ? rtrim(str_replace('\\', '/', dirname($base)), '/') : '';
 
-    return ($parent === '' ? '' : $parent) . '/../pruebas/logout.php';
+    return ($parent === '' ? '' : $parent) . '/Pruebas/public/admin/logout.php';
 }
 
 function lab_redirect_to_login(): void
@@ -393,7 +393,7 @@ function lab_redirect_to_login(): void
     header('Location: ' . $loginUrl);
     exit;
 }
-
+    
 function lab_forbidden(string $message = 'No tiene permisos para acceder a este recurso.'): void
 {
     http_response_code(403);

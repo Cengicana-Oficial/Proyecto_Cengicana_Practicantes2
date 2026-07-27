@@ -1,3 +1,9 @@
+@import url("../styles/tokens.css");
+@import url("../styles/button.css");
+@import url("../styles/forms.css");
+@import url("../styles/surfaces.css");
+@import url("../styles/tables.css");
+
 /* =========================================================
    RESET
 ========================================================= */
@@ -12,33 +18,6 @@
 
 /* =========================================================
    VARIABLES
-========================================================= */
-
-:root {
-  --green-50: #eaf3de;
-  --green-100: #c0dd97;
-  --green-200: #97c459;
-  --green-400: #639922;
-  --green-600: #3b6d11;
-  --green-800: #27500a;
-  --green-900: #173404;
-
-  --teal-50: #e1f5ee;
-  --teal-100: #9fe1cb;
-  --teal-200: #5dcaa5;
-  --teal-400: #1d9e75;
-  --teal-600: #0f6e56;
-  --teal-800: #085041;
-
-  --surface: #f4f8ef;
-  --white: #ffffff;
-  --text-main: #1a2e0d;
-  --text-mute: #5a7045;
-  --border: #c8dba8;
-}
-
-/* =========================================================
-   BASE
 ========================================================= */
 
 body {
@@ -165,36 +144,6 @@ main {
    ACTIONS
 ========================================================= */
 
-.btn-regresar {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-
-  margin-bottom: 20px;
-  padding: 10px 18px;
-
-  font-size: 14px;
-  font-weight: 700;
-  font-family: inherit;
-  text-decoration: none;
-
-  color: var(--white);
-  background: var(--green-600);
-  border-radius: 8px;
-
-  box-shadow: 0 2px 8px rgba(59, 109, 17, 0.22);
-  transition:
-    background 0.15s,
-    transform 0.15s,
-    box-shadow 0.15s;
-}
-
-.btn-regresar:hover {
-  background: var(--green-800);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 109, 17, 0.28);
-}
-
 .total-lotes {
   display: inline-flex;
   align-items: center;
@@ -264,196 +213,14 @@ main {
   gap: 7px;
 }
 
-.filter-field label {
-  color: var(--green-800);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-}
-
-.filter-field input,
-.filter-field select {
-  min-height: 44px;
-  padding: 10px 13px;
-  color: var(--text-main);
-  font: inherit;
-  font-size: 14px;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(59, 109, 17, .04);
-  transition: border-color .15s, box-shadow .15s, transform .15s;
-}
-
 .filter-field select {
   cursor: pointer;
-}
-
-.filter-field input:focus,
-.filter-field select:focus {
-  outline: none;
-  border-color: var(--green-200);
-  box-shadow:
-    0 0 0 3px rgba(151, 196, 89, .2),
-    0 6px 16px rgba(59, 109, 17, .1);
-  transform: translateY(-1px);
 }
 
 .filter-actions {
   display: flex;
   gap: 8px;
   align-items: end;
-}
-
-.filter-actions button,
-.filter-actions a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 9px 16px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  text-decoration: none;
-  border-radius: 10px;
-  white-space: nowrap;
-  transition: background .15s, border-color .15s, box-shadow .15s, transform .15s;
-}
-
-.filter-actions button {
-  color: var(--white);
-  background: linear-gradient(180deg, var(--green-600), var(--green-800));
-  border: 1px solid var(--green-600);
-  cursor: pointer;
-  box-shadow: 0 5px 14px rgba(59, 109, 17, .22);
-}
-
-.filter-actions button:hover {
-  background: linear-gradient(180deg, var(--green-800), var(--green-900));
-  transform: translateY(-1px);
-}
-
-.filter-actions a {
-  color: var(--green-800);
-  background: var(--white);
-  border: 1px solid var(--green-200);
-}
-
-.filter-actions a:hover {
-  background: var(--green-50);
-  border-color: var(--green-400);
-  transform: translateY(-1px);
-}
-
-/* =========================================================
-   TABLE
-========================================================= */
-
-.table-container {
-  overflow-x: auto;
-}
-
-.lotes-table {
-  width: 100%;
-  font-size: 13px;
-  border-collapse: collapse;
-}
-
-.lotes-table th {
-  padding: 9px 14px;
-
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-align: left;
-  text-transform: uppercase;
-
-  color: var(--green-800);
-  background: var(--green-50);
-  border: 1px solid var(--green-100);
-}
-
-.lotes-table td {
-  padding: 9px 14px;
-  vertical-align: middle;
-  border: 1px solid var(--border);
-}
-
-.lotes-table tr:nth-child(even) td {
-  background: #fafdf6;
-}
-
-.lotes-table tr:hover td {
-  background: var(--green-50);
-}
-
-.lotes-table td:first-child {
-  width: 120px;
-  font-weight: 700;
-  color: var(--green-800);
-}
-
-.empty-cell {
-  color: var(--text-mute);
-  font-weight: 700;
-  padding: 22px;
-  text-align: center;
-  background: var(--green-50);
-}
-
-.estado-badge {
-  align-items: center;
-  display: inline-flex;
-  justify-content: center;
-  min-width: 104px;
-  padding: 6px 11px;
-  font-size: 12px;
-  font-weight: 800;
-  border-radius: 999px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7);
-}
-
-.estado-pendiente {
-  color: #6a4b00;
-  background: linear-gradient(180deg, #fff8da, #ffe9a3);
-  border: 1px solid #e4c556;
-}
-
-.estado-revision {
-  color: #075875;
-  background: linear-gradient(180deg, #eefaff, #d8f0fa);
-  border: 1px solid #8bcce5;
-}
-
-.estado-aprobado {
-  color: var(--green-800);
-  background: linear-gradient(180deg, #f0fbec, #dff3d8);
-  border: 1px solid var(--green-200);
-}
-
-.btn-pdf {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 7px 12px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--green-800);
-  background: var(--white);
-  border: 1px solid var(--green-200);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.15s;
-}
-
-.btn-pdf:hover {
-  background: var(--green-50);
-  border-color: var(--green-400);
-  transform: translateY(-1px);
 }
 
 @media (max-width: 680px) {
@@ -487,3 +254,4 @@ main {
     flex-direction: column;
   }
 }
+

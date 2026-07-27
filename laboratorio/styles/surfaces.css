@@ -1,0 +1,123 @@
+@import url('tokens.css');
+@import url('status.css');
+
+:root {
+  --surface-card-bg: var(--white);
+  --surface-panel-bg: var(--surface-3);
+  --surface-hero-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 252, 246, 0.98));
+  --surface-notice-bg: var(--state-info-bg);
+  --surface-empty-bg: var(--white);
+  --surface-border: 1px solid var(--panel-border);
+  --surface-border-soft: 1px solid rgba(200, 219, 168, 0.75);
+  --surface-border-strong: 1px solid var(--green-200);
+  --surface-radius-card: var(--radius-md);
+  --surface-radius-panel: var(--radius-lg);
+  --surface-radius-hero: var(--radius-xl);
+  --surface-shadow-card: var(--shadow-soft);
+  --surface-shadow-panel: var(--shadow-card);
+  --surface-shadow-hero: var(--panel-shadow-strong);
+}
+
+:where(
+  .surface-card,
+  .card,
+  .page-intro,
+  .request-panel,
+  .search-card,
+  .results-panel,
+  .bc-panel,
+  .bc-table-panel,
+  .review-section,
+  .curva-card,
+  .historial-card,
+  .calibration-chart-panel
+) {
+  box-sizing: border-box;
+  background: var(--surface-card-bg);
+  border: var(--surface-border);
+  border-radius: var(--surface-radius-card);
+  box-shadow: var(--surface-shadow-card);
+}
+
+:where(.curva-card, .historial-card) {
+  padding: var(--space-6);
+}
+
+:where(
+  .surface-panel,
+  .page-intro,
+  .request-panel,
+  .search-card,
+  .results-panel,
+  .bc-panel,
+  .bc-table-panel,
+  .review-section,
+  .curva-card,
+  .historial-card,
+  .calibration-chart-panel
+) {
+  background: var(--surface-panel-bg);
+  border-color: rgba(200, 219, 168, 0.8);
+  border-radius: var(--surface-radius-panel);
+  box-shadow: var(--surface-shadow-panel);
+}
+
+:where(.surface-hero, .hero-card, .request-panel, .page-intro) {
+  background: var(--surface-hero-bg);
+  border-color: rgba(214, 228, 191, 0.9);
+  border-radius: var(--surface-radius-hero);
+  box-shadow: var(--surface-shadow-hero);
+}
+
+:where(
+  .surface-module,
+  .report-card,
+  .sample-card,
+  .module-card,
+  .tarjeta,
+  .analysis-card,
+  .pending-card,
+  .pending-type-header
+) {
+  background: var(--white);
+  border: 1px solid rgba(200, 219, 168, 0.88);
+  border-radius: var(--radius-md);
+  box-shadow: var(--surface-shadow-card);
+  transition:
+    transform var(--transition-base),
+    box-shadow var(--transition-base),
+    border-color var(--transition-base),
+    background var(--transition-base);
+}
+
+:where(.surface-module, .report-card, .sample-card, .module-card, .tarjeta, .analysis-card, .pending-card):hover {
+  transform: translateY(-1px);
+  border-color: var(--green-200);
+  box-shadow: var(--surface-shadow-panel);
+}
+
+:where(.surface-stat, .hero-stat) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--green-200);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, var(--white), var(--green-50));
+  color: var(--green-800);
+  box-sizing: border-box;
+}
+
+:where(.surface-section, .form-section, .group-block, .analysis-section, .pending-type-section) {
+  box-sizing: border-box;
+}
+
+:where(.surface-container, .results-panel, .bc-table-panel, .lab-table-panel, .calibration-chart-panel) {
+  overflow: hidden;
+}
+
+:where(.surface-content-block, .section-head, .panel-head, .hero-headline, .results-copy-wrap, .pending-card-head, .bc-panel-head, .bc-table-head) {
+  box-sizing: border-box;
+}

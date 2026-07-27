@@ -43,7 +43,11 @@ $analysisMap = [
     'suelos' => [
         'suelos-textura' => ['nombre' => 'Textura', 'tabla' => 'analisis_textura', 'grupo' => 'fisico'],
         'suelos-humedad' => ['nombre' => 'Humedad', 'tabla' => 'suelo_humedad', 'grupo' => 'fisico'],
-        'suelos-humedad-residual' => ['nombre' => 'Humedad Residual', 'tabla' => 'laboratorio_humedad', 'grupo' => 'fisico'],
+        'suelos-humedad-residual' => [
+            'nombre' => 'Humedad Gravimetrica',
+            'tablas' => ['laboratorio_humedad', 'suelo_humedad_gravimetrica', 'suelo_humedad_residual'],
+            'grupo' => 'fisico'
+        ],
         'suelos-dap' => ['nombre' => 'DAP (Densidad Aparente)', 'tabla' => 'suelo_dap', 'grupo' => 'fisico'],
         'suelos-cc' => ['nombre' => 'Capacidad de Campo', 'tabla' => 'suelo_cc', 'grupo' => 'fisico'],
         'suelos-pmp' => ['nombre' => 'Punto de Marchitez', 'tabla' => 'suelo_pmp', 'grupo' => 'fisico'],
@@ -129,6 +133,137 @@ foreach ($reportTypes as $key => &$meta) {
 }
 unset($meta);
 
+function dashboard_table_columns(PDO $pdo, string $table): array
+{
+    static $cache = [];
+
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+        return [];
+    }
+
+    if (!array_key_exists($table, $cache)) {
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM `$table`");
+            $cache[$table] = $stmt ? ($stmt->fetchAll(PDO::FETCH_COLUMN) ?: []) : [];
+        } catch (Throwable $e) {
+            $cache[$table] = [];
+        }
+    }
+
+    return $cache[$table];
+}
+
+function dashboard_get_lote_sample_keys(PDO $pdo, int $idLote): array
+{
+    static $cache = [];
+
+    if ($idLote <= 0) {
+        return [];
+    }
+
+    if (!array_key_exists($idLote, $cache)) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT DISTINCT CAST(m.numero_muestra AS CHAR) AS valor
+                  FROM muestra m
+                  INNER JOIN solicitud s ON s.id_solicitud = m.id_solicitud
+                 WHERE s.id_lote = ?
+                   AND m.numero_muestra IS NOT NULL
+                UNION
+                SELECT DISTINCT m.codigo_lab AS valor
+                  FROM muestra m
+                  INNER JOIN solicitud s ON s.id_solicitud = m.id_solicitud
+                 WHERE s.id_lote = ?
+                   AND m.codigo_lab IS NOT NULL
+                   AND m.codigo_lab <> ''
+                ORDER BY valor
+            ");
+            $stmt->execute([$idLote, $idLote]);
+            $cache[$idLote] = array_values(array_filter(array_map(static function ($row) {
+                return trim((string) ($row['valor'] ?? ''));
+            }, $stmt->fetchAll(PDO::FETCH_ASSOC))));
+        } catch (Throwable $e) {
+            $cache[$idLote] = [];
+        }
+    }
+
+    return $cache[$idLote];
+}
+
+function dashboard_count_analysis_rows(PDO $pdo, $tables, int $idLote): int
+{
+    $tables = is_array($tables) ? $tables : [$tables];
+    $sampleKeys = null;
+
+    foreach ($tables as $table) {
+        $columns = dashboard_table_columns($pdo, $table);
+        if (!$columns) {
+            continue;
+        }
+
+        $joins = [];
+        $conditions = [];
+        $params = [];
+
+        if (in_array('id_lote', $columns, true)) {
+            $conditions[] = 't.id_lote = ?';
+            $params[] = $idLote;
+        }
+
+        if (in_array('id_solicitud', $columns, true)) {
+            $joins['solicitud'] = 'LEFT JOIN solicitud s ON s.id_solicitud = t.id_solicitud';
+            $conditions[] = 's.id_lote = ?';
+            $params[] = $idLote;
+        }
+
+        if (in_array('id_formulario', $columns, true)) {
+            $joins['formulario'] = 'LEFT JOIN formulario f ON f.id_formulario = t.id_formulario';
+            $joins['lote_rango'] = 'LEFT JOIN lote_rango lr ON lr.id_rango = f.id_rango';
+            $conditions[] = 'lr.id_lote = ?';
+            $params[] = $idLote;
+        }
+
+        if (in_array('no_lab', $columns, true) || in_array('numero_laboratorio', $columns, true) || in_array('numero_muestra', $columns, true)) {
+            $sampleKeys ??= dashboard_get_lote_sample_keys($pdo, $idLote);
+            if ($sampleKeys) {
+                $placeholders = implode(', ', array_fill(0, count($sampleKeys), '?'));
+
+                if (in_array('no_lab', $columns, true)) {
+                    $conditions[] = "t.no_lab IN ($placeholders)";
+                    array_push($params, ...$sampleKeys);
+                } elseif (in_array('numero_laboratorio', $columns, true)) {
+                    $conditions[] = "CAST(t.numero_laboratorio AS CHAR) IN ($placeholders)";
+                    array_push($params, ...$sampleKeys);
+                } elseif (in_array('numero_muestra', $columns, true)) {
+                    $conditions[] = "CAST(t.numero_muestra AS CHAR) IN ($placeholders)";
+                    array_push($params, ...$sampleKeys);
+                }
+            }
+        }
+
+        if (!$conditions) {
+            continue;
+        }
+
+        $sql = 'SELECT COUNT(*) AS total FROM `' . $table . '` t '
+            . implode(' ', $joins)
+            . ' WHERE (' . implode(' OR ', $conditions) . ')';
+
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $total = (int) ($stmt->fetchColumn() ?: 0);
+            if ($total > 0) {
+                return $total;
+            }
+        } catch (Throwable $e) {
+            continue;
+        }
+    }
+
+    return 0;
+}
+
 $stmtLotes = $pdo->query("SELECT DISTINCT l.id_lote, l.codigo_lote FROM lote l ORDER BY l.codigo_lote");
 $lotes = $stmtLotes->fetchAll(PDO::FETCH_ASSOC);
 
@@ -142,14 +277,12 @@ if ($idLoteSelected) {
 
         foreach ($analysisMap[$tipoReporte] as $key => $analisis) {
             try {
-                $sqlCheck = "SELECT COUNT(*) AS total FROM `{$analisis['tabla']}` WHERE id_lote = ? LIMIT 1";
-                $stmtCheck = $pdo->prepare($sqlCheck);
-                $stmtCheck->execute([$idLoteSelected]);
-                $result = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+                $tablas = $analisis['tablas'] ?? $analisis['tabla'];
+                $total = dashboard_count_analysis_rows($pdo, $tablas, $idLoteSelected);
 
-                if ($result && (int) $result['total'] > 0) {
+                if ($total > 0) {
                     $analisis['id'] = $key;
-                    $analisis['registros'] = (int) $result['total'];
+                    $analisis['registros'] = $total;
                     $grupo = $analisis['grupo'] ?? 'general';
 
                     if (!isset($analisisPorGrupo[$grupo])) {
@@ -255,7 +388,7 @@ $grupoLabels = [
                     <div class="topbar-actions">
                         <a href="../index.php" class="topbar-link">Inicio</a>
                         <a href="<?= htmlspecialchars(dashboard_build_url($tipoReporte, $idLoteSelected)) ?>" class="topbar-link active">Informes</a>
-                        <a href="labc_index.php" class="topbar-link">Mapas</a>
+                        <a href="labc_index.php" class="topbar-link">Analisis</a>
                         <div class="topbar-avatar" aria-hidden="true">LAB</div>
                     </div>
                 </header>

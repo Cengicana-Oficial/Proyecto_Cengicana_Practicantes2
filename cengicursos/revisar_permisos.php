@@ -1,8 +1,9 @@
 <?php
 require_once __DIR__ . '/conexion.php';
+require_once __DIR__ . '/../login/config/session.php';
 
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    cengi_session_start();
 }
 
 function cengi_texto_normalizado($valor)
@@ -460,4 +461,3 @@ if (!usuario_tiene_modulo_cursos()) {
 if (!isset($_SESSION['CMenus'])) {
     $_SESSION['CMenus'] = $_SESSION['rol'] ?? 'Usuario';
 }
-?>

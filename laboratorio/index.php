@@ -4,6 +4,8 @@ require_once __DIR__ . '/includes/auth.php';
 lab_require_module_access();
 
 $canAnalisis = lab_can('laboratorio.formularios_labc.ver') || lab_can('laboratorio.analisis.ver');
+$canCatalogoAnalisis = lab_can('laboratorio.catalogo_analisis.ver');
+$canCatalogoMuestras = lab_can('laboratorio.catalogo_muestras.ver');
 $canConsolidacion = lab_can('laboratorio.consolidacion.ver');
 $canLotes = lab_can('laboratorio.lotes.ver');
 $canLabc = lab_can('laboratorio.labc.ver');
@@ -109,7 +111,7 @@ function labNuevoAnalisisUrl(string $tipo): string
             </li>
         <?php endif; ?>
 
-        <?php if ($canLabc || $canAnalisis || $canBlancoControl || $canConsolidacion): ?>
+        <?php if ($canLabc || $canAnalisis || $canBlancoControl || $canConsolidacion || $canCatalogoAnalisis || $canCatalogoMuestras): ?>
             <li>
                 <a href="view/labc_index.php">
                     <i class="fas fa-flask-vial"></i>
@@ -118,13 +120,15 @@ function labNuevoAnalisisUrl(string $tipo): string
             </li>
         <?php endif; ?>
 
-        <?php if ($canAnalisis): ?>
+        <?php if ($canCatalogoAnalisis): ?>
             <li>
                 <a href="catalogo_analisis.php">
                     <i class="fas fa-table-list"></i>
                     <span>Catálogo de análisis</span>
                 </a>
             </li>
+        <?php endif; ?>
+        <?php if ($canCatalogoMuestras): ?>
             <li>
                 <a href="catalogo_muestras.php">
                     <i class="fas fa-vials"></i>

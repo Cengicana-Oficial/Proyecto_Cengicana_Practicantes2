@@ -97,7 +97,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crear usuario de Laboratorio</title>
-    <link rel="stylesheet" href="../assets/usuarios.css">
+    <link rel="stylesheet" href="../login/assets/usuarios.css?v=<?= filemtime(__DIR__ . '/../login/assets/usuarios.css') ?>">
+    <link rel="stylesheet" href="styles/button.css">
     <style>
         .page-shell {
             max-width: 760px;

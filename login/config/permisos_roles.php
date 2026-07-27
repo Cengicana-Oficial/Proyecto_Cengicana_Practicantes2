@@ -40,6 +40,7 @@ function sembrar_permisos_base(PDO $conn)
         'gestionar_modulos' => 'Permite gestionar los modulos del sistema',
         'gestionar_ingenios' => 'Permite gestionar los ingenios',
         'gestionar_areas' => 'Permite crear y editar areas del modulo de visitas',
+        'gestionar_reserva_salones' => 'Permite preparar y enviar reservaciones de salones desde el modulo de visitas',
         'ver_solicitudes_aprobadas' => 'Permite ver solo solicitudes aprobadas',
         'enviar_correos' => 'Permite enviar correos de solicitudes',
         'ocultar_solicitudes' => 'Permite ocultar solicitudes del dashboard',
@@ -62,11 +63,20 @@ function sembrar_permisos_base(PDO $conn)
         'ver_reportes_cengi' => 'Permite ver y generar reportes de Cengicursos',
         'gestionar_notas_cengi' => 'Permite registrar asistencia, evaluaciones y diplomas en cursos',
         'subir_diplomas_cengi' => 'Permite subir y actualizar diplomas en cursos',
+        'solicitudes_internas.crear' => 'Permite crear solicitudes en el modulo Solicitudes internas',
+        'solicitudes_internas.ver' => 'Permite ver las solicitudes del modulo Sistema de solicitudes',
+        'solicitudes_internas.gestionar' => 'Permite gestionar solicitudes del modulo Sistema de solicitudes',
+        'solicitudes_internas.usuarios.ver' => 'Permite ver usuarios del modulo Sistema de solicitudes',
+        'solicitudes_internas.usuarios.gestionar' => 'Permite crear, editar y eliminar usuarios del modulo Sistema de solicitudes',
+        'solicitudes_internas.programas.ver' => 'Permite ver programas del modulo Sistema de solicitudes',
+        'solicitudes_internas.programas.gestionar' => 'Permite crear, editar y eliminar programas del modulo Sistema de solicitudes',
         'laboratorio.solicitudes.crear' => 'Permite ingresar un nuevo analisis en Laboratorio',
         'laboratorio.lotes.ver' => 'Permite visualizar lotes en Laboratorio',
         'laboratorio.labc.ver' => 'Permite ver el panel LABC de Laboratorio',
         'laboratorio.formularios_labc.ver' => 'Permite ver los formularios dentro del LABC',
         'laboratorio.consolidacion.ver' => 'Permite ver la vista de consolidacion de Laboratorio',
+        'laboratorio.catalogo_analisis.ver' => 'Permite ver el catalogo de analisis de Laboratorio',
+        'laboratorio.catalogo_muestras.ver' => 'Permite ver el catalogo de muestras de Laboratorio',
         'laboratorio.formularios_pendientes.ver' => 'Permite ver formularios pendientes de Laboratorio',
         'laboratorio.formularios_erroneos.ver' => 'Permite ver formularios erroneos de Laboratorio',
         'laboratorio.blanco_control.ver' => 'Permite ver blancos y controles dentro del LABC',
@@ -114,6 +124,7 @@ function agrupar_permisos(array $permisos)
     $grupos = [
         'Permisos de visitas' => [],
         'Permisos de cursos' => [],
+        'Permisos de solicitudes internas' => [],
         'Permisos de laboratorio' => [],
         'Permisos de pagos' => [],
         'Permisos de usuarios y accesos' => [],
@@ -130,6 +141,10 @@ function agrupar_permisos(array $permisos)
 function clasificar_grupo_permiso($nombrePermiso)
 {
     $nombre = strtolower((string) $nombrePermiso);
+
+    if (strpos($nombre, 'solicitudes_internas.') === 0) {
+        return 'Permisos de solicitudes internas';
+    }
 
     if (strpos($nombre, 'curso') !== false || strpos($nombre, 'participante') !== false || strpos($nombre, 'asistencia') !== false || strpos($nombre, 'evaluacion') !== false || strpos($nombre, 'ingenio') !== false || strpos($nombre, 'cengi') !== false || strpos($nombre, 'nota') !== false) {
         return 'Permisos de cursos';
@@ -159,6 +174,7 @@ function titulo_corto_grupo_permiso($grupo)
     $mapa = [
         'Permisos de visitas' => 'Visitas',
         'Permisos de cursos' => 'Cursos',
+        'Permisos de solicitudes internas' => 'Solicitudes internas',
         'Permisos de laboratorio' => 'Laboratorio',
         'Permisos de pagos' => 'Pagos',
         'Permisos de usuarios y accesos' => 'Usuarios y accesos',
@@ -173,6 +189,7 @@ function descripcion_grupo_permiso($grupo)
     $mapa = [
         'Permisos de visitas' => 'Controla solicitudes, areas, correos y seguimiento del modulo de visitas.',
         'Permisos de cursos' => 'Agrupa acciones para cursos, participantes, notas, ingenios y asignaciones.',
+        'Permisos de solicitudes internas' => 'Controla acceso a solicitudes, usuarios y programas del modulo Sistema de solicitudes.',
         'Permisos de laboratorio' => 'Controla el acceso a lotes, LABC, formularios, revision y controles de laboratorio.',
         'Permisos de pagos' => 'Reune permisos relacionados con estados de pago y control de cobros.',
         'Permisos de usuarios y accesos' => 'Incluye gestion de usuarios, roles, modulos y acceso administrativo.',
@@ -192,6 +209,7 @@ function etiqueta_permiso($nombrePermiso)
         'ocultar_solicitudes' => 'Ocultar solicitudes',
         'enviar_correos' => 'Enviar correos',
         'gestionar_areas' => 'Gestionar areas',
+        'gestionar_reserva_salones' => 'Gestionar reserva de salones',
         'gestionar_usuarios' => 'Gestionar usuarios',
         'gestionar_roles' => 'Gestionar roles',
         'gestionar_modulos' => 'Gestionar modulos',
@@ -215,11 +233,20 @@ function etiqueta_permiso($nombrePermiso)
         'ver_reportes_cengi' => 'Ver reportes de cursos',
         'gestionar_notas_cengi' => 'Gestionar notas y diplomas',
         'subir_diplomas_cengi' => 'Subir diplomas',
+        'solicitudes_internas.crear' => 'Crear solicitudes del modulo',
+        'solicitudes_internas.ver' => 'Ver solicitudes del modulo',
+        'solicitudes_internas.gestionar' => 'Gestionar solicitudes del modulo',
+        'solicitudes_internas.usuarios.ver' => 'Ver usuarios del modulo',
+        'solicitudes_internas.usuarios.gestionar' => 'Gestionar usuarios del modulo',
+        'solicitudes_internas.programas.ver' => 'Ver programas del modulo',
+        'solicitudes_internas.programas.gestionar' => 'Gestionar programas del modulo',
         'laboratorio.solicitudes.crear' => 'Ingresar nuevo analisis',
         'laboratorio.lotes.ver' => 'Visualizar lotes',
         'laboratorio.labc.ver' => 'LABC',
         'laboratorio.formularios_labc.ver' => 'Ver formularios en LABC',
         'laboratorio.consolidacion.ver' => 'Ver vista',
+        'laboratorio.catalogo_analisis.ver' => 'Ver catalogo de analisis',
+        'laboratorio.catalogo_muestras.ver' => 'Ver catalogo de muestras',
         'laboratorio.formularios_pendientes.ver' => 'Ver formularios pendientes',
         'laboratorio.formularios_erroneos.ver' => 'Ver formularios erroneos',
         'laboratorio.blanco_control.ver' => 'Ver blancos y controles',

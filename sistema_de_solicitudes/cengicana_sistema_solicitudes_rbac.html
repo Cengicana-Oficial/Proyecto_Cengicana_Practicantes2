@@ -1,0 +1,660 @@
+
+<style>
+  :root {
+    --verde: #73BC25;
+    --verde2: #A3D300;
+    --amarillo: #FFCC00;
+    --naranja: #FF6B00;
+    --gris: #CED2D5;
+    --gris-oscuro: #4A5568;
+    --blanco: #ffffff;
+    --fondo: #F5F7F2;
+    --texto: #1a2e05;
+    --texto-muted: #4a5568;
+    --borde: rgba(115,188,37,0.18);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Anthropic Sans", sans-serif; }
+  h2.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+  #app { min-height: 600px; background: var(--fondo); }
+
+  /* NAV */
+  .nav { background: var(--verde); padding: 0 20px; display: flex; align-items: center; gap: 0; }
+  .nav-logo { display: flex; align-items: center; gap: 10px; padding: 12px 0; flex: 1; }
+  .nav-logo-icon { width: 36px; height: 36px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .nav-logo svg { width: 22px; height: 22px; }
+  .nav-logo-text { color: white; font-size: 15px; font-weight: 500; letter-spacing: 0.3px; }
+  .nav-tabs { display: flex; gap: 0; }
+  .nav-tab { padding: 14px 16px; color: rgba(255,255,255,0.78); font-size: 13px; cursor: pointer; border-bottom: 3px solid transparent; transition: all .15s; white-space: nowrap; }
+  .nav-tab:hover { color: white; background: rgba(255,255,255,0.08); }
+  .nav-tab.active { color: white; border-bottom-color: var(--amarillo); font-weight: 500; }
+  .nav-user { color: white; font-size: 12px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(0,0,0,0.12); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+
+  /* ROLE SWITCHER (simulator banner) */
+  .role-switcher { background: #1a2e05; padding: 8px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .role-switcher-label { font-size: 11px; color: rgba(255,255,255,0.6); }
+  .role-pill { padding: 4px 11px; border-radius: 20px; font-size: 11px; cursor: pointer; border: 0.5px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.8); background: transparent; transition: all .15s; }
+  .role-pill:hover { border-color: var(--verde2); color: white; }
+  .role-pill.active { background: var(--verde2); border-color: var(--verde2); color: #1a2e05; font-weight: 500; }
+
+  /* VIEWS */
+  .view { display: none; padding: 20px; }
+  .view.active { display: block; }
+
+  /* STATS ROW */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat-card { background: white; border: 0.5px solid var(--borde); border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+  .stat-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .stat-icon.verde { background: #edf8d6; color: var(--verde); }
+  .stat-icon.amarillo { background: #fff8e0; color: #b38f00; }
+  .stat-icon.naranja { background: #fff0e5; color: var(--naranja); }
+  .stat-icon.gris { background: #f0f2f4; color: var(--gris-oscuro); }
+  .stat-info { flex: 1; }
+  .stat-num { font-size: 22px; font-weight: 500; color: var(--texto); }
+  .stat-label { font-size: 12px; color: var(--texto-muted); margin-top: 1px; }
+
+  /* SECTION HEADER */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; flex-wrap: wrap; gap: 8px; }
+  .section-title { font-size: 15px; font-weight: 500; color: var(--texto); }
+  .section-sub { font-size: 12px; color: var(--texto-muted); margin-bottom: 14px; }
+  .btn-primary { background: var(--verde); color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 500; transition: background .15s; }
+  .btn-primary:hover { background: #5fa01f; }
+  .btn-outline { background: transparent; border: 0.5px solid var(--verde); color: var(--verde); padding: 7px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all .15s; }
+  .btn-outline:hover { background: #edf8d6; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  /* FILTERS */
+  .filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+  .filter-chip { padding: 5px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 0.5px solid var(--gris); background: white; color: var(--texto-muted); transition: all .15s; }
+  .filter-chip:hover { border-color: var(--verde); color: var(--verde); }
+  .filter-chip.active { background: var(--verde); color: white; border-color: var(--verde); }
+  .search-box { flex: 1; min-width: 180px; }
+  .search-box input { width: 100%; padding: 6px 12px 6px 32px; border: 0.5px solid var(--gris); border-radius: 6px; font-size: 13px; background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23aaa' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 10px center; outline: none; }
+  .search-box input:focus { border-color: var(--verde); }
+  .select-filter { padding: 6px 10px; border: 0.5px solid var(--gris); border-radius: 6px; font-size: 12px; background: white; cursor: pointer; color: var(--texto-muted); }
+
+  /* TABLE */
+  .table-card { background: white; border: 0.5px solid var(--borde); border-radius: 10px; overflow: hidden; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { background: #f8faf4; }
+  th { padding: 10px 14px; text-align: left; font-weight: 500; color: var(--texto-muted); font-size: 12px; border-bottom: 0.5px solid var(--borde); white-space: nowrap; }
+  td { padding: 11px 14px; border-bottom: 0.5px solid #f0f2f4; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafdf6; }
+
+  /* BADGES */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .badge-recibido { background: #e0f2fe; color: #0c4a6e; }
+  .badge-proceso { background: #fff8e0; color: #7c5f00; }
+  .badge-completado { background: #dcfce7; color: #14532d; }
+  .badge-rechazado { background: #fee2e2; color: #7f1d1d; }
+  .badge-tipo-compra { background: #edf8d6; color: #2d5a0a; }
+  .badge-tipo-ti { background: #ede9fe; color: #3730a3; }
+  .badge-tipo-apoyo { background: #fff0e5; color: #92400e; }
+  .badge-priority-alta { background: #fee2e2; color: #991b1b; }
+  .badge-priority-media { background: #fff8e0; color: #7c5f00; }
+  .badge-priority-baja { background: #f0f2f4; color: #4a5568; }
+  .badge-programa { background: #f0f2f4; color: #2d3748; border: 0.5px solid var(--gris); }
+
+  /* MODAL */
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+  .modal-bg.open { display: flex; }
+  .modal { background: white; border-radius: 12px; width: 90%; max-width: 660px; max-height: 88vh; overflow-y: auto; }
+  .modal-header { padding: 18px 20px; border-bottom: 0.5px solid var(--borde); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: white; z-index: 1; }
+  .modal-header h3 { font-size: 15px; font-weight: 500; color: var(--texto); }
+  .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--texto-muted); padding: 4px 8px; border-radius: 4px; }
+  .modal-close:hover { background: var(--fondo); }
+  .modal-body { padding: 20px; }
+  .modal-footer { padding: 14px 20px; border-top: 0.5px solid var(--borde); display: flex; gap: 10px; justify-content: flex-end; background: white; }
+
+  /* FORM */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-full { grid-column: 1 / -1; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-label { font-size: 12px; font-weight: 500; color: var(--texto-muted); }
+  .form-label .req { color: var(--naranja); }
+  .form-control { padding: 8px 10px; border: 0.5px solid var(--gris); border-radius: 6px; font-size: 13px; outline: none; width: 100%; font-family: inherit; }
+  .form-control:focus { border-color: var(--verde); box-shadow: 0 0 0 3px rgba(115,188,37,0.12); }
+  select.form-control { background: white; cursor: pointer; }
+  textarea.form-control { resize: vertical; min-height: 80px; }
+  .upload-zone { border: 1.5px dashed var(--gris); border-radius: 8px; padding: 18px; text-align: center; cursor: pointer; transition: all .15s; background: #fbfdf8; }
+  .upload-zone:hover { border-color: var(--verde); background: #f0fde0; }
+  .upload-zone-text { font-size: 13px; color: var(--texto-muted); }
+  .upload-zone-hint { font-size: 11px; color: var(--gris-oscuro); margin-top: 3px; }
+
+  /* DETALLE */
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+  .detail-field-label { font-size: 11px; color: var(--texto-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .detail-field-value { font-size: 13px; color: var(--texto); }
+  .detail-section { margin-bottom: 16px; }
+  .detail-section-title { font-size: 13px; font-weight: 500; color: var(--texto); border-bottom: 0.5px solid var(--borde); padding-bottom: 8px; margin-bottom: 12px; }
+
+  /* TIMELINE */
+  .timeline-item { display: flex; gap: 12px; padding-bottom: 16px; position: relative; }
+  .timeline-item:not(:last-child)::before { content: ''; position: absolute; left: 13px; top: 26px; bottom: 0; width: 1px; background: var(--borde); }
+  .timeline-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .timeline-dot.verde { background: #dcfce7; color: #166534; }
+  .timeline-dot.amarillo { background: #fff8e0; color: #7c5f00; }
+  .timeline-dot.naranja { background: #fff0e5; color: var(--naranja); }
+  .timeline-content { flex: 1; }
+  .timeline-title { font-size: 13px; font-weight: 500; color: var(--texto); }
+  .timeline-meta { font-size: 11px; color: var(--texto-muted); margin-top: 2px; }
+  .timeline-obs { font-size: 12px; color: var(--texto-muted); margin-top: 4px; background: #f8faf4; padding: 6px 10px; border-radius: 6px; border-left: 3px solid var(--verde); }
+
+  /* STEPPER */
+  .status-stepper { display: flex; align-items: center; gap: 0; margin-bottom: 16px; }
+  .step { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; position: relative; }
+  .step:not(:last-child)::after { content: ''; position: absolute; top: 13px; left: 60%; width: 80%; height: 2px; background: var(--gris); }
+  .step.done:not(:last-child)::after, .step.active:not(:last-child)::after { background: var(--verde2); }
+  .step-circle { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; background: var(--gris); color: white; z-index: 1; }
+  .step.done .step-circle { background: var(--verde); }
+  .step.active .step-circle { background: var(--naranja); }
+  .step-label { font-size: 10px; color: var(--texto-muted); white-space: nowrap; }
+  .step.done .step-label, .step.active .step-label { color: var(--texto); font-weight: 500; }
+
+  /* OBS FORM */
+  .obs-form { background: #f8faf4; border-radius: 8px; padding: 14px; border: 0.5px solid var(--borde); }
+  .obs-form-title { font-size: 13px; font-weight: 500; color: var(--texto); margin-bottom: 10px; }
+  .status-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .status-btn { padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 0.5px solid; font-weight: 500; transition: all .15s; }
+  .status-btn.recibido { background: #e0f2fe; border-color: #7dd3fc; color: #0c4a6e; }
+  .status-btn.proceso { background: #fff8e0; border-color: #fcd34d; color: #7c5f00; }
+  .status-btn.completado { background: #dcfce7; border-color: #86efac; color: #14532d; }
+  .status-btn.rechazado { background: #fee2e2; border-color: #fca5a5; color: #7f1d1d; }
+  .status-btn:hover { filter: brightness(0.95); transform: translateY(-1px); }
+
+  .file-pill { display: inline-flex; align-items: center; gap: 6px; background: #f0f2f4; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: var(--texto-muted); }
+  .file-pill i { color: var(--naranja); }
+
+  .notify-banner { background: #edf8d6; border: 0.5px solid var(--verde2); border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--texto); margin-bottom: 16px; }
+  .notify-banner i { color: var(--verde); font-size: 18px; }
+
+  /* ACCESS INFO BOX */
+  .access-box { background: #f0f7ff; border: 0.5px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #1e3a5f; margin-bottom: 16px; display: flex; gap: 8px; align-items: flex-start; }
+  .access-box i { color: #2563eb; font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  /* PROGRAM GRID */
+  .programs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .program-card { background: white; border: 0.5px solid var(--borde); border-radius: 10px; padding: 14px; cursor: pointer; transition: all .15s; }
+  .program-card:hover { border-color: var(--verde); transform: translateY(-1px); }
+  .program-card-icon { width: 32px; height: 32px; border-radius: 7px; background: #edf8d6; color: var(--verde); display: flex; align-items: center; justify-content: center; font-size: 15px; margin-bottom: 8px; }
+  .program-card-name { font-size: 12px; font-weight: 500; color: var(--texto); line-height: 1.3; }
+  .program-card-count { font-size: 11px; color: var(--texto-muted); margin-top: 4px; }
+
+  @media (max-width: 600px) {
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+    .detail-grid { grid-template-columns: 1fr; }
+    .nav-tabs { display: none; }
+    .programs-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+
+<h2 class="sr-only">Sistema de gestión de solicitudes CENGICAÑA con control de acceso por rol: solicitante, responsable de programa y dirección, sobre compras, soporte TI y apoyo entre los 8 programas</h2>
+
+<div id="app">
+  <nav class="nav">
+    <div class="nav-logo">
+      <div class="nav-logo-icon">
+        <svg viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M11 2L3 7v8l8 5 8-5V7L11 2z" fill="#73BC25" stroke="#73BC25" stroke-width="1"/>
+          <path d="M11 6l-4 2.5v5L11 16l4-2.5v-5L11 6z" fill="white"/>
+        </svg>
+      </div>
+      <span class="nav-logo-text">CENGICAÑA · Solicitudes</span>
+    </div>
+    <div class="nav-tabs">
+      <div class="nav-tab active" onclick="showView('dashboard')">Panel</div>
+      <div class="nav-tab" onclick="showView('solicitudes')">Mis solicitudes</div>
+      <div class="nav-tab" onclick="showView('gestion')">Gestión</div>
+      <div class="nav-tab" onclick="showView('nueva')">+ Nueva solicitud</div>
+    </div>
+    <div class="nav-user" id="nav-user-label"><i class="ti ti-user-circle" aria-hidden="true"></i><span>Juan Pérez</span></div>
+  </nav>
+
+  <!-- ROLE SIMULATOR -->
+  <div class="role-switcher">
+    <span class="role-switcher-label">Simular vista de:</span>
+    <div class="role-pill active" onclick="setRole(this,'solicitante')">Solicitante (cualquier programa)</div>
+    <div class="role-pill" onclick="setRole(this,'responsable')">Responsable de programa</div>
+    <div class="role-pill" onclick="setRole(this,'direccion')">Dirección (acceso total)</div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="view-dashboard" class="view active">
+    <div class="notify-banner">
+      <i class="ti ti-bell-ringing" aria-hidden="true"></i>
+      <span>Tienes <strong>2 solicitudes</strong> actualizadas hoy. <span style="color:var(--verde);cursor:pointer;font-weight:500" onclick="showView('solicitudes')">Ver →</span></span>
+    </div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-icon verde"><i class="ti ti-inbox" aria-hidden="true"></i></div><div class="stat-info"><div class="stat-num">24</div><div class="stat-label">Total solicitudes</div></div></div>
+      <div class="stat-card"><div class="stat-icon amarillo"><i class="ti ti-clock" aria-hidden="true"></i></div><div class="stat-info"><div class="stat-num">8</div><div class="stat-label">En proceso</div></div></div>
+      <div class="stat-card"><div class="stat-icon verde"><i class="ti ti-circle-check" aria-hidden="true"></i></div><div class="stat-info"><div class="stat-num">13</div><div class="stat-label">Completadas</div></div></div>
+      <div class="stat-card"><div class="stat-icon naranja"><i class="ti ti-clock-exclamation" aria-hidden="true"></i></div><div class="stat-info"><div class="stat-num">3</div><div class="stat-label">Pendientes</div></div></div>
+    </div>
+    <div class="section-title" style="margin-bottom:4px">Apoyo entre áreas por programa</div>
+    <div class="section-sub">Distribución de solicitudes de apoyo recibidas por cada uno de los 8 programas</div>
+    <div class="programs-grid">
+      <div class="program-card" onclick="goGestionPrograma('Variedades')"><div class="program-card-icon"><i class="ti ti-plant-2" aria-hidden="true"></i></div><div class="program-card-name">Variedades</div><div class="program-card-count">3 solicitudes</div></div>
+      <div class="program-card" onclick="goGestionPrograma('Fisiología y producción agrícola')"><div class="program-card-icon"><i class="ti ti-seeding" aria-hidden="true"></i></div><div class="program-card-name">Fisiología y producción agrícola</div><div class="program-card-count">2 solicitudes</div></div>
+      <div class="program-card" onclick="goGestionPrograma('Transferencia de Tecnología')"><div class="program-card-icon"><i class="ti ti-share" aria-hidden="true"></i></div><div class="program-card-name">Transferencia de Tecnología</div><div class="program-card-count">1 solicitud</div></div>
+      <div class="program-card" onclick="goGestionPrograma('Manejo Integrado de Plagas y Enfermedades')"><div class="program-card-icon"><i class="ti ti-bug" aria-hidden="true"></i></div><div class="program-card-name">Manejo Integrado de Plagas y Enfermedades</div><div class="program-card-count">2 solicitudes</div></div>
+      <div class="program-card" onclick="goGestionPrograma('Agromecánica Digital')"><div class="program-card-icon"><i class="ti ti-tractor" aria-hidden="true"></i></div><div class="program-card-name">Agromecánica Digital</div><div class="program-card-count">0 solicitudes</div></div>
+      <div class="program-card" onclick="goGestionPrograma('Administración')"><div class="program-card-icon"><i class="ti ti-building-bank" aria-hidden="true"></i></div><div class="program-card-name">Administración</div><div class="program-card-count">1 solicitud</div></div>
+      <div class="program-card" onclick="goGestionPrograma('Laboratorio Agroindustrial')"><div class="program-card-icon"><i class="ti ti-flask" aria-hidden="true"></i></div><div class="program-card-name">Laboratorio Agroindustrial</div><div class="program-card-count">2 solicitudes</div></div>
+      <div class="program-card" onclick="goGestionPrograma('Dirección')"><div class="program-card-icon"><i class="ti ti-briefcase" aria-hidden="true"></i></div><div class="program-card-name">Dirección</div><div class="program-card-count">0 solicitudes</div></div>
+    </div>
+  </div>
+
+  <!-- SOLICITUDES (vista del solicitante) -->
+  <div id="view-solicitudes" class="view">
+    <div class="section-header">
+      <div class="section-title">Mis solicitudes</div>
+      <button class="btn-primary" onclick="showView('nueva')"><i class="ti ti-plus" aria-hidden="true"></i> Nueva solicitud</button>
+    </div>
+    <div class="section-sub">Solo se muestran las solicitudes que tú has creado, sin importar el tipo o programa.</div>
+    <div class="filters">
+      <div class="search-box"><input type="text" placeholder="Buscar solicitud..." oninput="filterTable('tbl-solicitudes', this.value)"></div>
+      <div class="filter-chip active" onclick="setFilter(this,'tbl-solicitudes','todas')">Todas</div>
+      <div class="filter-chip" onclick="setFilter(this,'tbl-solicitudes','recibido')">Recibido</div>
+      <div class="filter-chip" onclick="setFilter(this,'tbl-solicitudes','proceso')">En proceso</div>
+      <div class="filter-chip" onclick="setFilter(this,'tbl-solicitudes','completado')">Completado</div>
+      <div class="filter-chip" onclick="setFilter(this,'tbl-solicitudes','rechazado')">Rechazado</div>
+    </div>
+    <div class="table-card"><div class="table-wrap">
+      <table id="tbl-solicitudes">
+        <thead><tr><th>N° Solicitud</th><th>Tipo</th><th>Programa destino</th><th>Descripción</th><th>Fecha</th><th>Estado</th><th>Acción</th></tr></thead>
+        <tbody>
+          <tr data-estado="proceso"><td><strong>SOL-2024-047</strong></td><td><span class="badge badge-tipo-compra">Compra</span></td><td>—</td><td>Reactivos de laboratorio</td><td>14/06/2024</td><td><span class="badge badge-proceso">En proceso</span></td><td><button class="btn-outline btn-sm" onclick="openDetalle('SOL-2024-047')">Ver detalle</button></td></tr>
+          <tr data-estado="completado"><td><strong>SOL-2024-043</strong></td><td><span class="badge badge-tipo-ti">Soporte TI</span></td><td>—</td><td>Reinstalación de sistema operativo</td><td>10/06/2024</td><td><span class="badge badge-completado">Completado</span></td><td><button class="btn-outline btn-sm" onclick="openDetalle('SOL-2024-043')">Ver detalle</button></td></tr>
+          <tr data-estado="recibido"><td><strong>SOL-2024-051</strong></td><td><span class="badge badge-tipo-apoyo">Apoyo</span></td><td><span class="badge badge-programa">Agromecánica Digital</span></td><td>Análisis de datos de campo</td><td>17/06/2024</td><td><span class="badge badge-recibido">Recibido</span></td><td><button class="btn-outline btn-sm" onclick="openDetalle('SOL-2024-051')">Ver detalle</button></td></tr>
+          <tr data-estado="rechazado"><td><strong>SOL-2024-039</strong></td><td><span class="badge badge-tipo-compra">Compra</span></td><td>—</td><td>Equipo de medición portátil</td><td>02/06/2024</td><td><span class="badge badge-rechazado">Rechazado</span></td><td><button class="btn-outline btn-sm" onclick="openDetalle('SOL-2024-039')">Ver detalle</button></td></tr>
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+
+  <!-- GESTION (vista responsable/dirección) -->
+  <div id="view-gestion" class="view">
+    <div class="section-header">
+      <div class="section-title">Gestión de solicitudes</div>
+    </div>
+    <div class="access-box" id="access-explainer">
+      <i class="ti ti-shield-lock" aria-hidden="true"></i>
+      <span>Vista de <strong>solicitante</strong>: no tienes permisos de gestión. Cambia el rol arriba para simular un responsable de programa o dirección.</span>
+    </div>
+    <div class="filters" id="gestion-filters" style="display:none">
+      <div class="filter-chip active" onclick="setFilterG(this,'todas')">Todas</div>
+      <div class="filter-chip" onclick="setFilterG(this,'compra')">Compras</div>
+      <div class="filter-chip" onclick="setFilterG(this,'ti')">Soporte TI</div>
+      <div class="filter-chip" onclick="setFilterG(this,'apoyo')">Apoyo a mi programa</div>
+    </div>
+    <div class="table-card" id="gestion-table" style="display:none"><div class="table-wrap">
+      <table id="tbl-gestion">
+        <thead><tr><th>N° Solicitud</th><th>Solicitante</th><th>Tipo</th><th>Programa destino</th><th>Descripción</th><th>Fecha</th><th>Estado</th><th>Gestionar</th></tr></thead>
+        <tbody>
+          <tr data-cat="compra" data-prog="">
+            <td><strong>SOL-2024-047</strong></td><td>Juan Pérez</td><td><span class="badge badge-tipo-compra">Compra</span></td><td>—</td><td>Reactivos de laboratorio</td><td>14/06/2024</td><td><span class="badge badge-proceso">En proceso</span></td>
+            <td><button class="btn-primary btn-sm" onclick="openGestion('SOL-2024-047')"><i class="ti ti-edit" aria-hidden="true"></i> Actualizar</button></td>
+          </tr>
+          <tr data-cat="ti" data-prog="">
+            <td><strong>SOL-2024-049</strong></td><td>Carlos López</td><td><span class="badge badge-tipo-ti">Soporte TI</span></td><td>—</td><td>Configuración de VPN</td><td>15/06/2024</td><td><span class="badge badge-proceso">En proceso</span></td>
+            <td><button class="btn-primary btn-sm" onclick="openGestion('SOL-2024-049')"><i class="ti ti-edit" aria-hidden="true"></i> Actualizar</button></td>
+          </tr>
+          <tr data-cat="apoyo" data-prog="Agromecánica Digital">
+            <td><strong>SOL-2024-051</strong></td><td>María García</td><td><span class="badge badge-tipo-apoyo">Apoyo</span></td><td><span class="badge badge-programa">Agromecánica Digital</span></td><td>Análisis de datos de campo</td><td>17/06/2024</td><td><span class="badge badge-recibido">Recibido</span></td>
+            <td><button class="btn-primary btn-sm" onclick="openGestion('SOL-2024-051')"><i class="ti ti-edit" aria-hidden="true"></i> Actualizar</button></td>
+          </tr>
+          <tr data-cat="apoyo" data-prog="Variedades">
+            <td><strong>SOL-2024-052</strong></td><td>Luis Ramírez</td><td><span class="badge badge-tipo-apoyo">Apoyo</span></td><td><span class="badge badge-programa">Variedades</span></td><td>Apoyo en muestreo de campo</td><td>17/06/2024</td><td><span class="badge badge-recibido">Recibido</span></td>
+            <td><button class="btn-primary btn-sm" onclick="openGestion('SOL-2024-052')"><i class="ti ti-edit" aria-hidden="true"></i> Actualizar</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+
+  <!-- NUEVA SOLICITUD -->
+  <div id="view-nueva" class="view">
+    <div class="section-header"><div class="section-title">Nueva solicitud</div></div>
+    <div style="background:white;border:0.5px solid var(--borde);border-radius:10px;padding:24px;max-width:680px">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Tipo de solicitud <span class="req">*</span></label>
+          <select class="form-control" id="tipo-solicitud" onchange="updateTipoForm()">
+            <option value="">Seleccionar tipo...</option>
+            <option value="compra">Requerimiento de compra</option>
+            <option value="ti">Soporte TI</option>
+            <option value="apoyo">Solicitud de apoyo entre áreas</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Prioridad <span class="req">*</span></label>
+          <select class="form-control">
+            <option value="">Seleccionar...</option>
+            <option>Alta</option><option>Media</option><option>Baja</option>
+          </select>
+        </div>
+        <div class="form-group" id="campo-programa" style="display:none;grid-column:1/-1">
+          <label class="form-label">Programa al que solicitas apoyo <span class="req">*</span></label>
+          <select class="form-control">
+            <option value="">Seleccionar programa...</option>
+            <option>Variedades</option>
+            <option>Fisiología y producción agrícola</option>
+            <option>Transferencia de Tecnología</option>
+            <option>Manejo Integrado de Plagas y Enfermedades</option>
+            <option>Agromecánica Digital</option>
+            <option>Administración</option>
+            <option>Laboratorio Agroindustrial</option>
+            <option>Dirección</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Área / programa de origen <span class="req">*</span></label>
+          <select class="form-control">
+            <option>Variedades</option>
+            <option>Fisiología y producción agrícola</option>
+            <option>Transferencia de Tecnología</option>
+            <option>Manejo Integrado de Plagas y Enfermedades</option>
+            <option>Agromecánica Digital</option>
+            <option>Administración</option>
+            <option>Laboratorio Agroindustrial</option>
+            <option>Dirección</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha requerida</label>
+          <input type="date" class="form-control">
+        </div>
+        <div class="form-group form-full">
+          <label class="form-label">Descripción detallada <span class="req">*</span></label>
+          <textarea class="form-control" rows="4" placeholder="Describa claramente el requerimiento, contexto y justificación..."></textarea>
+        </div>
+        <div id="campos-compra" class="form-full" style="display:none">
+          <div class="form-grid">
+            <div class="form-group"><label class="form-label">Proveedor sugerido</label><input type="text" class="form-control" placeholder="Nombre del proveedor"></div>
+            <div class="form-group"><label class="form-label">Monto estimado (Q)</label><input type="number" class="form-control" placeholder="0.00"></div>
+          </div>
+        </div>
+        <div class="form-group form-full">
+          <label class="form-label">Adjuntar archivos (PDF, máx. 10 MB)</label>
+          <div class="upload-zone" onclick="document.getElementById('file-input').click()">
+            <div class="upload-zone-text"><i class="ti ti-cloud-upload" aria-hidden="true" style="font-size:24px;color:var(--verde);vertical-align:-6px;margin-right:6px"></i>Haz clic o arrastra archivos aquí</div>
+            <div class="upload-zone-hint">Formatos admitidos: PDF, JPG, PNG · Máximo 10 MB</div>
+          </div>
+          <input type="file" id="file-input" style="display:none" accept=".pdf,.jpg,.png" multiple onchange="showFiles(this)">
+          <div id="file-list" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
+        </div>
+      </div>
+      <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn-outline" onclick="showView('solicitudes')">Cancelar</button>
+        <button class="btn-primary" onclick="submitSolicitud()"><i class="ti ti-send" aria-hidden="true"></i> Enviar solicitud</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE -->
+<div class="modal-bg" id="modal-detalle">
+  <div class="modal">
+    <div class="modal-header">
+      <div><h3 id="det-id">SOL-2024-047</h3><div style="margin-top:4px;display:flex;gap:8px" id="det-badges"></div></div>
+      <button class="modal-close" onclick="closeModal('modal-detalle')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="status-stepper" id="det-stepper">
+        <div class="step done"><div class="step-circle">✓</div><div class="step-label">Recibido</div></div>
+        <div class="step done"><div class="step-circle">✓</div><div class="step-label">En revisión</div></div>
+        <div class="step active"><div class="step-circle"><i class="ti ti-loader" style="font-size:12px"></i></div><div class="step-label">En proceso</div></div>
+        <div class="step"><div class="step-circle">4</div><div class="step-label">Completado</div></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Información de la solicitud</div>
+        <div class="detail-grid">
+          <div><div class="detail-field-label">Tipo</div><div class="detail-field-value" id="det-tipo">Requerimiento de compra</div></div>
+          <div><div class="detail-field-label">Programa destino</div><div class="detail-field-value" id="det-programa">No aplica</div></div>
+          <div><div class="detail-field-label">Fecha de solicitud</div><div class="detail-field-value">14/06/2024</div></div>
+          <div><div class="detail-field-label">Prioridad</div><div class="detail-field-value"><span class="badge badge-priority-alta">Alta</span></div></div>
+          <div style="grid-column:1/-1"><div class="detail-field-label">Descripción</div><div class="detail-field-value" id="det-desc">—</div></div>
+        </div>
+      </div>
+      <div class="detail-section" id="det-archivos">
+        <div class="detail-section-title">Archivos adjuntos</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="file-pill"><i class="ti ti-file-type-pdf" aria-hidden="true"></i> formato_compra_SOL047.pdf</div>
+          <div class="file-pill"><i class="ti ti-file-type-pdf" aria-hidden="true"></i> cotizacion_reactivos.pdf</div>
+        </div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Historial de seguimiento</div>
+        <div class="timeline">
+          <div class="timeline-item"><div class="timeline-dot verde">✓</div><div class="timeline-content"><div class="timeline-title">Solicitud recibida</div><div class="timeline-meta">14/06/2024 · 09:15 · Sistema automático</div></div></div>
+          <div class="timeline-item"><div class="timeline-dot amarillo">→</div><div class="timeline-content"><div class="timeline-title">Enviada a revisión de compras</div><div class="timeline-meta">14/06/2024 · 10:30 · Ana Rodríguez</div><div class="timeline-obs">Se asignó al área de compras para validación de proveedor y disponibilidad presupuestaria.</div></div></div>
+          <div class="timeline-item"><div class="timeline-dot naranja">⟳</div><div class="timeline-content"><div class="timeline-title">En proceso de cotización</div><div class="timeline-meta">15/06/2024 · 08:00 · Pedro Gómez</div><div class="timeline-obs">Se contactó a proveedor. Esperando cotización formal. Tiempo estimado: 2 días hábiles.</div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn-outline" onclick="closeModal('modal-detalle')">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- MODAL GESTIÓN -->
+<div class="modal-bg" id="modal-gestion">
+  <div class="modal">
+    <div class="modal-header"><h3 id="gest-id">Gestionar solicitud</h3><button class="modal-close" onclick="closeModal('modal-gestion')">×</button></div>
+    <div class="modal-body">
+      <div class="detail-grid" style="margin-bottom:16px">
+        <div><div class="detail-field-label">Solicitante</div><div class="detail-field-value" id="gest-solicitante">Juan Pérez</div></div>
+        <div><div class="detail-field-label">Tipo / programa</div><div class="detail-field-value" id="gest-tipo">Requerimiento de compra</div></div>
+        <div style="grid-column:1/-1"><div class="detail-field-label">Descripción</div><div class="detail-field-value" id="gest-desc">Reactivos de laboratorio para análisis de muestras.</div></div>
+      </div>
+      <div class="obs-form">
+        <div class="obs-form-title">Actualizar estado y agregar observación</div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label class="form-label">Observación / comentario</label>
+          <textarea class="form-control" id="obs-text" rows="3" placeholder="Ingrese las observaciones que se comunicarán al solicitante..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cambiar estado</label>
+          <div class="status-btns">
+            <button class="status-btn recibido" onclick="updateEstado('Recibido')">Recibido</button>
+            <button class="status-btn proceso" onclick="updateEstado('En proceso')">En proceso</button>
+            <button class="status-btn completado" onclick="updateEstado('Completado')">Completado</button>
+            <button class="status-btn rechazado" onclick="updateEstado('Rechazado')">Rechazado</button>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px;background:#fff8e0;border:0.5px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px;color:#7c5f00;display:flex;gap:8px;align-items:center">
+        <i class="ti ti-mail" aria-hidden="true" style="font-size:16px"></i>
+        Al guardar, se notificará automáticamente al solicitante por correo con el nuevo estado y la observación.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-gestion')">Cancelar</button>
+      <button class="btn-primary" onclick="saveGestion()"><i class="ti ti-device-floppy" aria-hidden="true"></i> Guardar y notificar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ÉXITO -->
+<div class="modal-bg" id="modal-exito">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-body" style="text-align:center;padding:32px 24px">
+      <div style="width:64px;height:64px;background:#dcfce7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px;color:var(--verde)"><i class="ti ti-circle-check" aria-hidden="true"></i></div>
+      <h3 id="exito-title" style="font-size:16px;font-weight:500;color:var(--texto);margin-bottom:8px">¡Solicitud enviada!</h3>
+      <p id="exito-msg" style="font-size:13px;color:var(--texto-muted);margin-bottom:20px">Tu solicitud fue registrada. Recibirás actualizaciones por correo electrónico.</p>
+      <button class="btn-primary" style="width:100%;justify-content:center" onclick="closeModal('modal-exito')">Entendido</button>
+    </div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+
+<script>
+let currentRole = 'solicitante';
+let currentProgram = 'Agromecánica Digital';
+
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + id).classList.add('active');
+  const tabs = { dashboard: 0, solicitudes: 1, gestion: 2, nueva: 3 };
+  const navTabs = document.querySelectorAll('.nav-tab');
+  if (tabs[id] !== undefined) navTabs[tabs[id]].classList.add('active');
+}
+
+function goGestionPrograma(prog) {
+  if (currentRole === 'solicitante') { setRole(document.querySelectorAll('.role-pill')[1], 'responsable'); }
+  currentProgram = prog;
+  showView('gestion');
+}
+
+function setRole(el, role) {
+  currentRole = role;
+  document.querySelectorAll('.role-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  const labels = {
+    solicitante: '<i class="ti ti-user-circle" aria-hidden="true"></i><span>Juan Pérez · Solicitante</span>',
+    responsable: '<i class="ti ti-shield-check" aria-hidden="true"></i><span>Ana Rodríguez · Resp. Agromecánica Digital</span>',
+    direccion: '<i class="ti ti-briefcase" aria-hidden="true"></i><span>Dirección · Acceso total</span>'
+  };
+  document.getElementById('nav-user-label').innerHTML = labels[role];
+
+  const explainer = document.getElementById('access-explainer');
+  const filters = document.getElementById('gestion-filters');
+  const table = document.getElementById('gestion-table');
+  const rows = document.querySelectorAll('#tbl-gestion tbody tr');
+
+  if (role === 'solicitante') {
+    explainer.innerHTML = '<i class="ti ti-shield-lock" aria-hidden="true"></i><span>Vista de <strong>solicitante</strong>: no tienes permisos de gestión. Cambia el rol arriba para simular un responsable de programa o dirección.</span>';
+    filters.style.display = 'none';
+    table.style.display = 'none';
+  } else if (role === 'responsable') {
+    explainer.innerHTML = '<i class="ti ti-shield-check" aria-hidden="true"></i><span>Vista de <strong>responsable de Agromecánica Digital</strong>: ves todas las solicitudes de <strong>Compras</strong> y <strong>Soporte TI</strong> (transversal), más las de <strong>Apoyo entre áreas</strong> dirigidas específicamente a tu programa.</span>';
+    filters.style.display = 'flex';
+    table.style.display = 'block';
+    rows.forEach(r => {
+      const cat = r.dataset.cat, prog = r.dataset.prog;
+      r.style.display = (cat === 'compra' || cat === 'ti' || (cat === 'apoyo' && prog === currentProgram)) ? '' : 'none';
+    });
+    setFilterG(document.querySelectorAll('#gestion-filters .filter-chip')[0], 'todas');
+  } else if (role === 'direccion') {
+    explainer.innerHTML = '<i class="ti ti-eye" aria-hidden="true"></i><span>Vista de <strong>Dirección</strong>: acceso total a las tres categorías y a los 8 programas, sin restricción de filtrado.</span>';
+    filters.style.display = 'flex';
+    table.style.display = 'block';
+    rows.forEach(r => r.style.display = '');
+    setFilterG(document.querySelectorAll('#gestion-filters .filter-chip')[0], 'todas');
+  }
+}
+
+function setFilterG(el, val) {
+  document.querySelectorAll('#gestion-filters .filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  const rows = document.querySelectorAll('#tbl-gestion tbody tr');
+  rows.forEach(r => {
+    const cat = r.dataset.cat, prog = r.dataset.prog;
+    let baseVisible;
+    if (currentRole === 'direccion') baseVisible = true;
+    else baseVisible = (cat === 'compra' || cat === 'ti' || (cat === 'apoyo' && prog === currentProgram));
+    const matchesFilter = (val === 'todas') || (cat === val);
+    r.style.display = (baseVisible && matchesFilter) ? '' : 'none';
+  });
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+const detalles = {
+  'SOL-2024-047': { tipo: 'Requerimiento de compra', programa: 'No aplica', estado: 'proceso', desc: 'Solicitud de reactivos de laboratorio para análisis de muestras de caña en temporada de cosecha. Se requieren kit ELISA y reactivos para determinación de sacarosa.', archivos: true },
+  'SOL-2024-043': { tipo: 'Soporte TI', programa: 'No aplica', estado: 'completado', desc: 'Reinstalación de sistema operativo Windows 11 en equipo de escritorio del área de investigación.', archivos: false },
+  'SOL-2024-051': { tipo: 'Apoyo entre áreas', programa: 'Agromecánica Digital', estado: 'recibido', desc: 'Se solicita apoyo del programa de Agromecánica Digital para procesamiento y análisis estadístico de datos de campo de la temporada 2024.', archivos: false },
+  'SOL-2024-039': { tipo: 'Requerimiento de compra', programa: 'No aplica', estado: 'rechazado', desc: 'Equipo de medición portátil de humedad y temperatura para uso en campo.', archivos: true },
+  'SOL-2024-049': { tipo: 'Soporte TI', programa: 'No aplica', estado: 'proceso', desc: 'Configuración de acceso VPN para trabajo remoto del personal de investigación.', archivos: false },
+  'SOL-2024-052': { tipo: 'Apoyo entre áreas', programa: 'Variedades', estado: 'recibido', desc: 'Apoyo solicitado al programa de Variedades para muestreo de campo en ensayos de la zafra actual.', archivos: false },
+};
+
+function openDetalle(id) {
+  const d = detalles[id];
+  document.getElementById('det-id').textContent = id;
+  document.getElementById('det-tipo').textContent = d.tipo;
+  document.getElementById('det-programa').textContent = d.programa;
+  document.getElementById('det-desc').textContent = d.desc;
+  const badges = document.getElementById('det-badges');
+  const estadoMap = { proceso: 'badge-proceso', completado: 'badge-completado', recibido: 'badge-recibido', rechazado: 'badge-rechazado' };
+  const estadoLabel = { proceso: 'En proceso', completado: 'Completado', recibido: 'Recibido', rechazado: 'Rechazado' };
+  badges.innerHTML = `<span class="badge ${estadoMap[d.estado]}">${estadoLabel[d.estado]}</span>`;
+  document.getElementById('det-archivos').style.display = d.archivos ? '' : 'none';
+  const steps = document.querySelectorAll('#det-stepper .step');
+  const stepMap = { recibido: 0, proceso: 2, completado: 3, rechazado: 3 };
+  steps.forEach((s, i) => {
+    s.classList.remove('done', 'active');
+    const activeIdx = stepMap[d.estado];
+    if (i < activeIdx) s.classList.add('done');
+    else if (i === activeIdx) s.classList.add('active');
+  });
+  openModal('modal-detalle');
+}
+
+function openGestion(id) {
+  const d = detalles[id];
+  document.getElementById('gest-id').textContent = 'Gestionar ' + id;
+  document.getElementById('gest-tipo').textContent = d.tipo + (d.programa !== 'No aplica' ? ' · ' + d.programa : '');
+  document.getElementById('gest-desc').textContent = d.desc;
+  document.getElementById('obs-text').value = '';
+  openModal('modal-gestion');
+}
+
+function updateEstado(estado) {
+  const obs = document.getElementById('obs-text').value.trim();
+  document.getElementById('gest-id').textContent = 'Estado: ' + estado + (obs ? ' · Con observación' : '');
+}
+
+function saveGestion() {
+  closeModal('modal-gestion');
+  document.getElementById('exito-title').textContent = '¡Estado actualizado!';
+  document.getElementById('exito-msg').textContent = 'El solicitante ha sido notificado por correo electrónico con el nuevo estado y la observación ingresada.';
+  openModal('modal-exito');
+}
+
+function submitSolicitud() {
+  const tipo = document.getElementById('tipo-solicitud').value;
+  if (!tipo) { alert('Por favor selecciona el tipo de solicitud.'); return; }
+  document.getElementById('exito-title').textContent = '¡Solicitud enviada!';
+  document.getElementById('exito-msg').innerHTML = 'Tu solicitud fue registrada con el número <strong>SOL-2024-053</strong>. Recibirás actualizaciones por correo electrónico.';
+  openModal('modal-exito');
+}
+
+function setFilter(el, tableId, val) {
+  document.querySelectorAll('.filters .filter-chip').forEach(c => { if(c.closest('#view-solicitudes')) c.classList.remove('active'); });
+  el.classList.add('active');
+  const rows = document.querySelectorAll('#' + tableId + ' tbody tr');
+  rows.forEach(r => { r.style.display = (val === 'todas' || r.dataset.estado === val) ? '' : 'none'; });
+}
+
+function filterTable(tableId, val) {
+  const rows = document.querySelectorAll('#' + tableId + ' tbody tr');
+  rows.forEach(r => { r.style.display = r.textContent.toLowerCase().includes(val.toLowerCase()) ? '' : 'none'; });
+}
+
+function updateTipoForm() {
+  const tipo = document.getElementById('tipo-solicitud').value;
+  document.getElementById('campos-compra').style.display = tipo === 'compra' ? '' : 'none';
+  document.getElementById('campo-programa').style.display = tipo === 'apoyo' ? '' : 'none';
+}
+
+function showFiles(input) {
+  const list = document.getElementById('file-list');
+  list.innerHTML = '';
+  Array.from(input.files).forEach(f => {
+    const pill = document.createElement('div');
+    pill.className = 'file-pill';
+    pill.innerHTML = `<i class="ti ti-file-type-pdf" aria-hidden="true"></i> ${f.name}`;
+    list.appendChild(pill);
+  });
+}
+
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); });
+});
+</script>

@@ -9,7 +9,7 @@ require_once __DIR__ . '/../../models/conexion.php';
 $conexion = new Conexion();
 $conn = $conexion->conectar();
 
-$resultado = null;
+$resultado = lab_analysis_take_flash();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ppm_p_sol = 0;
         }
 
-        $porcentaje_p = $peso != 0 ? ($ppm_p_sol / $peso) : 0;
+        $porcentaje_p = $peso != 0 ? (($ppm_p_sol * 0.005) / $peso) : 0;
         if ($porcentaje_p < 0) {
             $porcentaje_p = 0;
         }
@@ -57,5 +57,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $resultado['porcentaje_p'] = $porcentaje_p;
 }
 
+lab_analysis_redirect_after_success($resultado);
 require_once __DIR__ . '/../../view/Foliares/fosforo_view.php';
 ?>
