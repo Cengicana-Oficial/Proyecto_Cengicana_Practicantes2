@@ -105,6 +105,9 @@ $resultado = $stmt->get_result();
                                     <td>
                                         <div class="cengi-row-actions">
                                             <a class="cengi-action-btn is-edit" href="../login/usuarios/editar_usuario.php?id=<?php echo (int) $row['idusuario']; ?>&scope=cursos" data-tooltip="Editar" aria-label="Editar"><span class="glyphicon glyphicon-pencil"></span><span class="sr-only">Editar</span></a>
+                                            <?php if (strtolower((string) $row['nombre_rol']) !== 'superadmin' && (int) $row['idusuario'] !== cengi_usuario_actual_id()): ?>
+                                                <a class="cengi-action-btn is-delete" href="#" data-href="../login/usuarios/eliminar_usuario.php?id=<?php echo (int) $row['idusuario']; ?>&scope=cursos" data-toggle="modal" data-target="#confirm-delete" data-tooltip="Eliminar" aria-label="Eliminar"><span class="glyphicon glyphicon-trash"></span><span class="sr-only">Eliminar</span></a>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                 <?php endif; ?>
@@ -116,5 +119,32 @@ $resultado = $stmt->get_result();
             </div>
         </div>
     </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="confirm-delete" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+
+                <div class="model-header">
+                    <button class="close" type="button" data-dismiss="modal" aria-hidden="true">&times;</button>
+                    <h4 class="modal-title" id="myModalLabel">Eliminar usuario</h4>
+                </div>
+
+                <div class="modal-body">
+                    ¿Desea eliminar este usuario? Esta acción no se puede deshacer.
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                    <a class="btn btn-danger btn-ok">Eliminar</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="text/javascript">
+        $('#confirm-delete').on('show.bs.modal', function (e) {
+            $(this).find('.btn-ok').attr('href', $(e.relatedTarget).data('href'));
+        });
+    </script>
 </body>
 </html>
