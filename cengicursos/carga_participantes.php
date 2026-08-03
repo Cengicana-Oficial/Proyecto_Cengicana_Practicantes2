@@ -1,4 +1,5 @@
 <?php
+ob_start();
 session_start();
 
 require_once "revisar_permisos.php";
@@ -7,7 +8,7 @@ require_once "menu.php";
 require_once __DIR__ . "/classes/PHPExcel.php";
 require_once __DIR__ . "/classes/PHPExcel/IOFactory.php";
 
-cengi_require_admin("participantes.php");
+cengi_require_carga_participantes("participantes.php");
 
 $db = conectar();
 $ingenioID = (int) ($_POST['ingenio'] ?? 0);
@@ -263,6 +264,9 @@ try {
     }
 
     $db->commit();
+    ob_end_clean();
+    header('Location: participantes.php?curso_id=' . $cursoID . '&mensaje=carga');
+    exit;
     ?>
                 <div class="cengi-result-card is-success">
                     <h3>Carga completada</h3>
@@ -286,6 +290,10 @@ try {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
+    error_log('Error en carga de participantes: ' . $e->getMessage());
+    ob_end_clean();
+    header('Location: participantes.php?curso_id=' . $cursoID . '&error=carga');
+    exit;
     ?>
                 <div class="cengi-result-card is-error">
                     <h3>No se pudo completar la carga</h3>
