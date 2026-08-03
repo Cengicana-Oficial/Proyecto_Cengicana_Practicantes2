@@ -2006,3 +2006,430 @@ body.cengi-nav-loading {
         margin-bottom: 10px;
     }
 }
+
+/* ===== Cursos: vista SIGEC basada en Cengicursos2.html ===== */
+
+.cengi-canvas .cengi-courses-page {
+    width: calc(100% - var(--cengi-sidebar-width));
+    max-width: none;
+}
+
+.cengi-canvas .cengi-courses-filter-card,
+.cengi-canvas .cengi-courses-section {
+    overflow: hidden;
+    margin-bottom: 16px;
+    border: 1px solid #E4E7E1;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: var(--cengi-shadow);
+}
+
+.cengi-canvas .cengi-courses-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 18px;
+    margin: 0;
+}
+
+.cengi-canvas .cengi-course-search {
+    position: relative;
+    flex: 1 1 235px;
+    max-width: 320px;
+}
+
+.cengi-canvas .cengi-course-search .glyphicon {
+    position: absolute;
+    top: 50%;
+    left: 11px;
+    color: #A3AAA0;
+    font-size: 12px;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.cengi-canvas .cengi-course-search input,
+.cengi-canvas .cengi-courses-filters select {
+    height: 36px;
+    border: 1px solid #E4E7E1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #1E2A1A;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    box-shadow: none;
+    outline: none;
+}
+
+.cengi-canvas .cengi-course-search input {
+    width: 100%;
+    padding: 8px 12px 8px 34px;
+}
+
+.cengi-canvas .cengi-courses-filters select {
+    min-width: 138px;
+    padding: 7px 28px 7px 10px;
+}
+
+.cengi-canvas .cengi-course-search input:focus,
+.cengi-canvas .cengi-courses-filters select:focus {
+    border-color: var(--cengi-primary);
+    box-shadow: 0 0 0 2px rgba(163, 211, 0, 0.28);
+}
+
+.cengi-canvas .cengi-filter-submit,
+.cengi-canvas .cengi-filter-clear {
+    min-height: 36px;
+    padding: 8px 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid #E4E7E1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #4B5A45;
+    font-size: 11.5px;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.cengi-canvas .cengi-filter-submit:hover,
+.cengi-canvas .cengi-filter-clear:hover {
+    background: #F2F4EF;
+    color: #1E2A1A;
+    text-decoration: none;
+}
+
+.cengi-canvas .cengi-course-create {
+    min-height: 36px;
+    padding: 8px 14px;
+    margin-left: auto;
+    border-radius: 8px !important;
+    background: var(--cengi-primary) !important;
+    border-color: var(--cengi-primary) !important;
+    box-shadow: none !important;
+    white-space: nowrap;
+}
+
+.cengi-canvas .cengi-course-create:hover,
+.cengi-canvas .cengi-course-create:focus {
+    background: #68ad21 !important;
+    border-color: #68ad21 !important;
+}
+
+.cengi-canvas .cengi-courses-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.cengi-canvas .cengi-courses-table {
+    width: 100%;
+    min-width: 1480px;
+    margin: 0;
+    border-collapse: collapse;
+    color: #1E2A1A;
+    font-size: 12px;
+}
+
+.cengi-canvas .cengi-courses-table th {
+    padding: 10px 12px;
+    border-bottom: 1px solid #E4E7E1;
+    background: #FAFBF8;
+    color: #4B5A45;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.cengi-canvas .cengi-courses-table td {
+    padding: 11px 12px;
+    border-bottom: 1px solid #E4E7E1;
+    background: #ffffff;
+    vertical-align: middle;
+}
+
+.cengi-canvas .cengi-courses-table tbody tr.cengi-course-row:hover > td {
+    background: #FAFBF6;
+}
+
+.cengi-canvas .cengi-courses-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.cengi-canvas .cengi-courses-table .is-expand {
+    width: 42px;
+    padding-right: 4px;
+    text-align: center;
+}
+
+.cengi-canvas .cengi-courses-table .is-actions {
+    width: 116px;
+    white-space: nowrap;
+}
+
+.cengi-canvas .cengi-course-expand {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #E4E7E1;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #4B5A45;
+}
+
+.cengi-canvas .cengi-course-expand:hover {
+    background: #F2F4EF;
+}
+
+.cengi-canvas .cengi-course-expand .glyphicon {
+    font-size: 10px;
+    transition: transform 0.15s ease;
+}
+
+.cengi-canvas .cengi-course-expand.is-open .glyphicon {
+    transform: rotate(180deg);
+}
+
+.cengi-canvas .cengi-course-code {
+    color: #36413A;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.cengi-canvas .cengi-course-name {
+    min-width: 210px;
+}
+
+.cengi-canvas .cengi-course-name strong,
+.cengi-canvas .cengi-course-name small {
+    display: block;
+}
+
+.cengi-canvas .cengi-course-name strong {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.cengi-canvas .cengi-course-name small,
+.cengi-canvas .cengi-course-progress-cell small {
+    margin-top: 3px;
+    color: #4B5A45;
+    font-size: 10.5px;
+    font-weight: 400;
+}
+
+.cengi-canvas .cengi-courses-table .is-date {
+    white-space: nowrap;
+}
+
+.cengi-canvas .cengi-course-progress-cell {
+    min-width: 112px;
+}
+
+.cengi-canvas .cengi-course-progress {
+    width: 64px;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 100px;
+    background: #EDEFEA;
+}
+
+.cengi-canvas .cengi-course-progress > span {
+    height: 100%;
+    display: block;
+    border-radius: inherit;
+    background: var(--cengi-primary);
+}
+
+.cengi-canvas .cengi-courses-table .cengi-status-badge {
+    padding: 4px 9px;
+    border: 0;
+    font-size: 10.5px;
+}
+
+.cengi-canvas .cengi-courses-table .cengi-row-actions {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.cengi-canvas .cengi-courses-table .cengi-action-btn,
+.cengi-canvas .cengi-courses-table .cengi-action-btn.is-view,
+.cengi-canvas .cengi-courses-table .cengi-action-btn.is-edit,
+.cengi-canvas .cengi-courses-table .cengi-action-btn.is-delete {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    border: 1px solid #E4E7E1 !important;
+    border-radius: 7px;
+    background: #ffffff !important;
+    color: #4B5A45 !important;
+}
+
+.cengi-canvas .cengi-courses-table .cengi-action-btn:hover,
+.cengi-canvas .cengi-courses-table .cengi-action-btn.is-view:hover,
+.cengi-canvas .cengi-courses-table .cengi-action-btn.is-edit:hover {
+    background: #F2F4EF !important;
+    color: #1E2A1A !important;
+}
+
+.cengi-canvas .cengi-courses-table .cengi-action-btn.is-delete:hover {
+    background: #FFF1EF !important;
+    border-color: #efc7c2 !important;
+    color: var(--cengi-danger-strong) !important;
+}
+
+.cengi-canvas .cengi-courses-table .cengi-action-btn .glyphicon {
+    font-size: 12px;
+}
+
+.cengi-canvas .cengi-course-detail-row[hidden] {
+    display: none;
+}
+
+.cengi-canvas .cengi-course-detail-row > td {
+    padding: 0 !important;
+    background: #FAFBF7 !important;
+}
+
+.cengi-canvas .cengi-course-detail {
+    padding: 16px 20px 20px 46px;
+    display: grid;
+    grid-template-columns: minmax(280px, 1.3fr) minmax(300px, 1fr);
+    gap: 28px;
+}
+
+.cengi-canvas .cengi-course-detail-label {
+    display: block;
+    margin-bottom: 6px;
+    color: #4B5A45;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.cengi-canvas .cengi-course-detail p {
+    margin: 0;
+    color: #4B5A45;
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.cengi-canvas .cengi-course-detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.cengi-canvas .cengi-course-detail-actions .btn {
+    min-height: 31px;
+    padding: 6px 10px;
+    border-radius: 8px !important;
+    font-size: 11.5px;
+    box-shadow: none !important;
+}
+
+.cengi-canvas .cengi-course-detail-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+    gap: 10px;
+}
+
+.cengi-canvas .cengi-course-detail-stats > div {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #E4E7E1;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.cengi-canvas .cengi-course-detail-stats strong {
+    color: #1E2A1A;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 18px;
+}
+
+.cengi-canvas .cengi-course-detail-stats span {
+    margin-top: 2px;
+    color: #4B5A45;
+    font-size: 10px;
+}
+
+.cengi-canvas .cengi-courses-empty {
+    padding: 52px 24px !important;
+    text-align: center;
+}
+
+.cengi-canvas .cengi-courses-empty > * {
+    display: block;
+}
+
+.cengi-canvas .cengi-courses-empty > .glyphicon {
+    margin-bottom: 10px;
+    color: var(--cengi-primary);
+    font-size: 24px;
+}
+
+.cengi-canvas .cengi-courses-empty strong {
+    font-size: 13px;
+}
+
+.cengi-canvas .cengi-courses-empty small {
+    margin-top: 4px;
+    color: #4B5A45;
+}
+
+@media (max-width: 1180px) {
+    .cengi-canvas .cengi-course-create {
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 1024px) {
+    .cengi-canvas .cengi-courses-page {
+        width: 100%;
+    }
+}
+
+@media (max-width: 767px) {
+    .cengi-canvas .cengi-courses-page {
+        padding: 18px 14px 40px;
+    }
+
+    .cengi-canvas .cengi-courses-filters {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .cengi-canvas .cengi-course-search,
+    .cengi-canvas .cengi-courses-filters select,
+    .cengi-canvas .cengi-filter-submit,
+    .cengi-canvas .cengi-filter-clear,
+    .cengi-canvas .cengi-course-create {
+        width: 100%;
+        max-width: none;
+    }
+
+    .cengi-canvas .cengi-course-search {
+        flex-basis: auto;
+    }
+
+    .cengi-canvas .cengi-course-detail {
+        padding-left: 20px;
+        grid-template-columns: 1fr;
+    }
+}

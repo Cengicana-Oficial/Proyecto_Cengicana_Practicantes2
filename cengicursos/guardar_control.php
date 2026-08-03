@@ -19,11 +19,17 @@ if (
     isset($_FILES['diploma']) &&
     $_FILES['diploma']['error'] === 0
 ) {
-    $nombrePDF = time() . "_" . $_FILES['diploma']['name'];
-    $ruta = "../uploads/diplomas/" . $nombrePDF;
+    $extension = strtolower(pathinfo($_FILES['diploma']['name'], PATHINFO_EXTENSION));
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($_FILES['diploma']['tmp_name']);
 
-    move_uploaded_file($_FILES['diploma']['tmp_name'], $ruta);
-    $diploma = $ruta;
+    if ($extension === 'pdf' && $mime === 'application/pdf') {
+        $nombrePDF = time() . "_" . preg_replace('/[^a-zA-Z0-9_.-]/', '_', $_FILES['diploma']['name']);
+        $ruta = "../uploads/diplomas/" . $nombrePDF;
+
+        if (move_uploaded_file($_FILES['diploma']['tmp_name'], $ruta)) {
+            $diploma = $ruta;
+        }
+    }
 }
 
 $stmtScope = $db->prepare("

@@ -19,6 +19,9 @@ RUN sed -i 's|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|ht
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+COPY dockerfiles/modulos-app/no-php-uploads.conf /etc/apache2/conf-available/no-php-uploads.conf
+RUN a2enconf no-php-uploads
+
 WORKDIR /var/www/html
 COPY . /var/www/html
 

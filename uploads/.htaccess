@@ -1,0 +1,4 @@
+# Los archivos en este directorio son subidos por usuarios; nunca deben ejecutarse como scripts.
+<FilesMatch "\.(php|php[3-8]?|phtml|pl|py|cgi|asp|aspx|sh|exe)$">
+    Require all denied
+</FilesMatch>
