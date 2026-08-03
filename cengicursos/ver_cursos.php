@@ -28,6 +28,20 @@ $modalidades = $db->query("
     ORDER BY tipo
 ")->fetchAll(PDO::FETCH_COLUMN);
 
+$ingenios = $db->query("
+    SELECT id, nombre_ingenios
+    FROM ingenios
+    ORDER BY nombre_ingenios
+")->fetchAll(PDO::FETCH_ASSOC);
+
+$tiposCurso = array_values(array_unique(array_merge(
+    ['Curso', 'Diplomado', 'Seminario', 'Presencial', 'Virtual', 'Hibrido'],
+    $modalidades
+)));
+
+$mensajeCurso = trim((string) ($_GET['mensaje'] ?? ''));
+$errorCurso = trim((string) ($_GET['error'] ?? ''));
+
 $condiciones = [];
 $params = [];
 
@@ -98,6 +112,8 @@ $camposEstudiante = $esEstudiante
 $sql = "
     SELECT
         c.id AS idcurso,
+        c.categoria_curso_id,
+        c.ingenio_id,
         c.nombre_cursos,
         ca.descripcion_categorias_cursos,
         i.nombre_ingenios,
@@ -186,6 +202,29 @@ function cengi_curso_avance($inicio, $fin)
 function cengi_curso_codigo($id)
 {
     return 'CEN-' . str_pad((string) (int) $id, 3, '0', STR_PAD_LEFT);
+}
+
+function cengi_curso_modal_atributos(array $curso)
+{
+    $datos = [
+        'id' => $curso['idcurso'] ?? '',
+        'categoria' => $curso['categoria_curso_id'] ?? '',
+        'ingenio' => $curso['ingenio_id'] ?? '',
+        'tipo' => $curso['tipo'] ?? '',
+        'nombre' => $curso['nombre_cursos'] ?? '',
+        'jornada' => $curso['jornada_cursos'] ?? '',
+        'dias' => $curso['dias'] ?? '',
+        'horario' => $curso['horario'] ?? '',
+        'inicio' => $curso['inicio'] ?? '',
+        'fin' => $curso['fin'] ?? '',
+    ];
+
+    $atributos = '';
+    foreach ($datos as $nombre => $valor) {
+        $atributos .= ' data-course-' . $nombre . '="' . cengi_curso_html($valor) . '"';
+    }
+
+    return $atributos;
 }
 ?>
 
@@ -455,7 +494,9 @@ function cengi_curso_codigo($id)
     <?php endif; ?>
 </body>
 </html>
-<?php endif; ?<!DOCTYPE html>
+<?php endif; ?>
+
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
@@ -471,6 +512,20 @@ function cengi_curso_codigo($id)
 <?php menu_render(); ?>
 
 <main class="container cengi-courses-page">
+    <?php if ($mensajeCurso === 'creado' || $mensajeCurso === 'actualizado'): ?>
+        <div class="cengi-course-feedback is-success" role="status">
+            <span class="glyphicon glyphicon-ok-circle" aria-hidden="true"></span>
+            <span><?php echo $mensajeCurso === 'creado' ? 'El curso fue creado correctamente.' : 'Los cambios del curso fueron guardados correctamente.'; ?></span>
+            <a href="ver_cursos.php" aria-label="Cerrar mensaje">&times;</a>
+        </div>
+    <?php elseif ($errorCurso !== ''): ?>
+        <div class="cengi-course-feedback is-error" role="alert">
+            <span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
+            <span>No fue posible guardar el curso. Revisa los datos e inténtalo nuevamente.</span>
+            <a href="ver_cursos.php" aria-label="Cerrar mensaje">&times;</a>
+        </div>
+    <?php endif; ?>
+
     <section class="cengi-courses-filter-card" aria-label="Filtros de cursos">
         <form class="cengi-courses-filters" action="ver_cursos.php" method="get">
             <div class="cengi-course-search">
@@ -506,7 +561,7 @@ function cengi_curso_codigo($id)
                 <a href="ver_cursos.php" class="cengi-filter-clear" aria-label="Limpiar filtros">Limpiar</a>
             <?php endif; ?>
             <?php if ($puedeGestionar): ?>
-                <a href="agregar_cursos.php" class="btn btn-primary cengi-course-create"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>Crear curso</a>
+                <button type="button" class="btn btn-primary cengi-course-create" data-course-modal="create" data-toggle="modal" data-target="#course-form-modal"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>Crear curso</button>
             <?php endif; ?>
         </form>
     </section>
@@ -547,7 +602,7 @@ function cengi_curso_codigo($id)
                         <td class="is-actions"><div class="cengi-row-actions">
                             <?php if ($puedeGestionar || $puedeCalificar): ?><a class="cengi-action-btn is-view" href="ver_participante_curso.php?id=<?php echo $cursoId; ?>" data-tooltip="Ver participantes" aria-label="Ver participantes"><span class="glyphicon glyphicon-eye-open"></span></a><?php endif; ?>
                             <?php if ($puedeGestionar): ?>
-                                <a class="cengi-action-btn is-edit" href="modificar_cursos.php?id=<?php echo $cursoId; ?>" data-tooltip="Editar" aria-label="Editar"><span class="glyphicon glyphicon-pencil"></span></a>
+                                <button type="button" class="cengi-action-btn is-edit" data-course-modal="edit" data-toggle="modal" data-target="#course-form-modal"<?php echo cengi_curso_modal_atributos($row); ?> data-tooltip="Editar" aria-label="Editar"><span class="glyphicon glyphicon-pencil"></span></button>
                                 <a class="cengi-action-btn is-delete" href="#" data-href="eliminar_cursos.php?id=<?php echo $cursoId; ?>" data-toggle="modal" data-target="#confirm-delete" data-tooltip="Eliminar" aria-label="Eliminar"><span class="glyphicon glyphicon-trash"></span></a>
                             <?php endif; ?>
                         </div></td>
@@ -555,7 +610,7 @@ function cengi_curso_codigo($id)
                     <tr class="cengi-course-detail-row" id="course-detail-<?php echo $cursoId; ?>" hidden><td colspan="13">
                         <div class="cengi-course-detail">
                             <div><span class="cengi-course-detail-label">Información del curso</span><p><?php echo cengi_curso_html($row['dias'] ?: 'Días por definir'); ?> · <?php echo cengi_curso_html($row['horario'] ?: 'Horario por definir'); ?> · Jornada <?php echo cengi_curso_html($row['jornada_cursos'] ?: 'por definir'); ?></p>
-                                <div class="cengi-course-detail-actions"><?php if ($puedeGestionar || $puedeCalificar): ?><a href="ver_participante_curso.php?id=<?php echo $cursoId; ?>" class="btn btn-default btn-sm">Ver seguimiento del curso</a><?php endif; ?> <?php if ($puedeGestionar): ?><a href="modificar_cursos.php?id=<?php echo $cursoId; ?>" class="btn btn-default btn-sm">Editar curso</a><?php endif; ?></div>
+                                <div class="cengi-course-detail-actions"><?php if ($puedeGestionar || $puedeCalificar): ?><a href="ver_participante_curso.php?id=<?php echo $cursoId; ?>" class="btn btn-default btn-sm">Ver seguimiento del curso</a><?php endif; ?> <?php if ($puedeGestionar): ?><button type="button" class="btn btn-default btn-sm" data-course-modal="edit" data-toggle="modal" data-target="#course-form-modal"<?php echo cengi_curso_modal_atributos($row); ?>>Editar curso</button><?php endif; ?></div>
                             </div>
                             <div class="cengi-course-detail-stats"><div><strong><?php echo (int) $row['modulos_total']; ?></strong><span>Módulos configurados</span></div><div><strong><?php echo (int) $row['inscritos']; ?></strong><span>Participantes inscritos</span></div><?php if ($esEstudiante): ?><div><strong><?php echo cengi_curso_html($row['nota']); ?></strong><span>Nota registrada</span></div><?php endif; ?></div>
                         </div>
@@ -568,6 +623,82 @@ function cengi_curso_codigo($id)
 </main>
 
 <?php if ($puedeGestionar): ?>
+<div class="modal fade cengi-course-form-modal" id="course-form-modal" tabindex="-1" role="dialog" aria-labelledby="course-form-title" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form id="course-form" method="post" action="guardar_cursos.php" autocomplete="off">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+                    <span class="cengi-course-modal-kicker">Gestión de cursos</span>
+                    <h4 class="modal-title" id="course-form-title">Crear curso</h4>
+                    <p id="course-form-subtitle">Completa la información general y el calendario del curso.</p>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="course-form-id" value="">
+                    <div class="cengi-course-modal-grid">
+                        <div class="form-group">
+                            <label for="course-form-category">Categoría</label>
+                            <select class="form-control" id="course-form-category" name="categorias_cursos" required>
+                                <?php foreach ($categorias as $categoria): ?>
+                                    <option value="<?php echo (int) $categoria['id']; ?>"><?php echo cengi_curso_html($categoria['descripcion_categorias_cursos']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-form-ingenio">Ingenio / institución</label>
+                            <select class="form-control" id="course-form-ingenio" name="ingenio" required>
+                                <?php foreach ($ingenios as $ingenio): ?>
+                                    <option value="<?php echo (int) $ingenio['id']; ?>"><?php echo cengi_curso_html($ingenio['nombre_ingenios']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-form-type">Tipo / modalidad</label>
+                            <select class="form-control" id="course-form-type" name="tipo" required>
+                                <?php foreach ($tiposCurso as $tipoCurso): ?>
+                                    <option value="<?php echo cengi_curso_html($tipoCurso); ?>"><?php echo cengi_curso_html($tipoCurso); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-form-shift">Jornada</label>
+                            <select class="form-control" id="course-form-shift" name="jornada_cursos" required>
+                                <option value="Matutina">Matutina</option>
+                                <option value="Vespertina">Vespertina</option>
+                                <option value="Todo Completo">Todo completo</option>
+                            </select>
+                        </div>
+                        <div class="form-group is-full">
+                            <label for="course-form-name">Nombre del curso</label>
+                            <input type="text" class="form-control" id="course-form-name" name="nombre_cursos" placeholder="Ej. Manejo integrado de plagas" maxlength="255" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-form-days">Días</label>
+                            <input type="text" class="form-control" id="course-form-days" name="dias" placeholder="Ej. Lunes y miércoles" maxlength="255" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-form-schedule">Horario</label>
+                            <input type="text" class="form-control" id="course-form-schedule" name="horario" placeholder="Ej. 08:00 - 12:00" maxlength="255" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-form-start">Fecha de inicio</label>
+                            <input type="date" class="form-control" id="course-form-start" name="inicio" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-form-end">Fecha de finalización</label>
+                            <input type="date" class="form-control" id="course-form-end" name="fin" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="course-form-submit"><span class="glyphicon glyphicon-floppy-disk" aria-hidden="true"></span>Crear curso</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="confirm-delete" tabindex="-1" role="dialog" aria-labelledby="delete-course-title" aria-hidden="true"><div class="modal-dialog"><div class="modal-content">
     <div class="modal-header"><button class="close" type="button" data-dismiss="modal" aria-hidden="true">&times;</button><h4 class="modal-title" id="delete-course-title">Eliminar curso</h4></div>
     <div class="modal-body">¿Deseas eliminar este curso? Esta acción no se puede deshacer.</div>
@@ -590,6 +721,63 @@ function cengi_curso_codigo($id)
     document.querySelectorAll('.cengi-courses-filters select').forEach(function (select) {
         select.addEventListener('change', function () { select.form.submit(); });
     });
+
+    var courseModal = $('#course-form-modal');
+    var courseForm = document.getElementById('course-form');
+    var courseSubmit = document.getElementById('course-form-submit');
+    var courseStart = document.getElementById('course-form-start');
+    var courseEnd = document.getElementById('course-form-end');
+
+    function setSelectValue(select, value) {
+        if (!select || !value) return;
+        var exists = Array.prototype.some.call(select.options, function (option) {
+            return option.value === value;
+        });
+        if (!exists) {
+            select.add(new Option(value, value));
+        }
+        select.value = value;
+    }
+
+    courseModal.on('show.bs.modal', function (event) {
+        var trigger = event.relatedTarget;
+        var mode = trigger && trigger.getAttribute('data-course-modal') === 'edit' ? 'edit' : 'create';
+        courseForm.reset();
+        courseForm.action = mode === 'edit' ? 'actualizar_cursos.php' : 'guardar_cursos.php';
+        document.getElementById('course-form-id').value = mode === 'edit' ? trigger.getAttribute('data-course-id') || '' : '';
+        document.getElementById('course-form-title').textContent = mode === 'edit' ? 'Editar curso' : 'Crear curso';
+        document.getElementById('course-form-subtitle').textContent = mode === 'edit'
+            ? 'Actualiza la información general y el calendario del curso seleccionado.'
+            : 'Completa la información general y el calendario del curso.';
+        courseSubmit.lastChild.nodeValue = mode === 'edit' ? ' Guardar cambios' : ' Crear curso';
+
+        if (mode === 'edit') {
+            setSelectValue(document.getElementById('course-form-category'), trigger.getAttribute('data-course-categoria') || '');
+            setSelectValue(document.getElementById('course-form-ingenio'), trigger.getAttribute('data-course-ingenio') || '');
+            setSelectValue(document.getElementById('course-form-type'), trigger.getAttribute('data-course-tipo') || '');
+            setSelectValue(document.getElementById('course-form-shift'), trigger.getAttribute('data-course-jornada') || '');
+            document.getElementById('course-form-name').value = trigger.getAttribute('data-course-nombre') || '';
+            document.getElementById('course-form-days').value = trigger.getAttribute('data-course-dias') || '';
+            document.getElementById('course-form-schedule').value = trigger.getAttribute('data-course-horario') || '';
+            courseStart.value = trigger.getAttribute('data-course-inicio') || '';
+            courseEnd.value = trigger.getAttribute('data-course-fin') || '';
+        }
+
+        courseEnd.min = courseStart.value;
+        courseSubmit.disabled = false;
+    });
+
+    courseStart.addEventListener('change', function () {
+        courseEnd.min = courseStart.value;
+        if (courseEnd.value && courseEnd.value < courseStart.value) {
+            courseEnd.value = courseStart.value;
+        }
+    });
+
+    courseForm.addEventListener('submit', function () {
+        courseSubmit.disabled = true;
+    });
+
     $('#confirm-delete').on('show.bs.modal', function (event) {
         $(this).find('.btn-ok').attr('href', $(event.relatedTarget).data('href'));
     });
