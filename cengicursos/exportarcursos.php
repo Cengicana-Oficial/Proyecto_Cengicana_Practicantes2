@@ -1,4 +1,6 @@
 <?php
+require_once("revisar_permisos.php");
+cengi_require_admin();
 require_once("conexion.php");
 $db = conectar();
 //include menu
