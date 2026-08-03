@@ -1,14 +1,27 @@
 <?php
 require_once("revisar_permisos.php");
-cengi_require_admin();
+cengi_require_ver_participantes();
 require_once("conexion.php");
 $db = conectar();
+$cursoId = (int) ($_GET['curso_id'] ?? 0);
 //include menu
 /** Incluye PHPExcel */
 require_once dirname(__FILE__) . '/classes/PHPExcel.php';
 require_once dirname(__FILE__) . '/classes/PHPExcel/Cell.php';
 require_once dirname(__FILE__) . '/classes/PHPExcel/Calculation.php';
 /*Extraer datos de MYSQL*/
+$condiciones = [];
+$params = [];
+if ($cursoId > 0) {
+    $condiciones[] = 'a.cursos_id = ?';
+    $params[] = $cursoId;
+}
+if (!cengi_ve_todo_por_rol_o_ingenio()) {
+    $condiciones[] = 'p.ingenio_id = ?';
+    $params[] = cengi_ingenio_id_actual();
+}
+$where = $condiciones ? 'WHERE ' . implode(' AND ', $condiciones) : '';
+
 	$sql = "
 SELECT
     c.nombre_cursos,
@@ -21,11 +34,12 @@ FROM asignaciones a
 INNER JOIN cursos c ON a.cursos_id = c.id
 INNER JOIN participantes p ON a.participantes_id = p.id
 INNER JOIN ingenios i ON p.ingenio_id = i.id
-" . cengi_scope_sql('p', false) . "
+$where
 ORDER BY i.id, c.id
 ";
 
-$stmt = $db->query($sql);
+$stmt = $db->prepare($sql);
+$stmt->execute($params);
 
 // Crear nuevo objeto PHPExcel
 $objPHPExcel = new PHPExcel();
@@ -108,7 +122,7 @@ $objPHPExcel->setActiveSheetIndex(0);
 
 // Redirigir la salida al navegador web de un cliente ( Excel5 )
 header('Content-Type: application/vnd.ms-excel');
-header('Content-Disposition: attachment;filename="reporte.xls"');
+header('Content-Disposition: attachment;filename="participantes_curso.xls"');
 header('Cache-Control: max-age=0');
 // Si usted está sirviendo a IE 9 , a continuación, puede ser necesaria la siguiente
 header('Cache-Control: max-age=1');

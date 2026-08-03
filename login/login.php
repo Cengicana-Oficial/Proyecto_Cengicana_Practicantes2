@@ -1,9 +1,16 @@
 <?php
 require_once __DIR__ . "/config/session.php";
+require_once __DIR__ . "/config/login_throttle.php";
 cengi_session_start();
 require_once("config/conexion.php");
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    $segundosRestantes = cengi_login_throttle_bloqueado();
+
+    if ($segundosRestantes > 0) {
+        $error = "Demasiados intentos fallidos. Intenta de nuevo en " . ceil($segundosRestantes / 60) . " minuto(s).";
+    } else {
 
     $correo = $_POST['correo'];
     $password = $_POST['password'];
@@ -34,6 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($loginCorrecto) {
+            cengi_login_throttle_limpiar();
+            session_regenerate_id(true);
+
             $stmtMod = $conn->prepare("
                 SELECT m.id, m.nombre
                 FROM usuario_modulo um
@@ -72,7 +82,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $error = "Credenciales incorrectas";
+        cengi_login_throttle_registrar_fallo();
+        $error = "Credenciales incorrectas";
+    }
 }
 ?>
 

@@ -158,6 +158,10 @@ $stmtCurso->execute([$asignacion_id]);
 $curso = $stmtCurso->fetch(PDO::FETCH_ASSOC);
 $idcurso = (int) ($curso['cursos_id'] ?? 0);
 
-header("Location: ver_participante_curso.php?id=$idcurso");
+if (trim((string) ($_POST['return_to'] ?? '')) === 'participantes') {
+    header("Location: participantes.php?curso_id=$idcurso&mensaje=calificacion");
+} else {
+    header("Location: ver_participante_curso.php?id=$idcurso");
+}
 exit;
 ?>

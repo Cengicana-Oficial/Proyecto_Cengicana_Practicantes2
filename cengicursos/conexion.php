@@ -55,10 +55,8 @@ function cengicursos_abrir_mysqli($host, $puerto, $usuario, $pass, $bdd)
 
         return $con;
     } catch (mysqli_sql_exception $e) {
-        die(
-            "Error MySQL hacia {$host}:{$puerto}/{$bdd}. Detalle: " .
-            $e->getMessage()
-        );
+        error_log("Error MySQL hacia {$host}:{$puerto}/{$bdd}. Detalle: " . $e->getMessage());
+        die('No fue posible conectar a la base de datos. Intente mas tarde.');
     }
 }
 
@@ -102,10 +100,8 @@ function conectar()
 
     } catch (PDOException $e) {
 
-        die(
-            "Error MySQL de Cursos hacia {$host}:{$port}/{$dbname}. Detalle: " .
-            $e->getMessage()
-        );
+        error_log("Error MySQL de Cursos hacia {$host}:{$port}/{$dbname}. Detalle: " . $e->getMessage());
+        die('No fue posible conectar a la base de datos. Intente mas tarde.');
     }
 }
 
@@ -191,9 +187,7 @@ function conectar_usuarios_menu_pdo()
 
         return $conexion;
     } catch (PDOException $e) {
-        die(
-            "Error MySQL (usuarios_menu/PDO) hacia {$host}:{$port}/{$dbname}. Detalle: " .
-            $e->getMessage()
-        );
+        error_log("Error MySQL (usuarios_menu/PDO) hacia {$host}:{$port}/{$dbname}. Detalle: " . $e->getMessage());
+        die('No fue posible conectar a la base de datos. Intente mas tarde.');
     }
 }
