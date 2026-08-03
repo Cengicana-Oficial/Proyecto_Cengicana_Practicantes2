@@ -1,100 +1,70 @@
 <?php
+require_once "revisar_permisos.php";
+cengi_require_admin('ver_cursos.php');
 
-require_once("revisar_permisos.php");
-cengi_require_admin();
-
-require_once("conexion.php");
+require_once "conexion.php";
 
 $db = conectar();
+$cursoId = (int) ($_POST['id'] ?? 0);
+$categoriaId = (int) ($_POST['categorias_cursos'] ?? $_POST['categorias'] ?? 0);
+$ingenioId = (int) ($_POST['ingenio'] ?? 0);
+$tipo = trim((string) ($_POST['tipo'] ?? ''));
+$nombre = trim((string) ($_POST['nombre_cursos'] ?? ''));
+$jornada = trim((string) ($_POST['jornada_cursos'] ?? ''));
+$dias = trim((string) ($_POST['dias'] ?? ''));
+$horario = trim((string) ($_POST['horario'] ?? ''));
+$inicio = trim((string) ($_POST['inicio'] ?? ''));
+$fin = trim((string) ($_POST['fin'] ?? ''));
 
-if (!empty($_POST['id']))
-{
-    $id = (int)$_POST['id'];
+$datosValidos = $cursoId > 0
+    && $categoriaId > 0
+    && $ingenioId > 0
+    && $tipo !== ''
+    && $nombre !== ''
+    && $jornada !== ''
+    && $dias !== ''
+    && $horario !== ''
+    && preg_match('/^\d{4}-\d{2}-\d{2}$/', $inicio)
+    && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fin)
+    && $fin >= $inicio;
 
-    $descripcion = $_POST['categorias'];
-    $ingenio = $_POST['ingenio'];
-
-    $tipo = $_POST['tipo'];
-
-    $curso = $_POST['nombre_cursos'];
-    $jornada = $_POST['jornada_cursos'];
-    $horario = $_POST['horario'];
-    $dias = $_POST['dias'];
-
-    try {
-
-        $sql = "
-            UPDATE cursos
-            SET
-                categoria_curso_id = ?,
-                ingenio_id = ?,
-                tipo = ?,
-                nombre_cursos = ?,
-                jornada_cursos = ?,
-                dias = ?,
-                horario = ?
-            WHERE id = ?
-        ";
-
-        $stmt = $db->prepare($sql);
-
-        $resultado = $stmt->execute([
-            $descripcion,
-            $ingenio,
-            $tipo,
-            $curso,
-            $jornada,
-            $dias,
-            $horario,
-            $id
-        ]);
-
-    } catch (PDOException $e) {
-
-        $resultado = false;
-        $error = $e->getMessage();
-
-    }
-
-}
-else
-{
-    $resultado = false;
-    $error = "Debe indicar el id";
+if (!$datosValidos) {
+    header('Location: ver_cursos.php?error=datos');
+    exit;
 }
 
-?>
+try {
+    $stmt = $db->prepare("
+        UPDATE cursos
+        SET
+            categoria_curso_id = ?,
+            ingenio_id = ?,
+            tipo = ?,
+            nombre_cursos = ?,
+            jornada_cursos = ?,
+            dias = ?,
+            horario = ?,
+            inicio = ?,
+            fin = ?
+        WHERE id = ?
+    ");
+    $stmt->execute([
+        $categoriaId,
+        $ingenioId,
+        $tipo,
+        $nombre,
+        $jornada,
+        $dias,
+        $horario,
+        $inicio,
+        $fin,
+        $cursoId,
+    ]);
+} catch (PDOException $e) {
+    error_log('No fue posible actualizar el curso: ' . $e->getMessage());
+    header('Location: ver_cursos.php?error=actualizar');
+    exit;
+}
 
-<html lang="es">
-
-<?php include('head.php'); ?>
-
-<body class="cengi-canvas">
-
-	<?php include('menu.php'); menu_render(); ?>
-
-	<div class="container">
-
-		<div class="cengi-result-card <?php echo $resultado ? 'is-success' : 'is-error'; ?>">
-
-			<?php if ($resultado) { ?>
-
-				<h3>Registro modificado</h3>
-
-			<?php } else { ?>
-
-				<h3>Error al modificar</h3>
-				<p><?php echo htmlspecialchars($error); ?></p>
-
-			<?php } ?>
-
-			<a href="index.php" class="btn btn-success">
-				Regresar
-			</a>
-
-		</div>
-
-	</div>
-
-</body>
-</html>
+header('Location: ver_cursos.php?mensaje=actualizado');
+exit;

@@ -1,34 +1,39 @@
 <?php
+require_once "revisar_permisos.php";
+cengi_require_admin('ver_cursos.php');
 
-require_once("revisar_permisos.php");
-cengi_require_admin();
-
-require_once("conexion.php");
-require_once("menu.php");
+require_once "conexion.php";
 
 $db = conectar();
+$categoriaId = (int) ($_POST['categorias_cursos'] ?? 0);
+$ingenioId = (int) ($_POST['ingenio'] ?? 0);
+$tipo = trim((string) ($_POST['tipo'] ?? ''));
+$nombre = trim((string) ($_POST['nombre_cursos'] ?? ''));
+$jornada = trim((string) ($_POST['jornada_cursos'] ?? ''));
+$dias = trim((string) ($_POST['dias'] ?? ''));
+$horario = trim((string) ($_POST['horario'] ?? ''));
+$inicio = trim((string) ($_POST['inicio'] ?? ''));
+$fin = trim((string) ($_POST['fin'] ?? ''));
 
-$error = '';
+$datosValidos = $categoriaId > 0
+    && $ingenioId > 0
+    && $tipo !== ''
+    && $nombre !== ''
+    && $jornada !== ''
+    && $dias !== ''
+    && $horario !== ''
+    && preg_match('/^\d{4}-\d{2}-\d{2}$/', $inicio)
+    && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fin)
+    && $fin >= $inicio;
+
+if (!$datosValidos) {
+    header('Location: ver_cursos.php?error=datos');
+    exit;
+}
 
 try {
-
-    $categorias = (int)$_POST['categorias_cursos'];
-    $ingenio = (int)$_POST['ingenio'];
-
-    $tipo = $_POST['tipo'];
-
-    $curso = $_POST['nombre_cursos'];
-    $jornada = $_POST['jornada_cursos'];
-
-    $dias = $_POST['dias'];
-    $horario = $_POST['horario'];
-
-    $inicio = $_POST['inicio'];
-    $fin = $_POST['fin'];
-
     $stmt = $db->prepare("
-        INSERT INTO cursos
-        (
+        INSERT INTO cursos (
             categoria_curso_id,
             ingenio_id,
             tipo,
@@ -39,76 +44,24 @@ try {
             inicio,
             fin,
             creado
-        )
-        VALUES
-        (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()
-        )
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     ");
-
-    $resultado = $stmt->execute([
-        $categorias,
-        $ingenio,
+    $stmt->execute([
+        $categoriaId,
+        $ingenioId,
         $tipo,
-        $curso,
+        $nombre,
         $jornada,
         $dias,
         $horario,
         $inicio,
-        $fin
+        $fin,
     ]);
-
 } catch (PDOException $e) {
-
-    $resultado = false;
-    $error = $e->getMessage();
-
+    error_log('No fue posible crear el curso: ' . $e->getMessage());
+    header('Location: ver_cursos.php?error=guardar');
+    exit;
 }
 
-?>
-
-<html lang="es">
-
-<head>
-
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <link href="css/bootstrap.min.css" rel="stylesheet">
-    <link href="css/bootstrap-theme.css" rel="stylesheet">
-    <link href="css/proyecto.css" rel="stylesheet">
-
-    <script src="js/jquery-3.1.1.min.js"></script>
-    <script src="js/bootstrap.min.js"></script>
-
-</head>
-
-<body class="cengi-canvas">
-
-<?php menu_render(); ?>
-
-<div class="container">
-
-    <div class="cengi-result-card <?php echo $resultado ? 'is-success' : 'is-error'; ?>">
-
-        <?php if ($resultado) { ?>
-
-            <h3>Registro guardado</h3>
-
-        <?php } else { ?>
-
-            <h3>Error al guardar</h3>
-            <p><?php echo htmlspecialchars($error); ?></p>
-
-        <?php } ?>
-
-        <a href="ver_cursos.php" class="btn btn-primary">
-            Regresar
-        </a>
-
-    </div>
-
-</div>
-
-</body>
-
-</html>
+header('Location: ver_cursos.php?mensaje=creado');
+exit;

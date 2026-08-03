@@ -2433,3 +2433,219 @@ body.cengi-nav-loading {
         grid-template-columns: 1fr;
     }
 }
+
+/* ===== Cursos: modal de creación y edición ===== */
+
+.cengi-canvas .cengi-course-feedback {
+    position: relative;
+    min-height: 48px;
+    margin-bottom: 16px;
+    padding: 13px 46px 13px 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #cbe2b3;
+    border-left: 4px solid var(--cengi-primary);
+    border-radius: 10px;
+    background: #eff9e4;
+    color: var(--cengi-primary-deep);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.cengi-canvas .cengi-course-feedback.is-error {
+    border-color: #efc7c2;
+    border-left-color: var(--cengi-danger);
+    background: #fff1ef;
+    color: var(--cengi-danger-strong);
+}
+
+.cengi-canvas .cengi-course-feedback > a {
+    position: absolute;
+    top: 50%;
+    right: 15px;
+    color: inherit;
+    font-size: 21px;
+    font-weight: 400;
+    line-height: 1;
+    opacity: 0.62;
+    text-decoration: none;
+    transform: translateY(-50%);
+}
+
+.cengi-canvas .cengi-course-create {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+}
+
+.cengi-canvas .cengi-courses-table button.cengi-action-btn {
+    cursor: pointer;
+}
+
+.cengi-course-form-modal.in {
+    padding: 20px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.cengi-course-form-modal .modal-dialog {
+    width: min(760px, calc(100vw - 40px));
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.cengi-course-form-modal .modal-content {
+    overflow: hidden;
+    border: 1px solid #E4E7E1;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 24px 70px rgba(20, 35, 17, 0.26);
+}
+
+.cengi-course-form-modal .modal-header {
+    position: relative;
+    padding: 21px 24px 18px;
+    border-bottom: 1px solid #E4E7E1;
+    background: #FAFBF8;
+}
+
+.cengi-course-form-modal .modal-header .close {
+    position: absolute;
+    top: 17px;
+    right: 20px;
+    width: 30px;
+    height: 30px;
+    margin: 0;
+    border: 1px solid #E4E7E1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #4B5A45;
+    font-size: 21px;
+    font-weight: 400;
+    line-height: 25px;
+    opacity: 1;
+}
+
+.cengi-course-form-modal .cengi-course-modal-kicker {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--cengi-primary-strong);
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.cengi-course-form-modal .modal-title {
+    padding-right: 45px;
+    color: #1E2A1A;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.cengi-course-form-modal .modal-header p {
+    margin: 4px 45px 0 0;
+    color: #4B5A45;
+    font-size: 11.5px;
+}
+
+.cengi-course-form-modal .modal-body {
+    max-height: calc(100vh - 230px);
+    padding: 22px 24px 8px;
+    overflow-y: auto;
+}
+
+.cengi-course-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px 17px;
+}
+
+.cengi-course-modal-grid .form-group {
+    margin: 0;
+}
+
+.cengi-course-modal-grid .form-group.is-full {
+    grid-column: 1 / -1;
+}
+
+.cengi-course-modal-grid label {
+    margin-bottom: 6px;
+    color: #1E2A1A;
+    font-size: 11.5px;
+    font-weight: 700;
+}
+
+.cengi-course-modal-grid .form-control {
+    height: 38px;
+    padding: 8px 11px;
+    border: 1px solid #E4E7E1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #1E2A1A;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    box-shadow: none;
+}
+
+.cengi-course-modal-grid .form-control:focus {
+    border-color: var(--cengi-primary);
+    box-shadow: 0 0 0 2px rgba(163, 211, 0, 0.28);
+}
+
+.cengi-course-form-modal .modal-footer {
+    padding: 16px 24px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 9px;
+    border-top: 1px solid #E4E7E1;
+    background: #FAFBF8;
+}
+
+.cengi-course-form-modal .modal-footer .btn {
+    min-height: 38px;
+    padding: 8px 15px;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+}
+
+.cengi-course-form-modal .modal-footer .btn-primary {
+    background: var(--cengi-primary) !important;
+    border-color: var(--cengi-primary) !important;
+}
+
+@media (max-width: 640px) {
+    .cengi-course-form-modal.in {
+        padding: 10px !important;
+        align-items: flex-start;
+    }
+
+    .cengi-course-form-modal .modal-dialog {
+        width: 100%;
+        margin-top: 10px;
+    }
+
+    .cengi-course-form-modal .modal-body {
+        max-height: calc(100vh - 220px);
+        padding: 18px 18px 6px;
+    }
+
+    .cengi-course-form-modal .modal-header,
+    .cengi-course-form-modal .modal-footer {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .cengi-course-modal-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cengi-course-modal-grid .form-group.is-full {
+        grid-column: auto;
+    }
+}
