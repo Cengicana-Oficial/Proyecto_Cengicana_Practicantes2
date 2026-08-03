@@ -41,13 +41,15 @@ if (!empty($_GET['id'])) {
     } catch (PDOException $e) {
 
         $resultado = false;
-        $error = $e->getMessage();
+        error_log('No fue posible eliminar la categoria: ' . $e->getMessage());
 
         if (
-            stripos($error, 'foreign key') !== false ||
-            stripos($error, 'violates foreign key') !== false
+            stripos($e->getMessage(), 'foreign key') !== false ||
+            stripos($e->getMessage(), 'violates foreign key') !== false
         ) {
             $error = "la categoria tiene cursos asociados";
+        } else {
+            $error = "No fue posible eliminar la categoria";
         }
     }
 
@@ -78,7 +80,7 @@ else
 					<h3>Registro <strong><?php echo strtoupper($categoria); ?></strong> eliminado</h3>
 				<?php } else { ?>
 					<h3>Error al eliminar</h3>
-					<p><?php echo strtoupper($error); ?></p>
+					<p><?php echo htmlspecialchars(strtoupper($error)); ?></p>
 				<?php } ?>
 
 				<a href="ver_cursos.php" class="btn btn-success">Regresar</a>

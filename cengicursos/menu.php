@@ -11,7 +11,7 @@ function cengi_pagina_titulo($currentPage, $esEstudiante)
         'ver_categorias.php' => ['Categorias de curso', 'Clasificacion de la oferta de capacitacion'],
         'agregar_categorias.php' => ['Nueva categoria', 'Registra una categoria de curso'],
         'ver_participante_curso.php' => ['Seguimiento por curso', 'Asistencia, evaluaciones, contenido y diplomas por curso'],
-        'participantes.php' => ['Participantes', 'Listado y carga masiva de participantes'],
+        'participantes.php' => ['Participantes por curso', 'Asistencia, evaluaciones y diplomas'],
         'carga_participantes.php' => ['Carga masiva CSV', 'Resultado de la importacion de participantes'],
         'solicitudes.php' => ['Inscripciones', 'Solicitudes pendientes de validacion'],
         'editar_solicitud.php' => ['Editar solicitud', 'Actualiza una solicitud pendiente'],
