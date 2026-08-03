@@ -2434,6 +2434,488 @@ body.cengi-nav-loading {
     }
 }
 
+/* ===== Participantes por curso ===== */
+
+.cengi-participants-page .cengi-participants-shell {
+    width: calc(100% - var(--cengi-sidebar-width));
+    margin-left: var(--cengi-sidebar-width);
+    padding: 22px 30px 38px;
+}
+
+.cengi-participants-page .cengi-flash {
+    margin-bottom: 14px;
+    border-radius: 9px;
+    font-size: 12px;
+}
+
+.cengi-participants-toolbar-card,
+.cengi-participants-table-card {
+    border: 1px solid #e2e7de;
+    border-radius: 11px;
+    background: #fff;
+    box-shadow: 0 5px 18px rgba(34, 50, 29, 0.06);
+}
+
+.cengi-participants-toolbar-card {
+    margin-bottom: 15px;
+    padding: 16px 18px;
+}
+
+.cengi-participants-toolbar {
+    display: grid;
+    grid-template-columns: minmax(230px, 1.2fr) minmax(240px, 1.35fr) minmax(145px, .65fr) auto;
+    align-items: end;
+    gap: 11px;
+}
+
+.cengi-participants-toolbar label {
+    display: block;
+    margin-bottom: 5px;
+    color: #667061;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.cengi-participants-toolbar .form-control {
+    height: 38px;
+    border-color: #dfe5db;
+    border-radius: 7px;
+    background: #fbfcfa;
+    color: #263321;
+    font-size: 12px;
+    box-shadow: none;
+}
+
+.cengi-participants-search {
+    position: relative;
+}
+
+.cengi-participants-search .glyphicon {
+    position: absolute;
+    z-index: 2;
+    top: 13px;
+    left: 12px;
+    color: #84907f;
+    font-size: 12px;
+}
+
+.cengi-participants-search .form-control {
+    padding-left: 34px;
+}
+
+.cengi-participants-toolbar .btn,
+.cengi-participants-toolbar-actions .btn {
+    min-height: 38px;
+    padding: 9px 13px;
+    border-color: #dce3d8;
+    border-radius: 7px !important;
+    background: #fff;
+    color: #34402f;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 18px;
+    box-shadow: none !important;
+}
+
+.cengi-participants-toolbar-actions {
+    margin-top: 13px;
+    padding-top: 13px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #edf0eb;
+}
+
+.cengi-participants-toolbar-actions .btn-success {
+    border-color: var(--cengi-primary-deep);
+    background: var(--cengi-primary-deep) !important;
+    color: #fff;
+}
+
+.cengi-participants-table-card {
+    overflow: hidden;
+}
+
+.cengi-participants-table-card .table-responsive {
+    margin: 0;
+    border: 0;
+}
+
+.cengi-participants-table {
+    min-width: 1160px;
+    margin: 0;
+}
+
+.cengi-participants-table > thead > tr > th {
+    padding: 12px 11px;
+    border-bottom: 1px solid #dde3da;
+    background: #f6f8f4;
+    color: #65715f;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .055em;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+.cengi-participants-table > tbody > tr > td {
+    padding: 11px;
+    border-top: 1px solid #edf0eb;
+    color: #384334;
+    font-size: 11px;
+    vertical-align: middle;
+}
+
+.cengi-participants-table > tbody > tr:hover > td {
+    background: #fbfcfa;
+}
+
+.cengi-participant-name {
+    min-width: 190px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cengi-participant-avatar,
+.cengi-participant-profile-avatar {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #e9f5d5;
+    color: #557b10;
+    font-weight: 800;
+}
+
+.cengi-participant-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 10px;
+}
+
+.cengi-participant-name strong,
+.cengi-participant-name small {
+    display: block;
+}
+
+.cengi-participant-name strong {
+    color: #202c1c;
+    font-size: 11.5px;
+}
+
+.cengi-participant-name small {
+    margin-top: 2px;
+    color: #899284;
+    font-size: 9.5px;
+}
+
+.cengi-participant-cui {
+    color: #53604e;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 10.5px;
+}
+
+.cengi-participant-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 9px;
+    font-weight: 750;
+}
+
+.cengi-participant-status.is-active { background: #edf4ff; color: #32659b; }
+.cengi-participant-status.is-approved { background: #edf8df; color: #547d15; }
+.cengi-participant-status.is-inactive { background: #f0f1ef; color: #70776c; }
+
+.cengi-participant-attendance {
+    min-width: 105px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.cengi-participant-attendance .progress {
+    width: 65px;
+    height: 6px;
+    margin: 0;
+    border-radius: 4px;
+    background: #e9ede6;
+    box-shadow: none;
+}
+
+.cengi-participant-attendance .progress-bar {
+    border-radius: 4px;
+    background: var(--cengi-primary);
+    box-shadow: none;
+}
+
+.cengi-participant-attendance span { color: #596454; font-size: 9.5px; font-weight: 700; }
+.cengi-participant-diploma { color: #3d7318; font-size: 10px; font-weight: 700; }
+
+.cengi-participants-table button.cengi-action-btn {
+    cursor: pointer;
+}
+
+.cengi-participants-table .cengi-action-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid #dfe4dc;
+    border-radius: 6px;
+    background: #fff;
+    color: #677162;
+    line-height: 26px;
+    text-align: center;
+    box-shadow: none;
+}
+
+.cengi-participants-table .cengi-action-btn:hover { border-color: #a8c475; color: #47730d; background: #f7fbea; }
+.cengi-participants-table .cengi-action-btn.is-delete:hover { border-color: #e1aaa5; color: #a83a31; background: #fff6f5; }
+
+.cengi-participants-empty {
+    padding: 48px 20px !important;
+    color: #899284 !important;
+    text-align: center;
+}
+
+.cengi-participants-empty > span,
+.cengi-participants-empty > strong,
+.cengi-participants-empty > small { display: block; }
+.cengi-participants-empty > span { margin-bottom: 9px; font-size: 23px; }
+.cengi-participants-empty > strong { color: #596454; font-size: 12px; }
+.cengi-participants-empty > small { margin-top: 4px; font-size: 10px; }
+.cengi-participants-empty.is-small { padding: 22px !important; border: 1px dashed #dfe4dc; border-radius: 8px; }
+
+.cengi-participants-table-foot {
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    border-top: 1px solid #e5e9e2;
+    background: #fafbf9;
+    color: #838d7e;
+    font-size: 9.5px;
+}
+
+/* Modales de participantes */
+
+.cengi-participant-modal.in {
+    padding: 20px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.cengi-participant-modal .modal-dialog {
+    width: min(680px, calc(100vw - 40px));
+    max-width: 680px;
+    margin: 0 auto;
+}
+
+.cengi-participant-modal .modal-dialog.cengi-modal-compact {
+    width: min(560px, calc(100vw - 40px));
+    max-width: 560px;
+}
+
+.cengi-participant-modal .modal-content {
+    overflow: hidden;
+    border: 1px solid #e2e7de;
+    border-radius: 13px;
+    background: #fff;
+    box-shadow: 0 25px 72px rgba(25, 39, 20, .25);
+}
+
+.cengi-participant-modal .modal-header {
+    position: relative;
+    min-height: 74px;
+    padding: 17px 55px 16px 70px;
+    border-bottom: 1px solid #e7ebe4;
+    background: #fafbf9;
+}
+
+.cengi-participant-modal .modal-header .close {
+    position: absolute;
+    top: 18px;
+    right: 19px;
+    width: 29px;
+    height: 29px;
+    margin: 0;
+    border: 1px solid #dfe5dc;
+    border-radius: 7px;
+    background: #fff;
+    color: #596454;
+    font-weight: 400;
+    line-height: 25px;
+    opacity: 1;
+}
+
+.cengi-participant-modal .cengi-modal-icon {
+    position: absolute;
+    top: 17px;
+    left: 20px;
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    background: #eaf5d6;
+    color: #5e8618;
+    font-size: 15px;
+}
+
+.cengi-participant-modal .modal-title {
+    color: #202c1c;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 17px;
+    font-weight: 750;
+}
+
+.cengi-participant-modal .modal-header p {
+    margin: 3px 0 0;
+    color: #778172;
+    font-size: 10.5px;
+}
+
+.cengi-participant-modal .modal-body {
+    max-height: calc(100vh - 220px);
+    padding: 21px 22px 8px;
+    overflow-y: auto;
+}
+
+.cengi-participant-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+}
+
+.cengi-participant-modal-grid.is-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cengi-participant-modal .form-group { margin-bottom: 14px; }
+.cengi-participant-modal-grid .form-group { margin-bottom: 0; }
+
+.cengi-participant-modal label:not(.cengi-upload-dropzone) {
+    margin-bottom: 6px;
+    color: #303c2b;
+    font-size: 10.5px;
+    font-weight: 750;
+}
+
+.cengi-participant-modal .form-control {
+    height: 38px;
+    border: 1px solid #dfe5dc;
+    border-radius: 7px;
+    background: #fff;
+    color: #263321;
+    font-size: 11.5px;
+    box-shadow: none;
+}
+
+.cengi-participant-modal input[type="file"].form-control { height: auto; }
+.cengi-participant-modal .form-control:focus { border-color: var(--cengi-primary); box-shadow: 0 0 0 2px rgba(163, 211, 0, .22); }
+
+.cengi-participant-modal .modal-footer {
+    padding: 14px 22px 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #e7ebe4;
+    background: #fafbf9;
+}
+
+.cengi-participant-modal .modal-footer .btn { min-height: 37px; padding: 8px 14px; border-radius: 7px !important; font-size: 11px; box-shadow: none !important; }
+
+.cengi-upload-guide {
+    margin-bottom: 15px;
+    padding: 12px 14px;
+    border: 1px solid #dfe8d3;
+    border-radius: 8px;
+    background: #f6faef;
+}
+
+.cengi-upload-guide strong,
+.cengi-upload-guide span,
+.cengi-upload-guide small { display: block; }
+.cengi-upload-guide strong { margin-bottom: 4px; color: #517316; font-size: 10px; text-transform: uppercase; }
+.cengi-upload-guide span { color: #34402f; font-family: Consolas, monospace; font-size: 10.5px; }
+.cengi-upload-guide small { margin-top: 4px; color: #7a8474; font-size: 9.5px; }
+
+.cengi-upload-dropzone {
+    min-height: 118px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed #aeba9f;
+    border-radius: 9px;
+    background: #fbfcfa;
+    color: #53604e;
+    cursor: pointer;
+    text-align: center;
+}
+
+.cengi-upload-dropzone > .glyphicon { margin-bottom: 7px; color: #76a628; font-size: 25px; }
+.cengi-upload-dropzone strong { font-size: 11px; }
+.cengi-upload-dropzone small { margin-top: 3px; color: #899284; font-size: 9.5px; }
+.cengi-upload-dropzone input { max-width: 270px; margin-top: 12px; font-size: 10px; }
+
+.cengi-participant-profile-head { padding: 2px 0 19px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid #e8ece5; }
+.cengi-participant-profile-avatar { width: 56px; height: 56px; font-size: 15px; }
+.cengi-participant-profile-head h3 { margin: 0 0 4px; color: #202c1c; font-size: 16px; font-weight: 750; }
+.cengi-participant-profile-head p { margin: 0 0 3px; color: #596454; font-size: 10.5px; }
+.cengi-participant-profile-head small { color: #8a9385; font-family: Consolas, monospace; font-size: 9.5px; }
+.cengi-participant-history-title { margin: 18px 0 10px; color: #394535; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.cengi-participant-history-item { padding: 10px 11px; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 9px; border-bottom: 1px solid #edf0eb; }
+.cengi-participant-history-item > .glyphicon { color: #7da829; }
+.cengi-participant-history-item strong, .cengi-participant-history-item small { display: block; }
+.cengi-participant-history-item strong { color: #34402f; font-size: 10.5px; }
+.cengi-participant-history-item small { margin-top: 2px; color: #899284; font-size: 9px; }
+.cengi-participant-history-item b { color: #5d781e; font-size: 10px; }
+
+.cengi-confirm-content .modal-body { padding: 31px 30px 18px; text-align: center; }
+.cengi-confirm-icon { width: 48px; height: 48px; margin: 0 auto 13px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #fff0ee; color: #b74338; font-size: 18px; }
+.cengi-confirm-content h4 { margin: 0 0 8px; color: #253020; font-size: 17px; font-weight: 750; }
+.cengi-confirm-content p { margin: 0; color: #667061; font-size: 11px; line-height: 1.55; }
+.cengi-confirm-content .modal-footer { justify-content: center; }
+
+@media (max-width: 900px) {
+    .cengi-participants-toolbar { grid-template-columns: 1fr 1fr; }
+    .cengi-participants-toolbar-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 1024px) {
+    .cengi-participants-page .cengi-participants-shell {
+        width: 100%;
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 640px) {
+    .cengi-participants-page .cengi-participants-shell { padding: 14px 12px 28px; }
+    .cengi-participants-toolbar { grid-template-columns: 1fr; }
+    .cengi-participants-toolbar-actions { flex-direction: column; }
+    .cengi-participants-toolbar-actions .btn { width: 100%; }
+    .cengi-participant-modal.in { padding: 10px !important; align-items: flex-start; }
+    .cengi-participant-modal .modal-dialog, .cengi-participant-modal .modal-dialog.cengi-modal-compact { width: 100%; margin-top: 10px; }
+    .cengi-participant-modal-grid, .cengi-participant-modal-grid.is-three { grid-template-columns: 1fr; }
+    .cengi-participant-modal .modal-body { max-height: calc(100vh - 205px); padding: 18px 17px 7px; }
+    .cengi-participant-modal .modal-header { padding-right: 48px; }
+}
+
+@media print {
+    .cengi-participants-page .cengi-sidebar,
+    .cengi-participants-page .cengi-topbar,
+    .cengi-participants-toolbar-card,
+    .cengi-participants-table .cengi-row-actions { display: none !important; }
+    .cengi-participants-page .cengi-participants-shell { width: 100%; margin-left: 0; padding: 0; }
+    .cengi-participants-table-card { border: 0; box-shadow: none; }
+}
+
 /* ===== Cursos: modal de creación y edición ===== */
 
 .cengi-canvas .cengi-course-feedback {
