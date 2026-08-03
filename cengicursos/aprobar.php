@@ -141,6 +141,10 @@ try {
         throw new RuntimeException('Solicitud no encontrada.');
     }
 
+    if (strtolower(trim((string) ($solicitud['estado'] ?? ''))) !== 'pendiente') {
+        throw new RuntimeException('La solicitud ya fue gestionada.');
+    }
+
     if (
         !cengi_ve_todo_por_rol_o_ingenio() &&
         cengi_texto_normalizado($solicitud['nombre_ingenios'] ?? '') !== cengi_texto_normalizado(cengi_ingenio_nombre_actual())
@@ -197,7 +201,6 @@ try {
                 creado
             )
             VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
-            RETURNING id
         ");
 
         $stmtInsert->execute([
@@ -209,7 +212,7 @@ try {
             $solicitud['area_participante']
         ]);
 
-        $idParticipante = (int)$stmtInsert->fetchColumn();
+        $idParticipante = (int) $db->lastInsertId();
     }
 
     $usuarioEstudianteId = cengi_crear_o_asociar_usuario_estudiante($solicitud);
@@ -290,11 +293,12 @@ try {
 
     $db->rollBack();
 
-    die(
-        "Error al aprobar solicitud: " .
-        htmlspecialchars($e->getMessage())
+    header(
+        "Location: solicitudes.php?resultado=error&id={$id}&mensaje=" .
+        rawurlencode($e->getMessage())
     );
+    exit();
 }
 
-header("Location: solicitudes.php");
+header("Location: solicitudes.php?resultado=aprobada&id={$id}");
 exit();

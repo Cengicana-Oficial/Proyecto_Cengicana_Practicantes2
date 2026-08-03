@@ -45,7 +45,6 @@ $stmtInsertParticipante = $db->prepare("
         creado
     )
     VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
-    RETURNING id
 ");
 
 $stmtActualizarParticipante = $db->prepare("
@@ -113,7 +112,7 @@ try {
             $puesto,
             $area,
         ]);
-        $participanteID = $stmtInsertParticipante->fetchColumn();
+        $participanteID = (int) $db->lastInsertId();
     }
 
     $stmtBuscarAsignacion->execute([

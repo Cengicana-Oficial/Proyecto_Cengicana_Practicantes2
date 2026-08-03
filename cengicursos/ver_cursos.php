@@ -17,6 +17,7 @@ if ($esEstudiante) {
             ca.descripcion_categorias_cursos,
             i.nombre_ingenios,
             c.jornada_cursos,
+            c.tipo,
             c.inicio,
             c.fin,
             COALESCE(cc.posevaluacion, cc.evaluacion, 0) AS nota
@@ -48,7 +49,7 @@ if ($esEstudiante) {
 
     if (!cengi_ve_todo_por_rol_o_ingenio()) {
         $normalizado = cengi_texto_normalizado(cengi_ingenio_nombre_actual());
-        $condiciones[] = "regexp_replace(lower(translate(i.nombre_ingenios, 'áéíóúÁÉÍÓÚñÑ', 'aeiouAEIOUnN')), '\s+', '', 'g') = ?";
+        $condiciones[] = cengi_sql_texto_normalizado('i.nombre_ingenios') . " = ?";
         $params[] = $normalizado;
         $condiciones[] = "
             EXISTS (
@@ -58,7 +59,7 @@ if ($esEstudiante) {
                 INNER JOIN ingenios ip ON ip.id = p.ingenio_id
                 WHERE a.cursos_id = c.id
                   AND a.estado_asignaciones = 1
-                  AND regexp_replace(lower(translate(ip.nombre_ingenios, 'áéíóúÁÉÍÓÚñÑ', 'aeiouAEIOUnN')), '\s+', '', 'g') = ?
+                  AND " . cengi_sql_texto_normalizado('ip.nombre_ingenios') . " = ?
             )
         ";
         $params[] = $normalizado;
@@ -73,6 +74,7 @@ if ($esEstudiante) {
             i.nombre_ingenios,
             c.nombre_cursos,
             c.jornada_cursos,
+            c.tipo,
             c.dias,
             c.horario,
             c.inicio,
@@ -92,6 +94,22 @@ function cengi_curso_html($valor)
 {
     return htmlspecialchars((string)($valor ?? ''), ENT_QUOTES, 'UTF-8');
 }
+
+function cengi_curso_estado($inicio, $fin)
+{
+    $hoy = date('Y-m-d');
+    $inicioValido = ($inicio && $inicio !== '0000-00-00') ? $inicio : null;
+    $finValido = ($fin && $fin !== '0000-00-00') ? $fin : null;
+
+    if ($finValido !== null && $finValido < $hoy) {
+        return ['Finalizado', 'is-finished'];
+    }
+    if ($inicioValido !== null && $inicioValido > $hoy) {
+        return ['Proximo', 'is-upcoming'];
+    }
+
+    return ['Activo', 'is-active'];
+}
 ?>
 
 <html lang="es">
@@ -99,6 +117,7 @@ function cengi_curso_html($valor)
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
+    <link rel="stylesheet" type="text/css" href="css/proyecto.css">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
     <meta charset="utf-8">
@@ -131,17 +150,9 @@ function cengi_curso_html($valor)
             max-width: 360px;
         }
 
-        .cengi-table-wrap {
-            width: 100%;
-            overflow-x: auto;
-            border: 1px solid #d9e5d4;
-            border-radius: 6px;
-            background: #fff;
-        }
-
         .cengi-courses-table {
             width: 100%;
-            min-width: 1080px;
+            min-width: 1260px;
             margin-bottom: 0;
             table-layout: fixed;
         }
@@ -182,6 +193,14 @@ function cengi_curso_html($valor)
             width: 106px;
         }
 
+        .cengi-courses-table .col-tipo {
+            width: 100px;
+        }
+
+        .cengi-courses-table .col-estado {
+            width: 116px;
+        }
+
         .cengi-courses-table .col-jornada {
             width: 92px;
         }
@@ -201,33 +220,13 @@ function cengi_curso_html($valor)
 
         .cengi-courses-table .col-actions,
         .cengi-courses-table td.col-actions {
-            width: 138px;
-            text-align: center;
+            width: 230px;
             white-space: nowrap;
         }
 
         .cengi-courses-table td.col-actions {
             padding-left: 8px;
             padding-right: 8px;
-        }
-
-        .cengi-courses-table td.col-actions a {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 28px;
-            height: 28px;
-            margin: 0 3px;
-            color: #4b9600;
-            border: 1px solid #d7e9cf;
-            border-radius: 4px;
-            text-decoration: none;
-        }
-
-        .cengi-courses-table td.col-actions a:hover {
-            color: #fff;
-            background: #61bd18;
-            border-color: #61bd18;
         }
 
         @media (max-width: 767px) {
@@ -249,7 +248,7 @@ function cengi_curso_html($valor)
     </style>
 </head>
 
-<body>
+<body class="cengi-canvas">
     <?php menu_render(); ?>
     <div class="container cengi-courses-page">
         <div class="cengi-hero">
@@ -270,11 +269,11 @@ function cengi_curso_html($valor)
             <div class="panel-body">
                 <div class="cengi-courses-toolbar">
                     <?php if ($puedeGestionar): ?>
-                        <a href="agregar_cursos.php" class="btn btn-primary">Nuevo registro</a>
+                        <a href="agregar_cursos.php" class="btn btn-primary"><span class="glyphicon glyphicon-plus"></span> Nuevo registro</a>
                     <?php endif; ?>
                     <form action="<?php $_SERVER['PHP_SELF']; ?>" method="POST">
                         <input type="text" placeholder="Nombre del curso" class="form-control" name="campo" id="campo" value="<?php echo cengi_curso_html($campo); ?>">
-                        <input type="submit" name="enviar" id="enviar" value="Buscar" class="btn btn-success">
+                        <button type="submit" name="enviar" id="enviar" value="Buscar" class="btn btn-success"><span class="glyphicon glyphicon-search"></span> Buscar</button>
                     </form>
                 </div>
 
@@ -287,9 +286,11 @@ function cengi_curso_html($valor)
                             <th class="col-course">Curso</th>
                             <th class="col-category">Categoria</th>
                             <th class="col-ingenio">Ingenio</th>
+                            <th class="col-tipo">Tipo</th>
                             <th class="col-jornada">Jornada</th>
                             <th class="col-date">Inicio</th>
                             <th class="col-date">Fin</th>
+                            <th class="col-estado">Estado</th>
                             <th class="col-date">Nota</th>
                         </tr>
                     <?php else: ?>
@@ -298,40 +299,48 @@ function cengi_curso_html($valor)
                             <th class="col-course">Curso</th>
                             <th class="col-category">Categoria</th>
                             <th class="col-ingenio">Ingenio</th>
+                            <th class="col-tipo">Tipo</th>
                             <th class="col-jornada">Jornada</th>
                             <th class="col-days">Dias</th>
                             <th class="col-time">Horario</th>
                             <th class="col-date">Inicio</th>
                             <th class="col-date">Fin</th>
+                            <th class="col-estado">Estado</th>
                             <?php if ($puedeGestionar || $puedeCalificar): ?><th class="col-actions">Acciones</th><?php endif; ?>
                         </tr>
                     <?php endif; ?>
                     </thead>
                     <tbody>
-                        <?php while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { ?>
+                        <?php while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                            [$estadoLabel, $estadoClase] = cengi_curso_estado($row['inicio'], $row['fin']);
+                        ?>
                             <tr>
                                 <td class="col-id"><?php echo cengi_curso_html($row['idcurso']); ?></td>
                                 <td class="col-course"><?php echo cengi_curso_html($row['nombre_cursos']); ?></td>
                                 <td class="col-category"><?php echo cengi_curso_html($row['descripcion_categorias_cursos']); ?></td>
                                 <td class="col-ingenio"><?php echo cengi_curso_html($row['nombre_ingenios']); ?></td>
+                                <td class="col-tipo"><?php echo cengi_curso_html($row['tipo'] ?: '—'); ?></td>
                                 <td class="col-jornada"><?php echo cengi_curso_html($row['jornada_cursos']); ?></td>
                                 <?php if ($esEstudiante): ?>
                                     <td class="col-date"><?php echo cengi_curso_html($row['inicio']); ?></td>
                                     <td class="col-date"><?php echo cengi_curso_html($row['fin']); ?></td>
+                                    <td class="col-estado"><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo $estadoLabel; ?></span></td>
                                     <td class="col-date"><strong><?php echo cengi_curso_html($row['nota']); ?></strong></td>
                                 <?php else: ?>
                                     <td class="col-days"><?php echo cengi_curso_html($row['dias']); ?></td>
                                     <td class="col-time"><?php echo cengi_curso_html($row['horario']); ?></td>
                                     <td class="col-date"><?php echo cengi_curso_html($row['inicio']); ?></td>
                                     <td class="col-date"><?php echo cengi_curso_html($row['fin']); ?></td>
+                                    <td class="col-estado"><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo $estadoLabel; ?></span></td>
                                     <?php if ($puedeGestionar || $puedeCalificar): ?>
                                         <td class="col-actions">
-                                            <?php if ($puedeGestionar): ?>
-                                                <a href="modificar_cursos.php?id=<?php echo (int) $row['idcurso']; ?>"><span class="glyphicon glyphicon-pencil"></span></a>
-                                                &nbsp;
-                                                <a href="#" data-href="eliminar_cursos.php?id=<?php echo (int) $row['idcurso']; ?>" data-toggle="modal" data-target="#confirm-delete"><span class="glyphicon glyphicon-trash"></span></a>
-                                            <?php endif; ?>
-                                            <a href="ver_participante_curso.php?id=<?php echo (int) $row['idcurso']; ?>"><span class="glyphicon glyphicon-list-alt"></span></a>
+                                            <div class="cengi-row-actions">
+                                                <?php if ($puedeGestionar): ?>
+                                                    <a class="cengi-action-btn is-edit" href="modificar_cursos.php?id=<?php echo (int) $row['idcurso']; ?>" data-tooltip="Editar" aria-label="Editar"><span class="glyphicon glyphicon-pencil"></span><span class="sr-only">Editar</span></a>
+                                                    <a class="cengi-action-btn is-delete" href="#" data-href="eliminar_cursos.php?id=<?php echo (int) $row['idcurso']; ?>" data-toggle="modal" data-target="#confirm-delete" data-tooltip="Eliminar" aria-label="Eliminar"><span class="glyphicon glyphicon-trash"></span><span class="sr-only">Eliminar</span></a>
+                                                <?php endif; ?>
+                                                <a class="cengi-action-btn is-view" href="ver_participante_curso.php?id=<?php echo (int) $row['idcurso']; ?>" data-tooltip="Ver participantes" aria-label="Ver participantes"><span class="glyphicon glyphicon-list-alt"></span><span class="sr-only">Ver participantes</span></a>
+                                            </div>
                                         </td>
                                     <?php endif; ?>
                                 <?php endif; ?>

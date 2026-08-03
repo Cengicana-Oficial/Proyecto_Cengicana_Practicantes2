@@ -32,9 +32,9 @@ if (!empty($_GET['idusuarios'])) {
 
 <?php include('head.php'); ?>
 
-<body>
+<body class="cengi-canvas">
 
-<?php include('menu.php'); ?>
+<?php include('menu.php'); menu_render(); ?>
 
 <div class="container">
 

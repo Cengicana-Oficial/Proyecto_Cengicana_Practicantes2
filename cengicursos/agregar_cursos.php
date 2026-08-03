@@ -17,17 +17,24 @@ require_once "menu.php";
 	<link href="css/bootstrap.min.css" rel="stylesheet">
 	<link href="css/bootstrap-theme.css" rel="stylesheet">
 	<link href="css/bootstrap-datetimepicker.min.css" rel="stylesheet">
+	<link href="css/proyecto.css" rel="stylesheet">
 
 	<script src="js/jquery-3.2.1.min.js"></script>
 	<script src="js/bootstrap.min.js"></script>
 	<script src="js/bootstrap-datetimepicker.min.js"></script>
 </head>
 
-<body>
+<body class="cengi-canvas">
 
 <?php menu_render(); ?>
 
 <div class="container">
+
+	<div class="cengi-hero">
+		<span class="cengi-chip">Cursos</span>
+		<h2>Agregar curso</h2>
+		<p>Registra un nuevo curso, diplomado o seminario con su categoria, ingenio y calendario.</p>
+	</div>
 
 	<div class="panel panel-success">
 
@@ -39,252 +46,159 @@ require_once "menu.php";
 
 			<form method="POST" action="guardar_cursos.php" autocomplete="off">
 
-				<!-- CATEGORÍA -->
-				<div class="form-group">
-					<div class="row">
+				<div class="cengi-form-grid">
 
-						<div class="col-sm-2">
-							<label for="categorias_cursos" class="control-label">
-								Categoría
-							</label>
-						</div>
+					<div class="form-group">
+						<label for="categorias_cursos" class="control-label">
+							Categoría
+						</label>
 
-						<div class="col-sm-4">
-
-							<?php
-							$sqling = "SELECT id, descripcion_categorias_cursos
+						<?php
+						$sqling = "SELECT id, descripcion_categorias_cursos
            FROM categorias_cursos";
 		   $categorias = $db->query($sqling);
 
 ?>
 
-							<select class="form-control"
-									id="categorias_cursos"
-									name="categorias_cursos"
-									required>
+						<select class="form-control"
+								id="categorias_cursos"
+								name="categorias_cursos"
+								required>
 
 <?php while ($categoria = $categorias->fetch(PDO::FETCH_ASSOC)) { ?>
-									<option value="<?php echo $categoria['id']; ?>">
-										<?php echo $categoria['descripcion_categorias_cursos']; ?>
-									</option>
+								<option value="<?php echo $categoria['id']; ?>">
+									<?php echo $categoria['descripcion_categorias_cursos']; ?>
+								</option>
 
-								<?php } ?>
+							<?php } ?>
 
-							</select>
-
-						</div>
-
+						</select>
 					</div>
-				</div>
 
-				<!-- INGENIO -->
-				<div class="form-group">
-					<div class="row">
+					<div class="form-group">
+						<label for="ingenio" class="control-label">
+							Ingenio
+						</label>
 
-						<div class="col-sm-2">
-							<label for="ingenio" class="control-label">
-								Ingenio
-							</label>
-						</div>
-
-						<div class="col-sm-4">
-
-							<?php
-							$sqling = "SELECT id, nombre_ingenios
+						<?php
+						$sqling = "SELECT id, nombre_ingenios
            FROM ingenios";
 
 $ingenios = $db->query($sqling);
-							?>
+						?>
 
-							<select class="form-control"
-									id="ingenio"
-									name="ingenio"
-									required>
+						<select class="form-control"
+								id="ingenio"
+								name="ingenio"
+								required>
 
 <?php while ($ingenio = $ingenios->fetch(PDO::FETCH_ASSOC)) { ?>
-									<option value="<?php echo $ingenio['id']; ?>">
-										<?php echo $ingenio['nombre_ingenios']; ?>
-									</option>
+								<option value="<?php echo $ingenio['id']; ?>">
+									<?php echo $ingenio['nombre_ingenios']; ?>
+								</option>
 
-								<?php } ?>
+							<?php } ?>
 
-							</select>
-
-						</div>
-
+						</select>
 					</div>
-				</div>
 
-				<!-- TIPO -->
-				<div class="form-group">
-					<div class="row">
+					<div class="form-group">
+						<label for="tipo" class="control-label">
+							Tipo
+						</label>
+						<select class="form-control"
+								id="tipo"
+								name="tipo"
+								required>
 
-						<div class="col-sm-2">
-							<label for="tipo" class="control-label">
-								Tipo
-							</label>
-						</div>
+							<option value="Curso">Curso</option>
+							<option value="Diplomado">Diplomado</option>
+							<option value="Seminario">Seminario</option>
 
-						<div class="col-sm-4">
-							<select class="form-control"
-									id="tipo"
-									name="tipo"
-									required>
-
-								<option value="Curso">Curso</option>
-								<option value="Diplomado">Diplomado</option>
-								<option value="Seminario">Seminario</option>
-
-							</select>
-						</div>
-
+						</select>
 					</div>
-				</div>
 
-				<!-- NOMBRE -->
-				<div class="form-group">
-					<div class="row">
-
-						<div class="col-sm-2">
-							<label for="nombre_cursos" class="control-label">
-								Nombre
-							</label>
-						</div>
-
-						<div class="col-sm-4">
-							<input type="text"
-								   name="nombre_cursos"
-								   class="form-control"
-								   required
-								   placeholder="Nombre del Curso">
-						</div>
-
+					<div class="form-group">
+						<label for="nombre_cursos" class="control-label">
+							Nombre
+						</label>
+						<input type="text"
+							   name="nombre_cursos"
+							   class="form-control"
+							   required
+							   placeholder="Nombre del Curso">
 					</div>
-				</div>
 
-				<!-- JORNADA -->
-				<div class="form-group">
-					<div class="row">
+					<div class="form-group">
+						<label for="jornada_cursos" class="control-label">
+							Jornada
+						</label>
 
-						<div class="col-sm-2">
-							<label for="jornada_cursos" class="control-label">
-								Jornada
-							</label>
-						</div>
+						<select class="form-control"
+								id="jornada_cursos"
+								name="jornada_cursos">
 
-						<div class="col-sm-4">
+							<option value="Matutina">Matutina</option>
+							<option value="Vespertina">Vespertina</option>
+							<option value="Todo Completo">Todo Completo</option>
 
-							<select class="form-control"
-									id="jornada_cursos"
-									name="jornada_cursos">
-
-								<option value="Matutina">Matutina</option>
-								<option value="Vespertina">Vespertina</option>
-								<option value="Todo Completo">Todo Completo</option>
-
-							</select>
-
-						</div>
-
+						</select>
 					</div>
-				</div>
 
-				<!-- DÍAS -->
-				<div class="form-group">
-					<div class="row">
-
-						<div class="col-sm-2">
-							<label for="dias" class="control-label">
-								Días
-							</label>
-						</div>
-
-						<div class="col-sm-4">
-							<input type="text"
-								   name="dias"
-								   class="form-control"
-								   required
-								   placeholder="Días a ejecutarse">
-						</div>
-
+					<div class="form-group">
+						<label for="dias" class="control-label">
+							Días
+						</label>
+						<input type="text"
+							   name="dias"
+							   class="form-control"
+							   required
+							   placeholder="Días a ejecutarse">
 					</div>
-				</div>
 
-				<!-- HORARIO -->
-				<div class="form-group">
-					<div class="row">
-
-						<div class="col-sm-2">
-							<label for="horario" class="control-label">
-								Horario
-							</label>
-						</div>
-
-						<div class="col-sm-4">
-							<input type="text"
-								   name="horario"
-								   class="form-control"
-								   required
-								   placeholder="Formato 24 horas">
-						</div>
-
+					<div class="form-group">
+						<label for="horario" class="control-label">
+							Horario
+						</label>
+						<input type="text"
+							   name="horario"
+							   class="form-control"
+							   required
+							   placeholder="Formato 24 horas">
 					</div>
-				</div>
 
-				<!-- FECHA INICIO -->
-				<div class="form-group">
-					<div class="row">
-
-						<div class="col-sm-2">
-							<label for="inicio" class="control-label">
-								Inicia
-							</label>
-						</div>
-
-						<div class="col-sm-4">
-							<input type="date"
-								   name="inicio"
-								   class="form-control"
-								   required>
-						</div>
-
+					<div class="form-group">
+						<label for="inicio" class="control-label">
+							Inicia
+						</label>
+						<input type="date"
+							   name="inicio"
+							   class="form-control"
+							   required>
 					</div>
-				</div>
 
-				<!-- FECHA FINAL -->
-				<div class="form-group">
-					<div class="row">
-
-						<div class="col-sm-2">
-							<label for="fin" class="control-label">
-								Finaliza
-							</label>
-						</div>
-
-						<div class="col-sm-4">
-							<input type="date"
-								   name="fin"
-								   class="form-control"
-								   required>
-						</div>
-
+					<div class="form-group">
+						<label for="fin" class="control-label">
+							Finaliza
+						</label>
+						<input type="date"
+							   name="fin"
+							   class="form-control"
+							   required>
 					</div>
+
 				</div>
 
 				<!-- BOTONES -->
-				<div class="form-group">
+				<div class="cengi-form-actions">
 
-					<div class="col-sm-offset-2 col-sm-10">
+					<button type="submit" class="btn btn-success">
+						Guardar
+					</button>
 
-						<button type="submit" class="btn btn-success">
-							Guardar
-						</button>
-
-						<a href="index.php" class="btn btn-danger">
-							Cancelar
-						</a>
-
-					</div>
+					<a href="index.php" class="btn btn-danger">
+						Cancelar
+					</a>
 
 				</div>
 

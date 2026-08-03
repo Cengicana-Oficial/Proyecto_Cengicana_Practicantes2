@@ -42,12 +42,13 @@ $resultado = $stmt->get_result();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
+    <link rel="stylesheet" type="text/css" href="css/proyecto.css">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
     <meta charset="utf-8">
 </head>
 
-<body>
+<body class="cengi-canvas">
     <?php menu_render(); ?>
     <div class="container">
         <div class="cengi-hero">
@@ -65,7 +66,7 @@ $resultado = $stmt->get_result();
                 <?php if (cengi_puede_gestionar_usuarios()): ?>
                     <div class="row">
                         <div class="col-sm-6">
-                            <a href="../login/usuarios/crear_usuario.php?scope=cursos" class="btn btn-success">Nuevo registro</a>
+                            <a href="../login/usuarios/crear_usuario.php?scope=cursos" class="btn btn-primary"><span class="glyphicon glyphicon-plus"></span> Nuevo registro</a>
                         </div>
                     </div>
                 <?php endif; ?>
@@ -75,11 +76,12 @@ $resultado = $stmt->get_result();
                             <input type="text" placeholder="Nombre, correo, rol o ingenio" class="form-control" name="campo" id="campo" value="<?php echo htmlspecialchars($campo); ?>">
                         </div>
                         <div class="col-sm-2">
-                            <input type="submit" name="enviar" id="enviar" value="Buscar" class="btn btn-success">
+                            <button type="submit" name="enviar" id="enviar" value="Buscar" class="btn btn-success"><span class="glyphicon glyphicon-search"></span> Buscar</button>
                         </div>
                     </form>
                 </div>
                 <br>
+                <div class="cengi-table-wrap">
                 <table class="table table-striped table-bordered table-hover">
                     <thead>
                         <tr>
@@ -101,13 +103,16 @@ $resultado = $stmt->get_result();
                                 <td><?php echo htmlspecialchars($row['nombre_rol']); ?></td>
                                 <?php if (cengi_puede_gestionar_usuarios()): ?>
                                     <td>
-                                        <a href="../login/usuarios/editar_usuario.php?id=<?php echo (int) $row['idusuario']; ?>&scope=cursos"><span class="glyphicon glyphicon-pencil"></span></a>
+                                        <div class="cengi-row-actions">
+                                            <a class="cengi-action-btn is-edit" href="../login/usuarios/editar_usuario.php?id=<?php echo (int) $row['idusuario']; ?>&scope=cursos" data-tooltip="Editar" aria-label="Editar"><span class="glyphicon glyphicon-pencil"></span><span class="sr-only">Editar</span></a>
+                                        </div>
                                     </td>
                                 <?php endif; ?>
                             </tr>
                         <?php } ?>
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </div>

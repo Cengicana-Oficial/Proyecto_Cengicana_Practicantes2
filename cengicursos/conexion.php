@@ -63,7 +63,7 @@ function cengicursos_abrir_mysqli($host, $puerto, $usuario, $pass, $bdd)
 }
 
 /**
- * SUPABASE POSTGRESQL (CURSOS)
+ * MYSQL (CURSOS)
  */
 function conectar()
 {
@@ -75,21 +75,26 @@ function conectar()
 
     $env = cengicursos_env();
 
-    $host = $env['CENGICURSOS_DB_HOST'];
-    $port = $env['CENGICURSOS_DB_PORT'];
-    $dbname = $env['CENGICURSOS_DB_NAME'];
-    $user = $env['CENGICURSOS_DB_USER'];
-    $pass = $env['CENGICURSOS_DB_PASS'];
+    $host = $env['CENGICURSOS_DB_HOST'] ?? 'mysql';
+    $port = $env['CENGICURSOS_DB_PORT'] ?? '3306';
+    $dbname = $env['CENGICURSOS_DB_NAME'] ?? 'cengi_cursos';
+    $user = $env['CENGICURSOS_DB_USER'] ?? '';
+    $pass = $env['CENGICURSOS_DB_PASS'] ?? '';
+
+    if ($host === '' || $dbname === '' || $user === '') {
+        die('Error: variables CENGICURSOS_DB_* incompletas.');
+    }
 
     try {
 
         $conexion = new PDO(
-            "pgsql:host={$host};port={$port};dbname={$dbname};sslmode=require",
+            "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4",
             $user,
             $pass,
             [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false
             ]
         );
 
@@ -98,7 +103,7 @@ function conectar()
     } catch (PDOException $e) {
 
         die(
-            "Error PostgreSQL hacia {$host}:{$port}/{$dbname}. Detalle: " .
+            "Error MySQL de Cursos hacia {$host}:{$port}/{$dbname}. Detalle: " .
             $e->getMessage()
         );
     }
@@ -148,4 +153,47 @@ function conectar_usuarios_menu()
     );
 
     return $conexionUsuarios;
+}
+
+/**
+ * Conexion PDO hacia usuarios_menu, usada unicamente por las pantallas de
+ * Cengicursos que necesitan reutilizar los helpers de PDO de
+ * login/config/permisos_roles.php (roles.php). El resto del modulo sigue
+ * usando conectar_usuarios_menu() (mysqli) para no romper nada existente.
+ */
+function conectar_usuarios_menu_pdo()
+{
+    static $conexion = null;
+
+    if ($conexion instanceof PDO) {
+        return $conexion;
+    }
+
+    $env = cengicursos_env();
+
+    $host = $env['DB_MENU_HOST'] ?? $env['LOGIN_DB_HOST'] ?? '127.0.0.1';
+    $port = $env['DB_MENU_PORT'] ?? $env['LOGIN_DB_PORT'] ?? '3306';
+    $dbname = $env['DB_MENU_NAME'] ?? $env['LOGIN_DB_NAME'] ?? 'usuarios_menu';
+    $user = $env['DB_MENU_USER'] ?? $env['LOGIN_DB_USER'] ?? 'root';
+    $pass = $env['DB_MENU_PASS'] ?? $env['LOGIN_DB_PASS'] ?? '';
+
+    try {
+        $conexion = new PDO(
+            "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4",
+            $user,
+            $pass,
+            [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]
+        );
+
+        return $conexion;
+    } catch (PDOException $e) {
+        die(
+            "Error MySQL (usuarios_menu/PDO) hacia {$host}:{$port}/{$dbname}. Detalle: " .
+            $e->getMessage()
+        );
+    }
 }
