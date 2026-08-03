@@ -167,6 +167,13 @@ function cengi_part_estado($fila)
     }
     return ['Activo', 'is-active'];
 }
+
+$parametrosExportacion = [
+    'curso_id' => $cursoId,
+    'q' => $busqueda,
+    'estado' => $estado,
+];
+$urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExportacion);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -240,7 +247,15 @@ function cengi_part_estado($fila)
             <?php if ($puedeCargar): ?>
                 <button type="button" class="btn btn-default" data-toggle="modal" data-target="#bulk-participants-modal"><span class="glyphicon glyphicon-user"></span> Cargar participantes</button>
             <?php endif; ?>
-            <a class="btn btn-default" href="exportarcursos.php?curso_id=<?php echo $cursoId; ?>"><span class="glyphicon glyphicon-download-alt"></span> Descargar listado</a>
+            <div class="btn-group">
+                <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" <?php echo $cursoId > 0 ? '' : 'disabled'; ?>>
+                    <span class="glyphicon glyphicon-download-alt"></span> Descargar listado <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-right">
+                    <li><a href="<?php echo cengi_part_html($urlExportacion . '&format=pdf'); ?>"><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
+                    <li><a href="<?php echo cengi_part_html($urlExportacion . '&format=csv'); ?>"><span class="glyphicon glyphicon-list-alt"></span> Descargar CSV</a></li>
+                </ul>
+            </div>
             <button type="button" class="btn btn-success" onclick="window.print()"><span class="glyphicon glyphicon-file"></span> Generar reporte</button>
         </div>
     </section>
