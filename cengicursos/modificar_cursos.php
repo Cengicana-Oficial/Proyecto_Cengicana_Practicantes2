@@ -2,6 +2,8 @@
 require_once "revisar_permisos.php";
 cengi_require_admin();
 require_once "conexion.php";
+	cengi_require_admin();
+	include("conexion.php");
 $db = conectar();
 require_once "menu.php";
 
