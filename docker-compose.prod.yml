@@ -1,11 +1,11 @@
-name: modulos-cengicana
+name: cengicana-ui-new
 
 services:
   app:
     build:
       context: .
       dockerfile: dockerfiles/modulos-app/Dockerfile
-    container_name: modulos-cengicana-app
+    container_name: cengicana-ui-new-app
     restart: unless-stopped
     ports:
       - "127.0.0.1:8085:80"
@@ -19,7 +19,7 @@ services:
 
   mysql:
     image: mysql:8.0
-    container_name: modulos-cengicana-mysql
+    container_name: cengicana-ui-new-mysql
     restart: unless-stopped
     env_file:
       - ./deploy/env/mysql.env
@@ -32,3 +32,4 @@ services:
 
 volumes:
   mysql-data:
+    name: cengicana-ui-new-mysql-data

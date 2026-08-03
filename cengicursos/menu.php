@@ -18,7 +18,6 @@ function cengi_pagina_titulo($currentPage, $esEstudiante)
         'ver_ingenios.php' => ['Ingenios', 'Directorio base de ingenios afiliados'],
         'agregar_ingenios.php' => ['Nuevo ingenio', 'Registra un ingenio en el directorio'],
         'ver_usuarios.php' => ['Usuarios', 'Cuentas con acceso al modulo de cursos'],
-        'agregar_usuarios.php' => ['Nuevo usuario', 'Registra una cuenta de usuario'],
         'directorio_participantes.php' => ['Directorio de participantes', 'Vista agregada por persona: cursos, diplomas y evaluacion'],
         'seguimiento_ingenio.php' => ['Seguimiento por ingenio', 'Ficha institucional de capacitacion por ingenio'],
         'organizaciones.php' => ['Organizaciones', 'Directorio de ingenios, universidades, empresas e instituciones'],

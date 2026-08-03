@@ -22,6 +22,7 @@ INNER JOIN ingenios i
 ";
 
 $params = [];
+$hayWhere = false;
 
 if ($valor !== '') {
 
@@ -30,7 +31,10 @@ if ($valor !== '') {
     ";
 
     $params[] = "%{$valor}%";
+    $hayWhere = true;
 }
+
+$sql .= cengi_scope_sql('p', $hayWhere);
 
 $sql .= "
     ORDER BY p.nombre_participantes

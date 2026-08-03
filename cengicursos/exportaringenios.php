@@ -2,7 +2,7 @@
 require_once "revisar_permisos.php";
 cengi_require_admin();
 require_once "conexion.php";
-$mysqli = conectar();
+$db = conectar();
 //include menu
 /** Incluye PHPExcel */
 require_once dirname(__FILE__) . '/classes/PHPExcel.php';
@@ -11,25 +11,19 @@ require_once dirname(__FILE__) . '/classes/PHPExcel/Calculation.php';
 /*Extraer datos de MYSQL*/
 $sql = "SELECT
 	  i.nombre_ingenios,
-	  i.id,
-	  p.ingenio_id,
 	  p.cui_participantes,
 	  p.nombre_participantes,
 	  p.puesto_participantes,
 	  p.area_participantes,
-	  p.estado_participantes,
-	  u.ingenio_id,
-	  u.nombre,
-      GROUP_CONCAT(DISTINCT u.nombre ORDER BY u.nombre ASC)
+	  u.nombre
 	 FROM cengi_cursos.participantes p
 	 INNER JOIN cengi_cursos.ingenios i ON (p.ingenio_id=i.id)
 	 INNER JOIN cengi_cursos.users u ON (p.ingenio_id=u.ingenio_id)
-	 WHERE p.estado_participantes = 1";
-//GROUP_CONCAT(DISTINCT u.nombre ORDER BY u.nombre ASC)
-//echo "$sql";
-mysqli_query($mysqli, "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
-$resultado = mysqli_query($mysqli, $sql) or die("Error en la selección de datos" . mysqli_error($mysqli));
-//$row=$resultado->fetch_array(MYSQLI_ASSOC);
+	 WHERE p.estado_participantes = 1" . cengi_scope_sql('p', true) . "
+	 ORDER BY i.id, p.nombre_participantes";
+
+$stmt = $db->prepare($sql);
+$stmt->execute();
 
 // Crear nuevo objeto PHPExcel
 $objPHPExcel = new PHPExcel();
@@ -68,7 +62,7 @@ $objPHPExcel->getActiveSheet()->getColumnDimension('E')->setWidth(25);
 $objPHPExcel->getActiveSheet()->getColumnDimension('F')->setWidth(40);
 
 $cel = 3; //Numero de fila donde empezara a crear  el reporte
-while ($row = mysqli_fetch_array($resultado)) {
+while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 
     $ingenio      = $row['nombre_ingenios'];
     $cui          = $row['cui_participantes'];
