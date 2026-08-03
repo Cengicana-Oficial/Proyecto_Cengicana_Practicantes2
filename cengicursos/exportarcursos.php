@@ -21,6 +21,7 @@ FROM asignaciones a
 INNER JOIN cursos c ON a.cursos_id = c.id
 INNER JOIN participantes p ON a.participantes_id = p.id
 INNER JOIN ingenios i ON p.ingenio_id = i.id
+" . cengi_scope_sql('p', false) . "
 ORDER BY i.id, c.id
 ";
 

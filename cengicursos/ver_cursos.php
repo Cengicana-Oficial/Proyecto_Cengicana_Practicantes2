@@ -455,9 +455,7 @@ function cengi_curso_codigo($id)
     <?php endif; ?>
 </body>
 </html>
-<?php endif; ?>
-
-<!DOCTYPE html>
+<?php endif; ?<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
