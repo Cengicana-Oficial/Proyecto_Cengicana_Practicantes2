@@ -14,8 +14,6 @@ function labGenericConditions(array $values, string $column, array &$params): st
         $lower = labGenericLower((string) $value);
         $parts[] = "LOWER($column) = ?";
         $params[] = $lower;
-        $parts[] = "LOWER($column) LIKE ?";
-        $params[] = '%' . $lower . '%';
     }
 
     return '(' . implode(' OR ', $parts) . ')';
@@ -45,7 +43,7 @@ function labGenericDestino(array $config, string $codigoLote, string $numeroLabo
           LEFT JOIN tipo_analisis ta ON ta.id_tipo = sa.id_tipo_analisis
          WHERE l.codigo_lote = ?
            AND ($tipoCondition OR tm.id_tipo IS NULL)
-           AND ($analisisCondition OR ta.id_tipo IS NULL)
+           AND (ta.id_tipo IS NULL OR (COALESCE(ta.activo, 1) = 1 AND ($analisisCondition)))
          ORDER BY s.id_solicitud DESC, lr.id_rango DESC
          LIMIT 1
     ";
@@ -78,6 +76,7 @@ function labGenericDestino(array $config, string $codigoLote, string $numeroLabo
           FROM tipo_analisis ta
           INNER JOIN tipo_muestra tm ON tm.id_tipo = ta.id_tipo_muestra
          WHERE $tipoCondition
+           AND COALESCE(ta.activo, 1) = 1
            AND $analisisCondition
          ORDER BY ta.id_tipo DESC
          LIMIT 1
@@ -142,12 +141,86 @@ function labGenericLotesConAnalisisIngresado(array $config, array $lotes): array
                   ON f.id_rango = lr.id_rango
                  AND f.id_tipo_analisis = ta.id_tipo
          WHERE {$tipoCondition}
+           AND COALESCE(ta.activo, 1) = 1
            AND {$analisisCondition}
            AND l.codigo_lote IN ({$placeholders})
     ");
     $stmt->execute($params);
 
     return array_flip($stmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+}
+
+function labGenericMuestraYaAnalizada(array $config, string $codigoLote, string $numeroLaboratorio): bool
+{
+    $codigoLote = trim($codigoLote);
+    $numeroLaboratorio = trim($numeroLaboratorio);
+    if ($codigoLote === '' || $numeroLaboratorio === '') {
+        return false;
+    }
+
+    $pdo = Conexion::conectar();
+    $table = $config['table'];
+    $columnas = labGenericTableColumns($table);
+    if (!$columnas) {
+        return false;
+    }
+
+    $joins = [];
+    $conds = [];
+    $params = [];
+
+    if (in_array('id_lote', $columnas, true)) {
+        $joins[] = 'INNER JOIN lote l ON l.id_lote = t.id_lote';
+        $conds[] = 'l.codigo_lote = ?';
+        $params[] = $codigoLote;
+    } elseif (in_array('codigo_lote', $columnas, true)) {
+        $conds[] = 't.codigo_lote = ?';
+        $params[] = $codigoLote;
+    } elseif (in_array('lote', $columnas, true)) {
+        $conds[] = 't.lote = ?';
+        $params[] = $codigoLote;
+    } else {
+        return false;
+    }
+
+    $numeroNormalizado = null;
+    if (preg_match('/^[A-Za-z]+-(\d+)-\d{2}-\d{2}$/', $numeroLaboratorio, $matches)) {
+        $numeroNormalizado = (int) $matches[1];
+    } elseif (is_numeric($numeroLaboratorio)) {
+        $numeroNormalizado = (int) $numeroLaboratorio;
+    } elseif (preg_match('/(\d+)/', $numeroLaboratorio, $matches)) {
+        $numeroNormalizado = (int) $matches[1];
+    }
+
+    if (in_array('no_lab', $columnas, true)) {
+        $conds[] = 't.no_lab = ?';
+        $params[] = $numeroLaboratorio;
+    } elseif (in_array('numero_laboratorio', $columnas, true)) {
+        if ($numeroNormalizado === null) {
+            return false;
+        }
+        $conds[] = 't.numero_laboratorio = ?';
+        $params[] = $numeroNormalizado;
+    } elseif (in_array('numero_muestra', $columnas, true)) {
+        if ($numeroNormalizado === null) {
+            return false;
+        }
+        $conds[] = 't.numero_muestra = ?';
+        $params[] = $numeroNormalizado;
+    } else {
+        return false;
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT 1
+          FROM `{$table}` t
+          " . implode("\n", $joins) . "
+         WHERE " . implode(' AND ', $conds) . "
+         LIMIT 1
+    ");
+    $stmt->execute($params);
+
+    return (bool) $stmt->fetchColumn();
 }
 
 function labGenericTableColumns(string $table): array
@@ -207,11 +280,6 @@ function labGenericGuardarAnalisis(array $config, array $rows, string $fecha, st
     $guardados = 0;
     $errores = [];
     labFormularioEnsureSchema();
-    $lotesIngresados = labGenericLotesConAnalisisIngresado(
-        $config,
-        array_map(static fn($row) => $row['lote'] ?? '', $rows)
-    );
-
     foreach ($rows as $index => $row) {
         $codigoLote = trim((string) ($row['lote'] ?? ''));
         $numeroLaboratorio = trim((string) ($row['numero_laboratorio'] ?? ''));
@@ -221,8 +289,13 @@ function labGenericGuardarAnalisis(array $config, array $rows, string $fecha, st
             continue;
         }
 
-        if (isset($lotesIngresados[$codigoLote])) {
-            $errores[] = 'Fila ' . ($index + 1) . ': el lote ' . $codigoLote . ' ya tiene este analisis ingresado.';
+        if ($numeroLaboratorio === '') {
+            $errores[] = 'Fila ' . ($index + 1) . ': seleccione un numero de laboratorio.';
+            continue;
+        }
+
+        if (labGenericMuestraYaAnalizada($config, $codigoLote, $numeroLaboratorio)) {
+            $errores[] = 'Fila ' . ($index + 1) . ': la muestra ' . $numeroLaboratorio . ' del lote ' . $codigoLote . ' ya tiene este analisis ingresado.';
             continue;
         }
 

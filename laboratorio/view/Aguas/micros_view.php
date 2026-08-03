@@ -10,11 +10,11 @@ $doc_edicion   = "03";
 $doc_vf        = "V2";
 
 $fecha_actual  = date('d-m-Y');
-$lote_actual   = "LT-2025-083";
+$lote_actual   = "";
 $tecnicos      = [
-    ['id' => 1, 'nombre' => 'Ana López Méndez'],
+    ['id' => 1, 'nombre' => 'Ana LÃ³pez MÃ©ndez'],
     ['id' => 2, 'nombre' => 'Carlos Ruiz'],
-    ['id' => 3, 'nombre' => 'María Pérez'],
+    ['id' => 3, 'nombre' => 'MarÃ­a PÃ©rez'],
 ];
 $observaciones = "";
 $resultado = $resultado ?? [];
@@ -30,7 +30,7 @@ $resultado = $resultado ?? [];
 <body>
 <div class="page-wrap">
 
-    <a href="../../view/labc_index.php" class="back-link">← Volver</a>
+    <a href="../../view/labc_index.php" class="back-link">â† Volver</a>
     <h2>Micro Nutrientes en Aguas</h2>
 
     <?php if (!empty($resultado)): ?>
@@ -43,12 +43,10 @@ $resultado = $resultado ?? [];
         <form method="POST" action="">
             <div class="form-body">
 
-                <div class="section-title">Datos de análisis</div>
+                <div class="section-title">Datos de anÃ¡lisis</div>
                 <div class="field-group">
                     <div class="field">
-        <label>Factor de Dilución <input type="number" step="any" name="factor_dilucion" id="factor_dilucion" value = "0" required></label>
-
-        <h3>Concentraciones (µg/ml)</h3>
+        <h3>Concentraciones (Âµg/ml)</h3>
         <div class="grid2">
             <label>Cu <input type="number" step="any" name="conc_cu" id="conc_cu" value="0.0"></label>
             <label>Zn <input type="number" step="any" name="conc_zn" id="conc_zn" value="0.0"></label>
@@ -69,24 +67,24 @@ $resultado = $resultado ?? [];
             <table class="analisis-table">
                 <thead>
                     <tr>
-                        <th>Patrón</th>
+                        <th>PatrÃ³n</th>
                         <th>Cu-Zn</th>
                         <th>Fe-Mn</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Patrón 1</td>
+                        <td>PatrÃ³n 1</td>
                         <td>0.25-0.25</td>
                         <td>3.0-3.0</td>
                     </tr>
                     <tr>
-                        <td>Patrón 2</td>
+                        <td>PatrÃ³n 2</td>
                         <td>1.25-1.25</td>
                         <td>6.0-6.0</td>
                     </tr>
                     <tr>
-                        <td>Patrón 3</td>
+                        <td>PatrÃ³n 3</td>
                         <td>3.00-3.00</td>
                         <td>12.0-12.0</td>
                     </tr>

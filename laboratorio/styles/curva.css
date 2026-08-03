@@ -19,14 +19,6 @@ body {
     padding: 0 16px;
 }
 
-.curva-card {
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 32px;
-    box-shadow: 0 2px 12px rgba(59,109,17,0.06);
-}
-
 .back-link {
     display: inline-flex;
     align-items: center;

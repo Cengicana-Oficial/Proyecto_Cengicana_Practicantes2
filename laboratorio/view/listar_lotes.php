@@ -5,6 +5,7 @@ lab_require_permission('laboratorio.lotes.ver');
 
 require_once __DIR__ . '/../conexion.php';
 require_once __DIR__ . '/../includes/solicitud_formulario_helpers.php';
+require_once __DIR__ . '/../includes/estado_lote_helper.php';
 
 asegurarColumnasFirmasSolicitud($conexion);
 
@@ -23,16 +24,31 @@ $firmaRecibeSelect = solicitudColumnExists($conexion, 'firma_recibe')
 
 $busquedaLote = trim((string) ($_GET['buscar'] ?? ''));
 $estadoFiltro = strtolower(trim((string) ($_GET['estado'] ?? '')));
-$estadosPermitidos = ['pendiente', 'revision', 'aprobado'];
+$estadosPermitidos = ['pendiente', 'en_proceso', 'revision', 'aprobado'];
 if (!in_array($estadoFiltro, $estadosPermitidos, true)) {
     $estadoFiltro = '';
 }
 
-$estadoFormulariosSql = "
+$analisisRequeridosSql = "
+    SELECT
+        s.id_lote,
+        COUNT(DISTINCT sa.id_tipo_analisis) AS analisis_requeridos
+    FROM solicitud s
+    INNER JOIN solicitud_analisis sa
+        ON sa.id_solicitud = s.id_solicitud
+    GROUP BY s.id_lote
+";
+
+$analisisIngresadosSql = "
     SELECT
         lr.id_lote,
-        COUNT(f.id_formulario) AS formularios_total,
-        SUM(CASE WHEN LOWER(COALESCE(ef.nombre, '')) = 'aprobado' THEN 1 ELSE 0 END) AS formularios_aprobados
+        COUNT(DISTINCT f.id_tipo_analisis) AS analisis_ingresados,
+        COUNT(
+            DISTINCT CASE
+                WHEN LOWER(COALESCE(ef.nombre, '')) = 'aprobado'
+                THEN f.id_tipo_analisis
+            END
+        ) AS analisis_aprobados
     FROM lote_rango lr
     LEFT JOIN formulario f
         ON f.id_rango = lr.id_rango
@@ -50,11 +66,13 @@ if ($busquedaLote !== '') {
 }
 
 if ($estadoFiltro === 'pendiente') {
-    $filtrosLote[] = 'COALESCE(fs2.formularios_total, 0) = 0';
+    $filtrosLote[] = 'COALESCE(ai2.analisis_ingresados, 0) = 0';
+} elseif ($estadoFiltro === 'en_proceso') {
+    $filtrosLote[] = 'COALESCE(ai2.analisis_ingresados, 0) > 0 AND COALESCE(ai2.analisis_ingresados, 0) < COALESCE(ar2.analisis_requeridos, 0)';
 } elseif ($estadoFiltro === 'revision') {
-    $filtrosLote[] = 'COALESCE(fs2.formularios_total, 0) > 0 AND COALESCE(fs2.formularios_aprobados, 0) < COALESCE(fs2.formularios_total, 0)';
+    $filtrosLote[] = 'COALESCE(ar2.analisis_requeridos, 0) > 0 AND COALESCE(ai2.analisis_ingresados, 0) >= COALESCE(ar2.analisis_requeridos, 0) AND COALESCE(ai2.analisis_aprobados, 0) < COALESCE(ar2.analisis_requeridos, 0)';
 } elseif ($estadoFiltro === 'aprobado') {
-    $filtrosLote[] = 'COALESCE(fs2.formularios_total, 0) > 0 AND COALESCE(fs2.formularios_aprobados, 0) >= COALESCE(fs2.formularios_total, 0)';
+    $filtrosLote[] = 'COALESCE(ar2.analisis_requeridos, 0) > 0 AND COALESCE(ai2.analisis_aprobados, 0) >= COALESCE(ar2.analisis_requeridos, 0)';
 }
 
 $whereLotes = $filtrosLote ? 'WHERE ' . implode(' AND ', $filtrosLote) : '';
@@ -65,8 +83,9 @@ $stmt = $conexion->prepare("
     SELECT
         l.id_lote,
         l.codigo_lote,
-        COALESCE(fs.formularios_total, 0) AS formularios_total,
-        COALESCE(fs.formularios_aprobados, 0) AS formularios_aprobados,
+        COALESCE(ar.analisis_requeridos, 0) AS analisis_requeridos,
+        COALESCE(ai.analisis_ingresados, 0) AS analisis_ingresados,
+        COALESCE(ai.analisis_aprobados, 0) AS analisis_aprobados,
         s.id_solicitud,
         s.fecha_muestreo,
         s.numero_muestras,
@@ -87,15 +106,19 @@ $stmt = $conexion->prepare("
     INNER JOIN (
         SELECT l2.id_lote
         FROM lote l2
-        LEFT JOIN ({$estadoFormulariosSql}) fs2
-            ON fs2.id_lote = l2.id_lote
+        LEFT JOIN ({$analisisRequeridosSql}) ar2
+            ON ar2.id_lote = l2.id_lote
+        LEFT JOIN ({$analisisIngresadosSql}) ai2
+            ON ai2.id_lote = l2.id_lote
         {$whereLotes}
         ORDER BY l2.id_lote DESC
         {$limitSql}
     ) lotes_filtrados
         ON lotes_filtrados.id_lote = l.id_lote
-    LEFT JOIN ({$estadoFormulariosSql}) fs
-        ON fs.id_lote = l.id_lote
+    LEFT JOIN ({$analisisRequeridosSql}) ar
+        ON ar.id_lote = l.id_lote
+    LEFT JOIN ({$analisisIngresadosSql}) ai
+        ON ai.id_lote = l.id_lote
     LEFT JOIN solicitud s
         ON s.id_lote = l.id_lote
     LEFT JOIN tipo_muestra tm
@@ -132,8 +155,9 @@ $stmt = $conexion->prepare("
     GROUP BY
         l.id_lote,
         l.codigo_lote,
-        fs.formularios_total,
-        fs.formularios_aprobados,
+        ar.analisis_requeridos,
+        ai.analisis_ingresados,
+        ai.analisis_aprobados,
         s.id_solicitud,
         s.fecha_muestreo,
         s.numero_muestras,
@@ -159,10 +183,18 @@ $lotes = [];
 foreach ($lotesRows as $row) {
     $idLote = (int) $row['id_lote'];
     if (!isset($lotes[$idLote])) {
+        $estadoLote = labCalcularEstadoLote(
+            $row['analisis_requeridos'] ?? 0,
+            $row['analisis_ingresados'] ?? 0,
+            $row['analisis_aprobados'] ?? 0
+        );
         $lotes[$idLote] = [
             'id_lote' => $idLote,
             'codigo_lote' => $row['codigo_lote'],
-            'estado_lote' => estadoLoteTexto($row['formularios_total'] ?? 0, $row['formularios_aprobados'] ?? 0),
+            'estado_lote' => $estadoLote,
+            'analisis_requeridos' => (int) ($row['analisis_requeridos'] ?? 0),
+            'analisis_ingresados' => (int) ($row['analisis_ingresados'] ?? 0),
+            'analisis_aprobados' => (int) ($row['analisis_aprobados'] ?? 0),
             'numeros_laboratorio' => [],
             'solicitudes' => [],
         ];
@@ -210,30 +242,6 @@ $lotes = array_values(array_map(static function ($lote) {
 function eLotes($value)
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
-}
-
-function estadoLoteTexto($totalFormularios, $formulariosAprobados): string
-{
-    $total = (int) $totalFormularios;
-    $aprobados = (int) $formulariosAprobados;
-
-    if ($total <= 0) {
-        return 'Pendiente';
-    }
-
-    return $aprobados >= $total ? 'Aprobado' : 'En revision';
-}
-
-function estadoLoteClase(string $estado): string
-{
-    $estado = strtolower($estado);
-    if (strpos($estado, 'aprobado') !== false) {
-        return 'estado-aprobado';
-    }
-    if (strpos($estado, 'revision') !== false) {
-        return 'estado-revision';
-    }
-    return 'estado-pendiente';
 }
 ?>
 
@@ -303,7 +311,8 @@ function estadoLoteClase(string $estado): string
             <select id="estado" name="estado" onchange="this.form.submit()">
                 <option value="" <?= $estadoFiltro === '' ? 'selected' : '' ?>>Todos</option>
                 <option value="pendiente" <?= $estadoFiltro === 'pendiente' ? 'selected' : '' ?>>Pendiente</option>
-                <option value="revision" <?= $estadoFiltro === 'revision' ? 'selected' : '' ?>>En revision</option>
+                <option value="en_proceso" <?= $estadoFiltro === 'en_proceso' ? 'selected' : '' ?>>En proceso</option>
+                <option value="revision" <?= $estadoFiltro === 'revision' ? 'selected' : '' ?>>En revisión</option>
                 <option value="aprobado" <?= $estadoFiltro === 'aprobado' ? 'selected' : '' ?>>Aprobado</option>
             </select>
         </div>
@@ -348,8 +357,8 @@ function estadoLoteClase(string $estado): string
                     <td><?= eLotes($pdfData['numeros_laboratorio']) ?></td>
                     <td><?= eLotes($pdfData['codigo_lote']) ?></td>
                     <td>
-                        <span class="estado-badge <?= eLotes(estadoLoteClase($lote['estado_lote'])) ?>">
-                            <?= eLotes($lote['estado_lote']) ?>
+                        <span class="estado-badge <?= eLotes($lote['estado_lote']['clase']) ?>">
+                            <?= eLotes($lote['estado_lote']['texto']) ?>
                         </span>
                     </td>
                     <td>

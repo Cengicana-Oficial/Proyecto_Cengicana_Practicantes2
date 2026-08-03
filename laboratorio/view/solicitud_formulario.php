@@ -48,7 +48,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $codigoLote = trim($_POST['lote'] ?? '');
     $fechaMuestreo = $_POST['fecha_de_muestreo'] ?? null;
     $numeroMuestras = max(1, (int) ($_POST['numero_muestras'] ?? 1));
-    $fechaEstimada = $_POST['fecha_estimada'] ?? null;
     $observaciones = trim($_POST['observaciones'] ?? '');
     $ingresadoPor = trim($_POST['ingresado_por'] ?? '');
     $correoIngresado = trim($_POST['correo_ingresado_por'] ?? '');
@@ -72,36 +71,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $idLote = obtenerLote($conexion, $codigoLote);
-    $paramsSolicitud = [
-      $tipoMuestra['id_tipo'],
-      $idLote,
-      $codigoMuestreo,
-      $fechaMuestreo,
-      $numeroMuestras,
-      $ingresadoPor,
-      $correoIngresado,
-      $recibidoPor,
-      $correoRecibido,
-      date('Y-m-d'),
-      $fechaEstimada ?: null,
-      $observaciones,
-      $firmaIngreso,
-      $firmaRecibe,
-    ];
+    $fechaIngresoActual = date('Y-m-d');
+    $solicitudExistente = null;
 
     if ($idSolicitud) {
-      $updateSolicitud = $conexion->prepare("
-        UPDATE solicitud
-        SET id_tipo = ?, id_lote = ?, codigo_muestreo = ?, fecha_muestreo = ?, numero_muestras = ?,
-            ingresado_por = ?, correo_ingresado = ?, recibido_por = ?, correo_recibido = ?,
-            fecha_ingreso = ?, fecha_estimada = ?, observaciones = ?,
-            firma_ingreso = COALESCE(NULLIF(?, ''), firma_ingreso),
-            firma_recibe = COALESCE(NULLIF(?, ''), firma_recibe)
+      $stmtSolicitudExistente = $conexion->prepare("
+        SELECT id_solicitud, id_tipo, fecha_ingreso, fecha_estimada
+        FROM solicitud
         WHERE id_solicitud = ?
+        LIMIT 1
       ");
-      $paramsActualizar = array_merge($paramsSolicitud, [$idSolicitud]);
+      $stmtSolicitudExistente->execute([$idSolicitud]);
+      $solicitudExistente = $stmtSolicitudExistente->fetch(PDO::FETCH_ASSOC) ?: null;
+
+      if (!$solicitudExistente) {
+        throw new RuntimeException('La solicitud que intenta editar no existe.');
+      }
+    }
+
+    $fechaEstimadaNueva = calcularFechaEstimadaSolicitud($fechaIngresoActual, $tipoMuestra);
+    $tipoMuestraCambia = $solicitudExistente
+      && (int) ($solicitudExistente['id_tipo'] ?? 0) !== (int) $tipoMuestra['id_tipo'];
+
+    if ($idSolicitud) {
+      if ($tipoMuestraCambia) {
+        $fechaIngresoOriginal = trim((string) ($solicitudExistente['fecha_ingreso'] ?? ''));
+        if ($fechaIngresoOriginal === '') {
+          $fechaIngresoOriginal = $fechaIngresoActual;
+        }
+
+        $fechaEstimadaPersistida = calcularFechaEstimadaSolicitud($fechaIngresoOriginal, $tipoMuestra);
+
+        $updateSolicitud = $conexion->prepare("
+          UPDATE solicitud
+          SET id_tipo = ?, id_lote = ?, codigo_muestreo = ?, fecha_muestreo = ?, numero_muestras = ?,
+              ingresado_por = ?, correo_ingresado = ?, recibido_por = ?, correo_recibido = ?,
+              fecha_estimada = ?, observaciones = ?,
+              firma_ingreso = COALESCE(NULLIF(?, ''), firma_ingreso),
+              firma_recibe = COALESCE(NULLIF(?, ''), firma_recibe)
+          WHERE id_solicitud = ?
+        ");
+        $paramsActualizar = [
+          $tipoMuestra['id_tipo'],
+          $idLote,
+          $codigoMuestreo,
+          $fechaMuestreo,
+          $numeroMuestras,
+          $ingresadoPor,
+          $correoIngresado,
+          $recibidoPor,
+          $correoRecibido,
+          $fechaEstimadaPersistida,
+          $observaciones,
+          $firmaIngreso,
+          $firmaRecibe,
+          $idSolicitud,
+        ];
+      } else {
+        $updateSolicitud = $conexion->prepare("
+          UPDATE solicitud
+          SET id_tipo = ?, id_lote = ?, codigo_muestreo = ?, fecha_muestreo = ?, numero_muestras = ?,
+              ingresado_por = ?, correo_ingresado = ?, recibido_por = ?, correo_recibido = ?,
+              observaciones = ?,
+              firma_ingreso = COALESCE(NULLIF(?, ''), firma_ingreso),
+              firma_recibe = COALESCE(NULLIF(?, ''), firma_recibe)
+          WHERE id_solicitud = ?
+        ");
+        $paramsActualizar = [
+          $tipoMuestra['id_tipo'],
+          $idLote,
+          $codigoMuestreo,
+          $fechaMuestreo,
+          $numeroMuestras,
+          $ingresadoPor,
+          $correoIngresado,
+          $recibidoPor,
+          $correoRecibido,
+          $observaciones,
+          $firmaIngreso,
+          $firmaRecibe,
+          $idSolicitud,
+        ];
+      }
       $updateSolicitud->execute($paramsActualizar);
     } else {
+      $paramsSolicitud = [
+        $tipoMuestra['id_tipo'],
+        $idLote,
+        $codigoMuestreo,
+        $fechaMuestreo,
+        $numeroMuestras,
+        $ingresadoPor,
+        $correoIngresado,
+        $recibidoPor,
+        $correoRecibido,
+        $fechaIngresoActual,
+        $fechaEstimadaNueva,
+        $observaciones,
+        $firmaIngreso,
+        $firmaRecibe,
+      ];
+
       $insertSolicitud = $conexion->prepare("
         INSERT INTO solicitud (
           id_tipo, id_lote, codigo_muestreo, fecha_muestreo, numero_muestras,
@@ -185,6 +255,8 @@ try {
       s.id_solicitud,
       s.codigo_muestreo,
       s.fecha_muestreo,
+      s.fecha_ingreso,
+      s.fecha_estimada,
       s.numero_muestras,
       l.codigo_lote,
       tm.nombre AS tipo_nombre,
@@ -225,7 +297,7 @@ try {
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 </head>
 <body>
-   <link rel="stylesheet" href="../css/solicitud_formulario.css?v=4">
+   <link rel="stylesheet" href="../css/solicitud_formulario.css?v=5">
 
 <!-- NAV -->
 <nav>
@@ -336,7 +408,6 @@ try {
             placeholder="Ej. 185"
             value="<?= htmlspecialchars($loteSeleccionado, ENT_QUOTES, 'UTF-8') ?>"/>
     </div>
-
     <div class="field">
         <label for="fecha_muestreo">
             Fecha de muestreo
@@ -346,6 +417,32 @@ try {
             id="fecha_muestreo"
             name="fecha_de_muestreo"
             type="date"/>
+    </div>
+    <div class="field">
+        <label for="fecha_ingreso">
+            Fecha de ingreso
+        </label>
+
+        <input
+            id="fecha_ingreso"
+            type="text"
+            placeholder="DD/MM/AAAA"
+            readonly
+            aria-readonly="true"
+            autocomplete="off"/>
+    </div>
+    <div class="field">
+        <label for="fecha_estimada">
+            Fecha estimada
+        </label>
+
+        <input
+            id="fecha_estimada"
+            type="text"
+            placeholder="DD/MM/AAAA"
+            readonly
+            aria-readonly="true"
+            autocomplete="off"/>
     </div>
 
     <div class="field">
@@ -359,7 +456,6 @@ try {
             type="number"
             placeholder="Ej. 7"/>
     </div>
-
     <div class="field">
         <label for="n_laboratorio_inicio">
             Número de laboratorio
@@ -433,20 +529,19 @@ try {
   <!-- FOOTER -->
   <footer class="doc-footer">
     <div class="footer-info">
-        <span class = "footer-title">AgroLab</span>
+        <span class = "footer-title">Laboratorio Agroindustrial</span>
       <span>
         <span class="material-symbols-outlined">location_on</span>
-        Km 92.5 Carretera a 
+        Km 92.5 Carretera a Santa Lucia Cotzumalguapa, Escuintla || Guatemala
     </span>
     <span>
         <span class="material-symbols-outlined">call</span>
-            +50 &nbsp;|&nbsp; , C. A.
+            +502 3135-5033
         </span>
     <span>
         <span class="material-symbols-outlined">mail</span>
-            laboratoriocg@AgroLab.org &nbsp;|&nbsp; diaboratorio@AgroLab.org
+            laboratorioagroindustrial@cengicana.org
         </span>
-      <span class="footer-meta">Generado por TecnoBoris v2.1</span>
     </div>
   </footer>
   </form>
@@ -471,7 +566,7 @@ try {
 <script type="application/json" id="solicitudes-db"><?php echo json_encode($solicitudesDb, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script type="application/json" id="correlativos-db"><?php echo json_encode($correlativosDb, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script type="application/json" id="analisis-catalogo"><?php echo json_encode($catalogoAnalisis, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
-<script src="../node_modules/pdf-lib/dist/pdf-lib.min.js"></script>
-<script src="../js/solicitud_formulario.js?v=5"></script>
+<script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+<script src="../js/solicitud_formulario.js?v=6"></script>
 </body>
 </html>

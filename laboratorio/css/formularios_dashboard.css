@@ -1,11 +1,7 @@
-:root {
-  --app-sidebar: 250px;
-  --app-gap: 24px;
-  --panel-border: rgba(200, 219, 168, 0.8);
-  --panel-shadow: 0 16px 36px rgba(37, 72, 18, 0.08);
-  --panel-shadow-strong: 0 24px 48px rgba(37, 72, 18, 0.12);
-}
-
+@import url("../styles/tokens.css");
+@import url("../styles/button.css");
+@import url("../styles/forms.css");
+@import url("../styles/surfaces.css");
 body {
   min-height: 100vh;
   color: var(--text-main);
@@ -354,25 +350,6 @@ body::before {
   margin-bottom: 18px;
 }
 
-.hero-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.hero-chip.alt {
-  background: rgba(255, 255, 255, 0.04);
-}
-
 .hero-headline h1 {
   font-size: clamp(28px, 3.2vw, 38px);
   line-height: 1.02;
@@ -464,34 +441,6 @@ body::before {
   color: var(--text-mute);
   font-size: 13px;
   line-height: 1.5;
-}
-
-.history-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 31px;
-  padding: 0 12px;
-  border-radius: 4px;
-  border: 1px solid var(--green-200);
-  background: rgba(255, 255, 255, 0.88);
-  color: var(--green-800);
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-  box-shadow: 0 6px 14px rgba(37, 72, 18, 0.05);
-}
-
-.history-btn:hover {
-  background: var(--green-50);
-  border-color: var(--green-400);
-}
-
-.history-btn.disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  box-shadow: none;
 }
 
 .group-block + .group-block {
@@ -599,18 +548,6 @@ body::before {
   padding-top: 2px;
 }
 
-.no-results-card {
-  display: grid;
-  place-items: center;
-  gap: 10px;
-  min-height: 180px;
-  padding: 24px;
-  border: 1px dashed var(--green-200);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
-  text-align: center;
-}
-
 .no-results-icon {
   display: grid;
   place-items: center;
@@ -620,19 +557,6 @@ body::before {
   background: rgba(151, 196, 89, 0.16);
   color: var(--green-800);
   font-size: 20px;
-}
-
-.no-results-card h3 {
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--green-900);
-}
-
-.no-results-card p {
-  max-width: 520px;
-  color: var(--text-mute);
-  font-size: 13px;
-  line-height: 1.55;
 }
 
 .floating-action {
@@ -735,11 +659,6 @@ body::before {
 
   .section-head {
     flex-direction: column;
-  }
-
-  .history-btn {
-    width: 100%;
-    justify-content: center;
   }
 
   .card-grid,

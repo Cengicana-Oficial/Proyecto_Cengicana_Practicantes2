@@ -10,7 +10,7 @@ $doc_edicion   = "03";
 $doc_vf        = "V2";
 
 $fecha_actual  = date('d-m-Y');
-$lote_actual   = "LT-2025-083";
+$lote_actual   = "";
 $tecnicos      = [
     ['id' => 1, 'nombre' => 'Ana López Méndez'],
     ['id' => 2, 'nombre' => 'Carlos Ruiz'],
@@ -55,7 +55,8 @@ $resultado = $resultado ?? [];
 
         <h3>Curva de Calibración</h3>
 
-    <table border="1">
+    <div class="table-wrap calibration-table-wrap">
+    <table class="calibration-table">
         <tr>
             <th>Punto Curva</th>
             <th>Absorbancia</th>
@@ -112,6 +113,7 @@ $resultado = $resultado ?? [];
         </tr>
 
     </table>
+    </div>
         </div>
         </div>
 

@@ -2,7 +2,8 @@ FROM php:8.2-apache
 
 ENV TZ=America/Guatemala
 
-RUN apt-get update \
+RUN sed -i 's|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|http://deb.debian.org/debian-security|https://deb.debian.org/debian-security|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         git \
         unzip \

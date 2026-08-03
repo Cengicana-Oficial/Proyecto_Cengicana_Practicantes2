@@ -78,12 +78,12 @@ foreach ($catalogoMuestras as $clave => $muestra) {
 <div class="page-shell">
     <header class="topbar">
         <div class="topbar-left">
-            <a class="brand-chip" href="../../Menu.php" aria-label="Ir al escritorio">
+            <a class="brand-chip" href="../index.php" aria-label="Ir al escritorio">
                 LAB
             </a>
 
             <nav class="topnav" aria-label="Navegación principal">
-                <a href="../../Menu.php">Escritorio</a>
+                <a href="../index.php">Escritorio</a>
                 <a class="active" href="listar_lotes.php" aria-current="page">Muestras</a>
                 <a href="../index.php">Laboratorio</a>
             </nav>

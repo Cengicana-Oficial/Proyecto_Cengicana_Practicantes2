@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/catalogo_muestras_helper.php';
 require_once __DIR__ . '/../conexion.php';
 
 lab_require_module_access();
@@ -16,6 +17,7 @@ $stmt = $conexion->query("
         s.fecha_ingreso,
         s.fecha_estimada,
         s.numero_muestras,
+        tm.id_tipo AS id_tipo_muestra,
         tm.nombre AS tipo_muestra,
         COUNT(DISTINCT ta.id_tipo) AS total_pendientes,
         GROUP_CONCAT(DISTINCT ta.nombre ORDER BY ta.nombre SEPARATOR '||') AS analisis_pendientes
@@ -28,14 +30,15 @@ $stmt = $conexion->query("
         ON sa.id_solicitud = s.id_solicitud
     INNER JOIN tipo_analisis ta
         ON ta.id_tipo = sa.id_tipo_analisis
-    LEFT JOIN lote_rango lr
-        ON lr.id_lote = l.id_lote
     WHERE NOT EXISTS (
         SELECT 1
-          FROM formulario f
-         WHERE f.id_rango = lr.id_rango
+          FROM lote_rango lr2
+          INNER JOIN formulario f
+            ON f.id_rango = lr2.id_rango
            AND f.id_tipo_analisis = ta.id_tipo
+         WHERE lr2.id_lote = l.id_lote
     )
+      AND ta.id_tipo_muestra = s.id_tipo
     GROUP BY
         l.id_lote,
         l.codigo_lote,
@@ -43,12 +46,58 @@ $stmt = $conexion->query("
         s.fecha_ingreso,
         s.fecha_estimada,
         s.numero_muestras,
+        tm.id_tipo,
         tm.nombre
     HAVING total_pendientes > 0
-    ORDER BY s.fecha_ingreso DESC, l.id_lote DESC
+    ORDER BY
+        CASE LOWER(tm.nombre)
+            WHEN 'suelos' THEN 10
+            WHEN 'agua' THEN 20
+            WHEN 'foliares' THEN 30
+            WHEN 'cañas' THEN 40
+            WHEN 'cana' THEN 40
+            WHEN 'mieles' THEN 50
+            WHEN 'miel' THEN 50
+            ELSE 90
+        END,
+        l.codigo_lote ASC,
+        s.fecha_ingreso DESC,
+        l.id_lote DESC
 ");
 
 $pendientes = $stmt ? $stmt->fetchAll() : [];
+$pendientesPorTipo = [];
+
+foreach ($pendientes as $item) {
+    $claveTipo = labCatalogoMuestrasClaveDesdePrefijo(null, (string) ($item['tipo_muestra'] ?? ''));
+    $ordenTipo = labCatalogoMuestrasOrdenModulo($claveTipo);
+    $labelTipo = labCatalogoMuestrasEtiquetaModuloPlural($claveTipo);
+
+    if (!isset($pendientesPorTipo[$claveTipo])) {
+        $pendientesPorTipo[$claveTipo] = [
+            'clave' => $claveTipo,
+            'label' => $labelTipo,
+            'orden' => $ordenTipo,
+            'items' => [],
+        ];
+    }
+
+    $pendientesPorTipo[$claveTipo]['items'][] = $item;
+}
+
+uasort($pendientesPorTipo, static function (array $left, array $right): int {
+    return ($left['orden'] <=> $right['orden']) ?: strcasecmp($left['label'], $right['label']);
+});
+
+foreach ($pendientesPorTipo as &$grupo) {
+    usort($grupo['items'], static function (array $left, array $right): int {
+        $leftCode = (string) ($left['codigo_lote'] ?? '');
+        $rightCode = (string) ($right['codigo_lote'] ?? '');
+        return strnatcasecmp($leftCode, $rightCode)
+            ?: ((int) ($right['fecha_ingreso'] ? strtotime((string) $right['fecha_ingreso']) : 0) <=> (int) ($left['fecha_ingreso'] ? strtotime((string) $left['fecha_ingreso']) : 0));
+    });
+}
+unset($grupo);
 
 function ePendientes($value): string
 {
@@ -71,7 +120,7 @@ function fechaPendiente($fecha): string
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Solicitudes pendientes</title>
-    <link rel="stylesheet" href="../css/solicitudes_pendientes.css">
+    <link rel="stylesheet" href="../css/solicitudes_pendientes.css?v=<?= filemtime(__DIR__ . '/../css/solicitudes_pendientes.css') ?>">
 </head>
 <body>
 <nav>
@@ -98,36 +147,48 @@ function fechaPendiente($fecha): string
             No hay solicitudes de analisis pendientes por lote.
         </section>
     <?php else: ?>
-        <section class="pending-grid">
-            <?php foreach ($pendientes as $item): ?>
-                <?php $analisis = array_filter(explode('||', (string) ($item['analisis_pendientes'] ?? ''))); ?>
-                <article class="pending-card">
-                    <div class="pending-card-head">
-                        <div>
-                            <span class="kicker">Lote</span>
-                            <h2><?= ePendientes($item['codigo_lote'] ?? '-') ?></h2>
-                        </div>
-                        <span class="type-pill"><?= ePendientes($item['tipo_muestra'] ?? '-') ?></span>
+        <?php foreach ($pendientesPorTipo as $grupo): ?>
+            <details class="pending-type-section">
+                <summary class="pending-type-header">
+                    <div class="pending-type-summary-copy">
+                        <span class="eyebrow">Tipo de muestra</span>
+                        <h2 class="pending-type-title"><?= ePendientes($grupo['label']) ?></h2>
                     </div>
+                    <span class="count-pill"><?= count($grupo['items']) ?> lotes</span>
+                </summary>
 
-                    <div class="pending-meta">
-                        <span>Solicitud #<?= (int) ($item['id_solicitud'] ?? 0) ?></span>
-                        <span><?= ePendientes($item['numero_muestras'] ?? '-') ?> muestras</span>
-                        <span>Ingreso <?= ePendientes(fechaPendiente($item['fecha_ingreso'] ?? null)) ?></span>
-                        <span>Estimada <?= ePendientes(fechaPendiente($item['fecha_estimada'] ?? null)) ?></span>
-                    </div>
+                <div class="pending-grid">
+                    <?php foreach ($grupo['items'] as $item): ?>
+                        <?php $analisis = array_filter(explode('||', (string) ($item['analisis_pendientes'] ?? ''))); ?>
+                        <article class="pending-card">
+                            <div class="pending-card-head">
+                                <div>
+                                    <span class="kicker">Lote</span>
+                                    <h2><?= ePendientes($item['codigo_lote'] ?? '-') ?></h2>
+                                </div>
+                                <span class="type-pill"><?= ePendientes($item['tipo_muestra'] ?? '-') ?></span>
+                            </div>
 
-                    <div class="analysis-block">
-                        <strong><?= (int) ($item['total_pendientes'] ?? count($analisis)) ?> analisis pendientes</strong>
-                        <div class="analysis-list">
-                            <?php foreach ($analisis as $nombreAnalisis): ?>
-                                <span><?= ePendientes($nombreAnalisis) ?></span>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                </article>
-            <?php endforeach; ?>
-        </section>
+                            <div class="pending-meta">
+                                <span>Solicitud #<?= (int) ($item['id_solicitud'] ?? 0) ?></span>
+                                <span><?= ePendientes($item['numero_muestras'] ?? '-') ?> muestras</span>
+                                <span>Ingreso <?= ePendientes(fechaPendiente($item['fecha_ingreso'] ?? null)) ?></span>
+                                <span>Estimada <?= ePendientes(fechaPendiente($item['fecha_estimada'] ?? null)) ?></span>
+                            </div>
+
+                            <div class="analysis-block">
+                                <strong><?= (int) ($item['total_pendientes'] ?? count($analisis)) ?> analisis pendientes</strong>
+                                <div class="analysis-list">
+                                    <?php foreach ($analisis as $nombreAnalisis): ?>
+                                        <span><?= ePendientes($nombreAnalisis) ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </details>
+        <?php endforeach; ?>
     <?php endif; ?>
 </main>
 </body>

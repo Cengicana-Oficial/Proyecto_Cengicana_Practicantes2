@@ -15,10 +15,11 @@ $stmtIngenios = $db->query("
 ");
 
 $stmtCursos = $db->query("
-    SELECT id, nombre_cursos
-    FROM cursos
-    WHERE estado_cursos = 1
-    ORDER BY nombre_cursos
+    SELECT c.id, c.nombre_cursos
+    FROM cursos c
+    INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
+    WHERE ca.estado_categorias_cursos = 1
+    ORDER BY c.nombre_cursos
 ");
 ?>
 <!DOCTYPE html>
@@ -29,90 +30,69 @@ $stmtCursos = $db->query("
     <title>Nuevo participante</title>
     <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
+    <link rel="stylesheet" type="text/css" href="css/proyecto.css">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
 </head>
-<body>
+<body class="cengi-canvas">
     <?php menu_render(); ?>
     <div class="container">
+        <div class="cengi-hero">
+            <span class="cengi-chip">Participantes</span>
+            <h2>Nuevo participante del curso</h2>
+            <p>Registra un participante y asignalo directamente a un curso e ingenio.</p>
+        </div>
+
         <div class="panel panel-success">
             <div class="panel-heading">
                 <h3 class="panel-title">Nuevo participante del curso</h3>
             </div>
             <div class="panel-body">
                 <form method="POST" action="guardar_participante_curso.php" autocomplete="off">
-                    <div class="form-group">
-                        <div class="row">
-                            <div class="col-sm-2">
-                                <label for="cui" class="control-label">CUI</label>
-                            </div>
-                            <div class="col-sm-4">
-                                <input type="text" class="form-control" id="cui" name="cui" placeholder="0000-00000-0000" required>
-                            </div>
-                            <div class="col-sm-2">
-                                <label for="nombre" class="control-label">Nombre</label>
-                            </div>
-                            <div class="col-sm-4">
-                                <input type="text" class="form-control" id="nombre" name="nombre" placeholder="Nombre del participante" required>
-                            </div>
+                    <div class="cengi-form-grid">
+                        <div class="form-group">
+                            <label for="cui" class="control-label">CUI</label>
+                            <input type="text" class="form-control" id="cui" name="cui" placeholder="0000-00000-0000" required>
                         </div>
-                    </div>
-
-                    <div class="form-group">
-                        <div class="row">
-                            <div class="col-sm-2">
-                                <label for="ingenio" class="control-label">Ingenio</label>
-                            </div>
-                            <div class="col-sm-4">
-                                <select class="form-control" id="ingenio" name="ingenio" required>
-                                    <option value="">Selecciona un ingenio</option>
+                        <div class="form-group">
+                            <label for="nombre" class="control-label">Nombre</label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" placeholder="Nombre del participante" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="ingenio" class="control-label">Ingenio</label>
+                            <select class="form-control" id="ingenio" name="ingenio" required>
+                                <option value="">Selecciona un ingenio</option>
 <?php while ($ingenio = $stmtIngenios->fetch(PDO::FETCH_ASSOC)) { ?>
-                                    <option value="<?php echo (int) $ingenio['id']; ?>">
-                                        <?php echo htmlspecialchars($ingenio['nombre_ingenios']); ?>
-                                    </option>
+                                <option value="<?php echo (int) $ingenio['id']; ?>">
+                                    <?php echo htmlspecialchars($ingenio['nombre_ingenios']); ?>
+                                </option>
 <?php } ?>
-                                </select>
-                            </div>
-                            <div class="col-sm-2">
-                                <label for="curso" class="control-label">Curso</label>
-                            </div>
-                            <div class="col-sm-4">
-                                <select class="form-control" id="curso" name="curso" required>
-                                    <option value="">Selecciona un curso</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="curso" class="control-label">Curso</label>
+                            <select class="form-control" id="curso" name="curso" required>
+                                <option value="">Selecciona un curso</option>
 <?php while ($curso = $stmtCursos->fetch(PDO::FETCH_ASSOC)) { ?>
-                                    <option value="<?php echo (int) $curso['id']; ?>" <?php echo $cursoID === (int) $curso['id'] ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars($curso['nombre_cursos']); ?>
-                                    </option>
+                                <option value="<?php echo (int) $curso['id']; ?>" <?php echo $cursoID === (int) $curso['id'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($curso['nombre_cursos']); ?>
+                                </option>
 <?php } ?>
-                                </select>
-                            </div>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="area" class="control-label">Area</label>
+                            <input type="text" class="form-control" id="area" name="area" placeholder="Area" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="puesto" class="control-label">Puesto</label>
+                            <input type="text" class="form-control" id="puesto" name="puesto" placeholder="Puesto" required>
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <div class="row">
-                            <div class="col-sm-2">
-                                <label for="area" class="control-label">Area</label>
-                            </div>
-                            <div class="col-sm-4">
-                                <input type="text" class="form-control" id="area" name="area" placeholder="Area" required>
-                            </div>
-                            <div class="col-sm-2">
-                                <label for="puesto" class="control-label">Puesto</label>
-                            </div>
-                            <div class="col-sm-4">
-                                <input type="text" class="form-control" id="puesto" name="puesto" placeholder="Puesto" required>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <div class="row">
-                            <div class="col-sm-offset-2 col-sm-10">
-                                <button type="submit" class="btn btn-success">Guardar y asignar</button>
-                                <a href="<?php echo $cursoID > 0 ? 'ver_participante_curso.php?id=' . $cursoID : 'participantes.php'; ?>" class="btn btn-danger">Cancelar</a>
-                            </div>
-                        </div>
+                    <div class="cengi-form-actions">
+                        <button type="submit" class="btn btn-success">Guardar y asignar</button>
+                        <a href="<?php echo $cursoID > 0 ? 'ver_participante_curso.php?id=' . $cursoID : 'participantes.php'; ?>" class="btn btn-danger">Cancelar</a>
                     </div>
                 </form>
             </div>

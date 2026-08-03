@@ -34,6 +34,7 @@ $permisos = [
     'gestionar_modulos' => 'Permite gestionar los módulos del sistema',
     'gestionar_ingenios' => 'Permite gestionar los ingenios',
     'gestionar_areas' => 'Permite crear y editar areas del modulo de visitas',
+    'gestionar_reserva_salones' => 'Permite preparar y enviar reservaciones de salones desde el dashboard de visitas',
     'ver_solicitudes_aprobadas' => 'Permite ver solo solicitudes aprobadas',
     'enviar_correos' => 'Permite enviar correos de solicitudes',
     'ocultar_solicitudes' => 'Permite ocultar solicitudes del dashboard'

@@ -1,0 +1,234 @@
+@import url('tokens.css');
+
+:root {
+  --form-control-min-height: 42px;
+  --form-control-padding-y: var(--space-2);
+  --form-control-padding-x: var(--space-3);
+  --form-control-gap: var(--space-2);
+  --form-control-grid-gap: var(--space-3);
+  --form-control-radius: var(--radius-sm);
+  --form-control-bg: var(--white);
+  --form-control-bg-muted: var(--color-surface-subtle);
+  --form-control-border: var(--border);
+  --form-control-border-strong: var(--border-strong);
+  --form-control-border-focus: var(--green-400);
+  --form-control-label-color: var(--text-mute);
+  --form-control-label-size: var(--font-size-xs);
+  --form-control-label-weight: var(--font-weight-bold);
+  --form-control-help-color: var(--text-mute);
+  --form-control-help-size: var(--font-size-xs);
+  --form-control-text-size: var(--font-size-sm);
+  --form-control-text-color: var(--text-main);
+}
+
+:where(.section-title) {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-8) 0 var(--space-3);
+  color: var(--green-600);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+:where(.section-title)::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--green-100);
+}
+
+:where(.section-title:first-child) {
+  margin-top: 0;
+}
+
+:where(.field-group) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--form-control-grid-gap);
+  margin-bottom: var(--space-4);
+}
+
+:where(.field, .filter-field, .bc-field, .review-meta label, .review-comment) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--form-control-gap);
+}
+
+:where(.field > label, .field-label, .filter-field label, .bc-field span, .bc-check span, .review-meta label, .metodo-label, .firma-card .firma-label) {
+  color: var(--form-control-label-color);
+  font-size: var(--form-control-label-size);
+  font-weight: var(--form-control-label-weight);
+  letter-spacing: 0.06em;
+  line-height: var(--line-height-snug);
+  text-transform: uppercase;
+}
+
+:where(label:has(> input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]), > select, > textarea)) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--form-control-gap);
+}
+
+:where(label:has(> input[type="checkbox"]), label:has(> input[type="radio"])) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--form-control-text-color);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+:where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+  select,
+  textarea
+) {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--form-control-min-height);
+  padding: var(--form-control-padding-y) var(--form-control-padding-x);
+  color: var(--form-control-text-color);
+  font: inherit;
+  font-size: var(--form-control-text-size);
+  line-height: var(--line-height-normal);
+  background: var(--form-control-bg);
+  border: 1px solid var(--form-control-border);
+  border-radius: var(--form-control-radius);
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base),
+    background-color var(--transition-base),
+    color var(--transition-base);
+}
+
+:where(select) {
+  cursor: pointer;
+}
+
+:where(textarea) {
+  min-height: calc(var(--space-5) * 6);
+  resize: vertical;
+}
+
+:where(input::placeholder, textarea::placeholder) {
+  color: var(--form-control-help-color);
+  opacity: 1;
+}
+
+:where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+  select,
+  textarea
+):hover:not(:disabled):not([readonly]) {
+  border-color: var(--form-control-border-strong);
+}
+
+:where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+  select,
+  textarea
+):focus-visible {
+  outline: none;
+  border-color: var(--form-control-border-focus);
+  box-shadow: var(--focus-ring);
+}
+
+:where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):disabled,
+  select:disabled,
+  textarea:disabled
+) {
+  color: var(--text-mute);
+  cursor: not-allowed;
+  background: var(--form-control-bg-muted);
+  border-color: var(--form-control-border);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+:where(input[readonly], textarea[readonly]) {
+  color: var(--text-secondary);
+  cursor: default;
+  background: var(--form-control-bg-muted);
+  border-color: var(--form-control-border-strong);
+  box-shadow: none;
+}
+
+:where(input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"], .is-error input, .is-error select, .is-error textarea) {
+  border-color: var(--state-danger-border);
+}
+
+:where(.is-success input, .is-success select, .is-success textarea) {
+  border-color: var(--state-success-border);
+}
+
+:where(input[type="checkbox"], input[type="radio"]) {
+  flex: 0 0 auto;
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin: 0;
+  accent-color: var(--green-600);
+}
+
+:where(input[type="radio"]) {
+  border-radius: var(--radius-full);
+}
+
+:where(input[type="checkbox"].switch, input[type="checkbox"][role="switch"], .form-switch input[type="checkbox"]) {
+  appearance: none;
+  inline-size: 2.75rem;
+  block-size: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--form-control-border);
+  border-radius: var(--radius-pill);
+  background:
+    radial-gradient(circle at 0.75rem 50%, var(--white) 0.42rem, transparent 0.46rem),
+    var(--green-100);
+}
+
+:where(input[type="checkbox"].switch:checked, input[type="checkbox"][role="switch"]:checked, .form-switch input[type="checkbox"]:checked) {
+  border-color: var(--green-600);
+  background:
+    radial-gradient(circle at calc(100% - 0.75rem) 50%, var(--white) 0.42rem, transparent 0.46rem),
+    var(--green-600);
+}
+
+:where(.field-hint, .help-text, .validation-message, .field-message, .firma-hint) {
+  color: var(--form-control-help-color);
+  font-size: var(--form-control-help-size);
+  line-height: var(--line-height-normal);
+}
+
+:where(.validation-message.is-error, .field-message.error) {
+  color: var(--state-danger-text);
+}
+
+:where(.validation-message.is-success, .field-message.success) {
+  color: var(--state-success-text);
+}
+
+:where(.field:has(input[required]) > label, .field:has(select[required]) > label, .field:has(textarea[required]) > label, label:has(> input[required], > select[required], > textarea[required]))::after {
+  color: var(--color-danger-500);
+  content: ' *';
+}
+
+:where(fieldset) {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+:where(legend) {
+  margin-bottom: var(--space-2);
+  color: var(--form-control-label-color);
+  font-size: var(--form-control-label-size);
+  font-weight: var(--form-control-label-weight);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

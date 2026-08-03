@@ -5,13 +5,20 @@
 	<meta name="viewport" content="width=device-widht, initial-scale=1">
 	<link href="css/bootstrap.min.css" rel="stylesheet">
 	<link href="css/bootstrap-theme.css" rel="stylesheet">
+	<link href="css/proyecto.css" rel="stylesheet">
 	<script src="js/jquery-3.2.1.min.js"></script>
 	<script src="js/bootstrap.min.js"></script>
 	<meta charset="utf-8">
 </head>
-<body>
+<body class="cengi-canvas">
 	<?php menu_render();?>
 	<div class="container">
+		<div class="cengi-hero">
+			<span class="cengi-chip">Categorias</span>
+			<h2>Agregar categoria</h2>
+			<p>Crea una nueva categoria para clasificar cursos, diplomados y seminarios.</p>
+		</div>
+
 		<div class="panel panel-success">
 			<div class="panel-heading">
 				<h3 class="panel-title"> Agregar Categorías</h3>
@@ -19,26 +26,20 @@
 
 			<div class="panel-body">
 		<form  method="POST" action="guardar_categorias.php" autocomplete="off">
-			<div class="form-group">
-					<div class="row">
-					<div class="col-sm-2">
-					<label for="nombre" class="col-sm-2 control-label">Nombre:</label>
-					</div>
-					<div class="col-sm-5">
-						<input type="text" name= "nombre"  class="form-control" required placeholder="Nombre">
-					</div>
-					<div class="col-sm-1"></div>
+			<div class="cengi-form-grid">
+				<div class="form-group">
+					<label for="nombre" class="control-label">Nombre</label>
+					<input type="text" name= "nombre"  class="form-control" required placeholder="Nombre">
 				</div>
 			</div>
 
-
-			<div class="form-group">
-				<div class="col-sm-offset-2 col-sm-10">
-					<button type="submit" class="btn btn-success">Guardar</button>
-					<a href="index.php" class="btn btn-danger">Cancelar</a>
-				</div>
+			<div class="cengi-form-actions">
+				<button type="submit" class="btn btn-success">Guardar</button>
+				<a href="index.php" class="btn btn-danger">Cancelar</a>
 			</div>
 		</form>
 	</div>
+	</div>
+</div>
 </body>
 </html>

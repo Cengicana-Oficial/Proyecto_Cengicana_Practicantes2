@@ -10,7 +10,7 @@ $doc_edicion   = "03";
 $doc_vf        = "V2";
 
 $fecha_actual  = date('d-m-Y');
-$lote_actual   = "LT-2025-083";
+$lote_actual   = "";
 $tecnicos      = [
     ['id' => 1, 'nombre' => 'Ana López Méndez'],
     ['id' => 2, 'nombre' => 'Carlos Ruiz'],

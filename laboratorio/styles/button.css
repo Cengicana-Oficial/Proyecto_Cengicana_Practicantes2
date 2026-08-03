@@ -1,0 +1,507 @@
+@import url('tokens.css');
+
+:where(
+  button,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  .btn,
+  .btn-submit,
+  .btn-primary,
+  .btn-secondary,
+  .btn-muted,
+  .btn-quiet,
+  .bc-button,
+  .action-button,
+  .icon-button,
+  .primary-action,
+  .text-action,
+  .icon-action,
+  .search-button,
+  .export-button,
+  .pdf-button,
+  .btn-regresar,
+  .history-btn,
+  .btn-pdf,
+  .btn-clear,
+  .lab-table-button,
+  .lab-table-icon-button,
+  .page-btn,
+  .filter-actions button,
+  .filter-actions a,
+  .tipo-btn,
+  .fab,
+  .logout-btn,
+  .toggle-btn,
+  .sidebar-download,
+  .action-btn,
+  .filter-reset,
+  .btn-volver,
+  .btn-download-all,
+  .btn-view,
+  .btn-small,
+  .action,
+  .row-button,
+  .btn-delete
+) {
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: var(--btn-gap, 8px) !important;
+  min-height: var(--btn-min-height, 40px) !important;
+  padding: var(--btn-padding-y, 10px) var(--btn-padding-x, 16px) !important;
+  font: inherit !important;
+  font-size: var(--btn-font-size, 14px) !important;
+  font-weight: var(--btn-font-weight, 800) !important;
+  line-height: 1 !important;
+  color: var(--btn-fg, var(--green-800)) !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+  border: var(--btn-border-width, 1px) solid var(--btn-border, transparent) !important;
+  border-radius: var(--btn-radius, var(--radius-sm)) !important;
+  background: var(--btn-bg, rgba(255, 255, 255, 0.92)) !important;
+  box-shadow: var(--btn-shadow, none) !important;
+  transition:
+    transform var(--transition-base) !important,
+    background var(--transition-base) !important,
+    border-color var(--transition-base) !important,
+    color var(--transition-base) !important,
+    box-shadow var(--transition-base) !important,
+    filter var(--transition-base) !important;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(
+  button,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  .btn,
+  .btn-submit,
+  .btn-primary,
+  .btn-secondary,
+  .btn-muted,
+  .btn-quiet,
+  .bc-button,
+  .action-button,
+  .icon-button,
+  .primary-action,
+  .text-action,
+  .icon-action,
+  .search-button,
+  .export-button,
+  .pdf-button,
+  .btn-regresar,
+  .history-btn,
+  .btn-pdf,
+  .btn-clear,
+  .lab-table-button,
+  .lab-table-icon-button,
+  .page-btn,
+  .filter-actions button,
+  .filter-actions a,
+  .tipo-btn,
+  .fab,
+  .logout-btn,
+  .toggle-btn,
+  .sidebar-download,
+  .action-btn,
+  .filter-reset,
+  .btn-volver,
+  .btn-download-all,
+  .btn-view,
+  .btn-small,
+  .action,
+  .row-button,
+  .btn-delete
+):hover:not(:disabled):not([aria-disabled="true"]) {
+  transform: translateY(-1px) !important;
+}
+
+:where(
+  button,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  .btn,
+  .btn-submit,
+  .btn-primary,
+  .btn-secondary,
+  .btn-muted,
+  .btn-quiet,
+  .bc-button,
+  .action-button,
+  .icon-button,
+  .primary-action,
+  .text-action,
+  .icon-action,
+  .search-button,
+  .export-button,
+  .pdf-button,
+  .btn-regresar,
+  .history-btn,
+  .btn-pdf,
+  .btn-clear,
+  .lab-table-button,
+  .lab-table-icon-button,
+  .page-btn,
+  .filter-actions button,
+  .filter-actions a,
+  .tipo-btn,
+  .fab,
+  .logout-btn,
+  .toggle-btn,
+  .sidebar-download,
+  .action-btn,
+  .filter-reset,
+  .btn-volver,
+  .btn-download-all,
+  .btn-view,
+  .btn-small,
+  .action,
+  .row-button,
+  .btn-delete
+):disabled,
+:where(
+  button,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  .btn,
+  .btn-submit,
+  .btn-primary,
+  .btn-secondary,
+  .btn-muted,
+  .btn-quiet,
+  .bc-button,
+  .action-button,
+  .icon-button,
+  .primary-action,
+  .text-action,
+  .icon-action,
+  .search-button,
+  .export-button,
+  .pdf-button,
+  .btn-regresar,
+  .history-btn,
+  .btn-pdf,
+  .btn-clear,
+  .lab-table-button,
+  .lab-table-icon-button,
+  .page-btn,
+  .filter-actions button,
+  .filter-actions a,
+  .tipo-btn,
+  .fab,
+  .logout-btn,
+  .toggle-btn,
+  .sidebar-download,
+  .action-btn,
+  .filter-reset,
+  .btn-volver,
+  .btn-download-all,
+  .btn-view,
+  .btn-small,
+  .action,
+  .row-button,
+  .btn-delete
+)[aria-disabled="true"] {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+:where(
+  button[type="submit"],
+  .btn,
+  .btn-submit,
+  .btn-primary,
+  .bc-button-primary,
+  .action-button.primary,
+  .primary-action,
+  .search-button,
+  .export-button,
+  .pdf-button,
+  .sidebar-download,
+  .btn-regresar,
+  .btn-download-all,
+  .fab.primary,
+  .toggle-btn
+) {
+  --btn-bg: linear-gradient(180deg, var(--green-600), var(--green-800));
+  --btn-border: var(--green-600);
+  --btn-fg: var(--white);
+  --btn-shadow: 0 10px 18px rgba(23, 52, 4, 0.18);
+}
+
+:where(
+  .btn-secondary,
+  .btn-muted,
+  .btn-quiet,
+  .bc-button-quiet,
+  .action-button.subtle,
+  .text-action,
+  .history-btn,
+  .pdf-button.secondary,
+  .btn-pdf,
+  .lab-table-button,
+  .lab-table-icon-button,
+  .page-btn,
+  .filter-actions a,
+  .btn-clear,
+  .btn-volver,
+  .btn-view,
+  .btn-small,
+  .action,
+  .row-button,
+  .btn-delete,
+  .btn-submit.secondary
+) {
+  --btn-bg: rgba(255, 255, 255, 0.92);
+  --btn-border: var(--green-200);
+  --btn-fg: var(--green-800);
+}
+
+:where(.btn-muted, .btn-quiet, .text-action, .lab-table-button, .lab-table-icon-button, .page-btn, .btn-clear, .btn-small, .btn-submit.secondary) {
+  --btn-font-weight: 700;
+}
+
+:where(.action-button, .primary-action, .text-action, .icon-action, .sidebar-download, .history-btn, .btn-regresar, .btn-pdf, .btn-view, .btn-small, .btn-volver, .btn-download-all, .btn-delete, .action, .row-button) {
+  --btn-radius: var(--radius-sm);
+}
+
+:where(.icon-button, .icon-action, .lab-table-icon-button, .page-btn, .toggle-btn) {
+  --btn-min-height: 30px;
+  --btn-padding-y: 0px;
+  --btn-padding-x: 0px;
+  --btn-gap: 0px;
+  --btn-radius: 999px;
+}
+
+:where(.icon-button, .icon-action, .lab-table-icon-button, .page-btn) {
+  width: 30px !important;
+  aspect-ratio: 1 / 1;
+}
+
+:where(.action-button.primary, .primary-action, .search-button, .export-button, .btn-submit, .bc-button-primary, .sidebar-download) {
+  --btn-radius: var(--radius-sm);
+}
+
+.action-button.subtle,
+.text-action,
+.history-btn,
+.pdf-button.secondary,
+.btn-pdf,
+.btn-clear,
+.lab-table-button,
+.lab-table-icon-button,
+.page-btn,
+.filter-actions a,
+.btn-volver,
+.btn-view,
+.btn-small,
+.btn-delete {
+  --btn-radius: var(--radius-sm);
+}
+
+.btn,
+.btn-submit,
+.btn-primary,
+.btn-secondary,
+.btn-muted,
+.btn-quiet,
+.bc-button,
+.action-button,
+.icon-button,
+.primary-action,
+.text-action,
+.icon-action,
+.search-button,
+.export-button,
+.pdf-button,
+.btn-regresar,
+.history-btn,
+.btn-pdf,
+.btn-clear,
+.lab-table-button,
+.lab-table-icon-button,
+.page-btn,
+.filter-actions button,
+.filter-actions a,
+.tipo-btn,
+.fab,
+.logout-btn,
+.toggle-btn,
+.sidebar-download,
+.action-btn,
+.filter-reset,
+.btn-volver,
+.btn-download-all,
+.btn-view,
+.btn-small,
+.action,
+.row-button,
+.btn-delete {
+  overflow: hidden;
+}
+
+.tipo-btn {
+  --btn-min-height: 34px;
+  --btn-padding-y: 7px;
+  --btn-padding-x: 16px;
+  --btn-gap: 6px;
+  --btn-radius: 999px;
+  --btn-font-weight: 700;
+  --btn-border: var(--green-200);
+  --btn-bg: transparent;
+  --btn-fg: var(--green-600);
+}
+
+.tipo-btn.active {
+  --btn-bg: linear-gradient(180deg, var(--green-600), var(--green-700));
+  --btn-border: var(--green-600);
+  --btn-fg: var(--white);
+  --btn-shadow: 0 10px 18px rgba(59, 109, 17, 0.18);
+}
+
+.fab {
+  --btn-min-height: 56px;
+  --btn-padding-y: 0px;
+  --btn-padding-x: 16px;
+  --btn-gap: 12px;
+  --btn-radius: 18px;
+  width: 238px !important;
+}
+
+.fab.secondary {
+  --btn-bg: linear-gradient(180deg, #ffffff, #f5faf0);
+  --btn-border: var(--border-strong);
+  --btn-fg: var(--green-700);
+  --btn-shadow: 0 12px 24px rgba(59, 109, 17, 0.22);
+}
+
+.fab.primary {
+  --btn-bg: linear-gradient(180deg, var(--green-600), var(--green-700));
+  --btn-border: var(--green-600);
+  --btn-fg: var(--white);
+  --btn-shadow: 0 12px 24px rgba(59, 109, 17, 0.22);
+}
+
+.logout-btn {
+  --btn-bg: #fff3f0;
+  --btn-border: #f0c5bd;
+  --btn-fg: #8f251d;
+}
+
+.logout-btn:hover:not(:disabled):not([aria-disabled="true"]) {
+  --btn-bg: #ffe7e2;
+}
+
+.toggle-btn {
+  --btn-min-height: 82px;
+  --btn-padding-y: 0px;
+  --btn-padding-x: 0px;
+  --btn-radius: 0px;
+  --btn-border: var(--border);
+  --btn-fg: var(--green-600);
+  width: 100% !important;
+  border-bottom-width: 1px !important;
+}
+
+.sidebar-download {
+  width: 100% !important;
+  --btn-min-height: 44px;
+  --btn-radius: 10px;
+  --btn-fg: var(--white);
+  --btn-shadow: 0 12px 20px rgba(23, 52, 4, 0.18);
+}
+
+.action-button.primary,
+.primary-action,
+.search-button,
+.export-button,
+.btn-submit,
+.bc-button-primary,
+.sidebar-download,
+.btn-regresar,
+.btn-download-all {
+  --btn-radius: var(--radius-sm);
+}
+
+.action-button.subtle,
+.text-action,
+.bc-button-quiet,
+.history-btn,
+.pdf-button.secondary,
+.btn-pdf,
+.btn-clear,
+.lab-table-button,
+.lab-table-icon-button,
+.page-btn,
+.filter-actions a,
+.btn-volver,
+.btn-view,
+.btn-small,
+.action,
+.row-button,
+.btn-delete {
+  --btn-radius: var(--radius-sm);
+}
+
+.btn-clear,
+.lab-table-button,
+.lab-table-icon-button,
+.page-btn,
+.btn-small {
+  --btn-min-height: 34px;
+  --btn-padding-y: 8px;
+  --btn-padding-x: 12px;
+  --btn-font-weight: 800;
+}
+
+.btn-clear,
+.btn-volver,
+.btn-view,
+.btn-small,
+.btn-delete {
+  --btn-bg: rgba(255, 255, 255, 0.92);
+  --btn-border: var(--green-200);
+}
+
+.btn-delete {
+  --btn-fg: #8f251d;
+  --btn-border: #f0c5bd;
+  --btn-bg: #fff3f0;
+}
+
+.btn-delete:hover:not(:disabled):not([aria-disabled="true"]) {
+  --btn-bg: #ffe7e2;
+}
+
+.row-button.danger {
+  --btn-bg: #fff7f5;
+  --btn-border: #efc1b8;
+  --btn-fg: #c13b2b;
+}
+
+.row-button.success {
+  --btn-bg: #f0faf2;
+  --btn-border: #bedcc2;
+  --btn-fg: #236038;
+}
+
+@media (max-width: 1024px) {
+  .btn-submit {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .btn-submit {
+    width: 100% !important;
+  }
+}

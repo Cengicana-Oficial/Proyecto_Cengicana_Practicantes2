@@ -59,55 +59,6 @@ h1 {
     min-width: 220px;
 }
 
-.filter-form label {
-    color: var(--text-mute);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .05em;
-    text-transform: uppercase;
-}
-
-.filter-form select {
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text-main);
-    font: inherit;
-    padding: .6rem .75rem;
-}
-
-.pdf-button {
-    align-items: center;
-    background: var(--green-600);
-    border: 1px solid var(--green-600);
-    border-radius: 8px;
-    color: var(--white);
-    cursor: pointer;
-    display: inline-flex;
-    font: inherit;
-    font-size: 13px;
-    font-weight: 700;
-    justify-content: center;
-    min-height: 39px;
-    padding: .6rem .85rem;
-    transition: background .15s, transform .15s;
-    white-space: nowrap;
-}
-
-.pdf-button:hover {
-    background: var(--green-800);
-    transform: translateY(-1px);
-}
-
-.pdf-button.secondary {
-    background: var(--white);
-    color: var(--green-800);
-}
-
-.pdf-button.secondary:hover {
-    background: var(--green-50);
-}
-
 .summary-row {
     display: flex;
     flex-wrap: wrap;
@@ -123,42 +74,6 @@ h1 {
     font-size: 13px;
     font-weight: 600;
     padding: .35rem .75rem;
-}
-
-.table-shell {
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow-x: auto;
-}
-
-.consolidacion-table {
-    border-collapse: collapse;
-    font-size: 13px;
-    min-width: 980px;
-    width: 100%;
-}
-
-.consolidacion-table th,
-.consolidacion-table td {
-    border: 1px solid var(--border);
-    padding: .6rem .7rem;
-    text-align: center;
-    white-space: nowrap;
-}
-
-.consolidacion-table th {
-    background: var(--green-50);
-    color: var(--green-800);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-}
-
-.consolidacion-table td:first-child,
-.consolidacion-table td:nth-child(5) {
-    text-align: left;
 }
 
 .cell-requested {
@@ -187,65 +102,13 @@ h1 {
     text-transform: uppercase;
 }
 
-.estado-revisar {
-    background: #fff2b8;
-    color: #6a4b00;
-}
-
-.estado-aprobado {
-    background: #dcf5de;
-    color: var(--green-800);
-}
-
-.empty-state,
-.empty-cell {
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text-mute);
-    padding: 1rem;
-    text-align: center;
-}
-
-.empty-cell {
-    border: 0;
-}
-
 .review-wrap {
     max-width: 1180px;
-}
-
-.review-alert {
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text-main);
-    margin-bottom: 1rem;
-    padding: .85rem 1rem;
-}
-
-.review-alert.success {
-    background: #eef9ef;
-    border-color: #b8dfbd;
-    color: var(--green-800);
-}
-
-.review-alert.error {
-    background: #fff0f0;
-    border-color: #efc4c4;
-    color: #8a1f1f;
 }
 
 .review-form {
     display: grid;
     gap: 1rem;
-}
-
-.review-section {
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1rem;
 }
 
 .review-section-head {
@@ -275,7 +138,6 @@ h1 {
     margin-bottom: 1rem;
 }
 
-.review-meta label,
 .review-comment {
     color: var(--text-mute);
     display: grid;
@@ -283,30 +145,6 @@ h1 {
     font-weight: 700;
     gap: .35rem;
     letter-spacing: .05em;
-    text-transform: uppercase;
-}
-
-.review-meta input,
-.review-comment textarea,
-.review-table input {
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text-main);
-    font: inherit;
-    min-height: 34px;
-    padding: .45rem .55rem;
-}
-
-.review-table-shell {
-    margin-top: .75rem;
-}
-
-.review-table caption {
-    color: var(--green-800);
-    font-weight: 800;
-    padding: .75rem;
-    text-align: left;
     text-transform: uppercase;
 }
 
@@ -341,20 +179,11 @@ h1 {
     color: var(--green-800);
 }
 
-.review-comment textarea {
-    min-height: 80px;
-    resize: vertical;
-}
-
 .review-actions {
     display: flex;
     flex-wrap: wrap;
     gap: .75rem;
     justify-content: end;
-}
-
-.empty-state.compact {
-    padding: .75rem;
 }
 
 @media (max-width: 720px) {

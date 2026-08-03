@@ -4,7 +4,7 @@
 	include("conexion.php");
 	$mysqli = conectar();
 	if (!empty($_GET['id'])) {
-		$id= $_GET['id'];
+		$id = (int) $_GET['id'];
 
 	$sql ="SELECT
 	  u.id idusuario,
@@ -28,8 +28,8 @@
 ?>
 <html lang="es">
 <?php include('head.php'); ?>
-<body>
-	<?php include('menu.php'); ?>
+<body class="cengi-canvas">
+	<?php menu_render(); ?>
 	<div class="container">
 		<div class="row">
 				<h3 style="text-align: center">Modificar Registro</h3>

@@ -102,3 +102,58 @@ if (!function_exists('lab_resultado_multiple')) {
         ];
     }
 }
+
+if (!function_exists('lab_analysis_flash_key')) {
+    function lab_analysis_flash_key(): string
+    {
+        return 'lab_analysis_flash_result';
+    }
+}
+
+if (!function_exists('lab_analysis_flash_set')) {
+    function lab_analysis_flash_set(array $resultado): void
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        $_SESSION[lab_analysis_flash_key()] = $resultado;
+    }
+}
+
+if (!function_exists('lab_analysis_take_flash')) {
+    function lab_analysis_take_flash(): ?array
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        $key = lab_analysis_flash_key();
+        if (!isset($_SESSION[$key]) || !is_array($_SESSION[$key])) {
+            return null;
+        }
+
+        $resultado = $_SESSION[$key];
+        unset($_SESSION[$key]);
+
+        return $resultado;
+    }
+}
+
+if (!function_exists('lab_analysis_redirect_after_success')) {
+    function lab_analysis_redirect_after_success(?array $resultado): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || empty($resultado['exito'])) {
+            return;
+        }
+
+        lab_analysis_flash_set($resultado);
+        $target = (string) ($_SERVER['REQUEST_URI'] ?? '');
+        if ($target === '') {
+            $target = (string) ($_SERVER['PHP_SELF'] ?? '');
+        }
+
+        header('Location: ' . $target, true, 303);
+        exit;
+    }
+}

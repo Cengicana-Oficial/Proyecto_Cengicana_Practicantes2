@@ -38,34 +38,35 @@ if (!empty($_GET['id'])) {
 
 <?php include('head.php'); ?>
 
-<body>
+<body class="cengi-canvas">
 
-<?php include('menu.php'); ?>
+<?php menu_render(); ?>
 
 <div class="container">
 
-    <div class="row">
-
-        <h3 style="text-align: center">
-            Modificar Registro
-        </h3>
-
+    <div class="cengi-hero">
+        <span class="cengi-chip">Ingenios</span>
+        <h2>Modificar ingenio</h2>
+        <p>Actualiza el nombre del ingenio seleccionado.</p>
     </div>
+
+    <div class="panel panel-success">
+
+        <div class="panel-heading">
+            <h3 class="panel-title">Modificar Registro</h3>
+        </div>
+
+        <div class="panel-body">
 
     <form method="POST"
           action="actualizar_ingenios.php"
           autocomplete="off">
 
-        <div class="form-group">
-
-            <label for="nombre"
-                   class="col-sm-2 control-label">
-
-                Ingenio:
-
-            </label>
-
-            <div class="col-sm-10">
+        <div class="cengi-form-grid">
+            <div class="form-group">
+                <label for="nombre" class="control-label">
+                    Ingenio
+                </label>
 
                 <input
                     type="text"
@@ -73,9 +74,7 @@ if (!empty($_GET['id'])) {
                     class="form-control"
                     value="<?php echo htmlspecialchars($row['nombre_ingenios']); ?>"
                 >
-
             </div>
-
         </div>
 
         <input
@@ -85,29 +84,21 @@ if (!empty($_GET['id'])) {
             value="<?php echo $row['id']; ?>"
         >
 
-        <div class="form-group">
+        <div class="cengi-form-actions">
+            <a href="index.php" class="btn btn-default">
+                Regresar
+            </a>
 
-            <div class="col-sm-offset-2 col-sm-10">
-
-                <a href="index.php"
-                   class="btn btn-default">
-
-                    Regresar
-
-                </a>
-
-                <button type="submit"
-                        class="btn btn-success">
-
-                    Guardar
-
-                </button>
-
-            </div>
-
+            <button type="submit" class="btn btn-success">
+                Guardar
+            </button>
         </div>
 
     </form>
+
+        </div>
+
+    </div>
 
 </div>
 
