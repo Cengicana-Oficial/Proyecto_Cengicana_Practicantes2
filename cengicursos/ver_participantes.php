@@ -1,4 +1,6 @@
 <?php
+require_once("revisar_permisos.php");
+cengi_require_ver_participantes();
 //require c'conexion.php
 require_once("conexion.php");
 $db = conectar();

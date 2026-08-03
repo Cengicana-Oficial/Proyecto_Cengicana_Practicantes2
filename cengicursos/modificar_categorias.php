@@ -1,4 +1,6 @@
 <?php
+	require_once "revisar_permisos.php";
+	cengi_require_admin();
 	include("conexion.php");
 	$mysqli = conectar();
 	if (!empty($_GET['id'])) {
