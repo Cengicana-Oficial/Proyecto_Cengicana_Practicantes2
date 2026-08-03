@@ -5,6 +5,7 @@ cengi_require_admin();
 
 require_once("conexion.php");
 require_once("validador_archivos.php");
+require_once("menu.php");
 
 $db = conectar();
 
@@ -93,36 +94,27 @@ if ($error === 0) {
 
 <html lang="es">
 	<head>
-		
+
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<link href="css/bootstrap.min.css" rel="stylesheet">
 		<link href="css/bootstrap-theme.css" rel="stylesheet">
+		<link href="css/proyecto.css" rel="stylesheet">
 		<script src="js/jquery-3.1.1.min.js"></script>
-		<script src="js/bootstrap.min.js"></script>	
+		<script src="js/bootstrap.min.js"></script>
 	</head>
-	
-	<body>
+
+	<body class="cengi-canvas">
+		<?php menu_render(); ?>
 		<div class="container">
-			<div class="row">
-				<?php if($error>0){ ?>
-				<div class="row alert alert-danger" >
-					<?php echo ("<strong>Error: </strong>".mensajeError($error)); ?>
-				</div>
+			<div class="cengi-result-card <?php echo $resultado ? 'is-success' : 'is-error'; ?>">
+				<?php if ($resultado) { ?>
+					<h3>Registro guardado</h3>
+				<?php } else { ?>
+					<h3>Error al guardar</h3>
+					<p><?php echo htmlspecialchars($errorTexto ?? mensajeError($error)); ?></p>
 				<?php } ?>
-				<div class="row alert alert-success" style="text-align:center">
-					<?php if($resultado) { ?>
-						<h3>REGISTRO GUARDADO</h3>
-						<?php } else { ?>
-						
-						<h3>
-ERROR AL GUARDAR:
-<?php echo htmlspecialchars($errorTexto ?? mensajeError($error)); ?>
-</h3>
-					<?php } ?>
-					
-					<a href="index.php" class="btn btn-success">Regresar</a>
-					
-				</div>
+
+				<a href="index.php" class="btn btn-success">Regresar</a>
 			</div>
 		</div>
 	</body>

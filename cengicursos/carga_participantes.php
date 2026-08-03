@@ -75,12 +75,19 @@ function cengi_obtener_filas_archivo($archivoTemporal, $extension)
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
+    <link rel="stylesheet" type="text/css" href="css/proyecto.css">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
 </head>
-<body>
+<body class="cengi-canvas">
     <?php menu_render(); ?>
     <div class="container">
+        <div class="cengi-hero">
+            <span class="cengi-chip">Participantes</span>
+            <h2>Resultado de la carga</h2>
+            <p>Detalle de participantes creados, actualizados y asignados desde el archivo.</p>
+        </div>
+
         <div class="panel panel-success">
             <div class="panel-heading">
                 <h3 class="panel-title">Resultado de la carga</h3>
@@ -136,7 +143,6 @@ try {
             creado
         )
         VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
-        RETURNING id
     ");
 
     $stmtActualizarParticipante = $db->prepare("
@@ -229,7 +235,7 @@ try {
                 $puesto,
                 $area,
             ]);
-            $participanteID = $stmtInsertParticipante->fetchColumn();
+            $participanteID = (int) $db->lastInsertId();
             $creados++;
         }
 
@@ -258,32 +264,35 @@ try {
 
     $db->commit();
     ?>
-                <div class="alert alert-success">
-                    <strong>Carga completada.</strong>
-                    Se procesaron <?php echo $procesados; ?> filas, se crearon <?php echo $creados; ?> participantes, se actualizaron <?php echo $actualizados; ?> y se generaron <?php echo $asignados; ?> asignaciones nuevas.
-                </div>
+                <div class="cengi-result-card is-success">
+                    <h3>Carga completada</h3>
+                    <p>
+                        Se procesaron <?php echo $procesados; ?> filas, se crearon <?php echo $creados; ?> participantes, se actualizaron <?php echo $actualizados; ?> y se generaron <?php echo $asignados; ?> asignaciones nuevas.
+                    </p>
     <?php if ($advertencias): ?>
-                <div class="alert alert-warning">
-                    <strong>Advertencias:</strong>
-                    <ul class="mb-0">
-                        <?php foreach ($advertencias as $advertencia) { ?>
-                            <li><?php echo htmlspecialchars($advertencia); ?></li>
-                        <?php } ?>
-                    </ul>
-                </div>
+                    <div class="alert alert-warning" style="text-align:left;">
+                        <strong>Advertencias:</strong>
+                        <ul class="mb-0">
+                            <?php foreach ($advertencias as $advertencia) { ?>
+                                <li><?php echo htmlspecialchars($advertencia); ?></li>
+                            <?php } ?>
+                        </ul>
+                    </div>
     <?php endif; ?>
+                    <a href="participantes.php" class="btn btn-success">Regresar</a>
+                </div>
 <?php
 } catch (Throwable $e) {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
     ?>
-                <div class="alert alert-danger">
-                    <strong>No se pudo completar la carga.</strong>
-                    <?php echo htmlspecialchars($e->getMessage()); ?>
+                <div class="cengi-result-card is-error">
+                    <h3>No se pudo completar la carga</h3>
+                    <p><?php echo htmlspecialchars($e->getMessage()); ?></p>
+                    <a href="participantes.php" class="btn btn-success">Regresar</a>
                 </div>
 <?php } ?>
-                <a href="participantes.php" class="btn btn-success">Regresar</a>
             </div>
         </div>
     </div>

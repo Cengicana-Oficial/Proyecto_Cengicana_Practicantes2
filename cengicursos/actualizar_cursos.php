@@ -69,31 +69,28 @@ else
 
 <?php include('head.php'); ?>
 
-<body>
+<body class="cengi-canvas">
 
-	<?php include('menu.php'); ?>
+	<?php include('menu.php'); menu_render(); ?>
 
 	<div class="container">
 
-		<div class="row">
+		<div class="cengi-result-card <?php echo $resultado ? 'is-success' : 'is-error'; ?>">
 
-			<div class="row" style="text-align: center;">
+			<?php if ($resultado) { ?>
 
-				<?php if($resultado) { ?>
+				<h3>Registro modificado</h3>
 
-					<h3>Registro Modificado</h3>
+			<?php } else { ?>
 
-				<?php } else { ?>
+				<h3>Error al modificar</h3>
+				<p><?php echo htmlspecialchars($error); ?></p>
 
-					<h3>Error al Modificar - <?php echo $error; ?></h3>
+			<?php } ?>
 
-				<?php } ?>
-
-				<a href="index.php" class="btn btn-success">
-					Regresar
-				</a>
-
-			</div>
+			<a href="index.php" class="btn btn-success">
+				Regresar
+			</a>
 
 		</div>
 

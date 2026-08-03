@@ -28,6 +28,22 @@ function cengi_texto_normalizado($valor)
     return preg_replace('/\s+/', '', $valor);
 }
 
+/**
+ * Equivalente en SQL (MySQL) de cengi_texto_normalizado(), para comparar
+ * columnas dentro de una consulta. MySQL no tiene TRANSLATE()/REGEXP_REPLACE(...,'g')
+ * como PostgreSQL, asi que se encadenan REPLACE() para cada vocal acentuada y la ñ.
+ */
+function cengi_sql_texto_normalizado($columnaSql)
+{
+    $expr = "LOWER(TRIM({$columnaSql}))";
+
+    foreach (['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n'] as $con => $sin) {
+        $expr = "REPLACE({$expr}, '{$con}', '{$sin}')";
+    }
+
+    return "REPLACE({$expr}, ' ', '')";
+}
+
 function usuario_tiene_modulo_cursos()
 {
     if (isset($_SESSION['es_superadmin']) && (int) $_SESSION['es_superadmin'] === 1) {
@@ -280,6 +296,97 @@ function cengi_puede_rechazar_solicitudes()
         || cengi_tiene_permiso('gestionar_solicitudes');
 }
 
+function cengi_puede_ver_organizaciones()
+{
+    return cengi_es_admin()
+        || cengi_es_gestor()
+        || cengi_tiene_permiso('ver_organizaciones_cengi')
+        || cengi_tiene_permiso('gestionar_organizaciones_cengi');
+}
+
+function cengi_puede_gestionar_organizaciones()
+{
+    return cengi_es_admin() || cengi_tiene_permiso('gestionar_organizaciones_cengi');
+}
+
+function cengi_puede_ver_instructores()
+{
+    return cengi_es_admin()
+        || cengi_es_gestor()
+        || cengi_es_formador()
+        || cengi_tiene_permiso('ver_instructores_cengi')
+        || cengi_tiene_permiso('gestionar_instructores_cengi');
+}
+
+function cengi_puede_gestionar_instructores()
+{
+    return cengi_es_admin() || cengi_tiene_permiso('gestionar_instructores_cengi');
+}
+
+function cengi_puede_ver_eventos()
+{
+    return cengi_es_admin()
+        || cengi_es_gestor()
+        || cengi_es_formador()
+        || cengi_tiene_permiso('ver_eventos_cengi')
+        || cengi_tiene_permiso('gestionar_eventos_cengi');
+}
+
+function cengi_puede_gestionar_eventos()
+{
+    return cengi_es_admin() || cengi_tiene_permiso('gestionar_eventos_cengi');
+}
+
+function cengi_puede_ver_diplomas()
+{
+    return cengi_es_admin()
+        || cengi_es_gestor()
+        || cengi_es_formador()
+        || cengi_tiene_permiso('ver_diplomas_cengi')
+        || cengi_tiene_permiso('gestionar_diplomas_cengi')
+        || cengi_puede_subir_diploma();
+}
+
+function cengi_puede_gestionar_diplomas()
+{
+    return cengi_es_admin()
+        || cengi_tiene_permiso('gestionar_diplomas_cengi')
+        || cengi_puede_subir_diploma();
+}
+
+function cengi_puede_ver_roles()
+{
+    return cengi_es_admin()
+        || cengi_tiene_permiso('ver_roles_cengi')
+        || cengi_tiene_permiso('roles_gestionar_cengi');
+}
+
+function cengi_puede_gestionar_roles()
+{
+    return cengi_es_admin() || cengi_tiene_permiso('roles_gestionar_cengi');
+}
+
+/**
+ * Clasifica un nombre de rol de usuarios_menu en uno de los 3 niveles
+ * administrativos que gestiona SIGEC (ver pagina roles.php). Instructor y
+ * Participante/Estudiante no se gestionan aqui (acceden via Moodle) y se
+ * excluyen antes de llamar a esta funcion.
+ */
+function cengi_clasificar_rol_nivel($nombreRol)
+{
+    $normalizado = cengi_texto_normalizado($nombreRol);
+
+    if (strpos($normalizado, 'ingenio') !== false) {
+        return 3; // Administrador de ingenio
+    }
+
+    if (strpos($normalizado, 'gestor') !== false || strpos($normalizado, 'encargado') !== false || strpos($normalizado, 'capacitacion') !== false) {
+        return 2; // Encargado de capacitacion
+    }
+
+    return 1; // Administrador general (admin / superadmin / cualquier otro rol administrativo)
+}
+
 function cengi_usuario_actual_id()
 {
     return isset($_SESSION['id_usuario']) ? (int) $_SESSION['id_usuario'] : 0;
@@ -345,7 +452,7 @@ function cengi_scope_sql_por_nombre_ingenio($alias, $alreadyWhere = true, $colum
     $column = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $column);
 
     $referenciaColumna = $alias !== '' ? "{$alias}.{$column}" : $column;
-    $columnaNormalizada = "regexp_replace(lower(translate({$referenciaColumna}, 'áéíóúÁÉÍÓÚñÑ', 'aeiouAEIOUnN')), '\s+', '', 'g')";
+    $columnaNormalizada = "LOWER(REPLACE({$referenciaColumna}, ' ', ''))";
 
     return $prefijo . $columnaNormalizada . " = '" . addslashes($ingenioNombre) . "'";
 }
@@ -441,6 +548,86 @@ function cengi_require_aprobar_solicitudes($redirect = 'solicitudes.php')
 function cengi_require_rechazar_solicitudes($redirect = 'solicitudes.php')
 {
     if (!cengi_puede_rechazar_solicitudes()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_ver_organizaciones($redirect = 'index.php')
+{
+    if (!cengi_puede_ver_organizaciones()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_gestionar_organizaciones($redirect = 'organizaciones.php')
+{
+    if (!cengi_puede_gestionar_organizaciones()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_ver_instructores($redirect = 'index.php')
+{
+    if (!cengi_puede_ver_instructores()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_gestionar_instructores($redirect = 'instructores.php')
+{
+    if (!cengi_puede_gestionar_instructores()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_ver_eventos($redirect = 'index.php')
+{
+    if (!cengi_puede_ver_eventos()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_gestionar_eventos($redirect = 'eventos_qr.php')
+{
+    if (!cengi_puede_gestionar_eventos()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_ver_diplomas($redirect = 'index.php')
+{
+    if (!cengi_puede_ver_diplomas()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_gestionar_diplomas($redirect = 'diplomas.php')
+{
+    if (!cengi_puede_gestionar_diplomas()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_ver_roles($redirect = 'index.php')
+{
+    if (!cengi_puede_ver_roles()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_gestionar_roles($redirect = 'roles.php')
+{
+    if (!cengi_puede_gestionar_roles()) {
         header("Location: {$redirect}");
         exit();
     }

@@ -8,6 +8,47 @@
   var prefetchCache = Object.create(null);
   var activeController = null;
 
+  function setupSearchReset() {
+    var searchInputs = document.querySelectorAll('form[method="POST" i] input[name="campo"]');
+
+    Array.prototype.forEach.call(searchInputs, function (input) {
+      input.dataset.cengiFilterActive = input.value.trim() !== '' ? 'true' : 'false';
+    });
+  }
+
+  document.addEventListener('input', function (event) {
+    var input = event.target;
+
+    if (!input.matches || !input.matches('form[method="POST" i] input[name="campo"]')) {
+      return;
+    }
+
+    if (input.value.trim() !== '' || input.dataset.cengiFilterActive !== 'true') {
+      return;
+    }
+
+    input.dataset.cengiFilterActive = 'false';
+    input.setAttribute('aria-busy', 'true');
+
+    window.setTimeout(function () {
+      if (input.value.trim() !== '') {
+        input.removeAttribute('aria-busy');
+        return;
+      }
+
+      var form = input.form;
+      if (form) {
+        form.submit();
+      }
+    }, 180);
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupSearchReset);
+  } else {
+    setupSearchReset();
+  }
+
   function ensureProgressBar() {
     var bar = document.getElementById(progressId);
     var parent = document.body || document.documentElement;

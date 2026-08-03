@@ -31,13 +31,14 @@ if ($campo !== '') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
+    <link rel="stylesheet" type="text/css" href="css/proyecto.css">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
     <script src="js/main.js"></script>
     <meta charset="utf-8">
 </head>
 
-<body>
+<body class="cengi-canvas">
     <?php menu_render(); ?>
 
     <?php if ($puedeGestionar): ?>
@@ -113,8 +114,8 @@ if ($campo !== '') {
                     </div>
 
                     <div class="form-group">
-                        <button type="submit" class="btn btn-success">Guardar</button>
-                        <a href="index.php" class="btn btn-danger">Cancelar</a>
+                        <button type="submit" class="btn btn-success"><span class="glyphicon glyphicon-floppy-disk"></span> Guardar</button>
+                        <a href="index.php" class="btn btn-danger"><span class="glyphicon glyphicon-remove"></span> Cancelar</a>
                     </div>
                 </form>
             </div>
@@ -148,13 +149,14 @@ if ($campo !== '') {
                             <input type="text" placeholder="Nombre del participante" class="form-control" name="campo" id="campo" value="<?php echo htmlspecialchars($campo); ?>">
                         </div>
                         <div class="col-sm-2">
-                            <input type="submit" name="enviar" id="enviar" value="Buscar" class="btn btn-success">
+                            <button type="submit" name="enviar" id="enviar" value="Buscar" class="btn btn-success"><span class="glyphicon glyphicon-search"></span> Buscar</button>
                         </div>
                     </form>
                 </div>
 
                 <br>
 
+                <div class="cengi-table-wrap">
                 <table class="table table-striped table-bordered table-hover">
                     <thead>
                         <tr>
@@ -179,9 +181,10 @@ if ($campo !== '') {
                                     <td><?php echo htmlspecialchars($row['area_participantes']); ?></td>
                                     <?php if ($puedeGestionar): ?>
                                         <td>
-                                            <a href="modificar_participantes.php?id=<?php echo (int) $row['idparticipante']; ?>"><span class="glyphicon glyphicon-pencil"></span></a>
-                                            &nbsp;
-                                            <a href="#" data-href="eliminar_participante.php?id=<?php echo (int) $row['idparticipante']; ?>" data-toggle="modal" data-target="#confirm-delete"><span class="glyphicon glyphicon-trash"></span></a>
+                                            <div class="cengi-row-actions">
+                                                <a class="cengi-action-btn is-edit" href="modificar_participantes.php?id=<?php echo (int) $row['idparticipante']; ?>" data-tooltip="Editar" aria-label="Editar"><span class="glyphicon glyphicon-pencil"></span><span class="sr-only">Editar</span></a>
+                                                <a class="cengi-action-btn is-delete" href="#" data-href="eliminar_participante.php?id=<?php echo (int) $row['idparticipante']; ?>" data-toggle="modal" data-target="#confirm-delete" data-tooltip="Eliminar" aria-label="Eliminar"><span class="glyphicon glyphicon-trash"></span><span class="sr-only">Eliminar</span></a>
+                                            </div>
                                         </td>
                                     <?php endif; ?>
                                 </tr>
@@ -193,6 +196,7 @@ if ($campo !== '') {
                         <?php endif; ?>
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </div>

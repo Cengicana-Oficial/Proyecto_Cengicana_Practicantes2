@@ -10,21 +10,29 @@ cengi_require_admin();
 	<meta name="viewport" content="width=device-widht, initial-scale=1">
 	<link href="css/bootstrap.min.css" rel="stylesheet">
 	<link href="css/bootstrap-theme.css" rel="stylesheet">
+	<link href="css/proyecto.css" rel="stylesheet">
 	<script src="js/jquery-3.2.1.min.js"></script>
 	<script src="js/bootstrap.min.js"></script>
 	<meta content="text/html;" http-equiv="content-type" charset="utf-8">
 </head>
-<body>
-	<?php include_once("menu.php"); ?>
+<body class="cengi-canvas">
+	<?php include_once("menu.php"); menu_render(); ?>
 	<div class="container" id="cargar_participantes">
+		<div class="cengi-hero">
+			<span class="cengi-chip">Participantes</span>
+			<h2>Carga de participantes</h2>
+			<p>Sube un archivo CSV con los participantes de un ingenio, delegado y curso.</p>
+		</div>
+
 		<div class="panel panel-success">
 			<div class="panel-heading">
 				<h3 class="panel-title">Carga de Participantes</h3>
 			</div>
-			<div class="panel-body">	
-				<form  method="POST" action="carga_participantes.php" enctype="multipart/form-data" autocomplete="off" accept-charset="UTF-8">	
+			<div class="panel-body">
+				<form  method="POST" action="carga_participantes.php" enctype="multipart/form-data" autocomplete="off" accept-charset="UTF-8">
+				<div class="cengi-form-grid">
 				<div class="form-group">
-					<label for="nombre" class="col-sm-2 control-label">Ingenio_</label>
+					<label for="ingenio" class="control-label">Ingenio</label>
 					<?php
 						//Consulta obtener todos los ingenios
 						$sqling ="SELECT id, nombre_ingenios FROM cengi_cursos.ingenios";
@@ -37,9 +45,8 @@ cengi_require_admin();
 					</select>
 				</div>
 
-				
 			<div class="form-group">
-					<label for="users" class="col-sm-2 control-label">Delegado</label>
+					<label for="user" class="control-label">Delegado</label>
 					<?php
 						//Consulta obtener todos los ingenios
 						$sqling ="SELECT id, nombre FROM cengi_cursos.users";
@@ -53,7 +60,7 @@ cengi_require_admin();
 				</div>
 
 				<div class="form-group">
-					<label for="nombre" class="col-sm-2 control-label">Curso</label>
+					<label for="curso" class="control-label">Curso</label>
 					<?php
 						//Consulta obtener todos los ingenios
 						$sqling ="SELECT id, nombre_cursos FROM cengi_cursos.cursos";
@@ -65,10 +72,12 @@ cengi_require_admin();
 					</select>
 				</div>
 				<div class="form-group">
-					<label for="nombre" class="col-sm-2 control-label">Archivo</label>
-					<input id="archivo" accept=".csv" class="form-control" name="archivo" type="file" /> 
+					<label for="archivo" class="control-label">Archivo</label>
+					<input id="archivo" accept=".csv" class="form-control" name="archivo" type="file" />
 				</div>
-				<div class="form-group">
+				</div>
+
+				<div class="cengi-form-actions">
 					<button type="submit" class="btn btn-success">Guardar</button>
 					<a href="index.php" class="btn btn-danger">Cancelar</a>
 				</div>

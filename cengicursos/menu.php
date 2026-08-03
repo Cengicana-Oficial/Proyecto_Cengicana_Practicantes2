@@ -1,401 +1,279 @@
 <?php
 require_once __DIR__ . '/revisar_permisos.php';
 
+function cengi_pagina_titulo($currentPage, $esEstudiante)
+{
+    $titulos = [
+        'index.php' => ['Dashboard general', 'Resumen del modulo de capacitacion'],
+        'ver_cursos.php' => [$esEstudiante ? 'Mis cursos' : 'Cursos', $esEstudiante ? 'Consulta tus cursos asignados y tu nota' : 'Planifica, publica y administra la oferta de capacitacion'],
+        'agregar_cursos.php' => ['Nuevo curso', 'Registra un curso dentro de una categoria e ingenio'],
+        'modificar_cursos.php' => ['Editar curso', 'Actualiza los datos de un curso existente'],
+        'ver_categorias.php' => ['Categorias de curso', 'Clasificacion de la oferta de capacitacion'],
+        'agregar_categorias.php' => ['Nueva categoria', 'Registra una categoria de curso'],
+        'ver_participante_curso.php' => ['Seguimiento por curso', 'Asistencia, evaluaciones, contenido y diplomas por curso'],
+        'participantes.php' => ['Participantes', 'Listado y carga masiva de participantes'],
+        'carga_participantes.php' => ['Carga masiva CSV', 'Resultado de la importacion de participantes'],
+        'solicitudes.php' => ['Inscripciones', 'Solicitudes pendientes de validacion'],
+        'editar_solicitud.php' => ['Editar solicitud', 'Actualiza una solicitud pendiente'],
+        'ver_ingenios.php' => ['Ingenios', 'Directorio base de ingenios afiliados'],
+        'agregar_ingenios.php' => ['Nuevo ingenio', 'Registra un ingenio en el directorio'],
+        'ver_usuarios.php' => ['Usuarios', 'Cuentas con acceso al modulo de cursos'],
+        'agregar_usuarios.php' => ['Nuevo usuario', 'Registra una cuenta de usuario'],
+        'directorio_participantes.php' => ['Directorio de participantes', 'Vista agregada por persona: cursos, diplomas y evaluacion'],
+        'seguimiento_ingenio.php' => ['Seguimiento por ingenio', 'Ficha institucional de capacitacion por ingenio'],
+        'organizaciones.php' => ['Organizaciones', 'Directorio de ingenios, universidades, empresas e instituciones'],
+        'instructores.php' => ['Instructores', 'Directorio de instructores e informe por curso/diplomado'],
+        'eventos_qr.php' => ['Control QR eventos', 'Eventos con registro de ingreso por codigo QR'],
+        'diplomas.php' => ['Certificacion', 'Generacion y carga de diplomas de curso y de evento'],
+        'roles.php' => ['Roles y permisos', 'Matriz de permisos por rol y usuarios del sistema'],
+    ];
+
+    return $titulos[$currentPage] ?? ['Cengicursos', 'Formacion y conocimiento'];
+}
+
 function menu_render()
 {
     $puedeGestionar = cengi_puede_gestionar();
-    $puedeVerUsuarios = cengi_puede_ver_usuarios();
-    $puedeGestionarUsuarios = cengi_puede_gestionar_usuarios();
     $puedeVerIngenios = cengi_puede_ver_ingenios();
-    $puedeGestionarIngenios = cengi_puede_gestionar_ingenios();
     $puedeVerParticipantes = cengi_puede_ver_participantes();
-    $puedeCargarParticipantes = cengi_puede_cargar_participantes();
     $puedeVerSolicitudes = cengi_puede_ver_solicitudes();
-    $puedeEditarSolicitudes = cengi_puede_editar_solicitudes();
-    $puedeAprobarSolicitudes = cengi_puede_aprobar_solicitudes();
-    $puedeRechazarSolicitudes = cengi_puede_rechazar_solicitudes();
+    $puedeVerOrganizaciones = cengi_puede_ver_organizaciones();
+    $puedeVerInstructores = cengi_puede_ver_instructores();
+    $puedeVerEventos = cengi_puede_ver_eventos();
+    $puedeVerDiplomas = cengi_puede_ver_diplomas();
+    $puedeVerRoles = cengi_puede_ver_roles();
+    $puedeCalificar = cengi_puede_calificar();
     $esEstudiante = cengi_es_estudiante();
+
+    $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+    $currentPage = basename($requestPath ?: 'index.php');
+    $isActive = static function (array $pages) use ($currentPage) {
+        return in_array($currentPage, $pages, true) ? ' is-active' : '';
+    };
+
+    [$tituloPagina, $subtituloPagina] = cengi_pagina_titulo($currentPage, $esEstudiante);
+
+    $nombreUsuario = trim((string) ($_SESSION['usuario'] ?? 'Usuario'));
+    $rolUsuario = trim((string) ($_SESSION['rol'] ?? ''));
+    $ingenioUsuario = trim((string) ($_SESSION['ingenio_nombre'] ?? ''));
+    $iniciales = '';
+    foreach (preg_split('/\s+/', $nombreUsuario, -1, PREG_SPLIT_NO_EMPTY) as $parte) {
+        $iniciales .= mb_strtoupper(mb_substr($parte, 0, 1, 'UTF-8'), 'UTF-8');
+        if (mb_strlen($iniciales, 'UTF-8') >= 2) {
+            break;
+        }
+    }
+    $iniciales = $iniciales !== '' ? $iniciales : 'U';
     ?>
-<style>
-:root {
-    --cengi-lms-primary: #73BC25;
-    --cengi-lms-primary-strong: #5e9b1d;
-    --cengi-lms-secondary: #73BC25;
-    --cengi-lms-accent: #eef8df;
-    --cengi-lms-surface: #ffffff;
-    --cengi-lms-border: #dbe8dc;
-    --cengi-lms-copy: #294033;
-    --cengi-lms-soft: #f5f8f2;
-}
+<aside class="cengi-sidebar" id="cengiSidebar">
+    <a class="cengi-brand" href="index.php" aria-label="Ir al inicio de Cengicursos">
+        <span class="cengi-brand-mark" aria-hidden="true">
+            <span class="glyphicon glyphicon-leaf"></span>
+        </span>
+        <span class="cengi-brand-copy">
+            <strong>SIGEC</strong>
+            <small>CENGICAÑA</small>
+        </span>
+    </a>
 
-body {
-    background:
-        radial-gradient(circle at top right, rgba(148, 201, 115, 0.16), transparent 24%),
-        radial-gradient(circle at top left, rgba(76, 154, 100, 0.12), transparent 28%),
-        linear-gradient(180deg, #f9fcf7 0%, #eff5ec 100%);
-    color: var(--cengi-lms-copy);
-}
-
-.container {
-    width: min(1180px, calc(100% - 32px));
-}
-
-.navbar.navbar-inverse {
-    background: linear-gradient(
-        135deg,
-        #5e9b1d 0%,
-        #73BC25 100%
-    );
-
-border: 0;
-    border-radius: 24px;
-    box-shadow: 0 18px 40px rgba(47, 111, 68, 0.18);
-    margin-top: 22px;
-    margin-bottom: 28px;
-    padding: 8px 10px;
-}
-
-.navbar-inverse .navbar-brand,
-.navbar-inverse .navbar-nav > li > a {
-    color: #f8fff6;
-    font-weight: 600;
-}
-
-.navbar-inverse .navbar-brand {
-    letter-spacing: 0.08em;
-}
-
-.navbar-inverse .navbar-nav > li > a {
-    border-radius: 14px;
-    transition: background-color 0.2s ease, transform 0.2s ease;
-}
-
-.navbar-inverse .navbar-nav > li > a:hover,
-.navbar-inverse .navbar-nav > li > a:focus,
-.navbar-inverse .navbar-nav > .open > a,
-.navbar-inverse .navbar-nav > .open > a:hover,
-.navbar-inverse .navbar-nav > .open > a:focus {
-    background: rgba(255, 255, 255, 0.16);
-    color: #ffffff;
-}
-
-.navbar-inverse .dropdown-menu {
-    border: 0;
-    border-radius: 18px;
-    padding: 10px;
-    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.14);
-    background: rgba(255, 255, 255, 0.98);
-}
-
-.navbar-inverse .dropdown-menu > li > a {
-    border-radius: 12px;
-    padding: 10px 14px;
-    color: var(--cengi-lms-copy);
-}
-
-.navbar-inverse .dropdown-menu > li > a:hover,
-.navbar-inverse .dropdown-menu > li > a:focus {
-    background: #edf5ea;
-}
-
-.panel {
-    border: 0;
-    border-radius: 24px;
-    overflow: hidden;
-    box-shadow: 0 18px 38px rgba(41, 64, 51, 0.10);
-}
-
-.panel.panel-success > .panel-heading {
-    background: linear-gradient(135deg, var(--cengi-lms-primary) 0%, var(--cengi-lms-secondary) 100%);
-    border: 0;
-    color: #fff;
-    padding: 18px 24px;
-}
-
-.panel .panel-title {
-    font-size: 20px;
-    font-weight: 700;
-}
-
-.panel .panel-body {
-    background: rgba(255, 255, 255, 0.95);
-    padding: 24px;
-}
-
-.btn {
-    border-radius: 14px;
-    border: 0;
-    font-weight: 600;
-    padding-inline: 16px;
-}
-
-.btn-primary,
-.btn-success,
-.btn-info {
-    box-shadow: 0 10px 24px rgba(47, 125, 50, 0.18);
-}
-
-.btn-primary {
-    background: var(--cengi-lms-primary);
-}
-
-.btn-success {
-    background: var(--cengi-lms-secondary);
-}
-
-.btn-info {
-    background: #3c7d58;
-}
-
-.btn-danger {
-    background: #d64545;
-}
-
-.form-control {
-    border-radius: 14px;
-    border: 1px solid var(--cengi-lms-border);
-    box-shadow: none;
-    min-height: 42px;
-}
-
-.form-control:focus {
-    border-color: #7ab56d;
-    box-shadow: 0 0 0 3px rgba(122, 181, 109, 0.16);
-}
-
-.table {
-    border-collapse: separate;
-    border-spacing: 0;
-    overflow: hidden;
-    border-radius: 18px;
-}
-
-.table > thead > tr > th {
-    background: #edf4e9;
-    border-bottom-width: 1px;
-    color: var(--cengi-lms-primary-strong);
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-
-.table > tbody > tr > td,
-.table > thead > tr > th {
-    padding: 13px 14px;
-    vertical-align: middle;
-}
-
-.table-hover > tbody > tr:hover {
-    background: #f7fbf5;
-}
-
-.well {
-    border: 0;
-    border-radius: 18px;
-    background: var(--cengi-lms-soft);
-    box-shadow: none;
-}
-
-.cengi-hero {
-    background: linear-gradient(
-        180deg,
-        #ffffff,
-        #eef8df
-    );
-
-    border-radius: 30px;
-    color: #5e9b1d;
-    padding: 34px;
-    box-shadow: 0 24px 46px rgba(47, 111, 68, 0.22);
-    margin-bottom: 28px;
-}
-
-.cengi-hero h2,
-.cengi-hero h1,
-.cengi-hero p {
-    color: #5e9b1d !important;
-}
-
-.cengi-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.14);
-    padding: 8px 14px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-
-.cengi-card-grid {
-    display: grid;
-    gap: 18px;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.cengi-card {
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 22px;
-    padding: 22px;
-    box-shadow: 0 18px 38px rgba(24, 49, 83, 0.08);
-}
-
-.cengi-card h3 {
-    margin-top: 0;
-    margin-bottom: 8px;
-    color: var(--cengi-lms-primary-strong);
-}
-
-.cengi-empty {
-    background: #f7fbf5;
-    border: 1px dashed #c4d7c0;
-    border-radius: 18px;
-    padding: 18px;
-    color: #4c6654;
-}
-
-@media (max-width: 767px) {
-    .navbar.navbar-inverse {
-        border-radius: 22px;
-        padding: 10px 6px;
-    }
-
-    .panel .panel-body {
-        padding: 18px;
-    }
-
-    .cengi-hero {
-        padding: 24px;
-    }
-}
-
-#cengi-progress-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #5e9b1d, #73BC25, #a6d85c);
-    box-shadow: 0 0 14px rgba(115, 188, 37, 0.35);
-    opacity: 0;
-    z-index: 9999;
-    transition: width 0.22s ease, opacity 0.22s ease;
-}
-
-#cengi-progress-bar.is-visible {
-    opacity: 1;
-}
-
-#cengi-progress-bar.is-active {
-    width: 100%;
-}
-
-body.cengi-nav-loading {
-    cursor: progress;
-}
-</style>
-<div class="container">
-    <nav class="navbar navbar-inverse">
-        <div class="navbar-header">
-            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#app-navbar-collapse-pattern">
-                <span class="sr-only">Toggle Navigation</span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-            </button>
-            <span class="navbar-brand">CENGICURSOS</span>
+    <nav class="cengi-sidebar-nav" id="cengiPrimaryNav" aria-label="Navegacion principal">
+        <div class="cengi-nav-group">
+            <div class="cengi-nav-label">General</div>
+            <a href="index.php" class="cengi-nav-item<?php echo $isActive(['index.php']); ?>">
+                <span class="glyphicon glyphicon-th-large"></span>
+                <span>Dashboard</span>
+            </a>
         </div>
 
-        <div class="navbar-collapse collapse" id="app-navbar-collapse-pattern">
-            <ul class="nav navbar-nav">
-                <li role="presentation"><a href="index.php">Inicio</a></li>
-
-                <?php if ($puedeVerUsuarios): ?>
-                    <li class="dropdown">
-                        <a class="dropdown-toggle" data-toggle="dropdown" href="#">Usuarios</a>
-                        <ul class="dropdown-menu">
-                            <li role="presentation"><a href="ver_usuarios.php"><span class="glyphicon glyphicon-th-large"></span> Ver todos</a></li>
-                            <?php if ($puedeGestionarUsuarios): ?>
-                                <li role="presentation"><a href="../login/usuarios/crear_usuario.php?scope=cursos"><span class="glyphicon glyphicon-plus"></span> Agregar</a></li>
-                            <?php endif; ?>
-                        </ul>
-                    </li>
-                <?php endif; ?>
-
-                <?php if ($puedeVerIngenios): ?>
-                    <li class="dropdown">
-                        <a class="dropdown-toggle" data-toggle="dropdown" href="#">Ingenios</a>
-                        <ul class="dropdown-menu">
-                            <li role="presentation"><a href="ver_ingenios.php"><span class="glyphicon glyphicon-th-large"></span> Ver todos</a></li>
-                            <?php if ($puedeGestionarIngenios): ?>
-                                <li role="presentation"><a href="agregar_ingenios.php"><span class="glyphicon glyphicon-plus"></span> Agregar</a></li>
-                            <?php endif; ?>
-                        </ul>
-                    </li>
-                <?php endif; ?>
-
-                <?php if ($puedeVerParticipantes): ?>
-                    <li class="dropdown">
-                        <a class="dropdown-toggle" data-toggle="dropdown" href="#">Participantes</a>
-                        <ul class="dropdown-menu">
-                            <li role="presentation"><a href="participantes.php"><span class="glyphicon glyphicon-th-large"></span> Ver participantes</a></li>
-                            <?php if ($puedeCargarParticipantes): ?>
-                                <li role="presentation"><a href="participantes.php#cargarParticipantes"><span class="glyphicon glyphicon-cloud-upload"></span> Cargar CSV o Excel</a></li>
-                            <?php endif; ?>
-                        </ul>
-                    </li>
-                <?php endif; ?>
-
-                <li class="dropdown">
-                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">Cursos</a>
-                    <ul class="dropdown-menu">
-                        <li><a href="ver_cursos.php"><span class="glyphicon glyphicon-th-large"></span> <?php echo $esEstudiante ? 'Mis cursos' : 'Ver todos'; ?></a></li>
-                        <?php if ($puedeGestionar): ?>
-                            <li><a href="agregar_cursos.php"><span class="glyphicon glyphicon-plus"></span> Agregar</a></li>
-                            <li role="presentation" class="dropdown-header">Categorias</li>
-                            <li><a href="ver_categorias.php"><span class="glyphicon glyphicon-th-large"></span> Ver todos</a></li>
-                            <li><a href="agregar_categorias.php"><span class="glyphicon glyphicon-plus"></span> Agregar</a></li>
-                        <?php endif; ?>
-                    </ul>
-                </li>
-
-                <?php if ($puedeVerSolicitudes): ?>
-                    <li class="dropdown">
-                        <a class="dropdown-toggle" data-toggle="dropdown" href="#">Solicitudes</a>
-                        <ul class="dropdown-menu">
-                            <li role="presentation"><a href="solicitudes.php"><span class="glyphicon glyphicon-th-large"></span> Ver solicitudes</a></li>
-                            <?php if ($puedeEditarSolicitudes): ?>
-                                <li role="presentation"><a href="solicitudes.php"><span class="glyphicon glyphicon-pencil"></span> Editar pendientes</a></li>
-                            <?php endif; ?>
-                            <?php if ($puedeAprobarSolicitudes): ?>
-                                <li role="presentation"><a href="solicitudes.php"><span class="glyphicon glyphicon-ok"></span> Aprobar</a></li>
-                            <?php endif; ?>
-                            <?php if ($puedeRechazarSolicitudes): ?>
-                                <li role="presentation"><a href="solicitudes.php"><span class="glyphicon glyphicon-remove"></span> Rechazar</a></li>
-                            <?php endif; ?>
-                        </ul>
-                    </li>
-                <?php endif; ?>
-
-                <?php if ($puedeGestionar): ?>
-                    <li class="dropdown">
-                        <a class="dropdown-toggle" data-toggle="dropdown" href="#">Reportes</a>
-                        <ul class="dropdown-menu">
-                            <li role="presentation" class="dropdown-header">Seleccionar</li>
-                            <li><a href="exportaringenios.php"><span class="glyphicon glyphicon-th-large"></span> Reporte por ingenio</a></li>
-                            <li><a href="exportarcursos.php"><span class="glyphicon glyphicon-th-large"></span> Reporte por curso</a></li>
-                        </ul>
-                    </li>
-                <?php endif; ?>
-
-                <li role="presentation"><a href="logout.php?act=logout">Logout</a></li>
-            </ul>
+        <div class="cengi-nav-group">
+            <div class="cengi-nav-label">Capacitacion</div>
+            <a href="ver_cursos.php" class="cengi-nav-item<?php echo $isActive(['ver_cursos.php', 'agregar_cursos.php', 'modificar_cursos.php']); ?>">
+                <span class="glyphicon glyphicon-education"></span>
+                <span><?php echo $esEstudiante ? 'Mis cursos' : 'Cursos'; ?></span>
+            </a>
+            <?php if ($puedeGestionar): ?>
+                <a href="ver_categorias.php" class="cengi-nav-item<?php echo $isActive(['ver_categorias.php', 'agregar_categorias.php']); ?>">
+                    <span class="glyphicon glyphicon-tags"></span>
+                    <span>Categorias</span>
+                </a>
+            <?php endif; ?>
+            <?php if ($puedeVerSolicitudes): ?>
+                <a href="solicitudes.php" class="cengi-nav-item<?php echo $isActive(['solicitudes.php', 'editar_solicitud.php']); ?>">
+                    <span class="glyphicon glyphicon-inbox"></span>
+                    <span>Inscripciones</span>
+                </a>
+            <?php endif; ?>
+            <?php if ($puedeVerParticipantes): ?>
+                <a href="participantes.php" class="cengi-nav-item<?php echo $isActive(['participantes.php', 'ver_participantes.php']); ?>">
+                    <span class="glyphicon glyphicon-user"></span>
+                    <span>Participantes</span>
+                </a>
+            <?php endif; ?>
+            <?php if ($puedeCalificar || $puedeGestionar): ?>
+                <a href="ver_participante_curso.php" class="cengi-nav-item<?php echo $isActive(['ver_participante_curso.php']); ?>">
+                    <span class="glyphicon glyphicon-stats"></span>
+                    <span>Seguimiento por curso</span>
+                </a>
+            <?php endif; ?>
+            <?php if ($puedeVerParticipantes): ?>
+                <a href="directorio_participantes.php" class="cengi-nav-item<?php echo $isActive(['directorio_participantes.php']); ?>">
+                    <span class="glyphicon glyphicon-list-alt"></span>
+                    <span>Directorio de participantes</span>
+                </a>
+            <?php endif; ?>
         </div>
+
+        <div class="cengi-nav-group">
+            <div class="cengi-nav-label">Reportes</div>
+            <a href="seguimiento_ingenio.php" class="cengi-nav-item<?php echo $isActive(['seguimiento_ingenio.php']); ?>">
+                <span class="glyphicon glyphicon-tree-deciduous"></span>
+                <span>Seguimiento por ingenio</span>
+            </a>
+            <?php if ($puedeGestionar): ?>
+                <a href="exportaringenios.php" class="cengi-nav-item">
+                    <span class="glyphicon glyphicon-save-file"></span>
+                    <span>Reporte por ingenio</span>
+                </a>
+                <a href="exportarcursos.php" class="cengi-nav-item">
+                    <span class="glyphicon glyphicon-save-file"></span>
+                    <span>Reporte por curso</span>
+                </a>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($puedeVerOrganizaciones || $puedeVerInstructores || $puedeVerIngenios): ?>
+        <div class="cengi-nav-group">
+            <div class="cengi-nav-label">Comunidad</div>
+            <?php if ($puedeVerOrganizaciones): ?>
+                <a href="organizaciones.php" class="cengi-nav-item<?php echo $isActive(['organizaciones.php']); ?>">
+                    <span class="glyphicon glyphicon-briefcase"></span>
+                    <span>Organizaciones</span>
+                </a>
+            <?php endif; ?>
+            <?php if ($puedeVerInstructores): ?>
+                <a href="instructores.php" class="cengi-nav-item<?php echo $isActive(['instructores.php']); ?>">
+                    <span class="glyphicon glyphicon-record"></span>
+                    <span>Instructores</span>
+                </a>
+            <?php endif; ?>
+            <?php if ($puedeVerIngenios): ?>
+                <a href="ver_ingenios.php" class="cengi-nav-item<?php echo $isActive(['ver_ingenios.php', 'agregar_ingenios.php', 'modificar_ingenios.php']); ?>">
+                    <span class="glyphicon glyphicon-globe"></span>
+                    <span>Ingenios</span>
+                </a>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($puedeVerEventos || $puedeVerDiplomas): ?>
+        <div class="cengi-nav-group">
+            <div class="cengi-nav-label">Eventos y certificacion</div>
+            <?php if ($puedeVerEventos): ?>
+                <a href="eventos_qr.php" class="cengi-nav-item<?php echo $isActive(['eventos_qr.php']); ?>">
+                    <span class="glyphicon glyphicon-qrcode"></span>
+                    <span>Control QR eventos</span>
+                </a>
+            <?php endif; ?>
+            <?php if ($puedeVerDiplomas): ?>
+                <a href="diplomas.php" class="cengi-nav-item<?php echo $isActive(['diplomas.php']); ?>">
+                    <span class="glyphicon glyphicon-certificate"></span>
+                    <span>Certificacion</span>
+                </a>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($puedeGestionar || $puedeVerRoles): ?>
+        <div class="cengi-nav-group">
+            <div class="cengi-nav-label">Sistema</div>
+            <?php if ($puedeGestionar): ?>
+                <a href="participantes.php" class="cengi-nav-item">
+                    <span class="glyphicon glyphicon-cloud-upload"></span>
+                    <span>Carga masiva CSV</span>
+                </a>
+            <?php endif; ?>
+            <?php if ($puedeVerRoles): ?>
+                <a href="roles.php" class="cengi-nav-item<?php echo $isActive(['roles.php']); ?>">
+                    <span class="glyphicon glyphicon-lock"></span>
+                    <span>Roles y permisos</span>
+                </a>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
     </nav>
-</div>
+
+    <div class="cengi-sidebar-foot">
+        <a href="logout.php?act=logout" class="cengi-nav-item cengi-logout-link">
+            <span class="glyphicon glyphicon-log-out"></span>
+            <span>Salir</span>
+        </a>
+        <div class="cengi-sidebar-version">SIGEC &middot; Cengicursos &middot; Zafra 2025&ndash;2026</div>
+    </div>
+</aside>
+
+<header class="cengi-topbar">
+    <button type="button" class="cengi-menu-toggle" id="cengiMenuToggle"
+            aria-label="Abrir menu" aria-expanded="false" aria-controls="cengiSidebar">
+        <span></span><span></span><span></span>
+    </button>
+    <div class="cengi-topbar-titles">
+        <div class="cengi-topbar-title"><?php echo htmlspecialchars($tituloPagina, ENT_QUOTES, 'UTF-8'); ?></div>
+        <div class="cengi-topbar-sub"><?php echo htmlspecialchars($subtituloPagina, ENT_QUOTES, 'UTF-8'); ?></div>
+    </div>
+    <div class="cengi-topbar-right">
+        <?php if ($rolUsuario !== ''): ?>
+            <span class="cengi-pill"><?php echo htmlspecialchars($rolUsuario, ENT_QUOTES, 'UTF-8'); ?></span>
+        <?php endif; ?>
+        <div class="cengi-userbox">
+            <div class="cengi-avatar"><?php echo htmlspecialchars($iniciales, ENT_QUOTES, 'UTF-8'); ?></div>
+            <div>
+                <div class="cengi-userbox-u1"><?php echo htmlspecialchars($nombreUsuario, ENT_QUOTES, 'UTF-8'); ?></div>
+                <div class="cengi-userbox-u2"><?php echo htmlspecialchars($ingenioUsuario !== '' ? $ingenioUsuario : $rolUsuario, ENT_QUOTES, 'UTF-8'); ?></div>
+            </div>
+        </div>
+    </div>
+</header>
+
 <script src="js/cengi-navigation.js"></script>
+<script>
+(function () {
+    var sidebar = document.getElementById('cengiSidebar');
+    var toggle = document.getElementById('cengiMenuToggle');
+    var nav = document.getElementById('cengiPrimaryNav');
+
+    function closeMenu() {
+        if (!sidebar || !toggle) return;
+        sidebar.classList.remove('is-open');
+        toggle.setAttribute('aria-expanded', 'false');
+    }
+
+    if (toggle && sidebar) {
+        toggle.addEventListener('click', function () {
+            var willOpen = !sidebar.classList.contains('is-open');
+            sidebar.classList.toggle('is-open', willOpen);
+            toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        if (sidebar && sidebar.classList.contains('is-open')
+            && !sidebar.contains(event.target)
+            && event.target !== toggle
+            && !toggle.contains(event.target)) {
+            closeMenu();
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeMenu();
+    });
+
+    if (nav) {
+        nav.addEventListener('click', function (event) {
+            if (event.target.closest('a')) closeMenu();
+        });
+    }
+})();
+</script>
 <?php
 }
-

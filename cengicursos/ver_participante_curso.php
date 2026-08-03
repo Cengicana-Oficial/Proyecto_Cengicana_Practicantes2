@@ -8,7 +8,60 @@ $db = conectar();
 $puedeGestionar = cengi_puede_gestionar();
 $soloCalifica = cengi_puede_calificar() && !$puedeGestionar;
 $puedeSubirDiploma = cengi_puede_subir_diploma();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar && trim((string) ($_POST['accion'] ?? '')) === 'agregar_modulo') {
+    $cursoIdModulo = (int) ($_POST['curso_id'] ?? 0);
+    $nombreModulo = trim((string) ($_POST['nombre_modulo'] ?? ''));
+    $horasModulo = (float) ($_POST['horas_modulo'] ?? 0);
+    $temasTexto = trim((string) ($_POST['temas'] ?? ''));
+
+    if ($cursoIdModulo > 0 && $nombreModulo !== '') {
+        $stmtOrden = $db->prepare("SELECT COALESCE(MAX(orden), 0) + 1 FROM curso_modulos WHERE curso_id = ?");
+        $stmtOrden->execute([$cursoIdModulo]);
+        $orden = (int) $stmtOrden->fetchColumn();
+
+        $stmt = $db->prepare("INSERT INTO curso_modulos (curso_id, nombre, horas, orden) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$cursoIdModulo, $nombreModulo, $horasModulo, $orden]);
+        $moduloId = (int) $db->lastInsertId();
+
+        $temaOrden = 1;
+        foreach (preg_split('/\r\n|\r|\n/', $temasTexto) as $tema) {
+            $tema = trim($tema);
+            if ($tema === '') {
+                continue;
+            }
+            $stmtTema = $db->prepare("INSERT INTO curso_modulo_temas (curso_modulo_id, tema, orden) VALUES (?, ?, ?)");
+            $stmtTema->execute([$moduloId, $tema, $temaOrden]);
+            $temaOrden++;
+        }
+    }
+
+    header('Location: ver_participante_curso.php?id=' . $cursoIdModulo);
+    exit;
+}
+
+$listaCursos = $db->query("
+    SELECT c.id, c.nombre_cursos, YEAR(COALESCE(c.inicio, c.creado)) AS anio
+    FROM cursos c
+    ORDER BY anio DESC, c.nombre_cursos
+")->fetchAll(PDO::FETCH_ASSOC);
+
 $idcurso = (int) ($_GET['id'] ?? 0);
+if ($idcurso <= 0 && $listaCursos) {
+    $idcurso = (int) $listaCursos[0]['id'];
+}
+
+$cursoInfo = null;
+if ($idcurso > 0) {
+    $stmtCurso = $db->prepare("
+        SELECT c.*, ca.descripcion_categorias_cursos
+        FROM cursos c
+        INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
+        WHERE c.id = ?
+    ");
+    $stmtCurso->execute([$idcurso]);
+    $cursoInfo = $stmtCurso->fetch(PDO::FETCH_ASSOC);
+}
 
 $sql = "
     SELECT
@@ -39,26 +92,125 @@ if (!cengi_ve_todo_por_rol_o_ingenio()) {
 $stmt = $db->prepare($sql);
 $stmt->execute([$idcurso]);
 $filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// KPIs del curso
+$totalInscritos = count($filas);
+$evaluacionesValidas = array_filter($filas, static function ($f) { return is_numeric($f['posevaluacion']); });
+$asistenciasValidas = array_filter($filas, static function ($f) { return is_numeric($f['asistencia']); });
+$evalPromedio = $evaluacionesValidas ? array_sum(array_map(static function ($f) { return (float) $f['posevaluacion']; }, $evaluacionesValidas)) / count($evaluacionesValidas) : null;
+$asistPromedio = $asistenciasValidas ? array_sum(array_map(static function ($f) { return (float) $f['asistencia']; }, $asistenciasValidas)) / count($asistenciasValidas) : null;
+$aprobados = count(array_filter($filas, static function ($f) { return is_numeric($f['posevaluacion']) && (float) $f['posevaluacion'] >= 60; }));
+
+// Contenido del curso (temario)
+$modulos = [];
+if ($idcurso > 0) {
+    $stmtModulos = $db->prepare("SELECT * FROM curso_modulos WHERE curso_id = ? ORDER BY orden");
+    $stmtModulos->execute([$idcurso]);
+    $modulos = $stmtModulos->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($modulos as &$modulo) {
+        $stmtTemas = $db->prepare("SELECT tema FROM curso_modulo_temas WHERE curso_modulo_id = ? ORDER BY orden");
+        $stmtTemas->execute([$modulo['id']]);
+        $modulo['temas'] = $stmtTemas->fetchAll(PDO::FETCH_COLUMN);
+    }
+    unset($modulo);
+}
+
+function cengi_pc_html($valor)
+{
+    return htmlspecialchars((string) ($valor ?? ''), ENT_QUOTES, 'UTF-8');
+}
 ?>
 
 <html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
-<link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
-<script src="js/jquery-3.2.1.min.js"></script>
-<script src="js/bootstrap.min.js"></script>
-<title>Participantes del Curso</title>
-</head>
-
-<body>
+<?php include('head.php'); ?>
+<body class="cengi-canvas">
 <?php menu_render(); ?>
 
 <div class="container">
     <div class="panel panel-success">
+        <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+            <div>
+                <h3 class="panel-title"><?php echo cengi_pc_html($cursoInfo['nombre_cursos'] ?? 'Selecciona un curso'); ?></h3>
+                <small><?php echo cengi_pc_html($cursoInfo['descripcion_categorias_cursos'] ?? ''); ?></small>
+            </div>
+            <form method="GET">
+                <select name="id" class="form-control" onchange="this.form.submit()">
+                    <?php foreach ($listaCursos as $c): ?>
+                        <option value="<?php echo (int) $c['id']; ?>" <?php echo $idcurso === (int) $c['id'] ? 'selected' : ''; ?>>
+                            <?php echo cengi_pc_html($c['nombre_cursos'] . ' (' . $c['anio'] . ')'); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </form>
+        </div>
+    </div>
+
+    <div class="cengi-kpi-grid">
+        <div class="cengi-kpi"><div class="cengi-kpi-val"><?php echo $totalInscritos; ?></div><div class="cengi-kpi-label">Inscritos</div></div>
+        <div class="cengi-kpi"><div class="cengi-kpi-val"><?php echo $aprobados; ?></div><div class="cengi-kpi-label">Aprobados (post. >= 60)</div></div>
+        <div class="cengi-kpi"><div class="cengi-kpi-val"><?php echo $asistPromedio !== null ? number_format($asistPromedio, 0) . '%' : '—'; ?></div><div class="cengi-kpi-label">Asistencia promedio</div></div>
+        <div class="cengi-kpi"><div class="cengi-kpi-val" style="color:var(--cengi-primary-deep);"><?php echo $evalPromedio !== null ? number_format($evalPromedio, 0) . ' pts' : '—'; ?></div><div class="cengi-kpi-label">Evaluacion final promedio</div></div>
+    </div>
+
+    <div class="panel panel-success">
+        <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <h3 class="panel-title">Contenido del curso</h3>
+                <small>Indice tematico por modulo (mismo temario para todas las ediciones de este registro)</small>
+            </div>
+        </div>
+        <div class="panel-body">
+            <?php if (!$modulos): ?>
+                <div class="cengi-empty">Este curso todavia no tiene modulos/temario configurados.</div>
+            <?php else: ?>
+                <?php foreach ($modulos as $modulo): ?>
+                    <div style="border:1px solid var(--cengi-border);border-radius:9px;padding:12px 14px;margin-bottom:10px;">
+                        <div style="display:flex;justify-content:space-between;font-weight:700;font-size:12.5px;">
+                            <span><?php echo cengi_pc_html($modulo['nombre']); ?></span>
+                            <span class="text-muted"><?php echo number_format((float) $modulo['horas'], 1); ?> h · <?php echo count($modulo['temas']); ?> temas</span>
+                        </div>
+                        <?php if ($modulo['temas']): ?>
+                            <ul style="margin:8px 0 0 18px;font-size:11.5px;color:var(--cengi-muted);">
+                                <?php foreach ($modulo['temas'] as $tema): ?>
+                                    <li><?php echo cengi_pc_html($tema); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+
+            <?php if ($puedeGestionar): ?>
+            <details style="margin-top:10px;">
+                <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--cengi-primary-deep);">+ Agregar modulo al temario</summary>
+                <form method="POST" class="cengi-form-grid" style="margin-top:10px;">
+                    <input type="hidden" name="accion" value="agregar_modulo">
+                    <input type="hidden" name="curso_id" value="<?php echo (int) $idcurso; ?>">
+                    <div class="form-group">
+                        <label class="control-label">Nombre del modulo</label>
+                        <input type="text" name="nombre_modulo" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-label">Horas</label>
+                        <input type="number" step="0.5" min="0" name="horas_modulo" class="form-control">
+                    </div>
+                    <div class="form-group cengi-form-full">
+                        <label class="control-label">Temas (uno por linea)</label>
+                        <textarea name="temas" class="form-control" rows="4"></textarea>
+                    </div>
+                    <div class="form-group cengi-form-full">
+                        <button type="submit" class="btn btn-success btn-sm">Guardar modulo</button>
+                    </div>
+                </form>
+            </details>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <div class="panel panel-success">
         <div class="panel-heading">
-            <h3 class="panel-title">Participantes del Curso</h3>
+            <h3 class="panel-title">Participantes del curso</h3>
         </div>
 
         <div class="panel-body">
@@ -76,6 +228,7 @@ $filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </div>
             <?php endif; ?>
 
+            <div class="cengi-table-wrap">
             <table class="table table-bordered table-striped">
                 <thead>
                     <tr>
@@ -169,22 +322,28 @@ $filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                                 <td>
                                     <input type="hidden" name="asignacion_id" value="<?= (int) $fila['asignacion_id'] ?>">
-                                    <button type="submit" class="btn btn-success">Guardar</button>
-                                    <?php if ($puedeGestionar): ?>
-                                        <a
-                                            href="toggle_asignacion.php?id=<?= (int) $fila['asignacion_id'] ?>&curso_id=<?= $idcurso ?>&estado=<?= (int) $fila['estado_asignaciones'] ?>"
-                                            class="btn btn-<?php echo (int) $fila['estado_asignaciones'] === 1 ? 'warning' : 'info'; ?> btn-sm"
-                                            style="margin-top:8px;display:inline-block;"
-                                        >
-                                            <?php echo (int) $fila['estado_asignaciones'] === 1 ? 'Desactivar del curso' : 'Reactivar en curso'; ?>
-                                        </a>
-                                    <?php endif; ?>
+                                    <div class="cengi-row-actions">
+                                        <button type="submit" class="cengi-action-btn is-edit" style="border:0;" data-tooltip="Guardar" aria-label="Guardar"><span class="glyphicon glyphicon-floppy-disk"></span><span class="sr-only">Guardar</span></button>
+                                        <?php if ($puedeGestionar): ?>
+                                            <?php $estadoActivo = (int) $fila['estado_asignaciones'] === 1; ?>
+                                            <a
+                                                href="toggle_asignacion.php?id=<?= (int) $fila['asignacion_id'] ?>&curso_id=<?= $idcurso ?>&estado=<?= (int) $fila['estado_asignaciones'] ?>"
+                                                class="cengi-action-btn <?php echo $estadoActivo ? 'is-toggle-on' : 'is-toggle-off'; ?>"
+                                                data-tooltip="<?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?>"
+                                                aria-label="<?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?>"
+                                            >
+                                                <span class="glyphicon <?php echo $estadoActivo ? 'glyphicon-eye-close' : 'glyphicon-eye-open'; ?>"></span>
+                                                <span class="sr-only"><?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?></span>
+                                            </a>
+                                        <?php endif; ?>
+                                    </div>
                                 </td>
                             </form>
                         </tr>
                     <?php } ?>
                 </tbody>
             </table>
+            </div>
         </div>
     </div>
 </div>

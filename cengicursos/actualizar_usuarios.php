@@ -29,8 +29,8 @@ else
 ?>
 <html lang="es">
 <?php include('head.php'); ?>
-<body>
-	<?php include('menu.php'); ?>
+<body class="cengi-canvas">
+	<?php include('menu.php'); menu_render(); ?>
 	<div class="container">
 		<div class="row">
 			<div class="row" style="text-align: center;">

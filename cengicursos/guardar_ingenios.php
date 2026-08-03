@@ -4,6 +4,7 @@ require_once("revisar_permisos.php");
 cengi_require_admin();
 
 require_once("conexion.php");
+require_once("menu.php");
 
 $db = conectar();
 
@@ -46,38 +47,35 @@ try {
 
     <link href="css/bootstrap.min.css" rel="stylesheet">
     <link href="css/bootstrap-theme.css" rel="stylesheet">
+    <link href="css/proyecto.css" rel="stylesheet">
 
     <script src="js/jquery-3.1.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
 
 </head>
 
-<body>
+<body class="cengi-canvas">
+
+<?php menu_render(); ?>
 
 <div class="container">
 
-    <div class="row">
+    <div class="cengi-result-card <?php echo $resultado ? 'is-success' : 'is-error'; ?>">
 
-        <div class="row alert alert-info" style="text-align:center">
+        <?php if ($resultado) { ?>
 
-            <?php if ($resultado) { ?>
+            <h3>Registro guardado</h3>
 
-                <h3>REGISTRO GUARDADO</h3>
+        <?php } else { ?>
 
-            <?php } else { ?>
+            <h3>Error al guardar</h3>
+            <p><?php echo htmlspecialchars($error); ?></p>
 
-                <h3>
-                    ERROR AL GUARDAR:
-                    <?php echo htmlspecialchars($error); ?>
-                </h3>
+        <?php } ?>
 
-            <?php } ?>
-
-            <a href="ver_ingenios.php" class="btn btn-primary">
-                Regresar
-            </a>
-
-        </div>
+        <a href="ver_ingenios.php" class="btn btn-primary">
+            Regresar
+        </a>
 
     </div>
 

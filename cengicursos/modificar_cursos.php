@@ -1,6 +1,9 @@
 <?php
-	include("conexion.php");
+require_once "revisar_permisos.php";
+cengi_require_admin();
+require_once "conexion.php";
 $db = conectar();
+require_once "menu.php";
 
 	if (!empty($_GET['id'])) {
 
@@ -50,43 +53,48 @@ if (!$row) {
 
 	<link href="css/bootstrap.min.css" rel="stylesheet">
 	<link href="css/bootstrap-theme.css" rel="stylesheet">
+	<link href="css/proyecto.css" rel="stylesheet">
 
 	<script src="js/jquery-3.2.1.min.js"></script>
 	<script src="js/bootstrap.min.js"></script>
 
 </head>
 
-<body>
+<body class="cengi-canvas">
 
-<?php include_once("menu.php"); ?>
+<?php menu_render(); ?>
 
 <div class="container">
+
+	<div class="cengi-hero">
+		<span class="cengi-chip">Cursos</span>
+		<h2>Modificar curso</h2>
+		<p>Actualiza la categoria, ingenio, calendario y horario del curso.</p>
+	</div>
 
 	<div class="panel panel-success">
 
 		<div class="panel-heading">
-
-			<h3 style="text-align: center">
-				Modificar Registro de Cursos
-			</h3>
-
+			<h3 class="panel-title">Modificar Registro de Cursos</h3>
 		</div>
+
+		<div class="panel-body">
 
 		<form method="POST" action="actualizar_cursos.php" autocomplete="off">
 
-			<div class="form-group">
+			<input
+				type="hidden"
+				name="id"
+				id="id"
+				value="<?php echo $row['idcurso']; ?>"
+			>
 
-				<div class="row">
+			<div class="cengi-form-grid">
 
-					<div class="col-sm-2">
-
-						<label for="categorias" class="col-sm-2 control-label">
-							Categoria
-						</label>
-
-					</div>
-
-					<div class="col-sm-4">
+				<div class="form-group">
+					<label for="categorias" class="control-label">
+						Categoria
+					</label>
 
 					<?php
 
@@ -123,36 +131,12 @@ $categorias = $db->query("
 					<?php }?>
 
 					</select>
-
-					</div>
-
-					<div class="col-sm-1"></div>
-
 				</div>
 
-			</div>
-
-			<input
-				type="hidden"
-				name="id"
-				id="id"
-				value="<?php echo $row['idcurso']; ?>"
-			>
-
-
-			<div class="form-group">
-
-				<div class="row">
-
-					<div class="col-sm-2">
-
-						<label for="ingenio" class="col-sm-2 control-label">
-							Ingenio
-						</label>
-
-					</div>
-
-					<div class="col-sm-4">
+				<div class="form-group">
+					<label for="ingenio" class="control-label">
+						Ingenio
+					</label>
 
 					<?php
 					$ingenios = $db->query("
@@ -187,268 +171,140 @@ $categorias = $db->query("
 					<?php } ?>
 
 					</select>
-
-					</div>
-
-					<div class="col-sm-1"></div>
-
 				</div>
 
-			</div>
+				<div class="form-group">
+					<label for="tipo" class="control-label">
+						Tipo
+					</label>
 
+					<select
+						class="form-control"
+						id="tipo"
+						name="tipo"
+					>
 
-			<!-- TIPO -->
-
-			<div class="form-group">
-
-				<div class="row">
-
-					<div class="col-sm-2">
-
-						<label for="tipo" class="col-sm-2 control-label">
-							Tipo
-						</label>
-
-					</div>
-
-					<div class="col-sm-4">
-
-						<select
-							class="form-control"
-							id="tipo"
-							name="tipo"
+						<option
+							value="Curso"
+							<?php if($row['tipo']=='Curso') echo 'selected'; ?>
 						>
+							Curso
+						</option>
 
-							<option
-								value="Curso"
-								<?php if($row['tipo']=='Curso') echo 'selected'; ?>
-							>
-								Curso
-							</option>
-
-							<option
-								value="Diplomado"
-								<?php if($row['tipo']=='Diplomado') echo 'selected'; ?>
-							>
-								Diplomado
-							</option>
-
-							<option
-								value="Seminario"
-								<?php if($row['tipo']=='Seminario') echo 'selected'; ?>
-							>
-								Seminario
-							</option>
-
-						</select>
-
-					</div>
-
-				</div>
-
-			</div>
-
-
-			<div class="form-group">
-
-				<div class="row">
-
-					<div class="col-sm-2">
-
-						<label for="nombre_cursos" class="col-sm-2 control-label">
-							Curso:
-						</label>
-
-					</div>
-
-					<div class="col-sm-6">
-
-						<input
-							type="text"
-							name="nombre_cursos"
-							class="form-control"
-							value="<?php echo htmlspecialchars($row['nombre_cursos']); ?>"						>
-
-					</div>
-
-					<div class="col-sm-1"></div>
-
-				</div>
-
-			</div>
-
-
-			<div class="form-group">
-
-				<div class="row">
-
-					<div class="col-sm-2">
-
-						<label for="jornada_cursos" class="col-sm-2 control-label">
-							Jornada
-						</label>
-
-					</div>
-
-					<div class="col-sm-6">
-
-						<input
-							type="text"
-							class="form-control"
-							id="jornada_cursos"
-							name="jornada_cursos"
-							value="<?php echo $row['jornada_cursos']; ?>"
-							required
+						<option
+							value="Diplomado"
+							<?php if($row['tipo']=='Diplomado') echo 'selected'; ?>
 						>
+							Diplomado
+						</option>
 
-					</div>
-
-					<div class="col-sm-1"></div>
-
-				</div>
-
-			</div>
-
-
-			<div class="form-group">
-
-				<div class="row">
-
-					<div class="col-sm-2">
-
-						<label for="horario" class="col-sm-2 control-label">
-							Horario
-						</label>
-
-					</div>
-
-					<div class="col-sm-6">
-
-						<input
-							type="text"
-							class="form-control"
-							id="horario"
-							name="horario"
-							value="<?php echo $row['horario']; ?>"
-							required
+						<option
+							value="Seminario"
+							<?php if($row['tipo']=='Seminario') echo 'selected'; ?>
 						>
+							Seminario
+						</option>
 
-					</div>
+					</select>
+				</div>
 
-					<div class="col-sm-1"></div>
+				<div class="form-group">
+					<label for="nombre_cursos" class="control-label">
+						Curso
+					</label>
+					<input
+						type="text"
+						name="nombre_cursos"
+						class="form-control"
+						value="<?php echo htmlspecialchars($row['nombre_cursos']); ?>"
+					>
+				</div>
 
+				<div class="form-group">
+					<label for="jornada_cursos" class="control-label">
+						Jornada
+					</label>
+					<input
+						type="text"
+						class="form-control"
+						id="jornada_cursos"
+						name="jornada_cursos"
+						value="<?php echo $row['jornada_cursos']; ?>"
+						required
+					>
+				</div>
+
+				<div class="form-group">
+					<label for="horario" class="control-label">
+						Horario
+					</label>
+					<input
+						type="text"
+						class="form-control"
+						id="horario"
+						name="horario"
+						value="<?php echo $row['horario']; ?>"
+						required
+					>
+				</div>
+
+				<div class="form-group">
+					<label for="dias" class="control-label">
+						Dias
+					</label>
+					<input
+						type="text"
+						class="form-control"
+						id="dias"
+						name="dias"
+						value="<?php echo $row['dias']; ?>"
+						required
+					>
+				</div>
+
+				<div class="form-group">
+					<label for="inicio" class="control-label">
+						Inicio
+					</label>
+					<input
+						type="date"
+						class="form-control"
+						id="inicio"
+						name="inicio"
+						value="<?php echo $row['inicio']; ?>"
+						required
+					>
+				</div>
+
+				<div class="form-group">
+					<label for="fin" class="control-label">
+						Finaliza
+					</label>
+					<input
+						type="date"
+						class="form-control"
+						id="fin"
+						name="fin"
+						value="<?php echo $row['fin']; ?>"
+						required
+					>
 				</div>
 
 			</div>
 
+			<div class="cengi-form-actions">
+				<a href="index.php" class="btn btn-default">
+					Regresar
+				</a>
 
-			<div class="form-group">
-
-				<div class="row">
-
-					<div class="col-sm-2">
-
-						<label for="dias" class="col-sm-2 control-label">
-							Dias
-						</label>
-
-					</div>
-
-					<div class="col-sm-6">
-
-						<input
-							type="text"
-							class="form-control"
-							id="dias"
-							name="dias"
-							value="<?php echo $row['dias']; ?>"
-							required
-						>
-
-					</div>
-
-				</div>
-
-			</div>
-
-
-			<div class="form-group">
-
-				<div class="row">
-
-					<div class="col-sm-2">
-
-						<label for="inicio" class="col-sm-2 control-label">
-							Inicio:
-						</label>
-
-					</div>
-
-					<div class="col-sm-6">
-
-						<input
-							type="date"
-							class="form-control"
-							id="inicio"
-							name="inicio"
-							value="<?php echo $row['inicio']; ?>"
-							required
-						>
-
-					</div>
-
-				</div>
-
-			</div>
-
-
-			<div class="form-group">
-
-				<div class="row">
-
-					<div class="col-sm-2">
-
-						<label for="fin" class="col-sm-2 control-label">
-							Finaliza:
-						</label>
-
-					</div>
-
-					<div class="col-sm-6">
-
-						<input
-							type="date"
-							class="form-control"
-							id="fin"
-							name="fin"
-							value="<?php echo $row['fin']; ?>"
-							required
-						>
-
-					</div>
-
-				</div>
-
-			</div>
-
-
-			<div class="form-group">
-
-				<div class="col-sm-offset-2 col-sm-10">
-
-					<a href="index.php" class="btn btn-default">
-						Regresar
-					</a>
-
-					<button type="submit" class="btn btn-success">
-						Guardar
-					</button>
-
-				</div>
-
+				<button type="submit" class="btn btn-success">
+					Guardar
+				</button>
 			</div>
 
 		</form>
+
+		</div>
 
 	</div>
 

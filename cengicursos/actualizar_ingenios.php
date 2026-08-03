@@ -46,18 +46,17 @@ else
 ?>
 <html lang="es">
 <?php include('head.php'); ?>
-<body>
-	<?php include('menu.php'); ?>
+<body class="cengi-canvas">
+	<?php include('menu.php'); menu_render(); ?>
 	<div class="container">
-		<div class="row">
-			<div class="row" style="text-align: center;">
-				<?php if($resultado) { ?>
-				<h3>Registro Modificado</h3>
-				<?php } else { ?>
-				<h3>Error al Modificar - <?php echo $error; ?></h3>
-				<?php } ?>
-				<a href="ver_ingenios.php" class="btn btn-success">Regresar</a>
-			</div>
+		<div class="cengi-result-card <?php echo $resultado ? 'is-success' : 'is-error'; ?>">
+			<?php if ($resultado) { ?>
+			<h3>Registro modificado</h3>
+			<?php } else { ?>
+			<h3>Error al modificar</h3>
+			<p><?php echo htmlspecialchars($error); ?></p>
+			<?php } ?>
+			<a href="ver_ingenios.php" class="btn btn-success">Regresar</a>
 		</div>
 	</div>
 </body>
