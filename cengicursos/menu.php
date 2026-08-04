@@ -76,13 +76,8 @@ function menu_render()
 </style>
 <aside class="cengi-sidebar" id="cengiSidebar">
     <a class="cengi-brand" href="index.php" aria-label="Ir al inicio de Cengicursos">
-        <span class="cengi-brand-mark" aria-hidden="true">
-            <span class="glyphicon glyphicon-leaf"></span>
-        </span>
-        <span class="cengi-brand-copy">
-            <strong>SIGEC</strong>
-            <small>CENGICAÑA</small>
-        </span>
+        <img class="cengi-brand-logo" src="img/logo-comite-capacitacion.png"
+            alt="Comité de Capacitación CENGICAÑA">
     </a>
 
     <nav class="cengi-sidebar-nav" id="cengiPrimaryNav" aria-label="Navegacion principal">
