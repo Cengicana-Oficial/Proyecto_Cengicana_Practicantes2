@@ -370,7 +370,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                 </button>
                 <ul class="dropdown-menu dropdown-menu-right">
                     <li><a href="<?php echo cengi_dbi_html($urlExportCursos . '&format=pdf'); ?>"><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
-                    <li><a href="<?php echo cengi_dbi_html($urlExportCursos . '&format=csv'); ?>"><span class="glyphicon glyphicon-list-alt"></span> Descargar CSV</a></li>
+                    <li><a href="<?php echo cengi_dbi_html($urlExportCursos . '&format=excel'); ?>"><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
                 </ul>
             </div>
         </div>
@@ -421,7 +421,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                 </button>
                 <ul class="dropdown-menu dropdown-menu-right">
                     <li><a href="<?php echo cengi_dbi_html($urlExportParticipantes . '&format=pdf'); ?>"><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
-                    <li><a href="<?php echo cengi_dbi_html($urlExportParticipantes . '&format=csv'); ?>"><span class="glyphicon glyphicon-list-alt"></span> Descargar CSV</a></li>
+                    <li><a href="<?php echo cengi_dbi_html($urlExportParticipantes . '&format=excel'); ?>"><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
                 </ul>
             </div>
         </form>
