@@ -1,67 +1,55 @@
 <?php
-require_once "revisar_permisos.php";
+require_once 'revisar_permisos.php';
+require_once 'conexion.php';
+require_once 'curso_form_helpers.php';
+
 cengi_require_admin('ver_cursos.php');
 
-require_once "conexion.php";
-
 $db = conectar();
-$categoriaId = (int) ($_POST['categorias_cursos'] ?? 0);
-$ingenioId = (int) ($_POST['ingenio'] ?? 0);
-$tipo = trim((string) ($_POST['tipo'] ?? ''));
-$nombre = trim((string) ($_POST['nombre_cursos'] ?? ''));
-$jornada = trim((string) ($_POST['jornada_cursos'] ?? ''));
-$dias = trim((string) ($_POST['dias'] ?? ''));
-$horario = trim((string) ($_POST['horario'] ?? ''));
-$inicio = trim((string) ($_POST['inicio'] ?? ''));
-$fin = trim((string) ($_POST['fin'] ?? ''));
-
-$datosValidos = $categoriaId > 0
-    && $ingenioId > 0
-    && $tipo !== ''
-    && $nombre !== ''
-    && $jornada !== ''
-    && $dias !== ''
-    && $horario !== ''
-    && preg_match('/^\d{4}-\d{2}-\d{2}$/', $inicio)
-    && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fin)
-    && $fin >= $inicio;
-
-if (!$datosValidos) {
+$datos = cengi_curso_form_datos();
+if (!cengi_curso_form_valido($datos)) {
     header('Location: ver_cursos.php?error=datos');
     exit;
 }
 
 try {
-    $stmt = $db->prepare("
-        INSERT INTO cursos (
-            categoria_curso_id,
-            ingenio_id,
-            tipo,
-            nombre_cursos,
-            jornada_cursos,
-            dias,
-            horario,
-            inicio,
-            fin,
-            creado
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-    ");
+    $db->beginTransaction();
+    $stmt = $db->prepare('INSERT INTO cursos (
+        codigo_curso, categoria_curso_id, ingenio_id, instructor_id, actividad_tipo,
+        tipo, nombre_cursos, area_tecnica, jornada_cursos, dias, horario, cupo, inicio, fin, creado
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())');
     $stmt->execute([
-        $categoriaId,
-        $ingenioId,
-        $tipo,
-        $nombre,
-        $jornada,
-        $dias,
-        $horario,
-        $inicio,
-        $fin,
+        $datos['codigo'] !== '' ? $datos['codigo'] : null,
+        $datos['categoria_id'],
+        $datos['ingenio_id'],
+        $datos['instructor_id'],
+        $datos['actividad'],
+        $datos['modalidad'],
+        $datos['nombre'],
+        $datos['area'],
+        $datos['jornada'],
+        $datos['dias'],
+        $datos['horario'],
+        $datos['cupo'],
+        $datos['inicio'],
+        $datos['fin'],
     ]);
-} catch (PDOException $e) {
+    $cursoId = (int) $db->lastInsertId();
+
+    if ($datos['codigo'] === '') {
+        $codigoGenerado = 'CEN-T-' . str_pad((string) $cursoId, 3, '0', STR_PAD_LEFT);
+        $stmtCodigo = $db->prepare('UPDATE cursos SET codigo_curso = ? WHERE id = ?');
+        $stmtCodigo->execute([$codigoGenerado, $cursoId]);
+    }
+
+    cengi_curso_guardar_modulos($db, $cursoId, $datos['modulos'], false);
+    $db->commit();
+    header('Location: ver_cursos.php?mensaje=creado');
+} catch (Throwable $e) {
+    if ($db->inTransaction()) {
+        $db->rollBack();
+    }
     error_log('No fue posible crear el curso: ' . $e->getMessage());
     header('Location: ver_cursos.php?error=guardar');
-    exit;
 }
-
-header('Location: ver_cursos.php?mensaje=creado');
 exit;

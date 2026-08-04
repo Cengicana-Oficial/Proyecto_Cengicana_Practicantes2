@@ -1,70 +1,77 @@
 <?php
-require_once "revisar_permisos.php";
-cengi_require_admin('ver_cursos.php');
+require_once 'revisar_permisos.php';
+require_once 'conexion.php';
+require_once 'curso_form_helpers.php';
 
-require_once "conexion.php";
+cengi_require_admin('ver_cursos.php');
 
 $db = conectar();
 $cursoId = (int) ($_POST['id'] ?? 0);
-$categoriaId = (int) ($_POST['categorias_cursos'] ?? $_POST['categorias'] ?? 0);
-$ingenioId = (int) ($_POST['ingenio'] ?? 0);
-$tipo = trim((string) ($_POST['tipo'] ?? ''));
-$nombre = trim((string) ($_POST['nombre_cursos'] ?? ''));
-$jornada = trim((string) ($_POST['jornada_cursos'] ?? ''));
-$dias = trim((string) ($_POST['dias'] ?? ''));
-$horario = trim((string) ($_POST['horario'] ?? ''));
-$inicio = trim((string) ($_POST['inicio'] ?? ''));
-$fin = trim((string) ($_POST['fin'] ?? ''));
+$stmtActual = $db->prepare('SELECT codigo_curso, actividad_tipo, area_tecnica, instructor_id, cupo FROM cursos WHERE id = ?');
+$stmtActual->execute([$cursoId]);
+$actual = $stmtActual->fetch(PDO::FETCH_ASSOC);
+if (!$actual) {
+    header('Location: ver_cursos.php?error=datos');
+    exit;
+}
 
-$datosValidos = $cursoId > 0
-    && $categoriaId > 0
-    && $ingenioId > 0
-    && $tipo !== ''
-    && $nombre !== ''
-    && $jornada !== ''
-    && $dias !== ''
-    && $horario !== ''
-    && preg_match('/^\d{4}-\d{2}-\d{2}$/', $inicio)
-    && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fin)
-    && $fin >= $inicio;
+$datos = cengi_curso_form_datos();
+if (!array_key_exists('codigo_curso', $_POST)) {
+    $datos['codigo'] = (string) $actual['codigo_curso'];
+}
+if (!array_key_exists('actividad_tipo', $_POST)) {
+    $datos['actividad'] = (string) $actual['actividad_tipo'];
+}
+if (!array_key_exists('area_tecnica', $_POST)) {
+    $datos['area'] = (string) $actual['area_tecnica'];
+}
+if (!array_key_exists('instructor_id', $_POST)) {
+    $datos['instructor_id'] = $actual['instructor_id'] !== null ? (int) $actual['instructor_id'] : null;
+}
+if (!array_key_exists('cupo', $_POST)) {
+    $datos['cupo'] = $actual['cupo'] !== null ? (int) $actual['cupo'] : null;
+}
 
-if (!$datosValidos) {
+if ($cursoId <= 0 || !cengi_curso_form_valido($datos)) {
     header('Location: ver_cursos.php?error=datos');
     exit;
 }
 
 try {
-    $stmt = $db->prepare("
-        UPDATE cursos
-        SET
-            categoria_curso_id = ?,
-            ingenio_id = ?,
-            tipo = ?,
-            nombre_cursos = ?,
-            jornada_cursos = ?,
-            dias = ?,
-            horario = ?,
-            inicio = ?,
-            fin = ?
-        WHERE id = ?
-    ");
+    $db->beginTransaction();
+    $stmt = $db->prepare('UPDATE cursos SET
+        codigo_curso = ?, categoria_curso_id = ?, ingenio_id = ?, instructor_id = ?, actividad_tipo = ?,
+        tipo = ?, nombre_cursos = ?, area_tecnica = ?, jornada_cursos = ?, dias = ?, horario = ?,
+        cupo = ?, inicio = ?, fin = ?
+        WHERE id = ?');
     $stmt->execute([
-        $categoriaId,
-        $ingenioId,
-        $tipo,
-        $nombre,
-        $jornada,
-        $dias,
-        $horario,
-        $inicio,
-        $fin,
+        $datos['codigo'] !== '' ? $datos['codigo'] : null,
+        $datos['categoria_id'],
+        $datos['ingenio_id'],
+        $datos['instructor_id'],
+        $datos['actividad'],
+        $datos['modalidad'],
+        $datos['nombre'],
+        $datos['area'],
+        $datos['jornada'],
+        $datos['dias'],
+        $datos['horario'],
+        $datos['cupo'],
+        $datos['inicio'],
+        $datos['fin'],
         $cursoId,
     ]);
-} catch (PDOException $e) {
+
+    if (isset($_POST['modulos_present'])) {
+        cengi_curso_guardar_modulos($db, $cursoId, $datos['modulos'], true);
+    }
+    $db->commit();
+    header('Location: ver_cursos.php?mensaje=actualizado');
+} catch (Throwable $e) {
+    if ($db->inTransaction()) {
+        $db->rollBack();
+    }
     error_log('No fue posible actualizar el curso: ' . $e->getMessage());
     header('Location: ver_cursos.php?error=actualizar');
-    exit;
 }
-
-header('Location: ver_cursos.php?mensaje=actualizado');
 exit;

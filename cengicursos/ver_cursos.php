@@ -34,8 +34,27 @@ $ingenios = $db->query("
     ORDER BY nombre_ingenios
 ")->fetchAll(PDO::FETCH_ASSOC);
 
+$instructores = $db->query("
+    SELECT id, nombre, especialidad
+    FROM instructores
+    WHERE estado = 1
+    ORDER BY nombre
+")->fetchAll(PDO::FETCH_ASSOC);
+
+$areasTecnicas = ['Agronomía', 'Riego', 'Fitosanidad', 'Industrial', 'Gestión'];
+$areasGuardadas = $db->query("
+    SELECT DISTINCT area_tecnica
+    FROM cursos
+    WHERE area_tecnica IS NOT NULL AND TRIM(area_tecnica) <> ''
+    ORDER BY area_tecnica
+")->fetchAll(PDO::FETCH_COLUMN);
+$areasTecnicas = array_values(array_unique(array_merge($areasTecnicas, $areasGuardadas)));
+
+$siguienteCursoId = (int) $db->query('SELECT COALESCE(MAX(id), 0) + 1 FROM cursos')->fetchColumn();
+$codigoSugerido = 'CEN-T-' . str_pad((string) $siguienteCursoId, 3, '0', STR_PAD_LEFT);
+
 $tiposCurso = array_values(array_unique(array_merge(
-    ['Curso', 'Diplomado', 'Seminario', 'Presencial', 'Virtual', 'Hibrido'],
+    ['Presencial', 'Virtual', 'Híbrida', 'Hibrido'],
     $modalidades
 )));
 
@@ -73,10 +92,11 @@ if ($busqueda !== '') {
         OR ca.descripcion_categorias_cursos LIKE ?
         OR i.nombre_ingenios LIKE ?
         OR COALESCE(ins.nombre, '') LIKE ?
+        OR COALESCE(c.codigo_curso, '') LIKE ?
         OR CONCAT('CEN-', LPAD(c.id, 3, '0')) LIKE ?
     )";
     $termino = '%' . $busqueda . '%';
-    array_push($params, $termino, $termino, $termino, $termino, $termino);
+    array_push($params, $termino, $termino, $termino, $termino, $termino, $termino);
 }
 
 if ($anio !== '' && $anio !== 'todos' && ctype_digit($anio)) {
@@ -112,9 +132,13 @@ $camposEstudiante = $esEstudiante
 $sql = "
     SELECT
         c.id AS idcurso,
+        c.codigo_curso,
         c.categoria_curso_id,
         c.ingenio_id,
+        c.instructor_id,
+        c.actividad_tipo,
         c.nombre_cursos,
+        c.area_tecnica,
         ca.descripcion_categorias_cursos,
         i.nombre_ingenios,
         COALESCE(ins.nombre, '') AS instructor_nombre,
@@ -122,6 +146,7 @@ $sql = "
         c.tipo,
         c.dias,
         c.horario,
+        c.cupo,
         c.inicio,
         c.fin,
         (SELECT COUNT(*) FROM asignaciones ac WHERE ac.cursos_id = c.id AND ac.estado_asignaciones = 1) AS inscritos,
@@ -139,6 +164,27 @@ $sql = "
 $stmt = $db->prepare($sql);
 $stmt->execute($params);
 $cursos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$modulosPorCurso = [];
+if ($cursos) {
+    $idsCursos = array_map('intval', array_column($cursos, 'idcurso'));
+    $marcadores = implode(',', array_fill(0, count($idsCursos), '?'));
+    $stmtModulos = $db->prepare("
+        SELECT id, curso_id, nombre, horas, orden, acepta_pre, acepta_post
+        FROM curso_modulos
+        WHERE curso_id IN ($marcadores)
+        ORDER BY curso_id, orden, id
+    ");
+    $stmtModulos->execute($idsCursos);
+    foreach ($stmtModulos->fetchAll(PDO::FETCH_ASSOC) as $modulo) {
+        $modulosPorCurso[(int) $modulo['curso_id']][] = $modulo;
+    }
+}
+
+foreach ($cursos as &$cursoFila) {
+    $cursoFila['modulos'] = $modulosPorCurso[(int) $cursoFila['idcurso']] ?? [];
+}
+unset($cursoFila);
 
 function cengi_curso_html($valor)
 {
@@ -204,19 +250,31 @@ function cengi_curso_codigo($id)
     return 'CEN-' . str_pad((string) (int) $id, 3, '0', STR_PAD_LEFT);
 }
 
+function cengi_curso_codigo_visible(array $curso)
+{
+    $codigo = trim((string) ($curso['codigo_curso'] ?? ''));
+    return $codigo !== '' ? $codigo : cengi_curso_codigo($curso['idcurso'] ?? 0);
+}
+
 function cengi_curso_modal_atributos(array $curso)
 {
     $datos = [
         'id' => $curso['idcurso'] ?? '',
+        'codigo' => cengi_curso_codigo_visible($curso),
         'categoria' => $curso['categoria_curso_id'] ?? '',
         'ingenio' => $curso['ingenio_id'] ?? '',
+        'instructor' => $curso['instructor_id'] ?? '',
+        'actividad' => $curso['actividad_tipo'] ?? 'formacion_academica',
         'tipo' => $curso['tipo'] ?? '',
         'nombre' => $curso['nombre_cursos'] ?? '',
+        'area' => $curso['area_tecnica'] ?? '',
         'jornada' => $curso['jornada_cursos'] ?? '',
         'dias' => $curso['dias'] ?? '',
         'horario' => $curso['horario'] ?? '',
         'inicio' => $curso['inicio'] ?? '',
         'fin' => $curso['fin'] ?? '',
+        'cupo' => $curso['cupo'] ?? '',
+        'modulos' => json_encode($curso['modulos'] ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT),
     ];
 
     $atributos = '';
@@ -588,7 +646,7 @@ function cengi_curso_modal_atributos(array $curso)
                 ?>
                     <tr class="cengi-course-row">
                         <td class="is-expand"><button type="button" class="cengi-course-expand" data-course-toggle="course-detail-<?php echo $cursoId; ?>" aria-controls="course-detail-<?php echo $cursoId; ?>" aria-expanded="false" aria-label="Mostrar detalle de <?php echo cengi_curso_html($row['nombre_cursos']); ?>"><span class="glyphicon glyphicon-menu-down" aria-hidden="true"></span></button></td>
-                        <td class="cengi-course-code"><?php echo cengi_curso_codigo($cursoId); ?></td>
+                        <td class="cengi-course-code"><?php echo cengi_curso_html(cengi_curso_codigo_visible($row)); ?></td>
                         <td class="cengi-course-name"><strong><?php echo cengi_curso_html($row['nombre_cursos']); ?></strong><small><?php echo cengi_curso_html($row['descripcion_categorias_cursos']); ?> · edición <?php echo cengi_curso_html($edicion); ?></small></td>
                         <td><?php echo cengi_curso_html($row['descripcion_categorias_cursos']); ?></td>
                         <td><?php echo cengi_curso_html($row['nombre_ingenios']); ?></td>
@@ -597,7 +655,7 @@ function cengi_curso_modal_atributos(array $curso)
                         <td class="is-date"><?php echo cengi_curso_fecha($row['fin']); ?></td>
                         <td class="cengi-course-progress-cell"><div class="cengi-course-progress" aria-label="<?php echo cengi_curso_html($avanceLabel); ?>"><span style="width:<?php echo $avance; ?>%;<?php echo $avance === 100 ? 'background:#CED2D5;' : ''; ?>"></span></div><small><?php echo cengi_curso_html($avanceLabel); ?></small></td>
                         <td><?php echo cengi_curso_html($row['instructor_nombre'] ?: 'Sin asignar'); ?></td>
-                        <td><?php echo (int) $row['inscritos']; ?> inscritos</td>
+                        <td><?php echo (int) $row['inscritos']; ?><?php echo (int) $row['cupo'] > 0 ? ' / ' . (int) $row['cupo'] : ''; ?></td>
                         <td><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo cengi_curso_html($estadoLabel); ?></span></td>
                         <td class="is-actions"><div class="cengi-row-actions">
                             <?php if ($puedeGestionar || $puedeCalificar): ?><a class="cengi-action-btn is-view" href="ver_participante_curso.php?id=<?php echo $cursoId; ?>" data-tooltip="Ver participantes" aria-label="Ver participantes"><span class="glyphicon glyphicon-eye-open"></span></a><?php endif; ?>
@@ -609,10 +667,28 @@ function cengi_curso_modal_atributos(array $curso)
                     </tr>
                     <tr class="cengi-course-detail-row" id="course-detail-<?php echo $cursoId; ?>" hidden><td colspan="13">
                         <div class="cengi-course-detail">
-                            <div><span class="cengi-course-detail-label">Información del curso</span><p><?php echo cengi_curso_html($row['dias'] ?: 'Días por definir'); ?> · <?php echo cengi_curso_html($row['horario'] ?: 'Horario por definir'); ?> · Jornada <?php echo cengi_curso_html($row['jornada_cursos'] ?: 'por definir'); ?></p>
+                            <div class="cengi-course-detail-copy">
+                                <span class="cengi-course-detail-label">Información del curso</span>
+                                <p><?php echo cengi_curso_html($row['dias'] ?: 'Días por definir'); ?> · <?php echo cengi_curso_html($row['horario'] ?: 'Horario por definir'); ?> · Jornada <?php echo cengi_curso_html($row['jornada_cursos'] ?: 'por definir'); ?></p>
+                                <div class="cengi-course-detail-meta">
+                                    <span><b>Actividad</b><?php echo ($row['actividad_tipo'] ?? '') === 'evento_tecnico' ? 'Evento técnico' : 'Formación académica'; ?></span>
+                                    <span><b>Área técnica</b><?php echo cengi_curso_html($row['area_tecnica'] ?: 'Sin definir'); ?></span>
+                                    <span><b>Instructor</b><?php echo cengi_curso_html($row['instructor_nombre'] ?: 'Sin asignar'); ?></span>
+                                    <span><b>Cupo</b><?php echo (int) $row['cupo'] > 0 ? (int) $row['cupo'] . ' participantes' : 'Sin límite definido'; ?></span>
+                                </div>
                                 <div class="cengi-course-detail-actions"><?php if ($puedeGestionar || $puedeCalificar): ?><a href="ver_participante_curso.php?id=<?php echo $cursoId; ?>" class="btn btn-default btn-sm">Ver seguimiento del curso</a><?php endif; ?> <?php if ($puedeGestionar): ?><button type="button" class="btn btn-default btn-sm" data-course-modal="edit" data-toggle="modal" data-target="#course-form-modal"<?php echo cengi_curso_modal_atributos($row); ?>>Editar curso</button><?php endif; ?></div>
                             </div>
-                            <div class="cengi-course-detail-stats"><div><strong><?php echo (int) $row['modulos_total']; ?></strong><span>Módulos configurados</span></div><div><strong><?php echo (int) $row['inscritos']; ?></strong><span>Participantes inscritos</span></div><?php if ($esEstudiante): ?><div><strong><?php echo cengi_curso_html($row['nota']); ?></strong><span>Nota registrada</span></div><?php endif; ?></div>
+                            <div class="cengi-course-detail-modules">
+                                <span class="cengi-course-detail-label">Módulos de evaluación configurados</span>
+                                <?php if (!empty($row['modulos'])): ?>
+                                    <div class="cengi-course-modules-mini is-head"><span>Módulo</span><span>Horas</span><span>Pre</span><span>Post</span></div>
+                                    <?php foreach ($row['modulos'] as $modulo): ?>
+                                        <div class="cengi-course-modules-mini"><span><?php echo cengi_curso_html($modulo['nombre']); ?></span><span><?php echo cengi_curso_html(rtrim(rtrim(number_format((float) $modulo['horas'], 2, '.', ''), '0'), '.')); ?> h</span><span><?php echo (int) $modulo['acepta_pre'] === 1 ? '✓' : '—'; ?></span><span><?php echo (int) $modulo['acepta_post'] === 1 ? '✓' : '—'; ?></span></div>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <p class="cengi-course-modules-empty"><?php echo ($row['actividad_tipo'] ?? '') === 'evento_tecnico' ? 'Este evento técnico no requiere evaluación académica.' : 'Aún no se han configurado módulos de evaluación.'; ?></p>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </td></tr>
                 <?php endforeach; ?>
@@ -635,12 +711,44 @@ function cengi_curso_modal_atributos(array $curso)
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="id" id="course-form-id" value="">
+                    <input type="hidden" name="modulos_present" value="1">
                     <div class="cengi-course-modal-grid">
+                        <div class="form-group is-full">
+                            <label>Tipo de actividad</label>
+                            <div class="cengi-course-activity-cards" role="radiogroup" aria-label="Tipo de actividad">
+                                <label class="cengi-course-activity-card is-selected">
+                                    <input type="radio" name="actividad_tipo" value="formacion_academica" checked>
+                                    <span class="glyphicon glyphicon-education"></span>
+                                    <span><strong>Formación académica</strong><small>Asistencia, pre/post evaluación, nota final y diploma.</small></span>
+                                </label>
+                                <label class="cengi-course-activity-card">
+                                    <input type="radio" name="actividad_tipo" value="evento_tecnico">
+                                    <span class="glyphicon glyphicon-list-alt"></span>
+                                    <span><strong>Evento técnico</strong><small>Registro, asistencia por QR, gafete y constancia.</small></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-form-code">Código del curso</label>
+                            <input type="text" class="form-control cengi-course-code-input" id="course-form-code" name="codigo_curso" value="<?php echo cengi_curso_html($codigoSugerido); ?>" placeholder="CEN-T-000" maxlength="30" required>
+                        </div>
                         <div class="form-group">
                             <label for="course-form-category">Categoría</label>
                             <select class="form-control" id="course-form-category" name="categorias_cursos" required>
                                 <?php foreach ($categorias as $categoria): ?>
                                     <option value="<?php echo (int) $categoria['id']; ?>"><?php echo cengi_curso_html($categoria['descripcion_categorias_cursos']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group is-full">
+                            <label for="course-form-name">Nombre del curso</label>
+                            <input type="text" class="form-control" id="course-form-name" name="nombre_cursos" placeholder="Ej. Manejo integrado de plagas" maxlength="255" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-form-area">Área técnica</label>
+                            <select class="form-control" id="course-form-area" name="area_tecnica" required>
+                                <?php foreach ($areasTecnicas as $areaTecnica): ?>
+                                    <option value="<?php echo cengi_curso_html($areaTecnica); ?>"><?php echo cengi_curso_html($areaTecnica); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -653,7 +761,7 @@ function cengi_curso_modal_atributos(array $curso)
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="course-form-type">Tipo / modalidad</label>
+                            <label for="course-form-type">Modalidad</label>
                             <select class="form-control" id="course-form-type" name="tipo" required>
                                 <?php foreach ($tiposCurso as $tipoCurso): ?>
                                     <option value="<?php echo cengi_curso_html($tipoCurso); ?>"><?php echo cengi_curso_html($tipoCurso); ?></option>
@@ -665,12 +773,9 @@ function cengi_curso_modal_atributos(array $curso)
                             <select class="form-control" id="course-form-shift" name="jornada_cursos" required>
                                 <option value="Matutina">Matutina</option>
                                 <option value="Vespertina">Vespertina</option>
+                                <option value="Fin de semana">Fin de semana</option>
                                 <option value="Todo Completo">Todo completo</option>
                             </select>
-                        </div>
-                        <div class="form-group is-full">
-                            <label for="course-form-name">Nombre del curso</label>
-                            <input type="text" class="form-control" id="course-form-name" name="nombre_cursos" placeholder="Ej. Manejo integrado de plagas" maxlength="255" required>
                         </div>
                         <div class="form-group">
                             <label for="course-form-days">Días</label>
@@ -688,7 +793,30 @@ function cengi_curso_modal_atributos(array $curso)
                             <label for="course-form-end">Fecha de finalización</label>
                             <input type="date" class="form-control" id="course-form-end" name="fin" required>
                         </div>
+                        <div class="form-group">
+                            <label for="course-form-instructor">Instructor</label>
+                            <select class="form-control" id="course-form-instructor" name="instructor_id">
+                                <option value="">Sin instructor asignado</option>
+                                <?php foreach ($instructores as $instructor): ?>
+                                    <option value="<?php echo (int) $instructor['id']; ?>"><?php echo cengi_curso_html($instructor['nombre'] . ($instructor['especialidad'] !== '' ? ' — ' . $instructor['especialidad'] : '')); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="course-form-capacity">Cupo</label>
+                            <input type="number" class="form-control" id="course-form-capacity" name="cupo" min="1" max="10000" placeholder="35">
+                        </div>
                     </div>
+
+                    <section class="cengi-course-modules-editor" id="course-modules-editor">
+                        <div class="cengi-course-modules-editor-head">
+                            <div><strong>Módulos de evaluación</strong><small>Define los módulos antes de abrir inscripciones; esta configuración habilita la carga de calificaciones.</small></div>
+                            <button type="button" class="btn btn-default btn-sm" id="course-module-add"><span class="glyphicon glyphicon-plus"></span> Agregar módulo</button>
+                        </div>
+                        <div class="cengi-course-module-row is-head"><span>Módulo</span><span>Horas</span><span>Pre-eval.</span><span>Post-eval.</span><span></span></div>
+                        <div id="course-module-rows"></div>
+                        <div class="cengi-course-modules-notice"><span class="glyphicon glyphicon-info-sign"></span><span>Si el curso no requiere calificación por módulo, déjalo vacío: el sistema solo solicitará asistencia y constancia.</span></div>
+                    </section>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
@@ -727,6 +855,8 @@ function cengi_curso_modal_atributos(array $curso)
     var courseSubmit = document.getElementById('course-form-submit');
     var courseStart = document.getElementById('course-form-start');
     var courseEnd = document.getElementById('course-form-end');
+    var moduleRows = document.getElementById('course-module-rows');
+    var moduleIndex = 0;
 
     function setSelectValue(select, value) {
         if (!select || !value) return;
@@ -739,10 +869,42 @@ function cengi_curso_modal_atributos(array $curso)
         select.value = value;
     }
 
-    courseModal.on('show.bs.modal', function (event) {
+    function updateActivityCards() {
+        document.querySelectorAll('.cengi-course-activity-card').forEach(function (card) {
+            var radio = card.querySelector('input[type="radio"]');
+            card.classList.toggle('is-selected', radio && radio.checked);
+        });
+    }
+
+    function addModuleRow(module) {
+        if (!moduleRows) return;
+        module = module || {};
+        moduleIndex += 1;
+        var key = 'm' + moduleIndex;
+        var row = document.createElement('div');
+        row.className = 'cengi-course-module-row';
+        row.innerHTML =
+            '<input type="hidden" name="modulos[' + key + '][id]">' +
+            '<input type="text" class="form-control" name="modulos[' + key + '][nombre]" placeholder="Ej. Agronomía cañera" maxlength="255">' +
+            '<input type="number" class="form-control" name="modulos[' + key + '][horas]" placeholder="Horas" min="0" max="9999" step="0.25">' +
+            '<label class="cengi-course-module-check"><input type="checkbox" name="modulos[' + key + '][pre]" value="1"><span>Sí</span></label>' +
+            '<label class="cengi-course-module-check"><input type="checkbox" name="modulos[' + key + '][post]" value="1"><span>Sí</span></label>' +
+            '<button type="button" class="cengi-course-module-remove" aria-label="Eliminar módulo"><span class="glyphicon glyphicon-remove"></span></button>';
+        row.querySelector('[name$="[id]"]').value = module.id || '';
+        row.querySelector('[name$="[nombre]"]').value = module.nombre || '';
+        row.querySelector('[name$="[horas]"]').value = module.horas == null ? '' : module.horas;
+        row.querySelector('[name$="[pre]"]').checked = String(module.acepta_pre == null ? 1 : module.acepta_pre) === '1';
+        row.querySelector('[name$="[post]"]').checked = String(module.acepta_post == null ? 1 : module.acepta_post) === '1';
+        row.querySelector('.cengi-course-module-remove').addEventListener('click', function () { row.remove(); });
+        moduleRows.appendChild(row);
+    }
+
+    if (courseForm) courseModal.on('show.bs.modal', function (event) {
         var trigger = event.relatedTarget;
         var mode = trigger && trigger.getAttribute('data-course-modal') === 'edit' ? 'edit' : 'create';
         courseForm.reset();
+        moduleRows.innerHTML = '';
+        moduleIndex = 0;
         courseForm.action = mode === 'edit' ? 'actualizar_cursos.php' : 'guardar_cursos.php';
         document.getElementById('course-form-id').value = mode === 'edit' ? trigger.getAttribute('data-course-id') || '' : '';
         document.getElementById('course-form-title').textContent = mode === 'edit' ? 'Editar curso' : 'Crear curso';
@@ -752,30 +914,51 @@ function cengi_curso_modal_atributos(array $curso)
         courseSubmit.lastChild.nodeValue = mode === 'edit' ? ' Guardar cambios' : ' Crear curso';
 
         if (mode === 'edit') {
+            document.getElementById('course-form-code').value = trigger.getAttribute('data-course-codigo') || '';
             setSelectValue(document.getElementById('course-form-category'), trigger.getAttribute('data-course-categoria') || '');
             setSelectValue(document.getElementById('course-form-ingenio'), trigger.getAttribute('data-course-ingenio') || '');
+            setSelectValue(document.getElementById('course-form-instructor'), trigger.getAttribute('data-course-instructor') || '');
             setSelectValue(document.getElementById('course-form-type'), trigger.getAttribute('data-course-tipo') || '');
+            setSelectValue(document.getElementById('course-form-area'), trigger.getAttribute('data-course-area') || '');
             setSelectValue(document.getElementById('course-form-shift'), trigger.getAttribute('data-course-jornada') || '');
             document.getElementById('course-form-name').value = trigger.getAttribute('data-course-nombre') || '';
             document.getElementById('course-form-days').value = trigger.getAttribute('data-course-dias') || '';
             document.getElementById('course-form-schedule').value = trigger.getAttribute('data-course-horario') || '';
+            document.getElementById('course-form-capacity').value = trigger.getAttribute('data-course-cupo') || '';
+            var activity = trigger.getAttribute('data-course-actividad') || 'formacion_academica';
+            var activityRadio = courseForm.querySelector('[name="actividad_tipo"][value="' + activity + '"]');
+            if (activityRadio) activityRadio.checked = true;
             courseStart.value = trigger.getAttribute('data-course-inicio') || '';
             courseEnd.value = trigger.getAttribute('data-course-fin') || '';
+            var modules = [];
+            try { modules = JSON.parse(trigger.getAttribute('data-course-modulos') || '[]'); } catch (ignore) {}
+            modules.forEach(addModuleRow);
+            if (!modules.length && activity !== 'evento_tecnico') addModuleRow();
+        } else {
+            document.getElementById('course-form-code').value = <?php echo json_encode($codigoSugerido); ?>;
+            addModuleRow();
         }
 
+        updateActivityCards();
         courseEnd.min = courseStart.value;
         courseSubmit.disabled = false;
     });
 
-    courseStart.addEventListener('change', function () {
+    if (courseStart) courseStart.addEventListener('change', function () {
         courseEnd.min = courseStart.value;
         if (courseEnd.value && courseEnd.value < courseStart.value) {
             courseEnd.value = courseStart.value;
         }
     });
 
-    courseForm.addEventListener('submit', function () {
+    if (courseForm) courseForm.addEventListener('submit', function () {
         courseSubmit.disabled = true;
+    });
+
+    var moduleAdd = document.getElementById('course-module-add');
+    if (moduleAdd) moduleAdd.addEventListener('click', function () { addModuleRow(); });
+    document.querySelectorAll('[name="actividad_tipo"]').forEach(function (radio) {
+        radio.addEventListener('change', updateActivityCards);
     });
 
     $('#confirm-delete').on('show.bs.modal', function (event) {
