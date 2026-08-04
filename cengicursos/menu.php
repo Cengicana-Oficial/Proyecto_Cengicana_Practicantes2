@@ -25,7 +25,7 @@ function cengi_pagina_titulo($currentPage, $esEstudiante)
         'instructores.php' => ['Instructores', 'Directorio de instructores e informe por curso/diplomado'],
         'eventos_qr.php' => ['Control QR eventos', 'Eventos con registro de ingreso por codigo QR'],
         'diplomas.php' => ['Certificacion', 'Generacion y carga de diplomas de curso y de evento'],
-        'roles.php' => ['Roles y permisos', 'Matriz de permisos por rol y usuarios del sistema'],
+        'roles.php' => ['Roles y permisos', 'Perfiles de acceso e integraciones futuras'],
     ];
 
     return $titulos[$currentPage] ?? ['Cengicursos', 'Formacion y conocimiento'];

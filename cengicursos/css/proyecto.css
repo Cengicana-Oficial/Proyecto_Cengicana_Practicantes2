@@ -4989,3 +4989,77 @@ body.cengi-nav-loading {
         -webkit-print-color-adjust: exact;
     }
 }
+
+/* ===== Roles y permisos: replica funcional de Cengicursos2.html ===== */
+.cengi-roles-page{width:calc(100% - var(--cengi-sidebar-width))!important;max-width:none!important;--roles-line:#E4E7E1;--roles-muted:#4B5A45;--roles-ink:#1E2A1A}
+.cengi-roles-page .cengi-role-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.cengi-roles-page .cengi-ref-section{margin:0 0 18px;overflow:hidden;background:#fff;border:1px solid var(--roles-line);border-radius:10px;box-shadow:0 1px 2px rgba(30,42,26,.06),0 4px 16px rgba(30,42,26,.05)}
+.cengi-roles-page .cengi-role-card{padding:0;border-color:var(--roles-line);border-radius:10px;box-shadow:0 1px 2px rgba(30,42,26,.06),0 4px 16px rgba(30,42,26,.05)}
+.cengi-roles-page .cengi-ref-section-body{padding:18px}
+.cengi-roles-page .cengi-role-card-top{display:flex;align-items:flex-start;justify-content:space-between}
+.cengi-roles-page .cengi-role-level,.cengi-roles-page .cengi-ref-chip{display:inline-flex;align-items:center;padding:4px 9px;border-radius:100px;background:#EEF1EC;color:var(--roles-muted);font-size:11px;font-weight:600;line-height:1.2;white-space:nowrap}
+.cengi-roles-page .cengi-role-level.is-level-1{background:#EAF6DD;color:#3E7A12}
+.cengi-roles-page .cengi-role-level.is-level-2{background:#FFF6DA;color:#8A6600}
+.cengi-roles-page .cengi-role-level.is-level-3{background:#FFE9D9;color:#B34E00}
+.cengi-roles-page .cengi-role-user-count{color:var(--roles-muted);font-size:11px;font-weight:600}
+.cengi-roles-page .cengi-role-card h3{margin:10px 0 0;color:var(--roles-ink);font-family:'Space Grotesk',sans-serif;font-size:14.5px;font-weight:600}
+.cengi-roles-page .cengi-role-card p{margin:6px 0 0;color:var(--roles-muted);font-size:12px;line-height:1.5}
+.cengi-roles-page .cengi-role-warning{margin-top:8px;padding:7px 9px;color:#B34E00;background:#FFF3E8;border:1px solid #FFDFC2;border-radius:7px;font-size:11px;line-height:1.5}
+.cengi-roles-page .cengi-role-summary{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.cengi-roles-page .cengi-role-edit{width:100%;margin-top:14px;justify-content:center}
+.cengi-roles-page .cengi-ref-button,.cengi-permissions-modal .cengi-ref-button{min-height:30px;padding:6px 10px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid transparent;border-radius:8px;background-image:none;box-shadow:none;color:var(--roles-ink,#1E2A1A);font-size:11.5px;font-weight:600;line-height:1.2;text-decoration:none;transition:filter .12s,transform .05s,background-color .12s}
+.cengi-roles-page .cengi-ref-button:hover,.cengi-roles-page .cengi-ref-button:focus,.cengi-permissions-modal .cengi-ref-button:hover,.cengi-permissions-modal .cengi-ref-button:focus{color:var(--roles-ink,#1E2A1A);text-decoration:none}
+.cengi-ref-button svg,.cengi-user-edit svg{width:14px;height:14px}
+.cengi-roles-page .cengi-ref-button-outline,.cengi-permissions-modal .cengi-ref-button-outline{background:#fff;border-color:var(--roles-line,#E4E7E1)}
+.cengi-roles-page .cengi-ref-button-outline:hover,.cengi-permissions-modal .cengi-ref-button-outline:hover{background:#F2F4EF}
+.cengi-roles-page .cengi-ref-button-primary,.cengi-permissions-modal .cengi-ref-button-primary{background:#73BC25;color:#fff}
+.cengi-roles-page .cengi-ref-button-primary:hover,.cengi-roles-page .cengi-ref-button-primary:focus,.cengi-permissions-modal .cengi-ref-button-primary:hover,.cengi-permissions-modal .cengi-ref-button-primary:focus{color:#fff;filter:brightness(1.06)}
+.cengi-roles-page .cengi-ref-notice{display:flex;gap:8px;margin:16px 0;padding:11px 14px;color:#7A5D00;background:#FFF6DA;border:1px solid #F4E5AC;border-radius:9px;font-size:11.5px;line-height:1.5}
+.cengi-roles-page .cengi-ref-notice svg{width:15px;height:15px;flex:none;margin-top:1px}
+.cengi-roles-page .cengi-ref-section-head{min-height:65px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid var(--roles-line)}
+.cengi-roles-page .cengi-ref-section-head h3{margin:0;color:var(--roles-ink);font-family:'Space Grotesk',sans-serif;font-size:14.5px;font-weight:600}
+.cengi-roles-page .hint,.cengi-permissions-modal .hint{margin-top:2px;color:var(--roles-muted,#4B5A45);font-size:11.5px;font-weight:400}
+.cengi-roles-page .cengi-ref-table-scroll{overflow-x:auto}
+.cengi-roles-page .cengi-ref-table{width:100%;margin:0;border:0;border-collapse:collapse;border-radius:0;background:#fff;font-size:12.5px}
+.cengi-roles-page .cengi-ref-table>thead>tr>th{padding:10px 12px;color:var(--roles-muted)!important;background:#FAFBF8!important;border:0!important;border-bottom:1px solid var(--roles-line)!important;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+.cengi-roles-page .cengi-ref-table>tbody>tr>td{padding:11px 12px;vertical-align:middle;background:#fff;border:0!important;border-bottom:1px solid var(--roles-line)!important}
+.cengi-roles-page .cengi-ref-table>tbody>tr:last-child>td{border-bottom:0!important}
+.cengi-roles-page .cengi-ref-table>tbody>tr:hover>td{background:#FAFBF6}
+.cengi-roles-page .cengi-ref-table .cengi-tag{padding:4px 9px;font-size:11px;font-weight:600}
+.cengi-roles-page .cengi-perm-gestion{background:#EAF6DD;color:#3E7A12;border-color:transparent}
+.cengi-roles-page .cengi-perm-lectura{background:#FFF6DA;color:#8A6600;border-color:transparent}
+.cengi-roles-page .cengi-perm-ninguno{background:#F2F2F0;color:#8A8F86;border-color:transparent}
+.cengi-roles-page .cengi-permissions-legend{display:flex;flex-wrap:wrap;gap:14px;padding:18px;border-top:1px solid var(--roles-line)}
+.cengi-roles-page .cengi-permissions-legend>span{display:flex;align-items:center;gap:5px;color:var(--roles-muted);font-size:11px}
+.cengi-roles-page .cengi-user-name-cell{display:flex;align-items:center;gap:9px}
+.cengi-roles-page .cengi-user-name-cell strong{font-size:12.5px;font-weight:600}
+.cengi-roles-page .cengi-user-avatar{width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#CED2D5;color:#4B5A45;font-family:'Space Grotesk',sans-serif;font-size:10.5px;font-weight:700}
+.cengi-roles-page .cengi-user-email,.cengi-roles-page .cengi-user-no-org{color:var(--roles-muted)}
+.cengi-roles-page .cengi-user-no-org{font-size:11.5px}
+.cengi-roles-page .cengi-user-status{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:100px;background:#EAF6DD;color:#3E7A12;font-size:11px;font-weight:600;white-space:nowrap}
+.cengi-roles-page .cengi-user-status i{width:6px;height:6px;border-radius:50%;background:#73BC25}
+.cengi-user-edit{width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--roles-muted,#4B5A45);background:#fff;border:1px solid var(--roles-line,#E4E7E1);border-radius:7px;text-decoration:none}
+.cengi-user-edit:hover,.cengi-user-edit:focus{color:var(--roles-ink,#1E2A1A);background:#F2F4EF;text-decoration:none}
+.cengi-roles-page .cengi-integrations-list{display:flex;flex-wrap:wrap;gap:8px}
+.cengi-permissions-modal{--roles-line:#E4E7E1;--roles-muted:#4B5A45;--roles-ink:#1E2A1A;position:fixed;inset:0;z-index:2000;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(20,26,15,.45)}
+.cengi-permissions-modal.is-open{display:flex}
+body.cengi-modal-open{overflow:hidden}
+.cengi-permissions-dialog{width:620px;max-width:94vw;max-height:88vh;overflow-y:auto;background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.cengi-permissions-modal-head,.cengi-permissions-modal-foot{position:sticky;z-index:1;display:flex;align-items:center;background:#fff}
+.cengi-permissions-modal-head{top:0;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--roles-line)}
+.cengi-permissions-modal-head h3{margin:0;color:var(--roles-ink);font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600}
+.cengi-permissions-modal-body{padding:8px 22px}
+.cengi-permission-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--roles-line)}
+.cengi-permission-row:last-child{border-bottom:0}
+.cengi-permission-name{flex:1;color:var(--roles-ink);font-size:12.5px;font-weight:600}
+.cengi-permission-options{display:flex;gap:6px}
+.cengi-permission-option{padding:5px 10px;color:var(--roles-muted);background:#fff;border:1px solid var(--roles-line);border-radius:7px;font-family:'Inter',sans-serif;font-size:11px;font-weight:600}
+.cengi-permission-option.is-gestion{color:#3E7A12;background:#EAF6DD;border-color:#B9DE9A}
+.cengi-permission-option.is-lectura{color:#8A6600;background:#FFF6DA;border-color:#F0DB96}
+.cengi-permission-option.is-ninguno{color:#6B7166;background:#F2F2F0;border-color:#E0E1DC}
+.cengi-permission-option[disabled]{cursor:default;opacity:1}
+.cengi-permissions-modal-foot{bottom:0;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid var(--roles-line)}
+.cengi-permissions-modal .cengi-ref-button{min-height:34px;padding:8px 14px;font-size:12.5px}
+@media(max-width:1024px){.cengi-roles-page{width:100%!important}}
+@media(max-width:900px){.cengi-roles-page .cengi-role-card-grid{grid-template-columns:1fr}}
+@media(max-width:620px){.cengi-roles-page .cengi-ref-section-head{align-items:flex-start;flex-direction:column}.cengi-permissions-modal{padding:10px}.cengi-permission-row{align-items:flex-start;flex-direction:column}.cengi-permission-options{width:100%}.cengi-permission-option{flex:1;padding:7px 5px}}
