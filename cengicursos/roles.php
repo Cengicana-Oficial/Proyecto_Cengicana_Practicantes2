@@ -24,17 +24,17 @@ $modulos = [
     'instructores' => ['label' => 'Instructores', 'read' => 'ver_instructores_cengi', 'write' => 'gestionar_instructores_cengi'],
     'organizaciones' => ['label' => 'Organizaciones', 'read' => 'ver_organizaciones_cengi', 'write' => 'gestionar_organizaciones_cengi'],
     'eventos' => ['label' => 'Eventos', 'read' => 'ver_eventos_cengi', 'write' => 'gestionar_eventos_cengi'],
-    'diplomas' => ['label' => 'Diplomas y certificacion', 'read' => 'ver_diplomas_cengi', 'write' => 'gestionar_diplomas_cengi'],
+    'diplomas' => ['label' => 'Diplomas y certificación', 'read' => 'ver_diplomas_cengi', 'write' => 'gestionar_diplomas_cengi'],
     'carga_masiva' => ['label' => 'Carga masiva', 'read' => 'ver_participantes_cengi', 'write' => 'cargar_participantes_cengi'],
     'reportes' => ['label' => 'Reportes por ingenio', 'read' => 'ver_reportes_cengi', 'write' => 'ver_reportes_cengi'],
     'roles' => ['label' => 'Roles y permisos', 'read' => 'ver_roles_cengi', 'write' => 'roles_gestionar_cengi'],
 ];
 
-$nombresNivel = [1 => 'Administrador general', 2 => 'Encargado de capacitacion', 3 => 'Administrador de ingenio'];
+$nombresNivel = [1 => 'Administrador general', 2 => 'Encargado de capacitación', 3 => 'Administrador de ingenio'];
 $descripcionNivel = [
-    1 => 'Gestion total del sistema: cursos, participantes, organizaciones, eventos, diplomas y roles.',
-    2 => 'Coordina la operacion diaria de capacitacion: cursos, inscripciones, participantes y reportes.',
-    3 => 'Ve unicamente los datos de su propio ingenio (colaboradores, cursos, asistencia y resultados).',
+    1 => 'Acceso completo al sistema, configuración e integraciones.',
+    2 => 'Gestiona cursos, participantes, evaluaciones y diplomas.',
+    3 => 'Consulta únicamente a sus propios colaboradores.',
 ];
 
 // Todos los roles reales de usuarios_menu, excluyendo Instructor/Estudiante/Participante
@@ -156,17 +156,43 @@ $usuarios = $pdo->query("
     WHERE LOWER(m.nombre) IN ('cursos', 'cengicursos')
     ORDER BY u.nombre
 ")->fetchAll(PDO::FETCH_ASSOC);
+$usuarios = array_values(array_filter($usuarios, static function ($usuario) {
+    $rolNormalizado = cengi_texto_normalizado($usuario['nombre_rol']);
+    return strpos($rolNormalizado, 'instructor') === false
+        && strpos($rolNormalizado, 'estudiante') === false
+        && strpos($rolNormalizado, 'alumno') === false
+        && strpos($rolNormalizado, 'participante') === false;
+}));
+$conteoUsuariosPorNivel = [1 => 0, 2 => 0, 3 => 0];
+foreach ($usuarios as $usuario) {
+    $nivelUsuario = cengi_clasificar_rol_nivel($usuario['nombre_rol']);
+    if (isset($conteoUsuariosPorNivel[$nivelUsuario])) {
+        $conteoUsuariosPorNivel[$nivelUsuario]++;
+    }
+}
 
 function cengi_rol_html($valor)
 {
     return htmlspecialchars((string) ($valor ?? ''), ENT_QUOTES, 'UTF-8');
 }
+
+function cengi_iniciales_usuario($nombre)
+{
+    $iniciales = '';
+    foreach (preg_split('/\s+/', trim((string) $nombre), -1, PREG_SPLIT_NO_EMPTY) as $parte) {
+        $iniciales .= mb_strtoupper(mb_substr($parte, 0, 1, 'UTF-8'), 'UTF-8');
+        if (mb_strlen($iniciales, 'UTF-8') >= 2) {
+            break;
+        }
+    }
+    return $iniciales !== '' ? $iniciales : 'U';
+}
 ?>
 <html lang="es">
 <?php include('head.php'); ?>
-<body class="cengi-canvas">
+<body class="cengi-canvas cengi-roles-canvas">
 <?php menu_render(); ?>
-<div class="container">
+<main class="container cengi-roles-page">
 
     <?php if ($mensaje !== ''): ?>
         <div class="cengi-feedback<?php echo $mensajeTipo === 'error' ? ' is-error' : ''; ?>">
@@ -175,36 +201,60 @@ function cengi_rol_html($valor)
         </div>
     <?php endif; ?>
 
-    <div class="cengi-role-card-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+    <div class="cengi-role-card-grid">
         <?php foreach ([1, 2, 3] as $nivel): ?>
-            <div class="cengi-role-card">
-                <span class="rc-level">Nivel <?php echo $nivel; ?></span>
-                <h3><?php echo cengi_rol_html($nombresNivel[$nivel]); ?></h3>
-                <p><?php echo cengi_rol_html($descripcionNivel[$nivel]); ?></p>
-                <div style="font-size:11px;color:var(--cengi-muted);">
-                    Roles en usuarios_menu:
-                    <?php echo $rolesPorNivel[$nivel] ? cengi_rol_html(implode(', ', array_map(static function ($r) { return $r['nombre_rol']; }, $rolesPorNivel[$nivel]))) : 'ninguno registrado todavia'; ?>
+            <?php
+                $cantidadGestion = 0;
+                $cantidadLectura = 0;
+                foreach ($estadoMatriz[$nivel] as $permisoNivel) {
+                    if ($permisoNivel === 'gestion') { $cantidadGestion++; }
+                    if ($permisoNivel === 'lectura') { $cantidadLectura++; }
+                }
+                $rolEditable = $rolEditablePorNivel[$nivel];
+            ?>
+            <section class="cengi-ref-section cengi-role-card">
+                <div class="cengi-ref-section-body">
+                    <div class="cengi-role-card-top">
+                        <span class="cengi-role-level is-level-<?php echo $nivel; ?>">Nivel <?php echo $nivel; ?></span>
+                        <span class="cengi-role-user-count"><?php echo (int) $conteoUsuariosPorNivel[$nivel]; ?> usuarios</span>
+                    </div>
+                    <h3><?php echo cengi_rol_html($nombresNivel[$nivel]); ?></h3>
+                    <p><?php echo cengi_rol_html($descripcionNivel[$nivel]); ?></p>
+                    <?php if ($nivel === 3): ?>
+                        <div class="cengi-role-warning"><span aria-hidden="true">&#9888;</span> Cada usuario con este rol debe tener un ingenio/institución asignado abajo, en <strong>Usuarios del sistema</strong> &mdash; así solo ve sus propios colaboradores.</div>
+                    <?php endif; ?>
+                    <div class="cengi-role-summary">
+                        <span class="cengi-ref-chip cengi-perm-gestion"><?php echo $cantidadGestion; ?> con gestión</span>
+                        <span class="cengi-ref-chip cengi-perm-lectura"><?php echo $cantidadLectura; ?> solo lectura</span>
+                    </div>
+                    <?php if ($puedeGestionar && $rolEditable): ?>
+                        <button type="button" class="cengi-ref-button cengi-ref-button-outline cengi-role-edit" onclick="cengiAbrirPermisos(<?php echo $nivel; ?>, <?php echo (int) $rolEditable['id']; ?>)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                            Editar permisos
+                        </button>
+                    <?php endif; ?>
                 </div>
-            </div>
+            </section>
         <?php endforeach; ?>
     </div>
 
-    <div class="cengi-notice" style="margin-top:16px;">
-        <span class="glyphicon glyphicon-info-sign"></span>
-        <span>Los roles de <strong>Instructor</strong> y <strong>Participante</strong> no se gestionan en SIGEC: instructores y participantes acceden al contenido, tareas y evaluaciones a traves de la plataforma <strong>Moodle</strong>, que se sincroniza con SIGEC mediante la integracion señalada abajo. (Este es un aviso informativo; no existe integracion real con Moodle en este monorepo.)</span>
+    <div class="cengi-ref-notice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        <span>Los roles de <strong>Instructor</strong> y <strong>Participante</strong> no se gestionan en SIGEC: instructores y participantes acceden al contenido, tareas y evaluaciones a través de la plataforma <strong>Moodle</strong>, que se sincroniza con SIGEC mediante la integración señalada abajo.</span>
     </div>
 
-    <div class="panel panel-success" style="margin-top:16px;">
-        <div class="panel-heading">
-            <h3 class="panel-title">Matriz de permisos por modulo</h3>
-            <small>Persiste directamente contra <code>usuarios_menu.rol_permiso</code>. Superadmin siempre tiene acceso total sin importar esta matriz (bypass por <code>es_superadmin=1</code>).</small>
+    <section class="cengi-ref-section cengi-permissions-section">
+        <div class="cengi-ref-section-head">
+            <div>
+                <h3>Matriz de permisos por módulo</h3>
+                <div class="hint">Vista general &mdash; usa "Editar permisos" en cada rol para modificarla</div>
+            </div>
         </div>
-        <div class="panel-body" style="padding:0;">
-            <div class="cengi-table-wrap" style="border:0;border-radius:0;">
-            <table class="table table-striped">
+        <div class="cengi-ref-table-scroll">
+            <table class="cengi-ref-table">
                 <thead>
                     <tr>
-                        <th>Modulo del sistema</th>
+                        <th>Módulo del sistema</th>
                         <?php foreach ([1, 2, 3] as $nivel): ?>
                             <th style="text-align:center;"><?php echo cengi_rol_html($nombresNivel[$nivel]); ?></th>
                         <?php endforeach; ?>
@@ -213,11 +263,11 @@ function cengi_rol_html($valor)
                 <tbody>
                     <?php foreach ($modulos as $clave => $def): ?>
                         <tr>
-                            <td><?php echo cengi_rol_html($def['label']); ?></td>
+                            <td><strong><?php echo cengi_rol_html($def['label']); ?></strong></td>
                             <?php foreach ([1, 2, 3] as $nivel):
                                 $valor = $estadoMatriz[$nivel][$clave] ?? 'ninguno';
                                 $claseChip = $valor === 'gestion' ? 'cengi-perm-gestion' : ($valor === 'lectura' ? 'cengi-perm-lectura' : 'cengi-perm-ninguno');
-                                $etiqueta = $valor === 'gestion' ? 'Gestion completa' : ($valor === 'lectura' ? 'Solo lectura' : 'Sin acceso');
+                                $etiqueta = $valor === 'gestion' ? 'Gestión completa' : ($valor === 'lectura' ? 'Solo lectura' : 'Sin acceso');
                             ?>
                                 <td style="text-align:center;"><span class="cengi-tag <?php echo $claseChip; ?>"><?php echo $etiqueta; ?></span></td>
                             <?php endforeach; ?>
@@ -225,89 +275,54 @@ function cengi_rol_html($valor)
                     <?php endforeach; ?>
                 </tbody>
             </table>
-            </div>
         </div>
-        <div class="panel-body" style="display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid var(--cengi-border);">
-            <span style="font-size:11px;color:var(--cengi-muted);"><span class="cengi-tag cengi-perm-gestion">Gestion completa</span> puede crear, editar y eliminar</span>
-            <span style="font-size:11px;color:var(--cengi-muted);"><span class="cengi-tag cengi-perm-lectura">Solo lectura</span> unicamente puede consultar</span>
-            <span style="font-size:11px;color:var(--cengi-muted);"><span class="cengi-tag cengi-perm-ninguno">Sin acceso</span> el modulo no aparece en su menu</span>
+        <div class="cengi-permissions-legend">
+            <span><span class="cengi-ref-chip cengi-perm-gestion">Gestión completa</span> puede crear, editar y eliminar</span>
+            <span><span class="cengi-ref-chip cengi-perm-lectura">Solo lectura</span> únicamente puede consultar</span>
+            <span><span class="cengi-ref-chip cengi-perm-ninguno">Sin acceso</span> el módulo no aparece en su menu</span>
         </div>
-    </div>
+    </section>
 
-    <?php if ($puedeGestionar): ?>
-    <div class="panel panel-success">
-        <div class="panel-heading"><h3 class="panel-title">Editar permisos de un rol</h3></div>
-        <div class="panel-body">
-            <form method="POST">
-                <input type="hidden" name="accion" value="guardar_matriz">
-                <div class="form-group">
-                    <label class="control-label">Rol a editar</label>
-                    <select name="rol_id" class="form-control" id="rolSelector" onchange="cengiCargarNivelesRol()">
-                        <?php foreach ([1, 2, 3] as $nivel): ?>
-                            <?php $rol = $rolEditablePorNivel[$nivel]; ?>
-                            <?php if ($rol): ?>
-                                <option value="<?php echo (int) $rol['id']; ?>" data-nivel="<?php echo $nivel; ?>">
-                                    <?php echo cengi_rol_html($nombresNivel[$nivel] . ' (' . $rol['nombre_rol'] . ')'); ?>
-                                </option>
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="cengi-table-wrap">
-                    <table class="table table-bordered">
-                        <thead><tr><th>Modulo</th><th>Gestion completa</th><th>Solo lectura</th><th>Sin acceso</th></tr></thead>
-                        <tbody>
-                            <?php foreach ($modulos as $clave => $def): ?>
-                                <?php if (!empty($def['fijo'])) { continue; } ?>
-                                <tr>
-                                    <td><?php echo cengi_rol_html($def['label']); ?></td>
-                                    <?php foreach (['gestion', 'lectura', 'ninguno'] as $opcion): ?>
-                                        <td style="text-align:center;">
-                                            <input type="radio" name="nivel[<?php echo cengi_rol_html($clave); ?>]" value="<?php echo $opcion; ?>" class="cengi-matriz-radio" data-modulo="<?php echo cengi_rol_html($clave); ?>" data-valor="<?php echo $opcion; ?>">
-                                        </td>
-                                    <?php endforeach; ?>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-                <button type="submit" class="btn btn-success"><span class="glyphicon glyphicon-floppy-disk"></span> Guardar permisos de este rol</button>
-            </form>
-        </div>
-    </div>
-    <?php endif; ?>
-
-    <div class="panel panel-success">
-        <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center;">
+    <section class="cengi-ref-section cengi-users-section">
+        <div class="cengi-ref-section-head">
             <div>
-                <h3 class="panel-title">Usuarios del sistema</h3>
-                <small>Asigna el rol y, si aplica, el ingenio/institucion al que queda limitado cada usuario</small>
+                <h3>Usuarios del sistema</h3>
+                <div class="hint">Asigna el rol y, si aplica, el ingenio/institución al que queda limitado cada usuario</div>
             </div>
             <?php if ($puedeGestionar): ?>
-                <a href="../login/usuarios/crear_usuario.php?scope=cursos" class="btn btn-primary btn-sm"><span class="glyphicon glyphicon-plus"></span> Nuevo usuario</a>
+                <a href="../login/usuarios/crear_usuario.php?scope=cursos" class="cengi-ref-button cengi-ref-button-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                    Nuevo usuario
+                </a>
             <?php endif; ?>
         </div>
-        <div class="cengi-table-wrap">
-            <table class="table table-striped table-bordered table-hover">
+        <div class="cengi-ref-table-scroll">
+            <table class="cengi-ref-table">
                 <thead><tr><th>Usuario</th><th>Correo</th><th>Rol</th><th>Ingenio / institucion asignado</th><th>Estado</th><?php if ($puedeGestionar): ?><th></th><?php endif; ?></tr></thead>
                 <tbody>
                     <?php foreach ($usuarios as $u): ?>
                         <tr>
-                            <td><strong><?php echo cengi_rol_html($u['nombre']); ?></strong></td>
-                            <td><?php echo cengi_rol_html($u['correo']); ?></td>
-                            <td><?php echo cengi_rol_html($u['nombre_rol']); ?></td>
-                            <td><?php echo cengi_rol_html($u['nombre_ingenio']); ?></td>
                             <td>
-                                <?php if ((int) $u['es_superadmin'] === 1): ?>
-                                    <span class="cengi-status-badge is-active"><i></i>Superadmin</span>
+                                <div class="cengi-user-name-cell">
+                                    <span class="cengi-user-avatar"><?php echo cengi_rol_html(cengi_iniciales_usuario($u['nombre'])); ?></span>
+                                    <strong><?php echo cengi_rol_html($u['nombre']); ?></strong>
+                                </div>
+                            </td>
+                            <td class="cengi-user-email"><?php echo cengi_rol_html($u['correo']); ?></td>
+                            <td><?php echo cengi_rol_html($u['nombre_rol']); ?></td>
+                            <td>
+                                <?php if ($u['nombre_ingenio'] !== 'Sin ingenio'): ?>
+                                    <span class="cengi-ref-chip"><?php echo cengi_rol_html($u['nombre_ingenio']); ?></span>
                                 <?php else: ?>
-                                    <span class="cengi-status-badge is-neutral"><i></i>Activo</span>
+                                    <span class="cengi-user-no-org">Todos / no aplica</span>
                                 <?php endif; ?>
                             </td>
+                            <td><span class="cengi-user-status"><i></i>Activo</span></td>
                             <?php if ($puedeGestionar): ?>
                                 <td>
-                                    <a class="cengi-action-btn is-edit" href="../login/usuarios/editar_usuario.php?id=<?php echo (int) $u['id']; ?>&scope=cursos" data-tooltip="Editar"><span class="glyphicon glyphicon-pencil"></span></a>
+                                    <a class="cengi-user-edit" href="../login/usuarios/editar_usuario.php?id=<?php echo (int) $u['id']; ?>&scope=cursos" title="Editar" aria-label="Editar a <?php echo cengi_rol_html($u['nombre']); ?>">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                                    </a>
                                 </td>
                             <?php endif; ?>
                         </tr>
@@ -315,48 +330,105 @@ function cengi_rol_html($valor)
                 </tbody>
             </table>
         </div>
-    </div>
+    </section>
 
-    <div class="panel panel-success">
-        <div class="panel-heading"><h3 class="panel-title">Integraciones futuras</h3><small>Preparado para conectarse con:</small></div>
-        <div class="panel-body" style="display:flex;gap:8px;flex-wrap:wrap;">
-            <span class="cengi-tag">Moodle</span>
-            <span class="cengi-tag">Power BI</span>
-            <span class="cengi-tag">Microsoft Teams</span>
-            <span class="cengi-tag">WhatsApp Business API</span>
-            <span class="cengi-tag">Correo electronico</span>
-            <span class="cengi-tag">Sistemas contables</span>
+    <section class="cengi-ref-section cengi-integrations-section">
+        <div class="cengi-ref-section-head">
+            <div><h3>Integraciones futuras</h3><div class="hint">Preparado para conectarse con:</div></div>
         </div>
-        <div class="panel-body" style="padding-top:0;">
-            <p class="text-muted" style="font-size:11.5px;">Ninguna de estas integraciones esta conectada todavia: son placeholders informativos, igual que en el mockup de referencia.</p>
+        <div class="cengi-ref-section-body cengi-integrations-list">
+            <span class="cengi-ref-chip">Moodle</span>
+            <span class="cengi-ref-chip">Power BI</span>
+            <span class="cengi-ref-chip">Microsoft Teams</span>
+            <span class="cengi-ref-chip">WhatsApp Business API</span>
+            <span class="cengi-ref-chip">Correo electrónico</span>
+            <span class="cengi-ref-chip">Sistemas contables</span>
         </div>
-    </div>
-</div>
+    </section>
+</main>
 
 <?php if ($puedeGestionar): ?>
+<div class="cengi-permissions-modal" id="cengiPermissionsModal" aria-hidden="true">
+    <form method="POST" class="cengi-permissions-dialog" id="cengiPermissionsForm">
+        <input type="hidden" name="accion" value="guardar_matriz">
+        <input type="hidden" name="rol_id" id="cengiPermRolId" value="">
+        <div class="cengi-permissions-modal-head">
+            <div>
+                <h3 id="cengiPermModalTitle">Editar permisos</h3>
+                <div class="hint">Define el nivel de acceso de este rol en cada módulo del sistema</div>
+            </div>
+            <button type="button" class="cengi-user-edit" onclick="cengiCerrarPermisos()" aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="cengi-permissions-modal-body">
+            <?php foreach ($modulos as $clave => $def): ?>
+                <div class="cengi-permission-row" data-modulo="<?php echo cengi_rol_html($clave); ?>">
+                    <div class="cengi-permission-name"><?php echo cengi_rol_html($def['label']); ?></div>
+                    <div class="cengi-permission-options">
+                        <?php foreach (['gestion' => 'Gestión', 'lectura' => 'Lectura', 'ninguno' => 'Sin acceso'] as $opcion => $texto): ?>
+                            <button type="button" class="cengi-permission-option" data-value="<?php echo $opcion; ?>"<?php echo !empty($def['fijo']) ? ' disabled' : ''; ?>><?php echo $texto; ?></button>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php if (empty($def['fijo'])): ?>
+                        <input type="hidden" name="nivel[<?php echo cengi_rol_html($clave); ?>]" value="ninguno">
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <div class="cengi-permissions-modal-foot">
+            <button type="button" class="cengi-ref-button cengi-ref-button-outline" onclick="cengiCerrarPermisos()">Cancelar</button>
+            <button type="submit" class="cengi-ref-button cengi-ref-button-primary">Guardar permisos</button>
+        </div>
+    </form>
+</div>
+
 <script>
 var cengiEstadoMatriz = <?php echo json_encode($estadoMatriz, JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-var cengiNivelPorRolId = {};
-<?php foreach ([1, 2, 3] as $nivel): ?>
-<?php if ($rolEditablePorNivel[$nivel]): ?>
-cengiNivelPorRolId[<?php echo (int) $rolEditablePorNivel[$nivel]['id']; ?>] = <?php echo $nivel; ?>;
-<?php endif; ?>
-<?php endforeach; ?>
+var cengiNombresNivel = <?php echo json_encode($nombresNivel, JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
-function cengiCargarNivelesRol() {
-    var select = document.getElementById('rolSelector');
-    if (!select) { return; }
-    var rolId = select.value;
-    var nivel = cengiNivelPorRolId[rolId];
-    var estado = cengiEstadoMatriz[nivel] || {};
-
-    document.querySelectorAll('.cengi-matriz-radio').forEach(function (radio) {
-        var modulo = radio.getAttribute('data-modulo');
-        var valor = radio.getAttribute('data-valor');
-        radio.checked = (estado[modulo] === valor);
+function cengiSeleccionarOpcion(row, valor) {
+    row.querySelectorAll('.cengi-permission-option').forEach(function (button) {
+        var seleccionado = button.getAttribute('data-value') === valor;
+        button.classList.toggle('is-' + button.getAttribute('data-value'), seleccionado);
+        button.setAttribute('aria-pressed', seleccionado ? 'true' : 'false');
     });
+    var input = row.querySelector('input[type="hidden"]');
+    if (input) { input.value = valor; }
 }
-document.addEventListener('DOMContentLoaded', cengiCargarNivelesRol);
+
+function cengiAbrirPermisos(nivel, rolId) {
+    var modal = document.getElementById('cengiPermissionsModal');
+    var estado = cengiEstadoMatriz[nivel] || {};
+    document.getElementById('cengiPermRolId').value = rolId;
+    document.getElementById('cengiPermModalTitle').textContent = 'Editar permisos — ' + cengiNombresNivel[nivel];
+    modal.querySelectorAll('.cengi-permission-row').forEach(function (row) {
+        var modulo = row.getAttribute('data-modulo');
+        cengiSeleccionarOpcion(row, estado[modulo] || 'ninguno');
+    });
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('cengi-modal-open');
+}
+
+function cengiCerrarPermisos() {
+    var modal = document.getElementById('cengiPermissionsModal');
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('cengi-modal-open');
+}
+
+document.querySelectorAll('.cengi-permission-option:not([disabled])').forEach(function (button) {
+    button.addEventListener('click', function () {
+        cengiSeleccionarOpcion(button.closest('.cengi-permission-row'), button.getAttribute('data-value'));
+    });
+});
+
+document.getElementById('cengiPermissionsModal').addEventListener('click', function (event) {
+    if (event.target === this) { cengiCerrarPermisos(); }
+});
+
+document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') { cengiCerrarPermisos(); }
+});
 </script>
 <?php endif; ?>
 </body>
