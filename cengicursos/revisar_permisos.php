@@ -169,6 +169,11 @@ function cengi_es_estudiante()
     );
 }
 
+function cengi_es_ingenio()
+{
+    return strpos(cengi_rol_actual(), 'ingenio') !== false;
+}
+
 function cengi_puede_gestionar()
 {
     return cengi_es_admin() || cengi_tiene_permiso('gestionar_cursos_cengi');
@@ -352,6 +357,18 @@ function cengi_puede_gestionar_diplomas()
     return cengi_es_admin()
         || cengi_tiene_permiso('gestionar_diplomas_cengi')
         || cengi_puede_subir_diploma();
+}
+
+/**
+ * Dashboard exclusivo de ingenio: se otorga a los administradores (que ven
+ * todo por cortesia) y a cualquier usuario cuyo rol contenga "ingenio" y que
+ * tenga un ingenio_id asignado. No se registro un permiso granular nuevo en
+ * permisos_roles.php porque el acceso depende del rol/ingenio de la sesion,
+ * igual que el resto del scoping por ingenio del modulo (cengi_scope_sql()).
+ */
+function cengi_puede_ver_dashboard_ingenio()
+{
+    return cengi_es_admin() || (cengi_es_ingenio() && cengi_ingenio_id_actual() > 0);
 }
 
 function cengi_puede_ver_roles()
@@ -612,6 +629,14 @@ function cengi_require_ver_diplomas($redirect = 'index.php')
 function cengi_require_gestionar_diplomas($redirect = 'diplomas.php')
 {
     if (!cengi_puede_gestionar_diplomas()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_dashboard_ingenio($redirect = 'index.php')
+{
+    if (!cengi_puede_ver_dashboard_ingenio()) {
         header("Location: {$redirect}");
         exit();
     }
