@@ -11,7 +11,7 @@ function cengi_pagina_titulo($currentPage, $esEstudiante)
         'ver_categorias.php' => ['Categorias de curso', 'Clasificacion de la oferta de capacitacion'],
         'agregar_categorias.php' => ['Nueva categoria', 'Registra una categoria de curso'],
         'ver_participante_curso.php' => ['Seguimiento por curso', 'Asistencia, evaluaciones, contenido y diplomas por curso'],
-        'participantes.php' => ['Participantes', 'Listado y carga masiva de participantes'],
+        'participantes.php' => ['Participantes por curso', 'Asistencia, evaluaciones y diplomas'],
         'carga_participantes.php' => ['Carga masiva CSV', 'Resultado de la importacion de participantes'],
         'solicitudes.php' => ['Inscripciones', 'Solicitudes pendientes de validacion'],
         'editar_solicitud.php' => ['Editar solicitud', 'Actualiza una solicitud pendiente'],
@@ -20,7 +20,8 @@ function cengi_pagina_titulo($currentPage, $esEstudiante)
         'ver_usuarios.php' => ['Usuarios', 'Cuentas con acceso al modulo de cursos'],
         'directorio_participantes.php' => ['Directorio de participantes', 'Vista agregada por persona: cursos, diplomas y evaluacion'],
         'seguimiento_ingenio.php' => ['Seguimiento por ingenio', 'Ficha institucional de capacitacion por ingenio'],
-        'organizaciones.php' => ['Organizaciones', 'Directorio de ingenios, universidades, empresas e instituciones'],
+        'dashboard_ingenio.php' => ['Mi ingenio', 'Participantes, cursos e historial de capacitacion de tu ingenio'],
+        'organizaciones.php' => ['Organizaciones', 'Ingenios, universidades e instituciones técnicas asociadas'],
         'instructores.php' => ['Instructores', 'Directorio de instructores e informe por curso/diplomado'],
         'eventos_qr.php' => ['Control QR eventos', 'Eventos con registro de ingreso por codigo QR'],
         'diplomas.php' => ['Certificacion', 'Generacion y carga de diplomas de curso y de evento'],
@@ -42,6 +43,7 @@ function menu_render()
     $puedeVerDiplomas = cengi_puede_ver_diplomas();
     $puedeVerRoles = cengi_puede_ver_roles();
     $puedeCalificar = cengi_puede_calificar();
+    $puedeVerDashboardIngenio = cengi_puede_ver_dashboard_ingenio();
     $esEstudiante = cengi_es_estudiante();
 
     $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
@@ -64,6 +66,14 @@ function menu_render()
     }
     $iniciales = $iniciales !== '' ? $iniciales : 'U';
     ?>
+<style>
+    #cengiPrimaryNav a[href='ver_categorias.php'],
+    #cengiPrimaryNav a[href='exportaringenios.php'],
+    #cengiPrimaryNav a[href='exportarcursos.php'],
+    #cengiPrimaryNav a[href='ver_ingenios.php'] {
+        display: none;
+    }
+</style>
 <aside class="cengi-sidebar" id="cengiSidebar">
     <a class="cengi-brand" href="index.php" aria-label="Ir al inicio de Cengicursos">
         <span class="cengi-brand-mark" aria-hidden="true">
@@ -128,6 +138,12 @@ function menu_render()
                 <span class="glyphicon glyphicon-tree-deciduous"></span>
                 <span>Seguimiento por ingenio</span>
             </a>
+            <?php if ($puedeVerDashboardIngenio): ?>
+                <a href="dashboard_ingenio.php" class="cengi-nav-item<?php echo $isActive(['dashboard_ingenio.php']); ?>">
+                    <span class="glyphicon glyphicon-dashboard"></span>
+                    <span>Mi ingenio</span>
+                </a>
+            <?php endif; ?>
             <?php if ($puedeGestionar): ?>
                 <a href="exportaringenios.php" class="cengi-nav-item">
                     <span class="glyphicon glyphicon-save-file"></span>

@@ -14,6 +14,10 @@ $area = trim((string) ($_POST['area'] ?? ''));
 $puesto = trim((string) ($_POST['puesto'] ?? ''));
 $usuarioID = cengi_usuario_actual_id();
 
+if (!cengi_ve_todo_por_rol_o_ingenio()) {
+    $ingenioID = cengi_ingenio_id_actual();
+}
+
 if (
     $cui === '' ||
     $nombre === '' ||

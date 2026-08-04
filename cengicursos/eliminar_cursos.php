@@ -40,13 +40,15 @@ if (!empty($_GET['id'])) {
     } catch (PDOException $e) {
 
         $resultado = false;
-        $error = $e->getMessage();
+        error_log('No fue posible eliminar el curso: ' . $e->getMessage());
 
         if (
-            stripos($error, 'foreign key') !== false ||
-            stripos($error, 'violates foreign key') !== false
+            stripos($e->getMessage(), 'foreign key') !== false ||
+            stripos($e->getMessage(), 'violates foreign key') !== false
         ) {
             $error = "El curso tiene participantes asociados";
+        } else {
+            $error = "No fue posible eliminar el curso";
         }
     }
 
@@ -89,7 +91,7 @@ else
         <?php } else { ?>
 
             <h3>Error al eliminar</h3>
-            <p><?php echo strtoupper($error); ?></p>
+            <p><?php echo htmlspecialchars(strtoupper($error)); ?></p>
 
         <?php } ?>
 

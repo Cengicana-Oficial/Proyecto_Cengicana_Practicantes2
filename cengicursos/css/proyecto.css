@@ -2434,6 +2434,1383 @@ body.cengi-nav-loading {
     }
 }
 
+/* ===== Organizaciones: tabla (reutiliza tarjeta/filtros de cengi-courses-*) ===== */
+
+.cengi-canvas .cengi-org-table {
+    width: 100%;
+    min-width: 960px;
+    margin: 0;
+    border-collapse: collapse;
+    color: #1E2A1A;
+    font-size: 12px;
+}
+
+.cengi-canvas .cengi-org-table th {
+    padding: 10px 12px;
+    border-bottom: 1px solid #E4E7E1;
+    background: #FAFBF8;
+    color: #4B5A45;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.cengi-canvas .cengi-org-table td {
+    padding: 11px 12px;
+    border-bottom: 1px solid #E4E7E1;
+    background: #ffffff;
+    vertical-align: middle;
+}
+
+.cengi-canvas .cengi-org-table tbody tr:hover > td {
+    background: #FAFBF6;
+}
+
+.cengi-canvas .cengi-org-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.cengi-canvas .cengi-org-table .is-actions {
+    width: 132px;
+    white-space: nowrap;
+}
+
+.cengi-canvas .cengi-org-table .cengi-org-name {
+    min-width: 170px;
+}
+
+.cengi-canvas .cengi-org-table .cengi-row-actions {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.cengi-canvas .cengi-org-table .cengi-status-badge {
+    padding: 4px 9px;
+    border: 0;
+    font-size: 10.5px;
+}
+
+/* Ajustes fieles al prototipo de Organizaciones en Cengicursos2.html */
+.cengi-canvas .cengi-organizations-page {
+    width: calc(100% - var(--cengi-sidebar-width));
+    max-width: none;
+}
+
+.cengi-organizations-page .cengi-courses-filters {
+    justify-content: space-between;
+}
+
+.cengi-organizations-page .cengi-course-search {
+    flex: 0 1 260px;
+    max-width: 260px;
+}
+
+.cengi-organizations-page .cengi-courses-filters > select {
+    margin-right: auto;
+}
+
+.cengi-organizations-page .cengi-org-contact {
+    color: #4B5A45;
+    white-space: nowrap;
+}
+
+.cengi-organizations-page .cengi-org-contact span {
+    color: inherit;
+}
+
+.cengi-organizations-page .cengi-org-table .is-actions {
+    width: 76px;
+}
+
+.cengi-organizations-page .cengi-org-table .cengi-action-btn,
+.cengi-organizations-page .cengi-org-table .cengi-action-btn.is-view,
+.cengi-organizations-page .cengi-org-table .cengi-action-btn.is-edit {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    border: 1px solid #E4E7E1 !important;
+    border-radius: 7px;
+    background: #ffffff !important;
+    color: #4B5A45 !important;
+    transform: none;
+}
+
+.cengi-organizations-page .cengi-org-table .cengi-action-btn:hover,
+.cengi-organizations-page .cengi-org-table .cengi-action-btn.is-view:hover,
+.cengi-organizations-page .cengi-org-table .cengi-action-btn.is-edit:hover {
+    border-color: #E4E7E1 !important;
+    background: #F2F4EF !important;
+    color: #1E2A1A !important;
+    transform: none;
+}
+
+.cengi-organizations-page .cengi-org-table .cengi-action-btn .glyphicon {
+    font-size: 12px;
+}
+
+.cengi-canvas .cengi-org-user-view {
+    overflow: hidden;
+    margin-top: 0;
+    border: 1px solid #E4E7E1;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: var(--cengi-shadow);
+}
+
+.cengi-canvas .cengi-org-user-view-head {
+    padding: 16px 18px;
+    border-bottom: 1px solid #E4E7E1;
+}
+
+.cengi-canvas .cengi-org-user-view-head h3 {
+    margin: 0;
+    color: #1E2A1A;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14.5px;
+    font-weight: 600;
+}
+
+.cengi-canvas .cengi-org-user-view-head p {
+    margin: 2px 0 0;
+    color: #4B5A45;
+    font-size: 11.5px;
+}
+
+.cengi-canvas .cengi-org-user-view-body {
+    padding: 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.cengi-canvas .cengi-org-user-view .cengi-tag {
+    padding: 4px 9px;
+    background: #EEF1EC;
+    color: #4B5A45;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.cengi-canvas .cengi-org-user-view .cengi-tag.is-denied {
+    background: #FBE3E0;
+    color: #B23223;
+}
+
+#org-form-modal.cengi-org-form-modal .modal-dialog.cengi-modal-compact {
+    width: min(480px, calc(100vw - 40px));
+    max-width: 480px;
+}
+
+#org-form-modal.cengi-org-form-modal .modal-content {
+    border-radius: 14px;
+}
+
+#org-form-modal.cengi-org-form-modal .modal-header {
+    min-height: 0;
+    padding: 18px 56px 18px 22px;
+    background: #ffffff;
+}
+
+#org-form-modal.cengi-org-form-modal .modal-header .close {
+    top: 14px;
+    right: 18px;
+}
+
+#org-form-modal.cengi-org-form-modal .modal-title {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+#org-form-modal.cengi-org-form-modal .modal-body {
+    padding: 22px;
+}
+
+#org-form-modal.cengi-org-form-modal .cengi-participant-modal-grid {
+    gap: 14px 16px;
+}
+
+#org-form-modal.cengi-org-form-modal .cengi-participant-modal-grid .is-full {
+    grid-column: 1 / -1;
+}
+
+#org-form-modal.cengi-org-form-modal .modal-footer {
+    padding: 16px 22px;
+    background: #ffffff;
+}
+
+#org-form-modal.cengi-org-form-modal .modal-footer .btn-primary {
+    background: var(--cengi-primary) !important;
+    border-color: var(--cengi-primary) !important;
+}
+
+.cengi-org-detail-modal.in {
+    padding: 20px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.cengi-org-detail-modal .modal-dialog {
+    width: min(640px, calc(100vw - 40px));
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+.cengi-org-detail-modal .modal-content {
+    overflow: hidden;
+    max-height: 88vh;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .25);
+}
+
+.cengi-org-detail-head {
+    padding: 20px 22px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid #E4E7E1;
+}
+
+.cengi-org-detail-avatar {
+    width: 52px;
+    height: 52px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: var(--cengi-naranja);
+    color: #ffffff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.cengi-org-detail-heading {
+    min-width: 0;
+    flex: 1;
+}
+
+.cengi-org-detail-heading h4 {
+    margin: 0;
+    color: #1E2A1A;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.cengi-org-detail-heading p {
+    margin: 2px 0 0;
+    color: #4B5A45;
+    font-size: 12px;
+}
+
+.cengi-org-modal-close {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    padding: 0;
+    border: 1px solid #E4E7E1;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #4B5A45;
+    font-size: 20px;
+    font-weight: 400;
+    line-height: 24px;
+}
+
+.cengi-org-modal-close:hover {
+    background: #F2F4EF;
+    color: #1E2A1A;
+}
+
+.cengi-org-detail-stats {
+    padding: 18px 22px;
+    display: flex;
+    gap: 22px;
+    border-bottom: 1px solid #E4E7E1;
+}
+
+.cengi-org-detail-stats > div {
+    min-width: 0;
+}
+
+.cengi-org-detail-stats strong,
+.cengi-org-detail-stats span {
+    display: block;
+}
+
+.cengi-org-detail-stats strong {
+    color: #1E2A1A;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+}
+
+.cengi-org-detail-stats > div:last-child strong {
+    color: #3E7A12;
+}
+
+.cengi-org-detail-stats span {
+    margin-top: 2px;
+    color: #4B5A45;
+    font-size: 11.5px;
+}
+
+.cengi-org-detail-body {
+    padding: 18px 22px;
+}
+
+.cengi-org-detail-body h5 {
+    margin: 0 0 10px;
+    color: #4B5A45;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.cengi-org-detail-course-row {
+    padding: 11px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    border-bottom: 1px solid #E4E7E1;
+    font-size: 12.5px;
+}
+
+.cengi-org-detail-course-row strong {
+    color: #1E2A1A;
+    font-weight: 600;
+}
+
+.cengi-org-detail-course-row span {
+    color: #4B5A45;
+    text-align: right;
+}
+
+.cengi-org-detail-empty {
+    padding: 18px 12px;
+    border-bottom: 1px solid #E4E7E1;
+    color: #4B5A45;
+    font-size: 12px;
+    text-align: center;
+}
+
+.cengi-org-detail-notice {
+    margin-top: 14px;
+}
+
+.cengi-org-detail-footer {
+    padding: 16px 22px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    border-top: 1px solid #E4E7E1;
+}
+
+.cengi-org-detail-footer .btn {
+    padding: 9px 14px;
+    border-radius: 8px !important;
+    font-size: 12.5px;
+    font-weight: 600;
+    box-shadow: none !important;
+}
+
+.cengi-org-detail-footer .btn-primary {
+    background: var(--cengi-primary) !important;
+    border-color: var(--cengi-primary) !important;
+}
+
+@media (max-width: 1024px) {
+    .cengi-canvas .cengi-organizations-page {
+        width: 100%;
+    }
+}
+
+@media (max-width: 640px) {
+    .cengi-organizations-page .cengi-courses-filters {
+        align-items: stretch;
+    }
+
+    .cengi-organizations-page .cengi-course-search {
+        flex: 0 0 auto;
+        max-width: none;
+    }
+
+    .cengi-organizations-page .cengi-courses-filters > select {
+        margin-right: 0;
+    }
+
+    #org-form-modal.cengi-org-form-modal .cengi-participant-modal-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #org-form-modal.cengi-org-form-modal .cengi-participant-modal-grid .is-full {
+        grid-column: auto;
+    }
+
+    .cengi-org-detail-modal.in {
+        padding: 10px !important;
+        align-items: flex-start;
+    }
+
+    .cengi-org-detail-modal .modal-dialog {
+        width: 100%;
+        margin-top: 10px;
+    }
+
+    .cengi-org-detail-stats {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .cengi-org-detail-course-row {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .cengi-org-detail-course-row span {
+        text-align: left;
+    }
+
+    .cengi-org-detail-footer {
+        flex-direction: column-reverse;
+    }
+
+    .cengi-org-detail-footer .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+/* ===== Participantes por curso ===== */
+
+.cengi-participants-page .cengi-participants-shell {
+    width: calc(100% - var(--cengi-sidebar-width));
+    margin-left: var(--cengi-sidebar-width);
+    padding: 22px 30px 38px;
+}
+
+.cengi-participants-page .cengi-flash {
+    margin-bottom: 14px;
+    border-radius: 9px;
+    font-size: 12px;
+}
+
+.cengi-participants-toolbar-card,
+.cengi-participants-table-card {
+    border: 1px solid #e2e7de;
+    border-radius: 11px;
+    background: #fff;
+    box-shadow: 0 5px 18px rgba(34, 50, 29, 0.06);
+}
+
+.cengi-participants-toolbar-card {
+    margin-bottom: 15px;
+    padding: 16px 18px;
+}
+
+.cengi-participants-toolbar {
+    display: grid;
+    grid-template-columns: minmax(230px, 1.2fr) minmax(240px, 1.35fr) minmax(145px, .65fr) auto;
+    align-items: end;
+    gap: 11px;
+}
+
+.cengi-participants-toolbar label {
+    display: block;
+    margin-bottom: 5px;
+    color: #667061;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.cengi-participants-toolbar .form-control {
+    height: 38px;
+    border-color: #dfe5db;
+    border-radius: 7px;
+    background: #fbfcfa;
+    color: #263321;
+    font-size: 12px;
+    box-shadow: none;
+}
+
+.cengi-participants-search {
+    position: relative;
+}
+
+.cengi-participants-search .glyphicon {
+    position: absolute;
+    z-index: 2;
+    top: 13px;
+    left: 12px;
+    color: #84907f;
+    font-size: 12px;
+}
+
+.cengi-participants-search .form-control {
+    padding-left: 34px;
+}
+
+.cengi-participants-toolbar .btn,
+.cengi-participants-toolbar-actions .btn {
+    min-height: 38px;
+    padding: 9px 13px;
+    border-color: #dce3d8;
+    border-radius: 7px !important;
+    background: #fff;
+    color: #34402f;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 18px;
+    box-shadow: none !important;
+}
+
+.cengi-participants-toolbar-actions {
+    margin-top: 13px;
+    padding-top: 13px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #edf0eb;
+}
+
+.cengi-participants-toolbar-actions .btn-success {
+    border-color: var(--cengi-primary-deep);
+    background: var(--cengi-primary-deep) !important;
+    color: #fff;
+}
+
+.cengi-participants-table-card {
+    overflow: hidden;
+}
+
+.cengi-participants-table-card .table-responsive {
+    margin: 0;
+    border: 0;
+}
+
+.cengi-participants-table {
+    min-width: 1160px;
+    margin: 0;
+}
+
+.cengi-participants-table > thead > tr > th {
+    padding: 12px 11px;
+    border-bottom: 1px solid #dde3da;
+    background: #f6f8f4;
+    color: #65715f;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .055em;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+.cengi-participants-table > tbody > tr > td {
+    padding: 11px;
+    border-top: 1px solid #edf0eb;
+    color: #384334;
+    font-size: 11px;
+    vertical-align: middle;
+}
+
+.cengi-participants-table > tbody > tr:hover > td {
+    background: #fbfcfa;
+}
+
+.cengi-participant-name {
+    min-width: 190px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cengi-participant-avatar,
+.cengi-participant-profile-avatar {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #e9f5d5;
+    color: #557b10;
+    font-weight: 800;
+}
+
+.cengi-participant-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 10px;
+}
+
+.cengi-participant-name strong,
+.cengi-participant-name small {
+    display: block;
+}
+
+.cengi-participant-name strong {
+    color: #202c1c;
+    font-size: 11.5px;
+}
+
+.cengi-participant-name small {
+    margin-top: 2px;
+    color: #899284;
+    font-size: 9.5px;
+}
+
+.cengi-participant-cui {
+    color: #53604e;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 10.5px;
+}
+
+.cengi-participant-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 9px;
+    font-weight: 750;
+}
+
+.cengi-participant-status.is-active { background: #edf4ff; color: #32659b; }
+.cengi-participant-status.is-approved { background: #edf8df; color: #547d15; }
+.cengi-participant-status.is-inactive { background: #f0f1ef; color: #70776c; }
+
+.cengi-participant-attendance {
+    min-width: 105px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.cengi-participant-attendance .progress {
+    width: 65px;
+    height: 6px;
+    margin: 0;
+    border-radius: 4px;
+    background: #e9ede6;
+    box-shadow: none;
+}
+
+.cengi-participant-attendance .progress-bar {
+    border-radius: 4px;
+    background: var(--cengi-primary);
+    box-shadow: none;
+}
+
+.cengi-participant-attendance span { color: #596454; font-size: 9.5px; font-weight: 700; }
+.cengi-participant-diploma { color: #3d7318; font-size: 10px; font-weight: 700; }
+
+.cengi-participants-table button.cengi-action-btn {
+    cursor: pointer;
+}
+
+.cengi-participants-table .cengi-action-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid #dfe4dc;
+    border-radius: 6px;
+    background: #fff;
+    color: #677162;
+    line-height: 26px;
+    text-align: center;
+    box-shadow: none;
+}
+
+.cengi-participants-table .cengi-action-btn:hover { border-color: #a8c475; color: #47730d; background: #f7fbea; }
+.cengi-participants-table .cengi-action-btn.is-delete:hover { border-color: #e1aaa5; color: #a83a31; background: #fff6f5; }
+
+.cengi-participants-empty {
+    padding: 48px 20px !important;
+    color: #899284 !important;
+    text-align: center;
+}
+
+.cengi-participants-empty > span,
+.cengi-participants-empty > strong,
+.cengi-participants-empty > small { display: block; }
+.cengi-participants-empty > span { margin-bottom: 9px; font-size: 23px; }
+.cengi-participants-empty > strong { color: #596454; font-size: 12px; }
+.cengi-participants-empty > small { margin-top: 4px; font-size: 10px; }
+.cengi-participants-empty.is-small { padding: 22px !important; border: 1px dashed #dfe4dc; border-radius: 8px; }
+
+.cengi-participants-table-foot {
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    border-top: 1px solid #e5e9e2;
+    background: #fafbf9;
+    color: #838d7e;
+    font-size: 9.5px;
+}
+
+/* Modales de participantes */
+
+.cengi-participant-modal.in {
+    padding: 20px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.cengi-participant-modal .modal-dialog {
+    width: min(680px, calc(100vw - 40px));
+    max-width: 680px;
+    margin: 0 auto;
+}
+
+.cengi-participant-modal .modal-dialog.cengi-modal-compact {
+    width: min(560px, calc(100vw - 40px));
+    max-width: 560px;
+}
+
+.cengi-participant-modal .modal-content {
+    overflow: hidden;
+    border: 1px solid #e2e7de;
+    border-radius: 13px;
+    background: #fff;
+    box-shadow: 0 25px 72px rgba(25, 39, 20, .25);
+}
+
+.cengi-participant-modal .modal-header {
+    position: relative;
+    min-height: 74px;
+    padding: 17px 55px 16px 70px;
+    border-bottom: 1px solid #e7ebe4;
+    background: #fafbf9;
+}
+
+.cengi-participant-modal .modal-header .close {
+    position: absolute;
+    top: 18px;
+    right: 19px;
+    width: 29px;
+    height: 29px;
+    margin: 0;
+    border: 1px solid #dfe5dc;
+    border-radius: 7px;
+    background: #fff;
+    color: #596454;
+    font-weight: 400;
+    line-height: 25px;
+    opacity: 1;
+}
+
+.cengi-participant-modal .cengi-modal-icon {
+    position: absolute;
+    top: 17px;
+    left: 20px;
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    background: #eaf5d6;
+    color: #5e8618;
+    font-size: 15px;
+}
+
+.cengi-participant-modal .modal-title {
+    color: #202c1c;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 17px;
+    font-weight: 750;
+}
+
+.cengi-participant-modal .modal-header p {
+    margin: 3px 0 0;
+    color: #778172;
+    font-size: 10.5px;
+}
+
+.cengi-participant-modal .modal-body {
+    max-height: calc(100vh - 220px);
+    padding: 21px 22px 8px;
+    overflow-y: auto;
+}
+
+.cengi-participant-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+}
+
+.cengi-participant-modal-grid.is-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cengi-participant-modal .form-group { margin-bottom: 14px; }
+.cengi-participant-modal-grid .form-group { margin-bottom: 0; }
+
+.cengi-participant-modal label:not(.cengi-upload-dropzone) {
+    margin-bottom: 6px;
+    color: #303c2b;
+    font-size: 10.5px;
+    font-weight: 750;
+}
+
+.cengi-participant-modal .form-control {
+    height: 38px;
+    border: 1px solid #dfe5dc;
+    border-radius: 7px;
+    background: #fff;
+    color: #263321;
+    font-size: 11.5px;
+    box-shadow: none;
+}
+
+.cengi-participant-modal input[type="file"].form-control { height: auto; }
+.cengi-participant-modal .form-control:focus { border-color: var(--cengi-primary); box-shadow: 0 0 0 2px rgba(163, 211, 0, .22); }
+
+.cengi-participant-modal .modal-footer {
+    padding: 14px 22px 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #e7ebe4;
+    background: #fafbf9;
+}
+
+.cengi-participant-modal .modal-footer .btn { min-height: 37px; padding: 8px 14px; border-radius: 7px !important; font-size: 11px; box-shadow: none !important; }
+
+.cengi-upload-guide {
+    margin-bottom: 15px;
+    padding: 12px 14px;
+    border: 1px solid #dfe8d3;
+    border-radius: 8px;
+    background: #f6faef;
+}
+
+.cengi-upload-guide strong,
+.cengi-upload-guide span,
+.cengi-upload-guide small { display: block; }
+.cengi-upload-guide strong { margin-bottom: 4px; color: #517316; font-size: 10px; text-transform: uppercase; }
+.cengi-upload-guide span { color: #34402f; font-family: Consolas, monospace; font-size: 10.5px; }
+.cengi-upload-guide small { margin-top: 4px; color: #7a8474; font-size: 9.5px; }
+
+.cengi-upload-dropzone {
+    min-height: 118px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed #aeba9f;
+    border-radius: 9px;
+    background: #fbfcfa;
+    color: #53604e;
+    cursor: pointer;
+    text-align: center;
+}
+
+.cengi-upload-dropzone > .glyphicon { margin-bottom: 7px; color: #76a628; font-size: 25px; }
+.cengi-upload-dropzone strong { font-size: 11px; }
+.cengi-upload-dropzone small { margin-top: 3px; color: #899284; font-size: 9.5px; }
+.cengi-upload-dropzone input { max-width: 270px; margin-top: 12px; font-size: 10px; }
+
+.cengi-participant-profile-head { padding: 2px 0 19px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid #e8ece5; }
+.cengi-participant-profile-avatar { width: 56px; height: 56px; font-size: 15px; }
+.cengi-participant-profile-head h3 { margin: 0 0 4px; color: #202c1c; font-size: 16px; font-weight: 750; }
+.cengi-participant-profile-head p { margin: 0 0 3px; color: #596454; font-size: 10.5px; }
+.cengi-participant-profile-head small { color: #8a9385; font-family: Consolas, monospace; font-size: 9.5px; }
+.cengi-participant-history-title { margin: 18px 0 10px; color: #394535; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.cengi-participant-history-item { padding: 10px 11px; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 9px; border-bottom: 1px solid #edf0eb; }
+.cengi-participant-history-item > .glyphicon { color: #7da829; }
+.cengi-participant-history-item strong, .cengi-participant-history-item small { display: block; }
+.cengi-participant-history-item strong { color: #34402f; font-size: 10.5px; }
+.cengi-participant-history-item small { margin-top: 2px; color: #899284; font-size: 9px; }
+.cengi-participant-history-item b { color: #5d781e; font-size: 10px; }
+
+.cengi-confirm-content .modal-body { padding: 31px 30px 18px; text-align: center; }
+.cengi-confirm-icon { width: 48px; height: 48px; margin: 0 auto 13px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #fff0ee; color: #b74338; font-size: 18px; }
+.cengi-confirm-content h4 { margin: 0 0 8px; color: #253020; font-size: 17px; font-weight: 750; }
+.cengi-confirm-content p { margin: 0; color: #667061; font-size: 11px; line-height: 1.55; }
+.cengi-confirm-content .modal-footer { justify-content: center; }
+
+@media (max-width: 900px) {
+    .cengi-participants-toolbar { grid-template-columns: 1fr 1fr; }
+    .cengi-participants-toolbar-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 1024px) {
+    .cengi-participants-page .cengi-participants-shell {
+        width: 100%;
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 640px) {
+    .cengi-participants-page .cengi-participants-shell { padding: 14px 12px 28px; }
+    .cengi-participants-toolbar { grid-template-columns: 1fr; }
+    .cengi-participants-toolbar-actions { flex-direction: column; }
+    .cengi-participants-toolbar-actions .btn { width: 100%; }
+    .cengi-participant-modal.in { padding: 10px !important; align-items: flex-start; }
+    .cengi-participant-modal .modal-dialog, .cengi-participant-modal .modal-dialog.cengi-modal-compact { width: 100%; margin-top: 10px; }
+    .cengi-participant-modal-grid, .cengi-participant-modal-grid.is-three { grid-template-columns: 1fr; }
+    .cengi-participant-modal .modal-body { max-height: calc(100vh - 205px); padding: 18px 17px 7px; }
+    .cengi-participant-modal .modal-header { padding-right: 48px; }
+}
+
+/* ===== Cursos: detalle y formulario ampliado ===== */
+
+.cengi-canvas .cengi-course-detail {
+    grid-template-columns: minmax(310px, .9fr) minmax(390px, 1.1fr);
+}
+
+.cengi-canvas .cengi-course-detail-meta {
+    margin-top: 13px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 18px;
+}
+
+.cengi-canvas .cengi-course-detail-meta span {
+    color: #4B5A45;
+    font-size: 10.5px;
+}
+
+.cengi-canvas .cengi-course-detail-meta b {
+    display: block;
+    margin-bottom: 2px;
+    color: #7B8676;
+    font-size: 8.5px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.cengi-course-detail-modules {
+    min-width: 0;
+}
+
+.cengi-course-modules-mini {
+    display: grid;
+    grid-template-columns: minmax(160px, 1fr) 60px 44px 44px;
+    align-items: center;
+    border-bottom: 1px solid #E8ECE5;
+}
+
+.cengi-course-modules-mini span {
+    padding: 7px 8px;
+    color: #3F4B3A;
+    font-size: 10.5px;
+}
+
+.cengi-course-modules-mini span:not(:first-child) {
+    text-align: center;
+}
+
+.cengi-course-modules-mini.is-head {
+    border: 1px solid #E2E7DF;
+    border-radius: 7px 7px 0 0;
+    background: #F5F7F3;
+}
+
+.cengi-course-modules-mini.is-head span {
+    color: #778172;
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.cengi-course-modules-empty {
+    padding: 13px 14px;
+    border: 1px dashed #D9E0D5;
+    border-radius: 8px;
+    background: #FCFDFB;
+    color: #778172 !important;
+    font-size: 10.5px !important;
+}
+
+.cengi-course-form-modal .modal-dialog {
+    width: min(840px, calc(100vw - 40px));
+    max-width: 840px;
+}
+
+.cengi-course-activity-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.cengi-course-activity-card {
+    min-height: 66px;
+    margin: 0 !important;
+    padding: 11px 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #DDE3D9;
+    border-radius: 9px;
+    background: #FFFFFF;
+    cursor: pointer;
+}
+
+.cengi-course-activity-card.is-selected {
+    border-color: #8EBE42;
+    background: #F4FAE9;
+    box-shadow: 0 0 0 1px rgba(115, 188, 37, .15);
+}
+
+.cengi-course-activity-card > input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.cengi-course-activity-card > .glyphicon {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    border-radius: 8px;
+    background: #EEF3E9;
+    color: #63715C;
+    font-size: 14px;
+}
+
+.cengi-course-activity-card.is-selected > .glyphicon {
+    background: #DFF0C5;
+    color: #4F7B10;
+}
+
+.cengi-course-activity-card strong,
+.cengi-course-activity-card small {
+    display: block;
+}
+
+.cengi-course-activity-card strong {
+    color: #283424;
+    font-size: 11px;
+}
+
+.cengi-course-activity-card small {
+    margin-top: 3px;
+    color: #788373;
+    font-size: 9px;
+    font-weight: 500;
+    line-height: 1.35;
+}
+
+.cengi-course-form-modal .cengi-course-code-input {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    text-transform: uppercase;
+}
+
+.cengi-course-modules-editor {
+    margin-top: 21px;
+    padding-top: 17px;
+    border-top: 1px solid #E4E7E1;
+}
+
+.cengi-course-modules-editor-head {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.cengi-course-modules-editor-head strong,
+.cengi-course-modules-editor-head small {
+    display: block;
+}
+
+.cengi-course-modules-editor-head strong {
+    color: #263321;
+    font-size: 11.5px;
+}
+
+.cengi-course-modules-editor-head small {
+    max-width: 540px;
+    margin-top: 3px;
+    color: #7A8475;
+    font-size: 9.5px;
+    line-height: 1.4;
+}
+
+.cengi-course-modules-editor-head .btn {
+    flex: 0 0 auto;
+    border-radius: 7px !important;
+    font-size: 10px;
+    box-shadow: none !important;
+}
+
+.cengi-course-module-row {
+    margin-bottom: 7px;
+    display: grid;
+    grid-template-columns: minmax(230px, 1fr) 90px 82px 82px 31px;
+    align-items: center;
+    gap: 8px;
+}
+
+.cengi-course-module-row.is-head {
+    margin-bottom: 5px;
+}
+
+.cengi-course-module-row.is-head span {
+    color: #7D8778;
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.cengi-course-module-row .form-control {
+    height: 35px;
+}
+
+.cengi-course-module-check {
+    height: 35px;
+    margin: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid #E0E5DD;
+    border-radius: 7px;
+    color: #596454 !important;
+    font-size: 9.5px !important;
+    cursor: pointer;
+}
+
+.cengi-course-module-check input {
+    margin: 0;
+}
+
+.cengi-course-module-remove {
+    width: 31px;
+    height: 31px;
+    padding: 0;
+    border: 1px solid #E4D6D3;
+    border-radius: 7px;
+    background: #FFF8F7;
+    color: #B05249;
+    line-height: 29px;
+}
+
+.cengi-course-modules-notice {
+    margin-top: 11px;
+    padding: 10px 12px;
+    display: flex;
+    gap: 8px;
+    border: 1px solid #DCE8CD;
+    border-radius: 8px;
+    background: #F6FAF0;
+    color: #5C6A55;
+    font-size: 9.5px;
+    line-height: 1.45;
+}
+
+.cengi-course-modules-notice .glyphicon {
+    color: #73A51E;
+}
+
+@media (max-width: 767px) {
+    .cengi-canvas .cengi-course-detail,
+    .cengi-course-activity-cards,
+    .cengi-canvas .cengi-course-detail-meta {
+        grid-template-columns: 1fr;
+    }
+
+    .cengi-course-module-row {
+        grid-template-columns: minmax(150px, 1fr) 70px 62px 62px 31px;
+        min-width: 550px;
+    }
+
+    .cengi-course-modules-editor {
+        overflow-x: auto;
+    }
+
+    .cengi-course-modules-editor-head {
+        min-width: 550px;
+    }
+}
+
+@media print {
+    .cengi-participants-page .cengi-sidebar,
+    .cengi-participants-page .cengi-topbar,
+    .cengi-participants-toolbar-card,
+    .cengi-participants-table .cengi-row-actions { display: none !important; }
+    .cengi-participants-page .cengi-participants-shell { width: 100%; margin-left: 0; padding: 0; }
+    .cengi-participants-table-card { border: 0; box-shadow: none; }
+}
+
+/* Control QR de eventos: vista y modales basados en el prototipo Cengicursos2. */
+.cengi-eventos-qr-page .cengi-event-card {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--cengi-shadow);
+}
+
+.cengi-eventos-qr-page .cengi-event-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+}
+
+.cengi-eventos-qr-page .cengi-event-heading small,
+.cengi-eventos-qr-page .cengi-modal-hint {
+    display: block;
+    margin-top: 3px;
+    color: var(--cengi-muted);
+    font-size: 11.5px;
+    font-weight: 400;
+}
+
+.cengi-eventos-qr-page .cengi-event-table-body { padding: 0; }
+.cengi-eventos-qr-page .cengi-events-table { margin-bottom: 0; }
+.cengi-eventos-qr-page .cengi-events-table > tbody > tr > td { vertical-align: middle; }
+.cengi-eventos-qr-page .cengi-events-table > tbody > tr:last-child > td { border-bottom: 0; }
+
+.cengi-eventos-qr-page .cengi-event-progress {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 92px;
+}
+
+.cengi-eventos-qr-page .cengi-event-progress .cengi-progress-track { width: 58px; }
+.cengi-eventos-qr-page .cengi-view-participants { white-space: nowrap; }
+.cengi-eventos-qr-page .cengi-qr-notice { margin-top: 12px; }
+.cengi-eventos-qr-page .cengi-example-badge-wrap { display: flex; justify-content: center; }
+.cengi-eventos-qr-page .cengi-badge-eyebrow { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; opacity: .88; }
+.cengi-eventos-qr-page .cengi-badge-event { margin-top: 4px; font-family: 'Space Grotesk', sans-serif; font-size: 14px; font-weight: 700; }
+.cengi-eventos-qr-page .cengi-badge-name { font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; }
+.cengi-eventos-qr-page .cengi-badge-company { margin: 2px 0 14px; color: var(--cengi-muted); font-size: 12px; }
+.cengi-eventos-qr-page .cengi-badge-code { margin-top: 10px; color: var(--cengi-muted); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+.cengi-eventos-qr-page .cengi-qr-box svg { display: block; width: 96px; height: 96px; }
+
+.cengi-eventos-qr-page #modalEventoParticipantes.in,
+.cengi-eventos-qr-page #modalQrParticipante.in {
+    padding: 20px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.cengi-eventos-qr-page .cengi-event-participants-dialog {
+    width: min(780px, calc(100vw - 40px));
+    max-width: 780px;
+    margin: 0 auto;
+}
+
+.cengi-eventos-qr-page .cengi-event-participants-dialog .modal-content {
+    max-height: calc(100vh - 40px);
+    overflow: hidden;
+    border-color: #dfe6dc;
+    box-shadow: 0 25px 72px rgba(25, 39, 20, .27);
+}
+
+.cengi-eventos-qr-page .cengi-participants-modal-head {
+    position: relative;
+    min-height: 82px;
+    padding: 18px 58px 17px 22px;
+    border-bottom: 1px solid #e4e9e1;
+    background: #fbfcfa;
+}
+
+.cengi-eventos-qr-page .cengi-participants-modal-head .close {
+    position: absolute;
+    top: 18px;
+    right: 20px;
+    width: 30px;
+    height: 30px;
+    margin: 0;
+    border: 1px solid #dbe3d8;
+    border-radius: 7px;
+    background: #fff;
+    color: #52604e;
+    font-size: 20px;
+    font-weight: 400;
+    line-height: 25px;
+    opacity: 1;
+}
+
+.cengi-eventos-qr-page .cengi-participants-modal-head .close:hover,
+.cengi-eventos-qr-page .cengi-participants-modal-head .close:focus {
+    border-color: #b8c7b1;
+    background: #f1f5ee;
+    color: #283823;
+}
+
+.cengi-eventos-qr-page .cengi-participants-modal-body {
+    padding: 0;
+    max-height: calc(100vh - 142px);
+    overflow-y: auto;
+    background: #fff;
+}
+.cengi-eventos-qr-page .cengi-participants-toolbar { display: flex; align-items: center; gap: 10px; padding: 16px 22px; flex-wrap: wrap; }
+.cengi-eventos-qr-page .cengi-participant-search { flex: 1 1 230px; min-width: 190px; }
+.cengi-eventos-qr-page .cengi-event-register-form { margin: 0 22px 16px; padding: 16px; border: 1px solid var(--cengi-border); border-radius: 10px; background: #FAFBF8; }
+.cengi-eventos-qr-page .cengi-register-actions { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 0; }
+.cengi-eventos-qr-page .cengi-modal-loading,
+.cengi-eventos-qr-page .cengi-empty-participants { padding: 35px 22px; color: var(--cengi-muted); text-align: center; }
+.cengi-eventos-qr-page .cengi-modal-loading .glyphicon { margin-right: 5px; }
+.cengi-eventos-qr-page #evpTablaWrap {
+    max-height: min(430px, calc(100vh - 245px));
+    overflow: auto;
+    border-top: 1px solid #e4e9e1;
+}
+
+.cengi-eventos-qr-page .cengi-event-participants-table { margin-bottom: 0; }
+.cengi-eventos-qr-page .cengi-event-participants-table > thead > tr > th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8faf7;
+    box-shadow: inset 0 -1px #dfe6dc;
+}
+.cengi-eventos-qr-page .cengi-event-participants-table > tbody > tr > td { vertical-align: middle; }
+.cengi-eventos-qr-page .cengi-event-participants-table > tbody > tr:last-child > td { border-bottom: 0; }
+
+.cengi-eventos-qr-page .cengi-person-cell,
+.cengi-eventos-qr-page .cengi-person-qr { display: flex; align-items: center; gap: 9px; }
+.cengi-eventos-qr-page .cengi-person-cell strong { display: block; white-space: nowrap; }
+.cengi-eventos-qr-page .cengi-person-cell small,
+.cengi-eventos-qr-page .cengi-entry-time { display: block; margin-top: 2px; color: var(--cengi-muted); font-size: 10px; }
+.cengi-eventos-qr-page .cengi-avatar-sm { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #EAF6DD; color: var(--cengi-primary-deep); font-weight: 700; flex: none; }
+.cengi-eventos-qr-page .cengi-mini-qr { width: 42px; height: 42px; padding: 2px; border: 1px solid var(--cengi-border); border-radius: 5px; background: #fff; flex: none; }
+.cengi-eventos-qr-page .cengi-mini-qr svg { display: block; width: 100%; height: 100%; }
+.cengi-eventos-qr-page .cengi-person-qr .mono { color: var(--cengi-muted); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; white-space: nowrap; }
+.cengi-eventos-qr-page .cengi-inline-entry-form { margin-top: 6px; }
+
+.cengi-eventos-qr-page .cengi-qr-detail-dialog { width: 390px; max-width: calc(100vw - 40px); margin: 0 auto; }
+.cengi-eventos-qr-page .cengi-qr-detail-body { padding: 22px; text-align: center; }
+.cengi-eventos-qr-page .cengi-individual-badge { width: 270px; }
+.cengi-eventos-qr-page .cengi-qr-box-large { width: 160px; height: 160px; }
+.cengi-eventos-qr-page .cengi-qr-box-large svg { width: 140px; height: 140px; }
+.cengi-eventos-qr-page .cengi-qr-help { margin: 14px 0 0; color: var(--cengi-muted); font-size: 11.5px; }
+.cengi-eventos-qr-page .cengi-qr-detail-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 767px) {
+    .cengi-eventos-qr-page .cengi-event-heading { align-items: flex-start; flex-direction: column; }
+    .cengi-eventos-qr-page .cengi-participants-toolbar > .btn { flex: 1 1 auto; }
+    .cengi-eventos-qr-page .cengi-participants-modal-body { max-height: 76vh; }
+    .cengi-eventos-qr-page #modalEventoParticipantes.in,
+    .cengi-eventos-qr-page #modalQrParticipante.in { padding: 10px !important; align-items: flex-start; }
+    .cengi-eventos-qr-page .cengi-event-participants-dialog { width: 100%; max-width: none; margin-top: 8px; }
+    .cengi-eventos-qr-page #evpTablaWrap { max-height: calc(100vh - 285px); }
+}
+
 /* ===== Cursos: modal de creación y edición ===== */
 
 .cengi-canvas .cengi-course-feedback {
@@ -2647,5 +4024,968 @@ body.cengi-nav-loading {
 
     .cengi-course-modal-grid .form-group.is-full {
         grid-column: auto;
+    }
+}
+
+@media (min-width: 641px) {
+    .cengi-course-form-modal .modal-dialog {
+        width: min(840px, calc(100vw - 40px));
+        max-width: 840px;
+    }
+}
+
+/* ===== Directorio de participantes (referencia Cengicursos2) ===== */
+
+.cengi-directory-page .cengi-directory-shell {
+    width: calc(100% - var(--cengi-sidebar-width));
+    max-width: none;
+    padding: 26px 28px 60px;
+}
+
+.cengi-directory-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.cengi-directory-kpi {
+    min-width: 0;
+    padding: 16px 18px;
+    overflow: hidden;
+    border: 1px solid #E4E7E1;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: var(--cengi-shadow);
+}
+
+.cengi-directory-kpi > div {
+    margin: 0;
+    color: #4B5A45;
+    font-size: 12px;
+}
+
+.cengi-directory-kpi > strong {
+    display: block;
+    margin-top: 10px;
+    color: #1E2A1A;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.cengi-directory-filter-card,
+.cengi-directory-table-card {
+    overflow: hidden;
+    border: 1px solid #E4E7E1;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: var(--cengi-shadow);
+}
+
+.cengi-directory-filter-card {
+    margin-bottom: 16px;
+    padding: 16px 18px;
+}
+
+.cengi-directory-filters {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+}
+
+.cengi-directory-filters > label {
+    margin: 0;
+    font-weight: 400;
+}
+
+.cengi-directory-search {
+    position: relative;
+    flex: 0 1 250px;
+}
+
+.cengi-directory-search .glyphicon {
+    position: absolute;
+    top: 50%;
+    left: 11px;
+    z-index: 1;
+    color: #A3AAA0;
+    font-size: 12px;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.cengi-directory-search input,
+.cengi-directory-filters select {
+    width: 100%;
+    height: 34px;
+    border: 1px solid #E4E7E1;
+    border-radius: 8px;
+    background: #fff;
+    color: #1E2A1A;
+    font-size: 12px;
+    box-shadow: none;
+    outline: none;
+}
+
+.cengi-directory-search input {
+    padding: 7px 12px 7px 34px;
+}
+
+.cengi-directory-filters select {
+    min-width: 155px;
+    padding: 7px 28px 7px 10px;
+}
+
+.cengi-directory-search input:focus,
+.cengi-directory-filters select:focus {
+    border-color: var(--cengi-primary);
+    box-shadow: 0 0 0 2px rgba(163, 211, 0, .24);
+}
+
+.cengi-directory-clear,
+.cengi-directory-export,
+.cengi-directory-profile-button {
+    min-height: 32px;
+    padding: 7px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid #E4E7E1;
+    border-radius: 8px;
+    background: #fff;
+    color: #1E2A1A;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.cengi-directory-export {
+    margin-left: auto;
+}
+
+.cengi-directory-clear {
+    color: #4B5A45;
+}
+
+.cengi-directory-clear:hover,
+.cengi-directory-export:hover,
+.cengi-directory-profile-button:hover,
+.cengi-directory-clear:focus,
+.cengi-directory-export:focus,
+.cengi-directory-profile-button:focus {
+    border-color: #CED2D5;
+    background: #F2F4EF;
+    color: #1E2A1A;
+    text-decoration: none;
+    outline: none;
+}
+
+.cengi-directory-table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.cengi-directory-table {
+    width: 100%;
+    min-width: 1050px;
+    margin: 0;
+    border: 0;
+    border-collapse: collapse;
+    background: #fff;
+    color: #1E2A1A;
+    font-size: 12px;
+}
+
+.cengi-directory-table th {
+    padding: 10px;
+    border-bottom: 1px solid #E4E7E1;
+    background: #FAFBF8;
+    color: #4B5A45;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.cengi-directory-table td {
+    padding: 11px 10px;
+    border-bottom: 1px solid #E4E7E1;
+    vertical-align: middle;
+}
+
+.cengi-directory-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.cengi-directory-table tbody tr:hover td {
+    background: #FAFBF6;
+}
+
+.cengi-directory-person {
+    min-width: 180px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.cengi-directory-avatar {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #CED2D5;
+    color: #4B5A45;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.cengi-directory-person strong,
+.cengi-directory-person small {
+    display: block;
+}
+
+.cengi-directory-person strong {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.cengi-directory-person small {
+    margin-top: 2px;
+    color: #4B5A45;
+    font-size: 10px;
+}
+
+.cengi-directory-cui {
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 10.5px;
+    white-space: nowrap;
+}
+
+.cengi-directory-profile-button {
+    cursor: pointer;
+}
+
+.cengi-directory-empty {
+    padding: 46px 20px !important;
+    color: #7A8575;
+    text-align: center;
+}
+
+.cengi-directory-empty > span,
+.cengi-directory-empty > strong,
+.cengi-directory-empty > small {
+    display: block;
+}
+
+.cengi-directory-empty > span { margin-bottom: 8px; font-size: 22px; }
+.cengi-directory-empty > strong { color: #4B5A45; font-size: 12px; }
+.cengi-directory-empty > small { margin-top: 4px; font-size: 10px; }
+
+.cengi-directory-table-footer {
+    padding: 9px 14px;
+    border-top: 1px solid #E4E7E1;
+    background: #FAFBF8;
+    color: #7A8575;
+    font-size: 10px;
+}
+
+/* Ficha del participante */
+
+.cengi-directory-modal.in {
+    padding: 20px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.cengi-directory-modal .modal-dialog {
+    width: min(720px, calc(100vw - 40px));
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.cengi-directory-modal .modal-content {
+    overflow: hidden;
+    border: 0;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .25);
+}
+
+.cengi-directory-profile-head {
+    min-height: 92px;
+    padding: 18px 22px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid #E4E7E1;
+}
+
+.cengi-directory-profile-avatar {
+    width: 52px;
+    height: 52px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--cengi-primary);
+    color: #fff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.cengi-directory-profile-head > div {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.cengi-directory-profile-head h2 {
+    margin: 0;
+    color: #1E2A1A;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.cengi-directory-profile-head p {
+    margin: 3px 0 0;
+    color: #4B5A45;
+    font-size: 11.5px;
+}
+
+.cengi-directory-modal-close {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+    border: 1px solid #E4E7E1;
+    border-radius: 7px;
+    background: #fff;
+    color: #4B5A45;
+    font-size: 19px;
+    line-height: 25px;
+}
+
+.cengi-directory-modal .modal-body {
+    max-height: calc(88vh - 155px);
+    padding: 18px 22px;
+    overflow-y: auto;
+}
+
+.cengi-directory-modal-loading,
+.cengi-directory-modal-error,
+.cengi-directory-no-courses {
+    padding: 30px 18px;
+    border: 1px dashed #D9DED5;
+    border-radius: 9px;
+    color: #4B5A45;
+    font-size: 12px;
+    text-align: center;
+}
+
+.cengi-directory-modal-loading .glyphicon {
+    margin-right: 6px;
+    animation: cengi-directory-spin .9s linear infinite;
+}
+
+@keyframes cengi-directory-spin { to { transform: rotate(360deg); } }
+
+.cengi-directory-modal-error {
+    border-color: #F0C6C0;
+    background: #FFF6F5;
+    color: #A63F3F;
+}
+
+.cengi-directory-profile-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.cengi-directory-profile-stats > div {
+    padding: 12px;
+    border: 1px solid #E4E7E1;
+    border-radius: 9px;
+    background: #FAFBF8;
+}
+
+.cengi-directory-profile-stats strong,
+.cengi-directory-profile-stats span {
+    display: block;
+}
+
+.cengi-directory-profile-stats strong {
+    color: #1E2A1A;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 20px;
+}
+
+.cengi-directory-profile-stats span {
+    margin-top: 2px;
+    color: #4B5A45;
+    font-size: 9.5px;
+}
+
+.cengi-directory-profile-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 13px 14px;
+    border-radius: 9px;
+    background: #F4F7F1;
+}
+
+.cengi-directory-profile-details span,
+.cengi-directory-profile-details strong {
+    display: block;
+}
+
+.cengi-directory-profile-details span {
+    color: #71806B;
+    font-size: 9.5px;
+    text-transform: uppercase;
+}
+
+.cengi-directory-profile-details strong {
+    margin-top: 3px;
+    color: #1E2A1A;
+    font-size: 11.5px;
+}
+
+.cengi-directory-history-title {
+    margin: 18px 0 9px;
+    color: #4B5A45;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.cengi-directory-course-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.cengi-directory-course-card {
+    padding: 13px 14px;
+    border: 1px solid #E4E7E1;
+    border-left: 3px solid var(--cengi-primary);
+    border-radius: 9px;
+    background: #fff;
+}
+
+.cengi-directory-course-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.cengi-directory-course-head > strong {
+    color: #1E2A1A;
+    font-size: 12.5px;
+}
+
+.cengi-directory-course-state {
+    padding: 3px 8px;
+    flex: 0 0 auto;
+    border-radius: 100px;
+    font-size: 9.5px;
+    font-weight: 700;
+}
+
+.cengi-directory-course-state.is-activo { background: #EAF6DD; color: #3E7A12; }
+.cengi-directory-course-state.is-finalizado { background: #EDEFEA; color: #5B6459; }
+.cengi-directory-course-state.is-inactivo { background: #FBE3E0; color: #A63F3F; }
+
+.cengi-directory-course-meta {
+    margin: 4px 0 10px;
+    color: #4B5A45;
+    font-size: 10.5px;
+}
+
+.cengi-directory-course-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.cengi-directory-course-metric {
+    padding: 7px 9px;
+    border-radius: 7px;
+    background: #F6F7F3;
+}
+
+.cengi-directory-course-metric span,
+.cengi-directory-course-metric strong { display: block; }
+.cengi-directory-course-metric span { color: #71806B; font-size: 9px; }
+.cengi-directory-course-metric strong { margin-top: 2px; color: #1E2A1A; font-size: 10.5px; }
+
+.cengi-directory-diploma-link {
+    margin-top: 10px;
+    display: inline-flex;
+    align-items: center;
+    color: #3E7A12;
+    font-size: 10.5px;
+    font-weight: 700;
+}
+
+.cengi-directory-modal .modal-footer {
+    padding: 14px 22px;
+    border-top: 1px solid #E4E7E1;
+    background: #FAFBF8;
+}
+
+.cengi-directory-modal .modal-footer .btn {
+    min-height: 34px;
+    padding: 7px 14px;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+}
+
+@media (max-width: 1100px) {
+    .cengi-directory-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1024px) {
+    .cengi-directory-page .cengi-directory-shell { width: 100%; margin-left: 0; }
+}
+
+@media (max-width: 767px) {
+    .cengi-directory-page .cengi-directory-shell { padding: 18px 14px 40px; }
+    .cengi-directory-filters { align-items: stretch; flex-direction: column; }
+    .cengi-directory-search { flex-basis: auto; }
+    .cengi-directory-filters > label,
+    .cengi-directory-filters select,
+    .cengi-directory-clear,
+    .cengi-directory-export { width: 100%; max-width: none; }
+    .cengi-directory-export { margin-left: 0; }
+}
+
+@media (max-width: 520px) {
+    .cengi-directory-kpis { grid-template-columns: 1fr; gap: 10px; }
+    .cengi-directory-modal.in { padding: 10px !important; align-items: flex-start; }
+    .cengi-directory-modal .modal-dialog { width: 100%; margin-top: 8px; }
+    .cengi-directory-modal .modal-body { max-height: calc(100vh - 178px); padding: 15px; }
+    .cengi-directory-profile-head { min-height: 78px; padding: 14px 15px; }
+    .cengi-directory-profile-avatar { width: 44px; height: 44px; font-size: 14px; }
+    .cengi-directory-profile-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cengi-directory-profile-details,
+    .cengi-directory-course-metrics { grid-template-columns: 1fr; }
+}
+
+@media print {
+    .cengi-directory-page .cengi-sidebar,
+    .cengi-directory-page .cengi-topbar,
+    .cengi-directory-filter-card,
+    .cengi-directory-profile-button,
+    .cengi-directory-table-footer { display: none !important; }
+    .cengi-directory-page .cengi-directory-shell { width: 100%; margin: 0; padding: 0; }
+    .cengi-directory-table { min-width: 0; font-size: 8px; }
+}
+
+/* ===== Certificación: réplica responsive de Cengicursos2.html ===== */
+
+.cengi-canvas .cengi-cert-page {
+    width: calc(100% - var(--cengi-sidebar-width));
+    max-width: none;
+}
+
+.cengi-cert-section {
+    margin-bottom: 18px;
+    overflow: hidden;
+    border: 1px solid var(--cengi-border);
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: var(--cengi-shadow);
+}
+
+.cengi-cert-section-head {
+    min-height: 58px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--cengi-border);
+}
+
+.cengi-cert-section-head h3 {
+    margin: 0;
+    color: var(--cengi-ink);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14.5px;
+    font-weight: 600;
+}
+
+.cengi-cert-section-head .hint {
+    margin-top: 2px;
+    color: var(--cengi-muted);
+    font-size: 11.5px;
+    font-weight: 400;
+    line-height: 1.4;
+}
+
+.cengi-cert-section-body {
+    padding: 18px;
+}
+
+.cengi-cert-section-body.is-table {
+    padding: 0;
+}
+
+.cengi-cert-tabs-section {
+    margin-bottom: 16px;
+}
+
+.cengi-cert-tabs-section .cengi-tabs {
+    margin: 0;
+    padding: 2px 18px 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.cengi-cert-tabs-section .cengi-tab {
+    flex: 0 0 auto;
+    margin-right: 18px;
+    white-space: nowrap;
+}
+
+.cengi-cert-form-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px 16px;
+}
+
+.cengi-cert-field {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.cengi-cert-field.is-full {
+    grid-column: 1 / -1;
+}
+
+.cengi-cert-field-spaced,
+.cengi-cert-event-filter {
+    margin-bottom: 14px;
+}
+
+.cengi-cert-field label,
+.cengi-cert-upload-label {
+    margin: 0;
+    color: var(--cengi-ink);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.cengi-cert-field label .opt {
+    color: var(--cengi-muted);
+    font-size: 11px;
+    font-weight: 400;
+}
+
+.cengi-cert-field .form-control {
+    width: 100%;
+    height: 36px;
+    min-height: 36px;
+    padding: 8px 11px;
+    border-radius: 8px !important;
+    font-size: 12.5px;
+}
+
+.cengi-cert-field input[readonly],
+.cengi-cert-field input:disabled {
+    background: #f7f8f5;
+    color: var(--cengi-muted);
+}
+
+.cengi-cert-logo-drop {
+    min-height: 55px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border: 1.5px dashed var(--cengi-border);
+    border-radius: 8px;
+    color: var(--cengi-muted);
+    font-size: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+
+.cengi-cert-logo-drop:hover,
+.cengi-cert-logo-drop:focus,
+.cengi-cert-logo-drop.is-dragging {
+    outline: none;
+    border-color: var(--cengi-primary);
+    background: #f5faef;
+    color: var(--cengi-primary-deep);
+}
+
+.cengi-cert-actions {
+    margin-top: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.cengi-cert-actions .btn {
+    min-height: 36px;
+    padding: 8px 14px;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+}
+
+.cengi-cert-dropzone {
+    min-height: 184px;
+    margin-top: 6px;
+    padding: 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1.5px dashed var(--cengi-border);
+    border-radius: 10px;
+    background: #ffffff;
+    color: var(--cengi-ink);
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
+}
+
+.cengi-cert-dropzone:hover,
+.cengi-cert-dropzone:focus,
+.cengi-cert-dropzone.is-dragging {
+    outline: none;
+    border-color: var(--cengi-primary);
+    background: #f7fbf3;
+}
+
+.cengi-cert-dropzone > .glyphicon {
+    margin-bottom: 3px;
+    color: var(--cengi-muted);
+    font-size: 26px;
+}
+
+.cengi-cert-dropzone strong {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.cengi-cert-drop-hint {
+    max-width: 480px;
+    color: var(--cengi-muted);
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+.cengi-cert-dropzone .btn {
+    margin-top: 7px;
+    pointer-events: none;
+}
+
+.cengi-cert-upload-notice {
+    margin-top: 14px;
+}
+
+.cengi-cert-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.cengi-cert-table {
+    width: 100%;
+    margin: 0;
+    border-collapse: collapse;
+    color: var(--cengi-ink);
+    font-size: 12.5px;
+}
+
+.cengi-cert-table th {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--cengi-border);
+    background: #fafbf8;
+    color: var(--cengi-muted);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.cengi-cert-table td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--cengi-border);
+    vertical-align: middle;
+}
+
+.cengi-cert-table tbody tr:hover {
+    background: #fafbf6;
+}
+
+.cengi-cert-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.cengi-cert-person strong,
+.cengi-cert-person small {
+    display: block;
+}
+
+.cengi-cert-person small {
+    margin-top: 2px;
+    color: var(--cengi-muted);
+    font-size: 11px;
+}
+
+.cengi-cert-code {
+    color: var(--cengi-muted);
+    font-size: 10.5px;
+    white-space: nowrap;
+}
+
+.cengi-cert-action-cell {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.cengi-canvas .cengi-diploma-preview .dp-logo {
+    width: auto;
+    max-width: 92px;
+    height: auto;
+    max-height: 42px;
+    margin-bottom: 7px;
+    object-fit: contain;
+}
+
+.cengi-canvas .cengi-diploma-preview .dp-logo[hidden] {
+    display: none;
+}
+
+.cengi-canvas .cengi-diploma-preview .dp-code {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+@media (max-width: 1024px) {
+    .cengi-canvas .cengi-cert-page {
+        width: 100%;
+    }
+}
+
+@media (max-width: 767px) {
+    .cengi-canvas .cengi-cert-page {
+        padding: 18px 14px 40px;
+    }
+
+    .cengi-cert-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cengi-cert-field.is-full {
+        grid-column: auto;
+    }
+
+    .cengi-cert-section-head,
+    .cengi-cert-section-body {
+        padding: 15px;
+    }
+
+    .cengi-cert-section-body.is-table {
+        padding: 0;
+    }
+
+    .cengi-cert-actions {
+        flex-direction: column;
+    }
+
+    .cengi-cert-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .cengi-cert-dropzone {
+        min-height: 170px;
+        padding: 22px 16px;
+    }
+
+    .cengi-canvas .cengi-diploma-preview .dp-name {
+        font-size: clamp(16px, 5.5vw, 21px);
+    }
+
+    .cengi-canvas .cengi-diploma-preview .dp-course {
+        max-width: 88%;
+        font-size: clamp(9px, 3vw, 12px);
+    }
+
+    .cengi-canvas .cengi-diploma-preview .dp-code {
+        right: 14px;
+        max-width: calc(100% - 28px);
+        font-size: 8px;
+    }
+}
+
+@media (max-width: 420px) {
+    .cengi-cert-tabs-section .cengi-tabs {
+        padding-inline: 14px;
+    }
+
+    .cengi-canvas .cengi-diploma-preview .dp-inner {
+        inset: 18px;
+    }
+
+    .cengi-canvas .cengi-diploma-preview .dp-eyebrow {
+        font-size: 8px;
+    }
+
+    .cengi-canvas .cengi-diploma-preview .dp-logo {
+        max-width: 70px;
+        max-height: 30px;
+        margin-bottom: 3px;
+    }
+}
+
+@media print {
+    body.cengi-certification-page * {
+        visibility: hidden !important;
+    }
+
+    body.cengi-certification-page .cengi-diploma-preview,
+    body.cengi-certification-page .cengi-diploma-preview * {
+        visibility: visible !important;
+    }
+
+    body.cengi-certification-page .cengi-diploma-preview {
+        position: fixed;
+        inset: 10mm;
+        width: auto;
+        height: auto;
+        aspect-ratio: auto;
+        border: 0;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
     }
 }
