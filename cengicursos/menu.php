@@ -64,6 +64,14 @@ function menu_render()
     }
     $iniciales = $iniciales !== '' ? $iniciales : 'U';
     ?>
+<style>
+    #cengiPrimaryNav a[href='ver_categorias.php'],
+    #cengiPrimaryNav a[href='exportaringenios.php'],
+    #cengiPrimaryNav a[href='exportarcursos.php'],
+    #cengiPrimaryNav a[href='ver_ingenios.php'] {
+        display: none;
+    }
+</style>
 <aside class="cengi-sidebar" id="cengiSidebar">
     <a class="cengi-brand" href="index.php" aria-label="Ir al inicio de Cengicursos">
         <span class="cengi-brand-mark" aria-hidden="true">
