@@ -1,8 +1,8 @@
-<?php 
+<?php
 require_once "revisar_permisos.php";
 cengi_require_admin();
-	require_once("conexion.php");
-	$mysqli=conectar();
+require_once "conexion.php";
+$db = conectar();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -34,13 +34,11 @@ cengi_require_admin();
 				<div class="form-group">
 					<label for="ingenio" class="control-label">Ingenio</label>
 					<?php
-						//Consulta obtener todos los ingenios
-						$sqling ="SELECT id, nombre_ingenios FROM cengi_cursos.ingenios";
-						$ingenios =mysqli_query($mysqli, $sqling)or die ('error en la seleccion de base de datos.');
+						$stmtIngenios = $db->query("SELECT id, nombre_ingenios FROM cengi_cursos.ingenios ORDER BY nombre_ingenios");
 					?>
 					<select class="form-control" id="ingenio" name="ingenio" required>
-					<?php while ($ingenio = $ingenios->fetch_array(MYSQLI_ASSOC)) {?>
-						<option value="<?php echo $ingenio['id']; ?>"><?php echo $ingenio['nombre_ingenios']; ?></option>
+					<?php while ($ingenio = $stmtIngenios->fetch(PDO::FETCH_ASSOC)) {?>
+						<option value="<?php echo (int) $ingenio['id']; ?>"><?php echo htmlspecialchars($ingenio['nombre_ingenios']); ?></option>
 					<?php } ?>
 					</select>
 				</div>
@@ -48,13 +46,11 @@ cengi_require_admin();
 			<div class="form-group">
 					<label for="user" class="control-label">Delegado</label>
 					<?php
-						//Consulta obtener todos los ingenios
-						$sqling ="SELECT id, nombre FROM cengi_cursos.users";
-						$ingenios =mysqli_query($mysqli, $sqling)or die ('error en la seleccion de base de datos.');
+						$stmtDelegados = $db->query("SELECT id, nombre FROM cengi_cursos.users ORDER BY nombre");
 					?>
 					<select class="form-control" id="user" name="user" required>
-					<?php while ($user = $users->fetch_array(MYSQLI_ASSOC)) {?>
-						<option value="<?php echo $user['id']; ?>"><?php echo $user['nombre']; ?></option>
+					<?php while ($delegado = $stmtDelegados->fetch(PDO::FETCH_ASSOC)) {?>
+						<option value="<?php echo (int) $delegado['id']; ?>"><?php echo htmlspecialchars($delegado['nombre']); ?></option>
 					<?php } ?>
 					</select>
 				</div>
@@ -62,12 +58,11 @@ cengi_require_admin();
 				<div class="form-group">
 					<label for="curso" class="control-label">Curso</label>
 					<?php
-						//Consulta obtener todos los ingenios
-						$sqling ="SELECT id, nombre_cursos FROM cengi_cursos.cursos";
-						$cursos=mysqli_query($mysqli, $sqling)or die ('error en la seleccion de base de datos.');
+						$stmtCursos = $db->query("SELECT id, nombre_cursos FROM cengi_cursos.cursos ORDER BY nombre_cursos");
 					?>
-					<select class="form-control" id="curso" name="curso" required>							<?php while ($curso = $cursos->fetch_array(MYSQLI_ASSOC)) {?>
-							<option value="<?php echo $curso['id']; ?>"><?php echo $curso['nombre_cursos']; ?></option>
+					<select class="form-control" id="curso" name="curso" required>
+					<?php while ($curso = $stmtCursos->fetch(PDO::FETCH_ASSOC)) {?>
+							<option value="<?php echo (int) $curso['id']; ?>"><?php echo htmlspecialchars($curso['nombre_cursos']); ?></option>
 					<?php } ?>
 					</select>
 				</div>

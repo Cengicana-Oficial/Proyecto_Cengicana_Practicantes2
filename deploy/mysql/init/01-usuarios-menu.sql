@@ -140,7 +140,7 @@ INSERT INTO usuarios (
 ) VALUES (
   'Developer CENGICANA',
   'developer@cengicana.org',
-  '$2y$10$vNepk1hJIu6goWyE3jk7duls8km5QnMcw6MzEEXayDrgHsmeDm47S',
+  '$2y$10$LEjx4vYtDG7NkRZuHmI1n.4FiiyEtn/iVdc6NL9if6kNq.Q8pN0cy',
   1,
   1,
   1

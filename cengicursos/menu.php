@@ -25,7 +25,7 @@ function cengi_pagina_titulo($currentPage, $esEstudiante)
         'instructores.php' => ['Instructores', 'Directorio de instructores e informe por curso/diplomado'],
         'eventos_qr.php' => ['Control QR eventos', 'Eventos con registro de ingreso por codigo QR'],
         'diplomas.php' => ['Certificacion', 'Generacion y carga de diplomas de curso y de evento'],
-        'roles.php' => ['Roles y permisos', 'Matriz de permisos por rol y usuarios del sistema'],
+        'roles.php' => ['Roles y permisos', 'Perfiles de acceso e integraciones futuras'],
     ];
 
     return $titulos[$currentPage] ?? ['Cengicursos', 'Formacion y conocimiento'];
@@ -76,13 +76,8 @@ function menu_render()
 </style>
 <aside class="cengi-sidebar" id="cengiSidebar">
     <a class="cengi-brand" href="index.php" aria-label="Ir al inicio de Cengicursos">
-        <span class="cengi-brand-mark" aria-hidden="true">
-            <span class="glyphicon glyphicon-leaf"></span>
-        </span>
-        <span class="cengi-brand-copy">
-            <strong>SIGEC</strong>
-            <small>CENGICAÑA</small>
-        </span>
+        <img class="cengi-brand-logo" src="img/logo-comite-capacitacion.png"
+            alt="Comité de Capacitación CENGICAÑA">
     </a>
 
     <nav class="cengi-sidebar-nav" id="cengiPrimaryNav" aria-label="Navegacion principal">
