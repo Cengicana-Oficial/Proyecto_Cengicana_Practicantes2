@@ -20,7 +20,8 @@ function cengi_pagina_titulo($currentPage, $esEstudiante)
         'ver_usuarios.php' => ['Usuarios', 'Cuentas con acceso al modulo de cursos'],
         'directorio_participantes.php' => ['Directorio de participantes', 'Vista agregada por persona: cursos, diplomas y evaluacion'],
         'seguimiento_ingenio.php' => ['Seguimiento por ingenio', 'Ficha institucional de capacitacion por ingenio'],
-        'organizaciones.php' => ['Organizaciones', 'Directorio de ingenios, universidades, empresas e instituciones'],
+        'dashboard_ingenio.php' => ['Mi ingenio', 'Participantes, cursos e historial de capacitacion de tu ingenio'],
+        'organizaciones.php' => ['Organizaciones', 'Ingenios, universidades e instituciones técnicas asociadas'],
         'instructores.php' => ['Instructores', 'Directorio de instructores e informe por curso/diplomado'],
         'eventos_qr.php' => ['Control QR eventos', 'Eventos con registro de ingreso por codigo QR'],
         'diplomas.php' => ['Certificacion', 'Generacion y carga de diplomas de curso y de evento'],
@@ -42,6 +43,7 @@ function menu_render()
     $puedeVerDiplomas = cengi_puede_ver_diplomas();
     $puedeVerRoles = cengi_puede_ver_roles();
     $puedeCalificar = cengi_puede_calificar();
+    $puedeVerDashboardIngenio = cengi_puede_ver_dashboard_ingenio();
     $esEstudiante = cengi_es_estudiante();
 
     $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
@@ -136,6 +138,12 @@ function menu_render()
                 <span class="glyphicon glyphicon-tree-deciduous"></span>
                 <span>Seguimiento por ingenio</span>
             </a>
+            <?php if ($puedeVerDashboardIngenio): ?>
+                <a href="dashboard_ingenio.php" class="cengi-nav-item<?php echo $isActive(['dashboard_ingenio.php']); ?>">
+                    <span class="glyphicon glyphicon-dashboard"></span>
+                    <span>Mi ingenio</span>
+                </a>
+            <?php endif; ?>
             <?php if ($puedeGestionar): ?>
                 <a href="exportaringenios.php" class="cengi-nav-item">
                     <span class="glyphicon glyphicon-save-file"></span>
