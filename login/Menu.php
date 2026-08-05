@@ -187,14 +187,14 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/Menu.css">
+    <link rel="stylesheet" href="assets/Menu.css?v=20260805-2">
 </head>
 <body>
     <header class="app-header" id="appHeader">
         <div class="brand-accent"></div>
         <div class="nav-shell">
             <a class="brand" href="Menu.php" aria-label="Ir al panel principal">
-                <img class="brand-logo" src="assets/img/logo.png" alt="CENGICAÑA">
+                <img class="brand-logo" src="assets/img/logo.png" alt="CENGICAÑA" width="150" style="width:150px;max-width:150px;height:auto;max-height:64px;object-fit:contain;">
             </a>
 
             <button class="menu-toggle" id="menuBtn" type="button"
