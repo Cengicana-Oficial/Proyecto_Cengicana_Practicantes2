@@ -17,7 +17,7 @@ $puedeCalificar = cengi_puede_calificar();
 $puedeDiploma = cengi_puede_subir_diploma();
 
 $busqueda = trim((string) ($_GET['q'] ?? ''));
-$estado = trim((string) ($_GET['estado'] ?? 'todos'));
+$estado = trim((string) ($_GET['estado'] ?? 'activo'));
 $cursoId = (int) ($_GET['curso_id'] ?? 0);
 $mensaje = trim((string) ($_GET['mensaje'] ?? ''));
 $error = trim((string) ($_GET['error'] ?? ''));
@@ -176,7 +176,8 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
             <?php
             $mensajes = [
                 'actualizado' => 'Los datos del participante se actualizaron correctamente.',
-                'desactivado' => 'El participante fue desactivado correctamente.',
+                'desactivado' => 'El participante fue eliminado de los registros activos correctamente.',
+                'removido' => 'El participante fue removido del curso correctamente.',
                 'calificacion' => 'Las calificaciones se guardaron correctamente.',
                 'carga' => 'La carga masiva de participantes finalizó correctamente.',
             ];
@@ -235,7 +236,6 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                     <li><a href="<?php echo cengi_part_html($urlExportacion . '&format=excel'); ?>"><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
                 </ul>
             </div>
-            <button type="button" class="btn btn-success" onclick="window.print()"><span class="glyphicon glyphicon-file"></span> Generar reporte</button>
         </div>
     </section>
 
@@ -293,11 +293,11 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                                     <button type="button" class="cengi-action-btn participant-grades-trigger" data-toggle="modal" data-target="#participant-grades-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-assignment="<?php echo (int) $fila['asignacion_id']; ?>" data-attendance="<?php echo cengi_part_html($fila['asistencia']); ?>" data-pre="<?php echo cengi_part_html($fila['evaluacion']); ?>" data-post="<?php echo cengi_part_html($fila['posevaluacion']); ?>" aria-label="Calificaciones" data-tooltip="Calificaciones"><span class="glyphicon glyphicon-education"></span></button>
                                 <?php endif; ?>
                                 <?php if ($puedeEditar): ?>
-                                    <button type="button" class="cengi-action-btn participant-edit-trigger" data-toggle="modal" data-target="#participant-edit-modal" data-id="<?php echo (int) $fila['participante_id']; ?>" data-ingenio="<?php echo (int) $fila['ingenio_id']; ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-position="<?php echo cengi_part_html($fila['puesto_participantes']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-email="<?php echo cengi_part_html($fila['correo_participantes']); ?>" data-degree="<?php echo cengi_part_html($fila['grado_academico_participantes']); ?>" data-phone="<?php echo cengi_part_html($fila['telefono_participantes']); ?>" data-state="<?php echo (int) $fila['estado_participantes']; ?>" aria-label="Editar" data-tooltip="Editar"><span class="glyphicon glyphicon-pencil"></span></button>
+                                    <button type="button" class="cengi-action-btn participant-edit-trigger" data-toggle="modal" data-target="#participant-edit-modal" data-id="<?php echo (int) $fila['participante_id']; ?>" data-ingenio="<?php echo (int) $fila['ingenio_id']; ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-position="<?php echo cengi_part_html($fila['puesto_participantes']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-email="<?php echo cengi_part_html($fila['correo_participantes']); ?>" data-degree="<?php echo cengi_part_html($fila['grado_academico_participantes']); ?>" data-phone="<?php echo cengi_part_html($fila['telefono_participantes']); ?>" data-state="<?php echo (int) $fila['estado_participantes'] === 1 && (int) $fila['estado_asignaciones'] === 1 ? 1 : 0; ?>" aria-label="Editar" data-tooltip="Editar"><span class="glyphicon glyphicon-pencil"></span></button>
                                 <?php endif; ?>
                                 <button type="button" class="cengi-action-btn participant-profile-trigger" data-toggle="modal" data-target="#participant-profile-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-company="<?php echo cengi_part_html($fila['nombre_ingenios']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-email="<?php echo cengi_part_html($fila['correo_participantes']); ?>" data-degree="<?php echo cengi_part_html($fila['grado_academico_participantes']); ?>" data-phone="<?php echo cengi_part_html($fila['telefono_participantes']); ?>" data-history="<?php echo cengi_part_html($historialJson); ?>" aria-label="Ver perfil" data-tooltip="Ver perfil"><span class="glyphicon glyphicon-eye-open"></span></button>
-                                <?php if ($puedeEliminar): ?>
-                                    <button type="button" class="cengi-action-btn is-delete participant-delete-trigger" data-toggle="modal" data-target="#confirm-participant-delete" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-href="eliminar_participante.php?id=<?php echo (int) $fila['participante_id']; ?>&amp;curso_id=<?php echo $cursoId; ?>" aria-label="Desactivar" data-tooltip="Desactivar"><span class="glyphicon glyphicon-trash"></span></button>
+                                <?php if ($puedeEliminar && (int) $fila['estado_asignaciones'] === 1): ?>
+                                    <button type="button" class="cengi-action-btn is-delete is-labeled participant-delete-trigger" data-toggle="modal" data-target="#confirm-participant-delete" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-href="remover_participante_curso.php?asignacion_id=<?php echo (int) $fila['asignacion_id']; ?>&amp;curso_id=<?php echo $cursoId; ?>" aria-label="Remover del curso"><span class="glyphicon glyphicon-remove"></span><span>Remover del curso</span></button>
                                 <?php endif; ?>
                             </div>
                         </td>
@@ -326,7 +326,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                     <div class="form-group"><label for="participant-edit-email">Correo electrónico</label><input type="email" class="form-control" id="participant-edit-email" name="correo_participantes" maxlength="255"></div>
                     <div class="form-group"><label for="participant-edit-degree">Grado académico</label><input class="form-control" id="participant-edit-degree" name="grado_academico_participantes" maxlength="255"></div>
                     <div class="form-group"><label for="participant-edit-phone">Teléfono</label><input type="tel" class="form-control" id="participant-edit-phone" name="telefono_participantes" maxlength="50"></div>
-                    <div class="form-group"><label for="participant-edit-state">Estado</label><select class="form-control" id="participant-edit-state" name="estado_participantes"><option value="1">Activo</option><option value="0">Inactivo</option></select></div>
+                    <div class="form-group"><label for="participant-edit-state">Estado en el curso</label><select class="form-control" id="participant-edit-state" name="estado_participantes"><option value="1">Activo</option><option value="0">Inactivo</option></select></div>
                 </div>
             </div>
             <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success"><span class="glyphicon glyphicon-floppy-disk"></span> Guardar cambios</button></div>
@@ -397,8 +397,8 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
 <?php if ($puedeEliminar): ?>
 <div class="modal fade cengi-participant-modal" id="confirm-participant-delete" tabindex="-1" role="dialog" aria-labelledby="participant-delete-title">
     <div class="modal-dialog cengi-modal-compact" role="document"><div class="modal-content cengi-confirm-content">
-        <div class="modal-body"><span class="cengi-confirm-icon"><span class="glyphicon glyphicon-trash"></span></span><h4 id="participant-delete-title">Desactivar participante</h4><p>¿Deseas desactivar a <strong id="participant-delete-name"></strong>? Sus asignaciones también quedarán inactivas.</p></div>
-        <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><a class="btn btn-danger btn-ok" href="#">Sí, desactivar</a></div>
+        <div class="modal-body"><span class="cengi-confirm-icon"><span class="glyphicon glyphicon-remove"></span></span><h4 id="participant-delete-title">Remover del curso</h4><p>¿Deseas remover a <strong id="participant-delete-name"></strong> de este curso? El participante seguirá disponible y sus demás asignaciones no serán modificadas.</p></div>
+        <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><a class="btn btn-danger btn-ok" href="#">Sí, remover</a></div>
     </div></div>
 </div>
 <?php endif; ?>

@@ -33,21 +33,75 @@ if (!cengi_ve_todo_por_rol_o_ingenio()) {
 }
 
 try {
-    $sql = 'UPDATE participantes
-            SET ingenio_id = ?, cui_participantes = ?, nombre_participantes = ?,
-                puesto_participantes = ?, area_participantes = ?, correo_participantes = ?,
-                grado_academico_participantes = ?, telefono_participantes = ?,
-                estado_participantes = ?, actualizado = NOW()
-            WHERE id = ?';
-    $params = [$ingenioId, $cui, $nombre, $puesto, $area, $correo, $gradoAcademico, $telefono, $estado, $id];
+    $db->beginTransaction();
+
+    $sqlScope = 'SELECT id FROM participantes WHERE id = ?';
+    $paramsScope = [$id];
     if (!cengi_ve_todo_por_rol_o_ingenio()) {
-        $sql .= ' AND ingenio_id = ?';
-        $params[] = cengi_ingenio_id_actual();
+        $sqlScope .= ' AND ingenio_id = ?';
+        $paramsScope[] = cengi_ingenio_id_actual();
     }
+
+    $stmtScope = $db->prepare($sqlScope);
+    $stmtScope->execute($paramsScope);
+    if (!$stmtScope->fetchColumn()) {
+        throw new RuntimeException('Participante fuera del alcance permitido.');
+    }
+
+    $asignacionId = 0;
+    if ($cursoId > 0) {
+        $stmtAsignacionScope = $db->prepare("
+            SELECT id
+            FROM asignaciones
+            WHERE participantes_id = ? AND cursos_id = ?
+            LIMIT 1
+        ");
+        $stmtAsignacionScope->execute([$id, $cursoId]);
+        $asignacionId = (int) $stmtAsignacionScope->fetchColumn();
+        if ($asignacionId <= 0) {
+            throw new RuntimeException('Asignacion del curso no encontrada.');
+        }
+    }
+
+    $campos = [
+        'ingenio_id = ?',
+        'cui_participantes = ?',
+        'nombre_participantes = ?',
+        'puesto_participantes = ?',
+        'area_participantes = ?',
+        'correo_participantes = ?',
+        'grado_academico_participantes = ?',
+        'telefono_participantes = ?',
+    ];
+    $params = [$ingenioId, $cui, $nombre, $puesto, $area, $correo, $gradoAcademico, $telefono];
+
+    if ($cursoId <= 0 || $estado === 1) {
+        $campos[] = 'estado_participantes = ?';
+        $params[] = $estado;
+    }
+
+    $campos[] = 'actualizado = NOW()';
+    $params[] = $id;
+
+    $sql = 'UPDATE participantes SET ' . implode(', ', $campos) . ' WHERE id = ?';
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
+
+    if ($cursoId > 0) {
+        $stmtAsignacion = $db->prepare("
+            UPDATE asignaciones
+            SET estado_asignaciones = ?, actualizado = NOW()
+            WHERE id = ?
+        ");
+        $stmtAsignacion->execute([$estado, $asignacionId]);
+    }
+
+    $db->commit();
     header('Location: ' . $destino . '&mensaje=actualizado');
 } catch (Throwable $e) {
+    if ($db->inTransaction()) {
+        $db->rollBack();
+    }
     error_log('Error al actualizar participante: ' . $e->getMessage());
     header('Location: ' . $destino . '&error=actualizar');
 }
