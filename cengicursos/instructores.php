@@ -98,6 +98,7 @@ $ediciones = $db->query("
         i.nombre AS instructor_nombre,
         i.especialidad AS instructor_especialidad,
         i.cv_path AS instructor_cv,
+        eei.token AS evaluacion_token,
         (SELECT COUNT(*) FROM asignaciones a WHERE a.cursos_id = c.id) AS total_inscritos,
         (
             SELECT AVG(CAST(cc.posevaluacion AS DECIMAL(6,2)))
@@ -109,6 +110,7 @@ $ediciones = $db->query("
     INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
     INNER JOIN ingenios ing ON ing.id = c.ingenio_id
     LEFT JOIN instructores i ON i.id = c.instructor_id
+    LEFT JOIN enlaces_evaluacion_instructor eei ON eei.curso_id = c.id AND eei.instructor_id = i.id
     ORDER BY c.nombre_cursos, c.inicio DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -726,6 +728,26 @@ body.inst-modal-open { overflow: hidden; }
     function cvChip(instructor, previewId) {
         return instructor.cv_path ? '<button class="inst-chip is-cv" type="button" data-cv-preview="' + previewId + '">📄 Ver CV</button>' : '<span class="inst-chip is-missing">⚠ Sin CV</span>';
     }
+    function evaluationLinkButton(token) {
+        if (!token) return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" disabled title="Este curso todavía no tiene enlace de evaluación">Sin enlace</button>';
+        return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-copy-eval-token="' + escapeHtml(token) + '">' +
+            '<span class="glyphicon glyphicon-link" aria-hidden="true"></span> Copiar link de evaluación</button>';
+    }
+    function copyEvaluationLink(token, button) {
+        var url = window.location.origin + '/cengicursos/evaluacion.php?token=' + encodeURIComponent(token);
+        var restoreLabel = button.innerHTML;
+        function showCopied() {
+            button.innerHTML = '<span class="glyphicon glyphicon-ok" aria-hidden="true"></span> ¡Copiado!';
+            window.setTimeout(function () { button.innerHTML = restoreLabel; }, 2000);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(showCopied, function () {
+                window.prompt('Copia el enlace de evaluación:', url);
+            });
+        } else {
+            window.prompt('Copia el enlace de evaluación:', url);
+        }
+    }
     function cvPreview(instructor, previewId, isList) {
         if (!instructor.cv_path) return '';
         var path = escapeHtml(instructor.cv_path);
@@ -883,11 +905,12 @@ body.inst-modal-open { overflow: hidden; }
         if (!courses.length) {
             history.innerHTML = '<div class="inst-detail-empty">Este instructor todavía no tiene cursos asociados.</div>';
         } else {
-            history.innerHTML = '<div style="overflow-x:auto;"><table class="inst-table"><thead><tr><th>Curso</th><th>Ingenio</th><th>Fecha</th><th>Modalidad</th><th>Participantes</th></tr></thead><tbody>' +
+            history.innerHTML = '<div style="overflow-x:auto;"><table class="inst-table"><thead><tr><th>Curso</th><th>Ingenio</th><th>Fecha</th><th>Modalidad</th><th>Participantes</th><th>Evaluación</th></tr></thead><tbody>' +
                 courses.map(function (course) {
                     var range = formatDate(course.inicio) + (course.fin && course.fin !== course.inicio ? ' – ' + formatDate(course.fin) : '');
                     return '<tr><td style="font-weight:600;">' + escapeHtml(course.nombre_cursos) + '</td><td>' + escapeHtml(course.ingenio || '—') + '</td><td>' + escapeHtml(range) + '</td>' +
-                        '<td>' + escapeHtml(course.modalidad || '—') + '</td><td>' + Number(course.total_inscritos || 0) + '</td></tr>';
+                        '<td>' + escapeHtml(course.modalidad || '—') + '</td><td>' + Number(course.total_inscritos || 0) + '</td>' +
+                        '<td>' + evaluationLinkButton(course.evaluacion_token) + '</td></tr>';
                 }).join('') + '</tbody></table></div>';
         }
         var rawEvaluation = Number(instructor.evaluacion_promedio);
@@ -936,6 +959,8 @@ body.inst-modal-open { overflow: hidden; }
         });
     });
     document.addEventListener('click', function (event) {
+        var copyEvalButton = event.target.closest('[data-copy-eval-token]');
+        if (copyEvalButton) { copyEvaluationLink(copyEvalButton.getAttribute('data-copy-eval-token'), copyEvalButton); return; }
         var previewButton = event.target.closest('[data-cv-preview]');
         if (previewButton) {
             var preview = document.getElementById(previewButton.getAttribute('data-cv-preview'));

@@ -97,30 +97,6 @@ $filas = $cursoId > 0 ? $stmtParticipantes->fetchAll(PDO::FETCH_ASSOC) : [];
 
 $ingenios = $db->query('SELECT id, nombre_ingenios FROM ingenios ORDER BY nombre_ingenios')->fetchAll(PDO::FETCH_ASSOC);
 
-$usuarios = [];
-if ($puedeCargar) {
-    try {
-        $dbUsuarios = conectar_usuarios_menu_pdo();
-        $sqlUsuarios = "SELECT DISTINCT u.id, u.nombre, COALESCE(r.nombre_rol, '') AS rol
-            FROM usuarios u
-            INNER JOIN roles r ON r.id = u.rol_id
-            LEFT JOIN usuario_modulo um ON um.usuario_id = u.id
-            LEFT JOIN modulos m ON m.id = um.modulo_id
-            WHERE LOWER(COALESCE(m.nombre, '')) IN ('cursos', 'cengicursos')";
-        $paramsUsuarios = [];
-        if (!cengi_ve_todo_por_rol_o_ingenio()) {
-            $sqlUsuarios .= ' AND u.ingenio_id = ?';
-            $paramsUsuarios[] = cengi_ingenio_id_actual();
-        }
-        $sqlUsuarios .= ' ORDER BY u.nombre';
-        $stmtUsuarios = $dbUsuarios->prepare($sqlUsuarios);
-        $stmtUsuarios->execute($paramsUsuarios);
-        $usuarios = $stmtUsuarios->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) {
-        $usuarios = [];
-    }
-}
-
 $historial = [];
 if ($filas) {
     $idsParticipantes = array_values(array_unique(array_map('intval', array_column($filas, 'participante_id'))));
@@ -400,10 +376,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
             <div class="modal-header"><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button><span class="cengi-modal-icon"><span class="glyphicon glyphicon-user"></span></span><div><h4 class="modal-title" id="bulk-participants-title">Cargar participantes</h4><p>Agrega participantes al curso sin salir de esta vista.</p></div></div>
             <div class="modal-body">
                 <input type="hidden" name="curso" value="<?php echo $cursoId; ?>">
-                <div class="cengi-participant-modal-grid">
-                    <div class="form-group"><label for="bulk-participants-company">Ingenio</label><select class="form-control" id="bulk-participants-company" name="ingenio" required><?php foreach ($ingenios as $ingenio): ?><option value="<?php echo (int) $ingenio['id']; ?>"><?php echo cengi_part_html($ingenio['nombre_ingenios']); ?></option><?php endforeach; ?></select></div>
-                    <div class="form-group"><label for="bulk-participants-user">Usuario asignado</label><select class="form-control" id="bulk-participants-user" name="user" required><?php foreach ($usuarios as $usuario): ?><option value="<?php echo (int) $usuario['id']; ?>"><?php echo cengi_part_html($usuario['nombre'] . (!empty($usuario['rol']) ? ' — ' . $usuario['rol'] : '')); ?></option><?php endforeach; ?></select></div>
-                </div>
+                <div class="form-group"><label for="bulk-participants-company">Ingenio</label><select class="form-control" id="bulk-participants-company" name="ingenio" required><?php foreach ($ingenios as $ingenio): ?><option value="<?php echo (int) $ingenio['id']; ?>"><?php echo cengi_part_html($ingenio['nombre_ingenios']); ?></option><?php endforeach; ?></select></div>
                 <div class="cengi-upload-guide"><strong>Formato requerido</strong><span>CUI, NOMBRE, PUESTO, AREA, CORREO_ELECTRONICO, GRADO_ACADEMICO, TELEFONO</span><small>Admite archivos CSV, XLS y XLSX. <a href="plantilla_participantes.csv" download>Descargar plantilla</a></small></div>
                 <label class="cengi-upload-dropzone" for="bulk-participants-file"><span class="glyphicon glyphicon-cloud-upload"></span><strong>Selecciona el archivo</strong><small>CSV, XLS o XLSX</small><input type="file" id="bulk-participants-file" name="archivo" accept=".csv,.xls,.xlsx" required></label>
             </div>

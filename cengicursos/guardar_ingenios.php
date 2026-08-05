@@ -1,86 +1,40 @@
 <?php
+require_once __DIR__ . '/revisar_permisos.php';
+require_once __DIR__ . '/conexion.php';
 
-require_once("revisar_permisos.php");
-cengi_require_admin();
+cengi_require_gestionar_ingenios();
 
-require_once("conexion.php");
-require_once("menu.php");
+$nombre = trim((string) ($_POST['nombre'] ?? ''));
 
-$db = conectar();
-
-$error = '';
-
-try {
-
-    $nombre = trim($_POST['nombre']);
-
-    $stmt = $db->prepare("
-        INSERT INTO ingenios
-        (
-            nombre_ingenios,
-            creado
-        )
-        VALUES
-        (
-            ?, NOW()
-        )
-    ");
-
-    $resultado = $stmt->execute([
-        $nombre
-    ]);
-
-} catch (PDOException $e) {
-
-    $resultado = false;
-    $error = $e->getMessage();
-
+if ($nombre === '' || mb_strlen($nombre, 'UTF-8') > 255) {
+    header('Location: ver_ingenios.php?' . http_build_query([
+        'confirmacion' => 'datos_invalidos',
+    ]));
+    exit;
 }
 
-?>
+try {
+    $db = conectar();
+    $stmt = $db->prepare('
+        INSERT INTO ingenios (nombre_ingenios, creado)
+        VALUES (?, NOW())
+    ');
+    $stmt->execute([$nombre]);
 
-<html lang="es">
+    header('Location: ver_ingenios.php?' . http_build_query([
+        'confirmacion' => 'creado',
+        'nombre' => $nombre,
+    ]));
+} catch (PDOException $e) {
+    $duplicado = (string) $e->getCode() === '23000';
+    if (!$duplicado) {
+        error_log('No fue posible guardar el ingenio o institución: ' . $e->getMessage());
+    }
 
-<head>
+    header('Location: ver_ingenios.php?' . http_build_query([
+        'confirmacion' => $duplicado ? 'duplicado' : 'error',
+        'nombre' => $nombre,
+    ]));
+}
 
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <link href="css/bootstrap.min.css" rel="stylesheet">
-    <link href="css/bootstrap-theme.css" rel="stylesheet">
-    <link href="css/proyecto.css" rel="stylesheet">
-
-    <script src="js/jquery-3.1.1.min.js"></script>
-    <script src="js/bootstrap.min.js"></script>
-
-</head>
-
-<body class="cengi-canvas">
-
-<?php menu_render(); ?>
-
-<div class="container">
-
-    <div class="cengi-result-card <?php echo $resultado ? 'is-success' : 'is-error'; ?>">
-
-        <?php if ($resultado) { ?>
-
-            <h3>Registro guardado</h3>
-
-        <?php } else { ?>
-
-            <h3>Error al guardar</h3>
-            <p><?php echo htmlspecialchars($error); ?></p>
-
-        <?php } ?>
-
-        <a href="ver_ingenios.php" class="btn btn-primary">
-            Regresar
-        </a>
-
-    </div>
-
-</div>
-
-</body>
-
-</html>
+exit;
