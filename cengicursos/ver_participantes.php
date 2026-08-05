@@ -15,7 +15,10 @@ SELECT
     p.cui_participantes,
     p.nombre_participantes,
     p.puesto_participantes,
-    p.area_participantes
+    p.area_participantes,
+    p.correo_participantes,
+    p.grado_academico_participantes,
+    p.telefono_participantes
 FROM participantes p
 INNER JOIN ingenios i
     ON p.ingenio_id = i.id
@@ -27,10 +30,11 @@ $hayWhere = false;
 if ($valor !== '') {
 
     $sql .= "
-        WHERE p.nombre_participantes LIKE ?
+        WHERE (p.nombre_participantes LIKE ? OR p.correo_participantes LIKE ? OR p.grado_academico_participantes LIKE ? OR p.telefono_participantes LIKE ?)
     ";
 
-    $params[] = "%{$valor}%";
+    $termino = "%{$valor}%";
+    array_push($params, $termino, $termino, $termino, $termino);
     $hayWhere = true;
 }
 
@@ -98,6 +102,9 @@ $stmt->execute($params);
 						<th>Nombre</th>
 						<th>Puesto</th>
 						<th>Área</th>
+						<th>Correo electrónico</th>
+						<th>Grado académico</th>
+						<th>Teléfono</th>
 						<th>Acciones</th>
 					</tr>
 				</thead>
@@ -110,6 +117,9 @@ $stmt->execute($params);
 						<td><?php echo htmlspecialchars($row['nombre_participantes']); ?></td>
 						<td><?php echo $row['puesto_participantes']; ?></td>
 						<td><?php echo $row['area_participantes']; ?></td>
+						<td><?php echo htmlspecialchars($row['correo_participantes']); ?></td>
+						<td><?php echo htmlspecialchars($row['grado_academico_participantes']); ?></td>
+						<td><?php echo htmlspecialchars($row['telefono_participantes']); ?></td>
 						<td>
 							<div class="cengi-row-actions">
 								<a class="cengi-action-btn is-edit" href="modificar_participantes.php?id=<?php echo $row['idparticipante']; ?>" data-tooltip="Editar" aria-label="Editar"><span class="glyphicon glyphicon-pencil"></span><span class="sr-only">Editar</span></a>

@@ -101,13 +101,14 @@ if ($vista === 'participantes') {
     $condiciones = ['p.ingenio_id = ?'];
     $params = [$ingenioId];
     if ($busqueda !== '') {
-        $condiciones[] = '(p.nombre_participantes LIKE ? OR p.cui_participantes LIKE ? OR p.area_participantes LIKE ?)';
+        $condiciones[] = '(p.nombre_participantes LIKE ? OR p.cui_participantes LIKE ? OR p.area_participantes LIKE ? OR p.correo_participantes LIKE ? OR p.grado_academico_participantes LIKE ? OR p.telefono_participantes LIKE ?)';
         $termino = '%' . $busqueda . '%';
-        array_push($params, $termino, $termino, $termino);
+        array_push($params, $termino, $termino, $termino, $termino, $termino, $termino);
     }
 
     $stmt = $db->prepare("
         SELECT p.nombre_participantes, p.cui_participantes, p.puesto_participantes, p.area_participantes,
+            p.correo_participantes, p.grado_academico_participantes, p.telefono_participantes,
             COUNT(DISTINCT CASE WHEN c.fin IS NOT NULL AND c.fin < CURDATE() THEN a.id END) AS cursos_completados,
             COUNT(DISTINCT CASE WHEN c.fin IS NULL OR c.fin >= CURDATE() THEN a.id END) AS cursos_activos,
             AVG(CASE WHEN cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.posevaluacion AS DECIMAL(6,2)) END) AS evaluacion_promedio,
@@ -119,22 +120,25 @@ if ($vista === 'participantes') {
         LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
         LEFT JOIN diplomas d ON d.tipo = 'curso' AND d.asignacion_id = a.id
         WHERE " . implode(' AND ', $condiciones) . "
-        GROUP BY p.id, p.nombre_participantes, p.cui_participantes, p.puesto_participantes, p.area_participantes
+        GROUP BY p.id, p.nombre_participantes, p.cui_participantes, p.puesto_participantes, p.area_participantes,
+            p.correo_participantes, p.grado_academico_participantes, p.telefono_participantes
         ORDER BY p.nombre_participantes
     ");
     $stmt->execute($params);
     $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $encabezadoExcel = ['Participante', 'CUI', 'Puesto', 'Área', 'Cursos completados', 'Cursos activos', 'Evaluación promedio', 'Diplomas', 'Última capacitación'];
-    $anchosExcel = [28, 16, 20, 20, 16, 14, 18, 12, 18];
+    $encabezadoExcel = ['Participante', 'CUI', 'Correo electrónico', 'Grado académico', 'Teléfono', 'Puesto', 'Área', 'Cursos completados', 'Cursos activos', 'Evaluación promedio', 'Diplomas', 'Última capacitación'];
+    $anchosExcel = [28, 16, 30, 22, 16, 20, 20, 16, 14, 18, 12, 18];
     $columnasPdf = [
-        ['Participante', 140, 30], ['CUI', 75, 16], ['Puesto', 110, 23], ['Área', 100, 21],
-        ['Complet.', 55, 9], ['Activos', 50, 9], ['Eval. prom.', 60, 10], ['Diplomas', 55, 9], ['Últ. capacitación', 72, 13],
+        ['Participante', 95, 19], ['CUI', 65, 14], ['Correo', 95, 20], ['Grado', 70, 14],
+        ['Teléfono', 55, 11], ['Puesto', 55, 11], ['Área', 55, 11], ['Complet.', 40, 7],
+        ['Activos', 35, 6], ['Eval.', 45, 8], ['Diplomas', 35, 6], ['Última', 55, 10],
     ];
 
     foreach ($registros as $r) {
         $filas[] = [
-            $r['nombre_participantes'], $r['cui_participantes'], $r['puesto_participantes'], $r['area_participantes'],
+            $r['nombre_participantes'], $r['cui_participantes'], $r['correo_participantes'],
+            $r['grado_academico_participantes'], $r['telefono_participantes'], $r['puesto_participantes'], $r['area_participantes'],
             (string) (int) $r['cursos_completados'], (string) (int) $r['cursos_activos'],
             cengi_dbi_export_numero($r['evaluacion_promedio'], ' pts'), (string) (int) $r['diplomas'],
             cengi_dbi_export_fecha($r['ultima_capacitacion']),

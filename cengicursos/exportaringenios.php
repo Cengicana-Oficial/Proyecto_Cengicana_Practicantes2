@@ -15,6 +15,9 @@ $sql = "SELECT
 	  p.nombre_participantes,
 	  p.puesto_participantes,
 	  p.area_participantes,
+	  p.correo_participantes,
+	  p.grado_academico_participantes,
+	  p.telefono_participantes,
 	  u.nombre
 	 FROM cengi_cursos.participantes p
 	 INNER JOIN cengi_cursos.ingenios i ON (p.ingenio_id=i.id)
@@ -37,7 +40,7 @@ $objPHPExcel->getProperties()->setCreator("Monica Galiego de Brán")
     ->setCategory("Reporte");
 
 // Combino las celdas desde A1 hasta F1
-$objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:F1');
+$objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:I1');
 
 $objPHPExcel->setActiveSheetIndex(0)
     ->setCellValue('A1', 'Reporte Participantes por Ingenio')
@@ -46,12 +49,15 @@ $objPHPExcel->setActiveSheetIndex(0)
     ->setCellValue('C2', 'CUI')
     ->setCellValue('D2', 'Puesto')
     ->setCellValue('E2', 'Area')
-    ->setCellValue('F2', 'Delegado');
+    ->setCellValue('F2', 'Correo electrónico')
+    ->setCellValue('G2', 'Grado académico')
+    ->setCellValue('H2', 'Teléfono')
+    ->setCellValue('I2', 'Delegado');
 
 // Fuente de la primera fila en negrita
 $boldArray = ['font' => ['bold' => true], 'alignment' => ['horizontal' => PHPExcel_Style_Alignment::HORIZONTAL_CENTER]];
 
-$objPHPExcel->getActiveSheet()->getStyle('A1:F2')->applyFromArray($boldArray);
+$objPHPExcel->getActiveSheet()->getStyle('A1:I2')->applyFromArray($boldArray);
 
 //Ancho de las columnas
 $objPHPExcel->getActiveSheet()->getColumnDimension('A')->setWidth(20);
@@ -60,6 +66,9 @@ $objPHPExcel->getActiveSheet()->getColumnDimension('C')->setWidth(25);
 $objPHPExcel->getActiveSheet()->getColumnDimension('D')->setWidth(25);
 $objPHPExcel->getActiveSheet()->getColumnDimension('E')->setWidth(25);
 $objPHPExcel->getActiveSheet()->getColumnDimension('F')->setWidth(40);
+$objPHPExcel->getActiveSheet()->getColumnDimension('G')->setWidth(25);
+$objPHPExcel->getActiveSheet()->getColumnDimension('H')->setWidth(18);
+$objPHPExcel->getActiveSheet()->getColumnDimension('I')->setWidth(40);
 
 $cel = 3; //Numero de fila donde empezara a crear  el reporte
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -69,6 +78,9 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $participante = $row['nombre_participantes'];
     $puesto       = $row['puesto_participantes'];
     $area         = $row['area_participantes'];
+    $correo       = $row['correo_participantes'];
+    $grado        = $row['grado_academico_participantes'];
+    $telefono     = $row['telefono_participantes'];
     $delegado     = $row['nombre'];
 
     $a = "A" . $cel;
@@ -77,6 +89,9 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $d = "D" . $cel;
     $e = "E" . $cel;
     $f = "F" . $cel;
+    $g = "G" . $cel;
+    $h = "H" . $cel;
+    $i = "I" . $cel;
     // Agregar datos
     $objPHPExcel->setActiveSheetIndex(0)
         ->setCellValue($a, $ingenio)
@@ -84,14 +99,17 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         ->setCellValue($c, $cui)
         ->setCellValue($d, $puesto)
         ->setCellValue($e, $area)
-        ->setCellValue($f, $delegado);
+        ->setCellValue($f, $correo)
+        ->setCellValue($g, $grado)
+        ->setCellValue($h, $telefono)
+        ->setCellValue($i, $delegado);
 
     $cel += 1;
 }
 /*Fin extracion de datos MYSQL*/
 
 //formato celdas
-$rango      = "A2:F2";
+$rango      = "A2:I2";
 $styleArray = ['font' => ['name' => 'Arial', 'size' => 10],
     'borders'             => ['allborders' => ['style' => PHPExcel_Style_Border::BORDER_THIN, 'color' => ['argb' => 'FFF']]],
 ];
