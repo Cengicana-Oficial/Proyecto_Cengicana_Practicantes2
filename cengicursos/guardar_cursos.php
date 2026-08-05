@@ -43,6 +43,7 @@ try {
     }
 
     cengi_curso_guardar_modulos($db, $cursoId, $datos['modulos'], false);
+    cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $datos['instructor_id']);
     $db->commit();
     header('Location: ver_cursos.php?mensaje=creado');
 } catch (Throwable $e) {

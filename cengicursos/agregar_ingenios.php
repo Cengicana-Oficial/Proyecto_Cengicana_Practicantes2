@@ -1,4 +1,4 @@
-<?php require_once "menu.php"; cengi_require_admin(); ?>
+<?php require_once "menu.php"; cengi_require_gestionar_ingenios(); ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -34,7 +34,7 @@
 
 			<div class="cengi-form-actions">
 				<button type="submit" class="btn btn-success">Guardar</button>
-				<a href="index.php" class="btn btn-danger">Cancelar</a>
+				<a href="ver_ingenios.php" class="btn btn-danger">Cancelar</a>
 			</div>
 		</form>
 	</div>

@@ -231,6 +231,9 @@ function cengi_pc_html($valor)
                 </div>
             <?php endif; ?>
 
+            <form action="guardar_control.php" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="accion" value="guardar_general">
+            <input type="hidden" name="curso_id" value="<?php echo (int) $idcurso; ?>">
             <div class="cengi-table-wrap">
             <table class="table table-bordered table-striped">
                 <thead>
@@ -243,13 +246,13 @@ function cengi_pc_html($valor)
                         <th>Pre-Evaluacion</th>
                         <th>Pos-Evaluacion</th>
                         <th>Diploma</th>
-                        <th>Guardar</th>
+                        <?php if ($puedeGestionar): ?><th>Acciones</th><?php endif; ?>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($filas)) { ?>
                         <tr>
-                            <td colspan="<?php echo $puedeGestionar ? 9 : 7; ?>" class="text-center">
+                            <td colspan="<?php echo $puedeGestionar ? 9 : 6; ?>" class="text-center">
                                 No hay participantes asignados a este curso todavia.
                             </td>
                         </tr>
@@ -257,7 +260,6 @@ function cengi_pc_html($valor)
 
                     <?php foreach ($filas as $fila) { ?>
                         <tr>
-                            <form action="guardar_control.php" method="POST" enctype="multipart/form-data">
                                 <td><strong><?= htmlspecialchars($fila['nombre_participantes']) ?></strong><br><small><?= htmlspecialchars(implode(' · ', array_filter([$fila['correo_participantes'], $fila['telefono_participantes'], $fila['grado_academico_participantes']]))) ?></small></td>
                                 <td><?= htmlspecialchars($fila['cui_participantes']) ?></td>
                                 <td><?= htmlspecialchars($fila['nombre_ingenios']) ?></td>
@@ -275,7 +277,7 @@ function cengi_pc_html($valor)
                                     <td>
                                         <input
                                             type="number"
-                                            name="asistencia"
+                                            name="registros[<?= (int) $fila['asignacion_id'] ?>][asistencia]"
                                             class="form-control"
                                             min="0"
                                             max="100"
@@ -288,7 +290,7 @@ function cengi_pc_html($valor)
                                 <td>
                                     <input
                                         type="number"
-                                        name="evaluacion"
+                                        name="registros[<?= (int) $fila['asignacion_id'] ?>][evaluacion]"
                                         class="form-control"
                                         min="0"
                                         max="100"
@@ -300,7 +302,7 @@ function cengi_pc_html($valor)
                                 <td>
                                     <input
                                         type="number"
-                                        name="posevaluacion"
+                                        name="registros[<?= (int) $fila['asignacion_id'] ?>][posevaluacion]"
                                         class="form-control"
                                         min="0"
                                         max="100"
@@ -311,7 +313,7 @@ function cengi_pc_html($valor)
 
                                 <td>
                                     <?php if ($puedeSubirDiploma): ?>
-                                        <input type="file" name="diploma" class="form-control">
+                                        <input type="file" name="diplomas[<?= (int) $fila['asignacion_id'] ?>]" class="form-control" accept="application/pdf,.pdf">
                                         <br>
                                     <?php endif; ?>
                                     <?php if (!empty($fila['diploma'])) { ?>
@@ -323,30 +325,36 @@ function cengi_pc_html($valor)
                                     <?php } ?>
                                 </td>
 
+                                <?php if ($puedeGestionar): ?>
                                 <td>
-                                    <input type="hidden" name="asignacion_id" value="<?= (int) $fila['asignacion_id'] ?>">
                                     <div class="cengi-row-actions">
-                                        <button type="submit" class="cengi-action-btn is-edit" style="border:0;" data-tooltip="Guardar" aria-label="Guardar"><span class="glyphicon glyphicon-floppy-disk"></span><span class="sr-only">Guardar</span></button>
-                                        <?php if ($puedeGestionar): ?>
-                                            <?php $estadoActivo = (int) $fila['estado_asignaciones'] === 1; ?>
-                                            <a
-                                                href="toggle_asignacion.php?id=<?= (int) $fila['asignacion_id'] ?>&curso_id=<?= $idcurso ?>&estado=<?= (int) $fila['estado_asignaciones'] ?>"
-                                                class="cengi-action-btn <?php echo $estadoActivo ? 'is-toggle-on' : 'is-toggle-off'; ?>"
-                                                data-tooltip="<?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?>"
-                                                aria-label="<?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?>"
-                                            >
-                                                <span class="glyphicon <?php echo $estadoActivo ? 'glyphicon-eye-close' : 'glyphicon-eye-open'; ?>"></span>
-                                                <span class="sr-only"><?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?></span>
-                                            </a>
-                                        <?php endif; ?>
+                                        <?php $estadoActivo = (int) $fila['estado_asignaciones'] === 1; ?>
+                                        <a
+                                            href="toggle_asignacion.php?id=<?= (int) $fila['asignacion_id'] ?>&curso_id=<?= $idcurso ?>&estado=<?= (int) $fila['estado_asignaciones'] ?>"
+                                            class="cengi-action-btn <?php echo $estadoActivo ? 'is-toggle-on' : 'is-toggle-off'; ?>"
+                                            data-tooltip="<?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?>"
+                                            aria-label="<?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?>"
+                                        >
+                                            <span class="glyphicon <?php echo $estadoActivo ? 'glyphicon-eye-close' : 'glyphicon-eye-open'; ?>"></span>
+                                            <span class="sr-only"><?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?></span>
+                                        </a>
                                     </div>
                                 </td>
-                            </form>
+                                <?php endif; ?>
                         </tr>
                     <?php } ?>
                 </tbody>
             </table>
             </div>
+            <?php if (!empty($filas)): ?>
+                <div style="margin-top: 20px; text-align: right;">
+                    <button type="submit" class="btn btn-success">
+                        <span class="glyphicon glyphicon-floppy-disk"></span>
+                        Guardar todos los registros
+                    </button>
+                </div>
+            <?php endif; ?>
+            </form>
         </div>
     </div>
 </div>

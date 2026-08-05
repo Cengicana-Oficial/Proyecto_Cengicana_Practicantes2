@@ -113,3 +113,34 @@ function cengi_curso_guardar_modulos(PDO $db, $cursoId, array $modulos, $actuali
         }
     }
 }
+
+/**
+ * Asegura que exista un enlace publico de evaluacion para la combinacion
+ * curso_id + instructor_id (idempotente: no se regenera si ya existe).
+ * Se debe llamar cada vez que un curso se guarda/actualiza con un instructor
+ * asignado. No hace nada si $instructorId es nulo/0.
+ */
+function cengi_asegurar_enlace_evaluacion_instructor(PDO $db, $cursoId, $instructorId)
+{
+    $cursoId = (int) $cursoId;
+    $instructorId = (int) $instructorId;
+    if ($cursoId <= 0 || $instructorId <= 0) {
+        return;
+    }
+
+    $stmt = $db->prepare('SELECT id FROM enlaces_evaluacion_instructor WHERE curso_id = ? AND instructor_id = ?');
+    $stmt->execute([$cursoId, $instructorId]);
+    if ($stmt->fetch(PDO::FETCH_ASSOC)) {
+        return;
+    }
+
+    $token = bin2hex(random_bytes(16));
+    try {
+        $stmtInsertar = $db->prepare('INSERT INTO enlaces_evaluacion_instructor (curso_id, instructor_id, token) VALUES (?, ?, ?)');
+        $stmtInsertar->execute([$cursoId, $instructorId, $token]);
+    } catch (PDOException $e) {
+        // Carrera entre dos peticiones concurrentes contra la misma llave unica
+        // (curso_id, instructor_id): la fila ya existe, no es un error real.
+        error_log('No fue posible crear el enlace de evaluacion (probable duplicado): ' . $e->getMessage());
+    }
+}

@@ -514,6 +514,14 @@ function cengi_require_ver_ingenios($redirect = 'index.php')
     }
 }
 
+function cengi_require_gestionar_ingenios($redirect = 'ver_ingenios.php')
+{
+    if (!cengi_puede_gestionar_ingenios()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
 function cengi_require_ver_participantes($redirect = 'index.php')
 {
     if (!cengi_puede_ver_participantes()) {

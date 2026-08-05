@@ -1,6 +1,8 @@
 <?php
 
 require_once("revisar_permisos.php");
+cengi_require_gestionar_ingenios();
+require_once("menu.php");
 cengi_require_admin();
 
 require_once("conexion.php");
