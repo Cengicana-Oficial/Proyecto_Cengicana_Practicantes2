@@ -194,13 +194,7 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
         <div class="brand-accent"></div>
         <div class="nav-shell">
             <a class="brand" href="Menu.php" aria-label="Ir al panel principal">
-                <span class="brand-symbol">
-                    <span class="material-symbols-outlined">eco</span>
-                </span>
-                <span class="brand-text">
-                    <strong>CENGICAÑA</strong>
-                    <small>Plataforma digital</small>
-                </span>
+                <img class="brand-logo" src="assets/img/logo.png" alt="CENGICAÑA">
             </a>
 
             <button class="menu-toggle" id="menuBtn" type="button"
