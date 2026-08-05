@@ -12,7 +12,7 @@ cengi_require_carga_participantes("participantes.php");
 
 $db = conectar();
 $ingenioID = (int) ($_POST['ingenio'] ?? 0);
-$userID = (int) ($_POST['user'] ?? 0);
+$userID = cengi_usuario_actual_id();
 $cursoID = (int) ($_POST['curso'] ?? 0);
 
 function cengi_carga_error($mensaje)
@@ -104,7 +104,7 @@ try {
         $userID <= 0 ||
         $cursoID <= 0
     ) {
-        cengi_carga_error('Debes seleccionar ingenio, usuario y curso antes de cargar el archivo.');
+        cengi_carga_error('Debes seleccionar ingenio y curso antes de cargar el archivo.');
     }
 
     if (
