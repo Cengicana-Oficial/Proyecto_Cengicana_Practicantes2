@@ -20,11 +20,12 @@ if ($campo !== '') {
         OR i.nombre_ingenios LIKE ?
         OR s.correo LIKE ?
         OR s.telefono LIKE ?
+        OR s.grado_academico LIKE ?
         OR s.tipo_pago LIKE ?
     )";
 
     $like = '%' . $campo . '%';
-    array_push($params, $like, $like, $like, $like, $like, $like);
+    array_push($params, $like, $like, $like, $like, $like, $like, $like);
 }
 
 if (!cengi_ve_todo_por_rol_o_ingenio()) {
@@ -210,6 +211,7 @@ $proyectoCssVersion = (int) (@filemtime(__DIR__ . '/css/proyecto.css') ?: 1);
                                     <div>
                                         <strong><?php echo htmlspecialchars($fila['nombre_participante']); ?></strong>
                                         <small>Solicitud #<?php echo (int) $fila['id_solicitud']; ?> · CUI <?php echo htmlspecialchars($fila['cui_participante']); ?></small>
+                                        <small><?php echo htmlspecialchars($fila['grado_academico']); ?></small>
                                     </div>
                                 </div>
                             </td>

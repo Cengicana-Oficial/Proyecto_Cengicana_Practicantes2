@@ -176,6 +176,9 @@ try {
                 nombre_participantes = ?,
                 puesto_participantes = ?,
                 area_participantes = ?,
+                correo_participantes = ?,
+                grado_academico_participantes = ?,
+                telefono_participantes = ?,
                 estado_participantes = 1,
                 actualizado = NOW()
             WHERE id = ?
@@ -185,6 +188,9 @@ try {
             $solicitud['nombre_participante'],
             $solicitud['puesto_participante'],
             $solicitud['area_participante'],
+            $solicitud['correo'],
+            $solicitud['grado_academico'],
+            $solicitud['telefono'],
             $idParticipante
         ]);
 
@@ -197,10 +203,13 @@ try {
                 nombre_participantes,
                 puesto_participantes,
                 area_participantes,
+                correo_participantes,
+                grado_academico_participantes,
+                telefono_participantes,
                 estado_participantes,
                 creado
             )
-            VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
         ");
 
         $stmtInsert->execute([
@@ -209,7 +218,10 @@ try {
             $solicitud['cui_participante'],
             $solicitud['nombre_participante'],
             $solicitud['puesto_participante'],
-            $solicitud['area_participante']
+            $solicitud['area_participante'],
+            $solicitud['correo'],
+            $solicitud['grado_academico'],
+            $solicitud['telefono']
         ]);
 
         $idParticipante = (int) $db->lastInsertId();

@@ -61,6 +61,9 @@ function cengi_obtener_filas_archivo($archivoTemporal, $extension)
             cengi_valor_excel($hoja->getCellByColumnAndRow(1, $fila)->getCalculatedValue()),
             cengi_valor_excel($hoja->getCellByColumnAndRow(2, $fila)->getCalculatedValue()),
             cengi_valor_excel($hoja->getCellByColumnAndRow(3, $fila)->getCalculatedValue()),
+            cengi_valor_excel($hoja->getCellByColumnAndRow(4, $fila)->getCalculatedValue()),
+            cengi_valor_excel($hoja->getCellByColumnAndRow(5, $fila)->getCalculatedValue()),
+            cengi_valor_excel($hoja->getCellByColumnAndRow(6, $fila)->getCalculatedValue()),
         ];
     }
 
@@ -140,10 +143,13 @@ try {
             nombre_participantes,
             puesto_participantes,
             area_participantes,
+            correo_participantes,
+            grado_academico_participantes,
+            telefono_participantes,
             estado_participantes,
             creado
         )
-        VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
     ");
 
     $stmtActualizarParticipante = $db->prepare("
@@ -154,6 +160,9 @@ try {
             nombre_participantes = ?,
             puesto_participantes = ?,
             area_participantes = ?,
+            correo_participantes = COALESCE(NULLIF(?, ''), correo_participantes),
+            grado_academico_participantes = COALESCE(NULLIF(?, ''), grado_academico_participantes),
+            telefono_participantes = COALESCE(NULLIF(?, ''), telefono_participantes),
             actualizado = NOW()
         WHERE id = ?
     ");
@@ -203,14 +212,22 @@ try {
         $nombre = trim((string) ($fila[1] ?? ''));
         $puesto = trim((string) ($fila[2] ?? ''));
         $area = trim((string) ($fila[3] ?? ''));
+        $correo = trim((string) ($fila[4] ?? ''));
+        $gradoAcademico = trim((string) ($fila[5] ?? ''));
+        $telefono = trim((string) ($fila[6] ?? ''));
         $lineaReal = $indice + 1;
 
-        if ($cui === '' && $nombre === '' && $puesto === '' && $area === '') {
+        if ($cui === '' && $nombre === '' && $puesto === '' && $area === '' && $correo === '' && $gradoAcademico === '' && $telefono === '') {
             continue;
         }
 
         if ($cui === '' || $nombre === '') {
             $advertencias[] = "Linea {$lineaReal}: se omitio porque faltan CUI o nombre.";
+            continue;
+        }
+
+        if ($correo !== '' && !filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+            $advertencias[] = "Linea {$lineaReal}: se omitio porque el correo electronico no es valido.";
             continue;
         }
 
@@ -224,6 +241,9 @@ try {
                 $nombre,
                 $puesto,
                 $area,
+                $correo,
+                $gradoAcademico,
+                $telefono,
                 $participanteID,
             ]);
             $actualizados++;
@@ -235,6 +255,9 @@ try {
                 $nombre,
                 $puesto,
                 $area,
+                $correo,
+                $gradoAcademico,
+                $telefono,
             ]);
             $participanteID = (int) $db->lastInsertId();
             $creados++;

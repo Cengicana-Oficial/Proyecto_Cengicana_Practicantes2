@@ -21,7 +21,10 @@ class participantes
                 p.cui_participantes,
                 p.nombre_participantes,
                 p.puesto_participantes,
-                p.area_participantes
+                p.area_participantes,
+                p.correo_participantes,
+                p.grado_academico_participantes,
+                p.telefono_participantes
             FROM participantes p
             INNER JOIN ingenios i ON p.ingenio_id = i.id
         ";

@@ -54,9 +54,9 @@ if (!cengi_ve_todo_por_rol_o_ingenio()) {
     $params[] = cengi_ingenio_id_actual();
 }
 if ($busqueda !== '') {
-    $condiciones[] = '(p.nombre_participantes LIKE ? OR p.cui_participantes LIKE ? OR i.nombre_ingenios LIKE ? OR p.area_participantes LIKE ?)';
+    $condiciones[] = '(p.nombre_participantes LIKE ? OR p.cui_participantes LIKE ? OR i.nombre_ingenios LIKE ? OR p.area_participantes LIKE ? OR p.correo_participantes LIKE ? OR p.grado_academico_participantes LIKE ? OR p.telefono_participantes LIKE ?)';
     $termino = '%' . $busqueda . '%';
-    array_push($params, $termino, $termino, $termino, $termino);
+    array_push($params, $termino, $termino, $termino, $termino, $termino, $termino, $termino);
 }
 if ($estado === 'activo') {
     $condiciones[] = 'p.estado_participantes = 1 AND a.estado_asignaciones = 1';
@@ -74,6 +74,9 @@ $stmtParticipantes = $db->prepare("
         p.nombre_participantes,
         p.puesto_participantes,
         p.area_participantes,
+        p.correo_participantes,
+        p.grado_academico_participantes,
+        p.telefono_participantes,
         p.estado_participantes,
         a.id AS asignacion_id,
         a.estado_asignaciones,
@@ -291,7 +294,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                         <td>
                             <div class="cengi-participant-name">
                                 <span class="cengi-participant-avatar"><?php echo cengi_part_html(cengi_part_iniciales($fila['nombre_participantes'])); ?></span>
-                                <span><strong><?php echo cengi_part_html($fila['nombre_participantes']); ?></strong><small><?php echo cengi_part_html($fila['puesto_participantes']); ?></small></span>
+                                <span><strong><?php echo cengi_part_html($fila['nombre_participantes']); ?></strong><small><?php echo cengi_part_html($fila['puesto_participantes']); ?></small><small><?php echo cengi_part_html($fila['correo_participantes']); ?></small></span>
                             </div>
                         </td>
                         <td><span class="cengi-participant-cui"><?php echo cengi_part_html($fila['cui_participantes']); ?></span></td>
@@ -314,9 +317,9 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                                     <button type="button" class="cengi-action-btn participant-grades-trigger" data-toggle="modal" data-target="#participant-grades-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-assignment="<?php echo (int) $fila['asignacion_id']; ?>" data-attendance="<?php echo cengi_part_html($fila['asistencia']); ?>" data-pre="<?php echo cengi_part_html($fila['evaluacion']); ?>" data-post="<?php echo cengi_part_html($fila['posevaluacion']); ?>" aria-label="Calificaciones" data-tooltip="Calificaciones"><span class="glyphicon glyphicon-education"></span></button>
                                 <?php endif; ?>
                                 <?php if ($puedeEditar): ?>
-                                    <button type="button" class="cengi-action-btn participant-edit-trigger" data-toggle="modal" data-target="#participant-edit-modal" data-id="<?php echo (int) $fila['participante_id']; ?>" data-ingenio="<?php echo (int) $fila['ingenio_id']; ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-position="<?php echo cengi_part_html($fila['puesto_participantes']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-state="<?php echo (int) $fila['estado_participantes']; ?>" aria-label="Editar" data-tooltip="Editar"><span class="glyphicon glyphicon-pencil"></span></button>
+                                    <button type="button" class="cengi-action-btn participant-edit-trigger" data-toggle="modal" data-target="#participant-edit-modal" data-id="<?php echo (int) $fila['participante_id']; ?>" data-ingenio="<?php echo (int) $fila['ingenio_id']; ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-position="<?php echo cengi_part_html($fila['puesto_participantes']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-email="<?php echo cengi_part_html($fila['correo_participantes']); ?>" data-degree="<?php echo cengi_part_html($fila['grado_academico_participantes']); ?>" data-phone="<?php echo cengi_part_html($fila['telefono_participantes']); ?>" data-state="<?php echo (int) $fila['estado_participantes']; ?>" aria-label="Editar" data-tooltip="Editar"><span class="glyphicon glyphicon-pencil"></span></button>
                                 <?php endif; ?>
-                                <button type="button" class="cengi-action-btn participant-profile-trigger" data-toggle="modal" data-target="#participant-profile-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-company="<?php echo cengi_part_html($fila['nombre_ingenios']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-history="<?php echo cengi_part_html($historialJson); ?>" aria-label="Ver perfil" data-tooltip="Ver perfil"><span class="glyphicon glyphicon-eye-open"></span></button>
+                                <button type="button" class="cengi-action-btn participant-profile-trigger" data-toggle="modal" data-target="#participant-profile-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-company="<?php echo cengi_part_html($fila['nombre_ingenios']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-email="<?php echo cengi_part_html($fila['correo_participantes']); ?>" data-degree="<?php echo cengi_part_html($fila['grado_academico_participantes']); ?>" data-phone="<?php echo cengi_part_html($fila['telefono_participantes']); ?>" data-history="<?php echo cengi_part_html($historialJson); ?>" aria-label="Ver perfil" data-tooltip="Ver perfil"><span class="glyphicon glyphicon-eye-open"></span></button>
                                 <?php if ($puedeEliminar): ?>
                                     <button type="button" class="cengi-action-btn is-delete participant-delete-trigger" data-toggle="modal" data-target="#confirm-participant-delete" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-href="eliminar_participante.php?id=<?php echo (int) $fila['participante_id']; ?>&amp;curso_id=<?php echo $cursoId; ?>" aria-label="Desactivar" data-tooltip="Desactivar"><span class="glyphicon glyphicon-trash"></span></button>
                                 <?php endif; ?>
@@ -344,6 +347,9 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                     <div class="form-group"><label for="participant-edit-company">Ingenio</label><select class="form-control" id="participant-edit-company" name="ingenio" required><?php foreach ($ingenios as $ingenio): ?><option value="<?php echo (int) $ingenio['id']; ?>"><?php echo cengi_part_html($ingenio['nombre_ingenios']); ?></option><?php endforeach; ?></select></div>
                     <div class="form-group"><label for="participant-edit-area">Área</label><input class="form-control" id="participant-edit-area" name="area_participantes" required></div>
                     <div class="form-group"><label for="participant-edit-position">Puesto</label><input class="form-control" id="participant-edit-position" name="puesto_participantes" required></div>
+                    <div class="form-group"><label for="participant-edit-email">Correo electrónico</label><input type="email" class="form-control" id="participant-edit-email" name="correo_participantes" maxlength="255"></div>
+                    <div class="form-group"><label for="participant-edit-degree">Grado académico</label><input class="form-control" id="participant-edit-degree" name="grado_academico_participantes" maxlength="255"></div>
+                    <div class="form-group"><label for="participant-edit-phone">Teléfono</label><input type="tel" class="form-control" id="participant-edit-phone" name="telefono_participantes" maxlength="50"></div>
                     <div class="form-group"><label for="participant-edit-state">Estado</label><select class="form-control" id="participant-edit-state" name="estado_participantes"><option value="1">Activo</option><option value="0">Inactivo</option></select></div>
                 </div>
             </div>
@@ -398,7 +404,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                     <div class="form-group"><label for="bulk-participants-company">Ingenio</label><select class="form-control" id="bulk-participants-company" name="ingenio" required><?php foreach ($ingenios as $ingenio): ?><option value="<?php echo (int) $ingenio['id']; ?>"><?php echo cengi_part_html($ingenio['nombre_ingenios']); ?></option><?php endforeach; ?></select></div>
                     <div class="form-group"><label for="bulk-participants-user">Usuario asignado</label><select class="form-control" id="bulk-participants-user" name="user" required><?php foreach ($usuarios as $usuario): ?><option value="<?php echo (int) $usuario['id']; ?>"><?php echo cengi_part_html($usuario['nombre'] . (!empty($usuario['rol']) ? ' — ' . $usuario['rol'] : '')); ?></option><?php endforeach; ?></select></div>
                 </div>
-                <div class="cengi-upload-guide"><strong>Formato requerido</strong><span>CUI, NOMBRE, PUESTO, AREA</span><small>Admite archivos CSV, XLS y XLSX.</small></div>
+                <div class="cengi-upload-guide"><strong>Formato requerido</strong><span>CUI, NOMBRE, PUESTO, AREA, CORREO_ELECTRONICO, GRADO_ACADEMICO, TELEFONO</span><small>Admite archivos CSV, XLS y XLSX. <a href="plantilla_participantes.csv" download>Descargar plantilla</a></small></div>
                 <label class="cengi-upload-dropzone" for="bulk-participants-file"><span class="glyphicon glyphicon-cloud-upload"></span><strong>Selecciona el archivo</strong><small>CSV, XLS o XLSX</small><input type="file" id="bulk-participants-file" name="archivo" accept=".csv,.xls,.xlsx" required></label>
             </div>
             <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Procesar archivo</button></div>
@@ -410,7 +416,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
 <div class="modal fade cengi-participant-modal" id="participant-profile-modal" tabindex="-1" role="dialog" aria-labelledby="participant-profile-title">
     <div class="modal-dialog" role="document"><div class="modal-content">
         <div class="modal-header"><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button><span class="cengi-modal-icon"><span class="glyphicon glyphicon-user"></span></span><div><h4 class="modal-title" id="participant-profile-title">Perfil del participante</h4><p>Información e historial de cursos.</p></div></div>
-        <div class="modal-body"><div class="cengi-participant-profile-head"><span class="cengi-participant-profile-avatar" id="participant-profile-avatar">P</span><div><h3 id="participant-profile-name"></h3><p id="participant-profile-meta"></p><small id="participant-profile-cui"></small></div></div><h5 class="cengi-participant-history-title">Historial de cursos</h5><div class="cengi-participant-history" id="participant-profile-history"></div></div>
+        <div class="modal-body"><div class="cengi-participant-profile-head"><span class="cengi-participant-profile-avatar" id="participant-profile-avatar">P</span><div><h3 id="participant-profile-name"></h3><p id="participant-profile-meta"></p><small id="participant-profile-cui"></small></div></div><div class="cengi-directory-profile-details"><div><span>Correo electrónico</span><strong id="participant-profile-email">—</strong></div><div><span>Teléfono</span><strong id="participant-profile-phone">—</strong></div><div><span>Grado académico</span><strong id="participant-profile-degree">—</strong></div></div><h5 class="cengi-participant-history-title">Historial de cursos</h5><div class="cengi-participant-history" id="participant-profile-history"></div></div>
         <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button></div>
     </div></div>
 </div>
@@ -442,6 +448,9 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
         document.getElementById('participant-edit-company').value = trigger.getAttribute('data-ingenio') || '';
         document.getElementById('participant-edit-area').value = trigger.getAttribute('data-area') || '';
         document.getElementById('participant-edit-position').value = trigger.getAttribute('data-position') || '';
+        document.getElementById('participant-edit-email').value = trigger.getAttribute('data-email') || '';
+        document.getElementById('participant-edit-degree').value = trigger.getAttribute('data-degree') || '';
+        document.getElementById('participant-edit-phone').value = trigger.getAttribute('data-phone') || '';
         document.getElementById('participant-edit-state').value = trigger.getAttribute('data-state') || '1';
     });
 
@@ -469,6 +478,9 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
         document.getElementById('participant-profile-avatar').textContent = initials(name);
         document.getElementById('participant-profile-meta').textContent = [trigger.getAttribute('data-company'), trigger.getAttribute('data-area')].filter(Boolean).join(' · ');
         document.getElementById('participant-profile-cui').textContent = 'CUI ' + (trigger.getAttribute('data-cui') || '—');
+        document.getElementById('participant-profile-email').textContent = trigger.getAttribute('data-email') || '—';
+        document.getElementById('participant-profile-degree').textContent = trigger.getAttribute('data-degree') || '—';
+        document.getElementById('participant-profile-phone').textContent = trigger.getAttribute('data-phone') || '—';
         var history = [];
         try { history = JSON.parse(trigger.getAttribute('data-history') || '[]'); } catch (ignore) {}
         document.getElementById('participant-profile-history').innerHTML = history.length ? history.map(function (item) {

@@ -69,6 +69,9 @@ $sql = "
         a.estado_asignaciones,
         p.nombre_participantes,
         p.cui_participantes,
+        p.correo_participantes,
+        p.grado_academico_participantes,
+        p.telefono_participantes,
         i.nombre_ingenios,
         cc.asistencia,
         cc.evaluacion,
@@ -255,7 +258,7 @@ function cengi_pc_html($valor)
                     <?php foreach ($filas as $fila) { ?>
                         <tr>
                             <form action="guardar_control.php" method="POST" enctype="multipart/form-data">
-                                <td><?= htmlspecialchars($fila['nombre_participantes']) ?></td>
+                                <td><strong><?= htmlspecialchars($fila['nombre_participantes']) ?></strong><br><small><?= htmlspecialchars(implode(' · ', array_filter([$fila['correo_participantes'], $fila['telefono_participantes'], $fila['grado_academico_participantes']]))) ?></small></td>
                                 <td><?= htmlspecialchars($fila['cui_participantes']) ?></td>
                                 <td><?= htmlspecialchars($fila['nombre_ingenios']) ?></td>
                                 <?php if ($puedeGestionar): ?>

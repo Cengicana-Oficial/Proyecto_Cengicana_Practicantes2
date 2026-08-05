@@ -44,7 +44,9 @@ if ($fichaId > 0) {
     }
 
     $stmtFicha = $db->prepare('SELECT p.id, p.nombre_participantes, p.cui_participantes,
-            p.puesto_participantes, p.area_participantes, p.estado_participantes, i.nombre_ingenios
+            p.puesto_participantes, p.area_participantes, p.correo_participantes,
+            p.grado_academico_participantes, p.telefono_participantes,
+            p.estado_participantes, i.nombre_ingenios
         FROM participantes p
         INNER JOIN ingenios i ON i.id = p.ingenio_id
         WHERE ' . implode(' AND ', $condicionesFicha) . ' LIMIT 1');
@@ -104,9 +106,9 @@ $condiciones = [];
 $params = [];
 
 if ($busqueda !== '') {
-    $condiciones[] = '(p.nombre_participantes LIKE ? OR p.cui_participantes LIKE ?)';
-    $params[] = '%' . $busqueda . '%';
-    $params[] = '%' . $busqueda . '%';
+    $condiciones[] = '(p.nombre_participantes LIKE ? OR p.cui_participantes LIKE ? OR p.correo_participantes LIKE ? OR p.grado_academico_participantes LIKE ? OR p.telefono_participantes LIKE ?)';
+    $termino = '%' . $busqueda . '%';
+    array_push($params, $termino, $termino, $termino, $termino, $termino);
 }
 if ($ingenioFiltro > 0) {
     $condiciones[] = 'p.ingenio_id = ?';
@@ -119,7 +121,8 @@ if (!cengi_ve_todo_por_rol_o_ingenio()) {
 $where = $condiciones ? 'WHERE ' . implode(' AND ', $condiciones) : '';
 
 $sql = "SELECT p.id, p.nombre_participantes, p.cui_participantes,
-        p.puesto_participantes, p.area_participantes, i.nombre_ingenios,
+        p.puesto_participantes, p.area_participantes, p.correo_participantes,
+        p.grado_academico_participantes, p.telefono_participantes, i.nombre_ingenios,
         COUNT(DISTINCT CASE WHEN c.fin IS NOT NULL AND c.fin < CURDATE() THEN a.id END) AS cursos_completados,
         COUNT(DISTINCT CASE WHEN c.fin IS NULL OR c.fin >= CURDATE() THEN a.id END) AS cursos_activos,
         COUNT(DISTINCT a.id) AS total_cursos,
@@ -133,7 +136,8 @@ $sql = "SELECT p.id, p.nombre_participantes, p.cui_participantes,
     LEFT JOIN diplomas d ON d.tipo = 'curso' AND d.asignacion_id = a.id
     {$where}
     GROUP BY p.id, p.nombre_participantes, p.cui_participantes,
-             p.puesto_participantes, p.area_participantes, i.nombre_ingenios";
+             p.puesto_participantes, p.area_participantes, p.correo_participantes,
+             p.grado_academico_participantes, p.telefono_participantes, i.nombre_ingenios";
 if ($cantidadFiltro === '1') {
     $sql .= ' HAVING total_cursos = 1';
 } elseif ($cantidadFiltro === '2-4') {
@@ -152,10 +156,11 @@ if (($_GET['export'] ?? '') === 'csv') {
     header('Cache-Control: no-store, no-cache, must-revalidate');
     echo "\xEF\xBB\xBF";
     $salida = fopen('php://output', 'wb');
-    fputcsv($salida, ['Participante', 'CUI', 'Ingenio', 'Puesto', 'Área', 'Cursos completados', 'Cursos activos', 'Evaluación promedio', 'Diplomas', 'Última capacitación']);
+    fputcsv($salida, ['Participante', 'CUI', 'Ingenio', 'Puesto', 'Área', 'Correo electrónico', 'Grado académico', 'Teléfono', 'Cursos completados', 'Cursos activos', 'Evaluación promedio', 'Diplomas', 'Última capacitación']);
     foreach ($participantes as $participante) {
         $filaCsv = [$participante['nombre_participantes'], $participante['cui_participantes'], $participante['nombre_ingenios'],
-            $participante['puesto_participantes'], $participante['area_participantes'], $participante['cursos_completados'],
+            $participante['puesto_participantes'], $participante['area_participantes'], $participante['correo_participantes'],
+            $participante['grado_academico_participantes'], $participante['telefono_participantes'], $participante['cursos_completados'],
             $participante['cursos_activos'], $participante['evaluacion_promedio'], $participante['diplomas'],
             cengi_dir_fecha($participante['ultima_capacitacion'])];
         foreach ($filaCsv as &$campoCsv) {
@@ -278,7 +283,7 @@ $exportarUrl = 'directorio_participantes.php?' . http_build_query([
                     <div><strong id="directory-stat-active">0</strong><span>Activos</span></div>
                     <div><strong id="directory-stat-diplomas">0</strong><span>Diplomas</span></div>
                 </div>
-                <div class="cengi-directory-profile-details"><div><span>Puesto</span><strong id="directory-profile-position">—</strong></div><div><span>Área</span><strong id="directory-profile-area">—</strong></div></div>
+                <div class="cengi-directory-profile-details"><div><span>Puesto</span><strong id="directory-profile-position">—</strong></div><div><span>Área</span><strong id="directory-profile-area">—</strong></div><div><span>Correo electrónico</span><strong id="directory-profile-email">—</strong></div><div><span>Grado académico</span><strong id="directory-profile-degree">—</strong></div><div><span>Teléfono</span><strong id="directory-profile-phone">—</strong></div></div>
                 <h3 class="cengi-directory-history-title">Historial de capacitación</h3>
                 <div class="cengi-directory-course-list" id="directory-profile-courses"></div>
             </div>
@@ -370,6 +375,9 @@ $exportarUrl = 'directorio_participantes.php?' . http_build_query([
         $('#directory-profile-subtitle').text((participant.nombre_ingenios || 'Sin ingenio') + ' · CUI ' + (participant.cui_participantes || '—'));
         $('#directory-profile-position').text(participant.puesto_participantes || '—');
         $('#directory-profile-area').text(participant.area_participantes || '—');
+        $('#directory-profile-email').text(participant.correo_participantes || '—');
+        $('#directory-profile-degree').text(participant.grado_academico_participantes || '—');
+        $('#directory-profile-phone').text(participant.telefono_participantes || '—');
         $('#directory-stat-total').text(summary.total || 0);
         $('#directory-stat-completed').text(summary.completados || 0);
         $('#directory-stat-active').text(summary.activos || 0);

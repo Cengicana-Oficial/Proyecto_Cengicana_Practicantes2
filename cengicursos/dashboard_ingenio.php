@@ -96,7 +96,9 @@ if ($fichaId > 0) {
     }
 
     $stmtFicha = $db->prepare("SELECT p.id, p.nombre_participantes, p.cui_participantes,
-            p.puesto_participantes, p.area_participantes, p.estado_participantes, i.nombre_ingenios
+            p.puesto_participantes, p.area_participantes, p.correo_participantes,
+            p.grado_academico_participantes, p.telefono_participantes,
+            p.estado_participantes, i.nombre_ingenios
         FROM participantes p
         INNER JOIN ingenios i ON i.id = p.ingenio_id
         WHERE p.id = ? AND p.ingenio_id = ? LIMIT 1");
@@ -263,13 +265,14 @@ if ($ingenioId > 0) {
     $condicionesPart = ['p.ingenio_id = ?'];
     $paramsPart = [$ingenioId];
     if ($busqueda !== '') {
-        $condicionesPart[] = '(p.nombre_participantes LIKE ? OR p.cui_participantes LIKE ? OR p.area_participantes LIKE ?)';
+        $condicionesPart[] = '(p.nombre_participantes LIKE ? OR p.cui_participantes LIKE ? OR p.area_participantes LIKE ? OR p.correo_participantes LIKE ? OR p.grado_academico_participantes LIKE ? OR p.telefono_participantes LIKE ?)';
         $termino = '%' . $busqueda . '%';
-        array_push($paramsPart, $termino, $termino, $termino);
+        array_push($paramsPart, $termino, $termino, $termino, $termino, $termino, $termino);
     }
     $stmtPart = $db->prepare("
         SELECT p.id, p.nombre_participantes, p.cui_participantes,
-            p.puesto_participantes, p.area_participantes, p.estado_participantes,
+            p.puesto_participantes, p.area_participantes, p.correo_participantes,
+            p.grado_academico_participantes, p.telefono_participantes, p.estado_participantes,
             COUNT(DISTINCT CASE WHEN c.fin IS NOT NULL AND c.fin < CURDATE() THEN a.id END) AS cursos_completados,
             COUNT(DISTINCT CASE WHEN c.fin IS NULL OR c.fin >= CURDATE() THEN a.id END) AS cursos_activos,
             COUNT(DISTINCT a.id) AS total_cursos,
@@ -282,7 +285,8 @@ if ($ingenioId > 0) {
         LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
         LEFT JOIN diplomas d ON d.tipo = 'curso' AND d.asignacion_id = a.id
         WHERE " . implode(' AND ', $condicionesPart) . "
-        GROUP BY p.id, p.nombre_participantes, p.cui_participantes, p.puesto_participantes, p.area_participantes, p.estado_participantes
+        GROUP BY p.id, p.nombre_participantes, p.cui_participantes, p.puesto_participantes, p.area_participantes,
+            p.correo_participantes, p.grado_academico_participantes, p.telefono_participantes, p.estado_participantes
         ORDER BY p.nombre_participantes
     ");
     $stmtPart->execute($paramsPart);
@@ -472,7 +476,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                     <div><strong id="dashboard-ingenio-stat-active">0</strong><span>Activos</span></div>
                     <div><strong id="dashboard-ingenio-stat-diplomas">0</strong><span>Diplomas</span></div>
                 </div>
-                <div class="cengi-directory-profile-details"><div><span>Puesto</span><strong id="dashboard-ingenio-profile-position">—</strong></div><div><span>Área</span><strong id="dashboard-ingenio-profile-area">—</strong></div></div>
+                <div class="cengi-directory-profile-details"><div><span>Puesto</span><strong id="dashboard-ingenio-profile-position">—</strong></div><div><span>Área</span><strong id="dashboard-ingenio-profile-area">—</strong></div><div><span>Correo electrónico</span><strong id="dashboard-ingenio-profile-email">—</strong></div><div><span>Grado académico</span><strong id="dashboard-ingenio-profile-degree">—</strong></div><div><span>Teléfono</span><strong id="dashboard-ingenio-profile-phone">—</strong></div></div>
                 <h3 class="cengi-directory-history-title">Historial de capacitación</h3>
                 <div class="cengi-directory-course-list" id="dashboard-ingenio-profile-courses"></div>
             </div>
@@ -589,6 +593,9 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
         $('#dashboard-ingenio-profile-subtitle').text((participant.nombre_ingenios || 'Sin ingenio') + ' · CUI ' + (participant.cui_participantes || '—'));
         $('#dashboard-ingenio-profile-position').text(participant.puesto_participantes || '—');
         $('#dashboard-ingenio-profile-area').text(participant.area_participantes || '—');
+        $('#dashboard-ingenio-profile-email').text(participant.correo_participantes || '—');
+        $('#dashboard-ingenio-profile-degree').text(participant.grado_academico_participantes || '—');
+        $('#dashboard-ingenio-profile-phone').text(participant.telefono_participantes || '—');
         $('#dashboard-ingenio-stat-total').text(summary.total || 0);
         $('#dashboard-ingenio-stat-completed').text(summary.completados || 0);
         $('#dashboard-ingenio-stat-active').text(summary.activos || 0);

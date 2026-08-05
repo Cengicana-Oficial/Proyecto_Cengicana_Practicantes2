@@ -18,6 +18,9 @@ if (!empty($_GET['id'])) {
             p.nombre_participantes,
             p.puesto_participantes,
             p.area_participantes,
+            p.correo_participantes,
+            p.grado_academico_participantes,
+            p.telefono_participantes,
             p.estado_participantes
         FROM participantes p
         WHERE p.id = ?
@@ -101,6 +104,21 @@ if (!empty($_GET['id'])) {
 				<div class="form-group">
 					<label for="area_participantes" class="control-label">Área</label>
 					<input type="text" class="form-control" id="area_participantes" name="area_participantes" value=" <?php echo htmlspecialchars($row['area_participantes']) ;?>" placeholder="Área" required>
+				</div>
+
+				<div class="form-group">
+					<label for="correo_participantes" class="control-label">Correo electrónico</label>
+					<input type="email" class="form-control" id="correo_participantes" name="correo_participantes" maxlength="255" value="<?php echo htmlspecialchars($row['correo_participantes']); ?>">
+				</div>
+
+				<div class="form-group">
+					<label for="grado_academico_participantes" class="control-label">Grado académico</label>
+					<input type="text" class="form-control" id="grado_academico_participantes" name="grado_academico_participantes" maxlength="255" value="<?php echo htmlspecialchars($row['grado_academico_participantes']); ?>">
+				</div>
+
+				<div class="form-group">
+					<label for="telefono_participantes" class="control-label">Teléfono</label>
+					<input type="tel" class="form-control" id="telefono_participantes" name="telefono_participantes" maxlength="50" value="<?php echo htmlspecialchars($row['telefono_participantes']); ?>">
 				</div>
 
 				<div class="form-group">

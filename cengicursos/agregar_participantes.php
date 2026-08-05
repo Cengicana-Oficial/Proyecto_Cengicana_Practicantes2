@@ -21,7 +21,7 @@ $db = conectar();
 		<div class="cengi-hero">
 			<span class="cengi-chip">Participantes</span>
 			<h2>Carga de participantes</h2>
-			<p>Sube un archivo CSV con los participantes de un ingenio, delegado y curso.</p>
+			<p>Sube un archivo CSV, XLS o XLSX con los datos personales y de contacto de los participantes.</p>
 		</div>
 
 		<div class="panel panel-success">
@@ -68,8 +68,12 @@ $db = conectar();
 				</div>
 				<div class="form-group">
 					<label for="archivo" class="control-label">Archivo</label>
-					<input id="archivo" accept=".csv" class="form-control" name="archivo" type="file" />
+					<input id="archivo" accept=".csv,.xls,.xlsx" class="form-control" name="archivo" type="file" required />
 				</div>
+				</div>
+				<div class="alert alert-info">
+					<strong>Columnas:</strong> CUI, NOMBRE, PUESTO, AREA, CORREO_ELECTRONICO, GRADO_ACADEMICO, TELEFONO.
+					<a href="plantilla_participantes.csv" download>Descargar plantilla CSV</a>
 				</div>
 
 				<div class="cengi-form-actions">
