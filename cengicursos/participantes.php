@@ -176,7 +176,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
             <?php
             $mensajes = [
                 'actualizado' => 'Los datos del participante se actualizaron correctamente.',
-                'desactivado' => 'El participante fue desactivado correctamente.',
+                'desactivado' => 'El participante fue eliminado de los registros activos correctamente.',
                 'calificacion' => 'Las calificaciones se guardaron correctamente.',
                 'carga' => 'La carga masiva de participantes finalizó correctamente.',
             ];
@@ -297,7 +297,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                                 <?php endif; ?>
                                 <button type="button" class="cengi-action-btn participant-profile-trigger" data-toggle="modal" data-target="#participant-profile-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-company="<?php echo cengi_part_html($fila['nombre_ingenios']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-email="<?php echo cengi_part_html($fila['correo_participantes']); ?>" data-degree="<?php echo cengi_part_html($fila['grado_academico_participantes']); ?>" data-phone="<?php echo cengi_part_html($fila['telefono_participantes']); ?>" data-history="<?php echo cengi_part_html($historialJson); ?>" aria-label="Ver perfil" data-tooltip="Ver perfil"><span class="glyphicon glyphicon-eye-open"></span></button>
                                 <?php if ($puedeEliminar): ?>
-                                    <button type="button" class="cengi-action-btn is-delete participant-delete-trigger" data-toggle="modal" data-target="#confirm-participant-delete" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-href="eliminar_participante.php?id=<?php echo (int) $fila['participante_id']; ?>&amp;curso_id=<?php echo $cursoId; ?>" aria-label="Desactivar" data-tooltip="Desactivar"><span class="glyphicon glyphicon-trash"></span></button>
+                                    <button type="button" class="cengi-action-btn is-delete is-labeled participant-delete-trigger" data-toggle="modal" data-target="#confirm-participant-delete" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-href="eliminar_participante.php?id=<?php echo (int) $fila['participante_id']; ?>&amp;curso_id=<?php echo $cursoId; ?>" aria-label="Eliminar"><span class="glyphicon glyphicon-trash"></span><span>Eliminar</span></button>
                                 <?php endif; ?>
                             </div>
                         </td>
@@ -397,8 +397,8 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
 <?php if ($puedeEliminar): ?>
 <div class="modal fade cengi-participant-modal" id="confirm-participant-delete" tabindex="-1" role="dialog" aria-labelledby="participant-delete-title">
     <div class="modal-dialog cengi-modal-compact" role="document"><div class="modal-content cengi-confirm-content">
-        <div class="modal-body"><span class="cengi-confirm-icon"><span class="glyphicon glyphicon-trash"></span></span><h4 id="participant-delete-title">Desactivar participante</h4><p>¿Deseas desactivar a <strong id="participant-delete-name"></strong>? Sus asignaciones también quedarán inactivas.</p></div>
-        <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><a class="btn btn-danger btn-ok" href="#">Sí, desactivar</a></div>
+        <div class="modal-body"><span class="cengi-confirm-icon"><span class="glyphicon glyphicon-trash"></span></span><h4 id="participant-delete-title">Eliminar participante</h4><p>¿Deseas eliminar a <strong id="participant-delete-name"></strong> de los registros activos? El participante y sus asignaciones quedarán inactivos para conservar el historial.</p></div>
+        <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><a class="btn btn-danger btn-ok" href="#">Sí, eliminar</a></div>
     </div></div>
 </div>
 <?php endif; ?>
