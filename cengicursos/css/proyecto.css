@@ -3145,6 +3145,13 @@ body.cengi-nav-loading {
     box-shadow: none;
 }
 
+.cengi-participants-table .cengi-action-btn.is-labeled {
+    width: auto;
+    min-width: 0;
+    padding: 0 9px;
+    gap: 5px;
+}
+
 .cengi-participants-table .cengi-action-btn:hover { border-color: #a8c475; color: #47730d; background: #f7fbea; }
 .cengi-participants-table .cengi-action-btn.is-delete:hover { border-color: #e1aaa5; color: #a83a31; background: #fff6f5; }
 
@@ -4084,6 +4091,16 @@ body.cengi-nav-loading {
     font-size: 26px;
     font-weight: 700;
     line-height: 1.15;
+}
+
+/* .panel.panel-success y .cengi-directory-filter-card usan overflow:hidden
+   para redondear esquinas, pero eso recorta cualquier .dropdown-menu que se
+   abra dentro (ej. "Descargar listado" en Mi ingenio). Se agrega esta clase
+   a los contenedores puntuales que tienen un dropdown, en vez de tocar la
+   regla compartida por el resto de la app. */
+.cengi-canvas .panel.panel-success.cengi-dropdown-overflow-fix,
+.cengi-directory-filter-card.cengi-dropdown-overflow-fix {
+    overflow: visible;
 }
 
 .cengi-directory-filter-card,

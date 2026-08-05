@@ -362,7 +362,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
         </div>
     </div>
 
-    <div class="panel panel-success">
+    <div class="panel panel-success cengi-dropdown-overflow-fix">
         <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
             <div>
                 <h3 class="panel-title">Cursos de tu ingenio</h3>
@@ -408,7 +408,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
         </div>
     </div>
 
-    <section class="cengi-directory-filter-card">
+    <section class="cengi-directory-filter-card cengi-dropdown-overflow-fix">
         <form class="cengi-directory-filters" method="get" id="dashboard-ingenio-filters">
             <?php if ($esAdmin): ?><input type="hidden" name="ingenio_id" value="<?php echo (int) $ingenioId; ?>"><?php endif; ?>
             <label class="cengi-directory-search">
