@@ -1,7 +1,6 @@
 <?php
-require_once "revisar_permisos.php";
+require_once("revisar_permisos.php");
 cengi_require_ver_participantes();
-require_once "menu.php";
 //require c'conexion.php
 require_once("conexion.php");
 $db = conectar();
