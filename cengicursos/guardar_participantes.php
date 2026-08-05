@@ -43,7 +43,7 @@ if ($error === 0) {
 
             $datos = str_getcsv($linea);
 
-            if (count($datos) < 5) {
+            if (count($datos) < 4) {
                 continue;
             }
 
@@ -51,7 +51,15 @@ if ($error === 0) {
             $nombre = trim($datos[1]);
             $puesto = trim($datos[2]);
             $area = trim($datos[3]);
-            $estado = trim($datos[4]);
+            $formatoNuevo = count($datos) >= 7;
+            $correo = $formatoNuevo ? trim($datos[4]) : '';
+            $gradoAcademico = $formatoNuevo ? trim($datos[5]) : '';
+            $telefono = $formatoNuevo ? trim($datos[6]) : '';
+            $estado = count($datos) >= 8 ? trim($datos[7]) : (!$formatoNuevo && isset($datos[4]) ? trim($datos[4]) : 1);
+
+            if ($correo !== '' && !filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
 
             $stmt = $db->prepare("
                 INSERT INTO participantes
@@ -61,11 +69,14 @@ if ($error === 0) {
                     nombre_participantes,
                     puesto_participantes,
                     area_participantes,
+                    correo_participantes,
+                    grado_academico_participantes,
+                    telefono_participantes,
                     estado_participantes
                 )
                 VALUES
                 (
-                    ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
             ");
 
@@ -75,6 +86,9 @@ if ($error === 0) {
                 $nombre,
                 $puesto,
                 $area,
+                $correo,
+                $gradoAcademico,
+                $telefono,
                 $estado
             ]);
         }

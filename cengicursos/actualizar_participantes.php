@@ -12,11 +12,19 @@ $cui = trim((string) ($_POST['cui_participantes'] ?? ''));
 $nombre = trim((string) ($_POST['nombre_participantes'] ?? ''));
 $puesto = trim((string) ($_POST['puesto_participantes'] ?? ''));
 $area = trim((string) ($_POST['area_participantes'] ?? ''));
+$correo = trim((string) ($_POST['correo_participantes'] ?? ''));
+$gradoAcademico = trim((string) ($_POST['grado_academico_participantes'] ?? ''));
+$telefono = trim((string) ($_POST['telefono_participantes'] ?? ''));
 $estado = (int) ($_POST['estado_participantes'] ?? 1) === 1 ? 1 : 0;
 $destino = 'participantes.php?curso_id=' . $cursoId;
 
 if ($id <= 0 || $ingenioId <= 0 || $cui === '' || $nombre === '' || $puesto === '' || $area === '') {
     header('Location: ' . $destino . '&error=actualizar');
+    exit;
+}
+
+if ($correo !== '' && !filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+    header('Location: ' . $destino . '&error=correo');
     exit;
 }
 
@@ -27,9 +35,11 @@ if (!cengi_ve_todo_por_rol_o_ingenio()) {
 try {
     $sql = 'UPDATE participantes
             SET ingenio_id = ?, cui_participantes = ?, nombre_participantes = ?,
-                puesto_participantes = ?, area_participantes = ?, estado_participantes = ?, actualizado = NOW()
+                puesto_participantes = ?, area_participantes = ?, correo_participantes = ?,
+                grado_academico_participantes = ?, telefono_participantes = ?,
+                estado_participantes = ?, actualizado = NOW()
             WHERE id = ?';
-    $params = [$ingenioId, $cui, $nombre, $puesto, $area, $estado, $id];
+    $params = [$ingenioId, $cui, $nombre, $puesto, $area, $correo, $gradoAcademico, $telefono, $estado, $id];
     if (!cengi_ve_todo_por_rol_o_ingenio()) {
         $sql .= ' AND ingenio_id = ?';
         $params[] = cengi_ingenio_id_actual();

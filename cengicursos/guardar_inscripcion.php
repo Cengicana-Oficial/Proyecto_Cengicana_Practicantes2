@@ -18,13 +18,14 @@ $nombreParticipante = trim((string) ($_POST['nombre_participante'] ?? ''));
 $cuiParticipante = trim((string) ($_POST['cui_participante'] ?? ''));
 $puestoParticipante = trim((string) ($_POST['puesto_participante'] ?? ''));
 $areaParticipante = trim((string) ($_POST['area_participante'] ?? ''));
+$gradoAcademico = trim((string) ($_POST['grado_academico'] ?? ''));
 $correo = trim((string) ($_POST['correo'] ?? ''));
 $telefono = trim((string) ($_POST['telefono'] ?? ''));
 $ingenioId = (int) ($_POST['ingenio_id'] ?? 0);
 $tipoPago = trim((string) ($_POST['tipo_pago'] ?? ''));
 $cursoId = (int) ($_POST['curso_id'] ?? 0);
 
-if ($nombreParticipante === '' || $cuiParticipante === '' || $puestoParticipante === '' || $areaParticipante === '' || $telefono === '') {
+if ($nombreParticipante === '' || $cuiParticipante === '' || $puestoParticipante === '' || $areaParticipante === '' || $gradoAcademico === '' || $telefono === '') {
     inscripcion_error('Completa todos los campos obligatorios.');
 }
 
@@ -62,12 +63,13 @@ $sql = "
         cui_participante,
         puesto_participante,
         area_participante,
+        grado_academico,
         correo,
         telefono,
         ingenio_id,
         curso_id,
         tipo_pago
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ";
 
 try {
@@ -77,6 +79,7 @@ try {
         $cuiParticipante,
         $puestoParticipante,
         $areaParticipante,
+        $gradoAcademico,
         $correo,
         $telefono,
         $ingenioId,

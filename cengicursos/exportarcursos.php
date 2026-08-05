@@ -29,6 +29,9 @@ SELECT
     c.dias,
     c.horario,
     p.nombre_participantes,
+    p.correo_participantes,
+    p.grado_academico_participantes,
+    p.telefono_participantes,
     i.nombre_ingenios
 FROM asignaciones a
 INNER JOIN cursos c ON a.cursos_id = c.id
@@ -53,7 +56,7 @@ $objPHPExcel->getProperties()->setCreator("Monica Galiego de Brán")
 							 ->setCategory("Reporte");
 
 // Combino las celdas desde A1 hasta E1
-$objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:E1');
+$objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:H1');
  
 $objPHPExcel->setActiveSheetIndex(0)
             ->setCellValue('A1', 'Reporte Participantes por Ingenio')
@@ -61,12 +64,15 @@ $objPHPExcel->setActiveSheetIndex(0)
             ->setCellValue('B2', 'dias')
             ->setCellValue('C2', 'Horario')
 			->setCellValue('D2', 'Participante')
-			->setCellValue('E2', 'Ingenio');
+			->setCellValue('E2', 'Correo electrónico')
+			->setCellValue('F2', 'Grado académico')
+			->setCellValue('G2', 'Teléfono')
+			->setCellValue('H2', 'Ingenio');
 			
 // Fuente de la primera fila en negrita
 $boldArray = array('font' => array('bold' => true,),'alignment' => array('horizontal' => PHPExcel_Style_Alignment::HORIZONTAL_CENTER));
  
-$objPHPExcel->getActiveSheet()->getStyle('A1:E2')->applyFromArray($boldArray);
+$objPHPExcel->getActiveSheet()->getStyle('A1:H2')->applyFromArray($boldArray);
 
 //Ancho de las columnas
 $objPHPExcel->getActiveSheet()->getColumnDimension('A')->setWidth(20);	
@@ -74,6 +80,9 @@ $objPHPExcel->getActiveSheet()->getColumnDimension('B')->setWidth(40);
 $objPHPExcel->getActiveSheet()->getColumnDimension('C')->setWidth(25);	
 $objPHPExcel->getActiveSheet()->getColumnDimension('D')->setWidth(25);	
 $objPHPExcel->getActiveSheet()->getColumnDimension('E')->setWidth(25);
+$objPHPExcel->getActiveSheet()->getColumnDimension('F')->setWidth(25);
+$objPHPExcel->getActiveSheet()->getColumnDimension('G')->setWidth(18);
+$objPHPExcel->getActiveSheet()->getColumnDimension('H')->setWidth(25);
 
 
 
@@ -85,6 +94,9 @@ $objPHPExcel->getActiveSheet()->getColumnDimension('E')->setWidth(25);
 		$dias=$row['dias'];
 		$horario=$row['horario'];
 		$participante=$row['nombre_participantes'];
+		$correo=$row['correo_participantes'];
+		$grado=$row['grado_academico_participantes'];
+		$telefono=$row['telefono_participantes'];
 		$ingenio=$row['nombre_ingenios'];
 		
 		
@@ -93,13 +105,19 @@ $objPHPExcel->getActiveSheet()->getColumnDimension('E')->setWidth(25);
 			$c="C".$cel;
 			$d="D".$cel;
 			$e="E".$cel;
+			$f="F".$cel;
+			$g="G".$cel;
+			$h="H".$cel;
 			// Agregar datos
 			$objPHPExcel->setActiveSheetIndex(0)
            	->setCellValue($a, $cursos)
             ->setCellValue($b, $dias)
             ->setCellValue($c, $horario)
             ->setCellValue($d, $participante)
-			->setCellValue($e, $ingenio);
+			->setCellValue($e, $correo)
+			->setCellValue($f, $grado)
+			->setCellValue($g, $telefono)
+			->setCellValue($h, $ingenio);
 			
 	$cel+=1;
 	}
@@ -107,7 +125,7 @@ $objPHPExcel->getActiveSheet()->getColumnDimension('E')->setWidth(25);
 /*Fin extracion de datos MYSQL*/
 
 //formato celdas
-$rango="A2:$e";
+$rango="A2:H2";
 $styleArray = array('font' => array( 'name' => 'Arial','size' => 10),
 'borders'=>array('allborders'=>array('style'=> PHPExcel_Style_Border::BORDER_THIN,'color'=>array('argb' => 'FFF')))
 );

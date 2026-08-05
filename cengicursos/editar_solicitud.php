@@ -120,6 +120,10 @@ $cursos = $db->query($sqlCursos);
                         <input type="text" name="area_participante" class="form-control" required value="<?php echo htmlspecialchars($solicitud['area_participante']); ?>">
                     </div>
                     <div class="form-group">
+                        <label>Grado académico</label>
+                        <input type="text" name="grado_academico" class="form-control" required value="<?php echo htmlspecialchars($solicitud['grado_academico']); ?>">
+                    </div>
+                    <div class="form-group">
                         <label>Tipo de pago</label>
                         <select name="tipo_pago" class="form-control" required>
                             <option value="Ingenio" <?php echo $solicitud['tipo_pago'] === 'Ingenio' ? 'selected' : ''; ?>>Ingenio</option>

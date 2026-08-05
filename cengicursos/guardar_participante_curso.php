@@ -12,6 +12,9 @@ $ingenioID = (int) ($_POST['ingenio'] ?? 0);
 $cursoID = (int) ($_POST['curso'] ?? 0);
 $area = trim((string) ($_POST['area'] ?? ''));
 $puesto = trim((string) ($_POST['puesto'] ?? ''));
+$correo = trim((string) ($_POST['correo'] ?? ''));
+$gradoAcademico = trim((string) ($_POST['grado_academico'] ?? ''));
+$telefono = trim((string) ($_POST['telefono'] ?? ''));
 $usuarioID = cengi_usuario_actual_id();
 
 if (!cengi_ve_todo_por_rol_o_ingenio()) {
@@ -30,6 +33,11 @@ if (
     exit;
 }
 
+if ($correo !== '' && !filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+    header("Location: agregar_participantes1.php?curso_id=" . $cursoID . "&error=correo");
+    exit;
+}
+
 $stmtBuscarParticipante = $db->prepare("
     SELECT id
     FROM participantes
@@ -45,10 +53,13 @@ $stmtInsertParticipante = $db->prepare("
         nombre_participantes,
         puesto_participantes,
         area_participantes,
+        correo_participantes,
+        grado_academico_participantes,
+        telefono_participantes,
         estado_participantes,
         creado
     )
-    VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
 ");
 
 $stmtActualizarParticipante = $db->prepare("
@@ -59,6 +70,9 @@ $stmtActualizarParticipante = $db->prepare("
         nombre_participantes = ?,
         puesto_participantes = ?,
         area_participantes = ?,
+        correo_participantes = COALESCE(NULLIF(?, ''), correo_participantes),
+        grado_academico_participantes = COALESCE(NULLIF(?, ''), grado_academico_participantes),
+        telefono_participantes = COALESCE(NULLIF(?, ''), telefono_participantes),
         estado_participantes = 1,
         actualizado = NOW()
     WHERE id = ?
@@ -105,6 +119,9 @@ try {
             $nombre,
             $puesto,
             $area,
+            $correo,
+            $gradoAcademico,
+            $telefono,
             $participanteID,
         ]);
     } else {
@@ -115,6 +132,9 @@ try {
             $nombre,
             $puesto,
             $area,
+            $correo,
+            $gradoAcademico,
+            $telefono,
         ]);
         $participanteID = (int) $db->lastInsertId();
     }

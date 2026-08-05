@@ -12,6 +12,25 @@ $cursos = $db->query("
     ORDER BY inicio ASC, nombre_cursos ASC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
+function cengi_curso_etiqueta(array $curso)
+{
+    $detalle = [$curso['tipo']];
+    if ($curso['jornada_cursos'] !== '') {
+        $detalle[] = $curso['jornada_cursos'];
+    }
+    if ($curso['dias'] !== '') {
+        $detalle[] = $curso['dias'];
+    }
+    if ($curso['horario'] !== '') {
+        $detalle[] = $curso['horario'];
+    }
+    if ($curso['inicio']) {
+        $detalle[] = 'Inicia ' . date('d/m/Y', strtotime($curso['inicio']));
+    }
+
+    return $curso['nombre_cursos'] . ' — ' . implode(' · ', $detalle);
+}
+
 $resultado = trim($_GET['resultado'] ?? '');
 $mensajeError = trim($_GET['mensaje'] ?? '');
 ?>
@@ -158,9 +177,9 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
 
                 </div>
 
-                <!-- PUESTO Y AREA -->
+                <!-- PUESTO, AREA Y GRADO ACADEMICO -->
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mt-5">
 
                     <div>
                         <label class="label-form">
@@ -188,6 +207,11 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
                             maxlength="255"
                             required
                         >
+                    </div>
+
+                    <div>
+                        <label class="label-form">Grado Académico</label>
+                        <input type="text" name="grado_academico" class="input-form" maxlength="255" required>
                     </div>
 
                 </div>
@@ -276,24 +300,8 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
                         </option>
 
                         <?php foreach ($cursos as $curso): ?>
-                            <?php
-                            $detalle = [$curso['tipo']];
-                            if ($curso['jornada_cursos'] !== '') {
-                                $detalle[] = $curso['jornada_cursos'];
-                            }
-                            if ($curso['dias'] !== '') {
-                                $detalle[] = $curso['dias'];
-                            }
-                            if ($curso['horario'] !== '') {
-                                $detalle[] = $curso['horario'];
-                            }
-                            if ($curso['inicio']) {
-                                $detalle[] = 'Inicia ' . date('d/m/Y', strtotime($curso['inicio']));
-                            }
-                            $etiqueta = $curso['nombre_cursos'] . ' — ' . implode(' · ', $detalle);
-                            ?>
                             <option value="<?php echo (int) $curso['id']; ?>">
-                                <?php echo htmlspecialchars($etiqueta); ?>
+                                <?php echo htmlspecialchars(cengi_curso_etiqueta($curso)); ?>
                             </option>
                         <?php endforeach; ?>
 
@@ -404,13 +412,121 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
 
             </div>
 
+            <div class="bg-white border border-outline rounded-2xl shadow-md p-5">
+
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined text-secondary">groups</span>
+                    <h3 class="font-bold text-primary">¿Varios participantes?</h3>
+                </div>
+
+                <p class="text-sm text-gray-500 mb-4">
+                    Si inscribes a un grupo, carga un CSV con los datos de todos en lugar de llenar el formulario uno por uno.
+                </p>
+
+                <button
+                    type="button"
+                    id="btnAbrirCargaMasiva"
+                    class="w-full px-4 py-3 rounded-xl bg-secondary text-white font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition"
+                >
+                    <span class="material-symbols-outlined">upload_file</span>
+                    Carga masiva (CSV)
+                </button>
+
+            </div>
+
         </aside>
 
     </div>
 
 </main>
 
-<script src="js/inscripcion.js"></script>
+
+<!-- MODAL CARGA MASIVA -->
+
+<div id="modalCargaMasiva" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4">
+
+    <div class="bg-white rounded-2xl shadow-lg w-full max-w-xl p-6 md:p-8 relative max-h-[90vh] overflow-y-auto">
+
+        <button type="button" id="btnCerrarCargaMasiva" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+
+        <div class="flex items-center gap-3 mb-6">
+            <span class="material-symbols-outlined text-primary text-3xl">upload_file</span>
+            <h2 class="text-2xl font-bold text-primary">Carga masiva de participantes</h2>
+        </div>
+
+        <p class="text-sm text-gray-500 mb-6">
+            Todos los participantes del archivo se inscribirán al mismo ingenio, curso y tipo de pago que selecciones aquí.
+        </p>
+
+        <form action="carga_inscripcion.php" method="POST" enctype="multipart/form-data" id="formCargaMasiva">
+
+            <div class="mt-2">
+                <label class="label-form">Ingenio</label>
+                <select name="ingenio_id" class="input-form" required>
+                    <option value="">Seleccione</option>
+                    <?php foreach ($ingenios as $ingenio): ?>
+                        <option value="<?php echo (int) $ingenio['id']; ?>">
+                            <?php echo htmlspecialchars($ingenio['nombre_ingenios']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="mt-5">
+                <label class="label-form">Curso</label>
+                <select name="curso_id" class="input-form" required <?php echo !$cursos ? 'disabled' : ''; ?>>
+                    <option value="">
+                        <?php echo $cursos ? 'Seleccione' : 'No hay cursos disponibles por el momento'; ?>
+                    </option>
+                    <?php foreach ($cursos as $curso): ?>
+                        <option value="<?php echo (int) $curso['id']; ?>">
+                            <?php echo htmlspecialchars(cengi_curso_etiqueta($curso)); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="mt-5">
+                <label class="label-form">Tipo Pago</label>
+                <select name="tipo_pago" class="input-form" required>
+                    <option value="">Seleccione</option>
+                    <option value="Ingenio">Ingenio</option>
+                    <option value="Propio">Propio</option>
+                </select>
+            </div>
+
+            <div class="mt-6 border-t border-outline pt-5">
+
+                <label class="label-form">Archivo CSV</label>
+
+                <div class="rounded-xl bg-container p-4 text-sm text-gray-600 mb-3">
+                    <strong>Formato requerido:</strong> CUI, NOMBRE, PUESTO, AREA, CORREO_ELECTRONICO, GRADO_ACADEMICO, TELEFONO
+                    <br>
+                    <a href="plantilla_participantes.php" class="text-secondary font-semibold underline">Descargar plantilla (Excel)</a>
+                    <br>
+                    <span class="text-xs text-gray-500">Completa la plantilla y sube el mismo archivo (Excel o CSV).</span>
+                </div>
+
+                <input type="file" name="archivo" accept=".csv,.xls" class="input-form" required>
+
+            </div>
+
+            <div class="mt-8">
+                <button type="submit" id="btnEnviarCargaMasiva" class="btn-submit">
+                    <span class="material-symbols-outlined">send</span>
+                    Cargar participantes
+                </button>
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+<script src="js/inscripcion.js?v=<?php echo rawurlencode((string) filemtime(__DIR__ . '/js/inscripcion.js')); ?>"></script>
 
 </body>
 </html>

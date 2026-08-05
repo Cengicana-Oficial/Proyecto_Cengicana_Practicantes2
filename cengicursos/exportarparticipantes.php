@@ -52,9 +52,9 @@ if (!cengi_ve_todo_por_rol_o_ingenio()) {
     $params[] = cengi_ingenio_id_actual();
 }
 if ($busqueda !== '') {
-    $condiciones[] = '(p.nombre_participantes LIKE ? OR p.cui_participantes LIKE ? OR i.nombre_ingenios LIKE ? OR p.area_participantes LIKE ?)';
+    $condiciones[] = '(p.nombre_participantes LIKE ? OR p.cui_participantes LIKE ? OR i.nombre_ingenios LIKE ? OR p.area_participantes LIKE ? OR p.correo_participantes LIKE ? OR p.grado_academico_participantes LIKE ? OR p.telefono_participantes LIKE ?)';
     $termino = '%' . $busqueda . '%';
-    array_push($params, $termino, $termino, $termino, $termino);
+    array_push($params, $termino, $termino, $termino, $termino, $termino, $termino, $termino);
 }
 if ($estado === 'activo') {
     $condiciones[] = 'p.estado_participantes = 1 AND a.estado_asignaciones = 1';
@@ -66,7 +66,8 @@ if ($estado === 'activo') {
 
 $stmt = $db->prepare('SELECT
         p.nombre_participantes, p.cui_participantes, i.nombre_ingenios,
-        p.puesto_participantes, p.area_participantes, p.estado_participantes,
+        p.puesto_participantes, p.area_participantes, p.correo_participantes,
+        p.grado_academico_participantes, p.telefono_participantes, p.estado_participantes,
         a.estado_asignaciones, cc.asistencia, cc.evaluacion, cc.posevaluacion
     FROM asignaciones a
     INNER JOIN participantes p ON p.id = a.participantes_id
@@ -95,12 +96,13 @@ function cengi_export_numero($valor, $porcentaje = false)
     return $porcentaje ? $numero . '%' : $numero;
 }
 
-$encabezados = ['Curso', 'Participante', 'CUI', 'Ingenio', 'Puesto', 'Área', 'Estado', 'Asistencia', 'Pre-evaluación', 'Post-evaluación'];
+$encabezados = ['Curso', 'Participante', 'CUI', 'Ingenio', 'Correo electrónico', 'Grado académico', 'Teléfono', 'Puesto', 'Área', 'Estado', 'Asistencia', 'Pre-evaluación', 'Post-evaluación'];
 $filasExportacion = [];
 foreach ($participantes as $fila) {
     $filasExportacion[] = [
         $curso['nombre_cursos'], $fila['nombre_participantes'], $fila['cui_participantes'],
-        $fila['nombre_ingenios'], $fila['puesto_participantes'], $fila['area_participantes'],
+        $fila['nombre_ingenios'], $fila['correo_participantes'], $fila['grado_academico_participantes'],
+        $fila['telefono_participantes'], $fila['puesto_participantes'], $fila['area_participantes'],
         cengi_export_estado($fila), cengi_export_numero($fila['asistencia'], true),
         cengi_export_numero($fila['evaluacion']), cengi_export_numero($fila['posevaluacion']),
     ];
@@ -114,7 +116,7 @@ if ($formato === 'excel') {
         $filasExportacion,
         'Participantes ' . $curso['nombre_cursos'],
         $nombreArchivoBase,
-        [28, 16, 22, 16, 16, 3, 12, 12, 12]
+        [28, 28, 16, 22, 30, 22, 16, 20, 20, 12, 12, 14, 14]
     );
 }
 
@@ -126,9 +128,10 @@ function cengi_pdf_pagina_participantes(array $filas, array $curso, $pagina, $to
     $altoEncabezado = 20;
     $altoFila = 18;
     $columnas = [
-        ['Participante', 150, 31], ['CUI', 78, 17], ['Ingenio', 100, 21],
-        ['Puesto', 100, 21], ['Área', 120, 26], ['Estado', 60, 11],
-        ['Asist.', 55, 10], ['Pre', 50, 9], ['Post', 50, 9],
+        ['Participante', 100, 20], ['CUI', 65, 14], ['Ingenio', 65, 13],
+        ['Correo', 95, 20], ['Grado', 75, 15], ['Teléfono', 55, 11],
+        ['Puesto', 60, 12], ['Área', 60, 12], ['Estado', 45, 9],
+        ['Asist.', 40, 7], ['Pre', 35, 6], ['Post', 35, 6],
     ];
     $ancho = array_sum(array_column($columnas, 1));
     $c = "0.10 0.28 0.16 rg\n" . cengi_export_pdf_texto($x, 558, 'Listado de participantes', 16, true);
@@ -145,6 +148,7 @@ function cengi_pdf_pagina_participantes(array $filas, array $curso, $pagina, $to
         }
         $valores = [
             $fila['nombre_participantes'], $fila['cui_participantes'], $fila['nombre_ingenios'],
+            $fila['correo_participantes'], $fila['grado_academico_participantes'], $fila['telefono_participantes'],
             $fila['puesto_participantes'], $fila['area_participantes'], cengi_export_estado($fila),
             cengi_export_numero($fila['asistencia'], true), cengi_export_numero($fila['evaluacion']),
             cengi_export_numero($fila['posevaluacion']),

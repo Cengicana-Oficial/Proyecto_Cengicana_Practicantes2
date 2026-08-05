@@ -88,6 +88,18 @@ $stmtCursos = $db->query("
                             <label for="puesto" class="control-label">Puesto</label>
                             <input type="text" class="form-control" id="puesto" name="puesto" placeholder="Puesto" required>
                         </div>
+                        <div class="form-group">
+                            <label for="correo" class="control-label">Correo electrónico</label>
+                            <input type="email" class="form-control" id="correo" name="correo" maxlength="255" placeholder="persona@ejemplo.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="grado_academico" class="control-label">Grado académico</label>
+                            <input type="text" class="form-control" id="grado_academico" name="grado_academico" maxlength="255" placeholder="Licenciatura, técnico, diversificado...">
+                        </div>
+                        <div class="form-group">
+                            <label for="telefono" class="control-label">Teléfono</label>
+                            <input type="tel" class="form-control" id="telefono" name="telefono" maxlength="50" placeholder="Número de teléfono">
+                        </div>
                     </div>
 
                     <div class="cengi-form-actions">
