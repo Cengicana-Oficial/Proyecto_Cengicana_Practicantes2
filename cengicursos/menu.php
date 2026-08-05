@@ -17,6 +17,7 @@ function cengi_pagina_titulo($currentPage, $esEstudiante)
         'editar_solicitud.php' => ['Editar solicitud', 'Actualiza una solicitud pendiente'],
         'ver_ingenios.php' => ['Ingenios', 'Directorio base de ingenios afiliados'],
         'agregar_ingenios.php' => ['Nuevo ingenio', 'Registra un ingenio en el directorio'],
+        'areas_tecnicas.php' => ['Áreas técnicas', 'Catálogo de temas para clasificar los cursos'],
         'ver_usuarios.php' => ['Usuarios', 'Cuentas con acceso al modulo de cursos'],
         'directorio_participantes.php' => ['Directorio de participantes', 'Vista agregada por persona: cursos, diplomas y evaluacion'],
         'seguimiento_ingenio.php' => ['Seguimiento por ingenio', 'Ficha institucional de capacitacion por ingenio'],
@@ -69,8 +70,7 @@ function menu_render()
 <style>
     #cengiPrimaryNav a[href='ver_categorias.php'],
     #cengiPrimaryNav a[href='exportaringenios.php'],
-    #cengiPrimaryNav a[href='exportarcursos.php'],
-    #cengiPrimaryNav a[href='ver_ingenios.php'] {
+    #cengiPrimaryNav a[href='exportarcursos.php'] {
         display: none;
     }
 </style>
@@ -151,7 +151,7 @@ function menu_render()
             <?php endif; ?>
         </div>
 
-        <?php if ($puedeVerOrganizaciones || $puedeVerInstructores || $puedeVerIngenios): ?>
+        <?php if ($puedeVerOrganizaciones || $puedeVerInstructores || $puedeVerIngenios || $puedeGestionar): ?>
         <div class="cengi-nav-group">
             <div class="cengi-nav-label">Comunidad</div>
             <?php if ($puedeVerOrganizaciones): ?>
@@ -169,7 +169,13 @@ function menu_render()
             <?php if ($puedeVerIngenios): ?>
                 <a href="ver_ingenios.php" class="cengi-nav-item<?php echo $isActive(['ver_ingenios.php', 'agregar_ingenios.php', 'modificar_ingenios.php']); ?>">
                     <span class="glyphicon glyphicon-globe"></span>
-                    <span>Ingenios</span>
+                    <span>Ingenios e instituciones</span>
+                </a>
+            <?php endif; ?>
+            <?php if ($puedeGestionar): ?>
+                <a href="areas_tecnicas.php" class="cengi-nav-item<?php echo $isActive(['areas_tecnicas.php']); ?>">
+                    <span class="glyphicon glyphicon-wrench"></span>
+                    <span>Áreas técnicas</span>
                 </a>
             <?php endif; ?>
         </div>

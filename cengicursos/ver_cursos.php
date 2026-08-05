@@ -41,14 +41,13 @@ $instructores = $db->query("
     ORDER BY nombre
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-$areasTecnicas = ['Agronomía', 'Riego', 'Fitosanidad', 'Industrial', 'Gestión'];
-$areasGuardadas = $db->query("
-    SELECT DISTINCT area_tecnica
-    FROM cursos
-    WHERE area_tecnica IS NOT NULL AND TRIM(area_tecnica) <> ''
-    ORDER BY area_tecnica
+$areasCatalogo = $db->query("
+    SELECT nombre
+    FROM areas_tecnicas
+    WHERE estado = 1
+    ORDER BY nombre
 ")->fetchAll(PDO::FETCH_COLUMN);
-$areasTecnicas = array_values(array_unique(array_merge($areasTecnicas, $areasGuardadas)));
+$areasTecnicas = $areasCatalogo;
 
 $siguienteCursoId = (int) $db->query('SELECT COALESCE(MAX(id), 0) + 1 FROM cursos')->fetchColumn();
 $codigoSugerido = 'CEN-T-' . str_pad((string) $siguienteCursoId, 3, '0', STR_PAD_LEFT);

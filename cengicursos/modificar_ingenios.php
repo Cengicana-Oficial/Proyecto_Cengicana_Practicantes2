@@ -1,7 +1,7 @@
 <?php
 
 require_once("revisar_permisos.php");
-cengi_require_admin();
+cengi_require_gestionar_ingenios();
 require_once("menu.php");
 
 require_once("conexion.php");
@@ -74,6 +74,7 @@ if (!empty($_GET['id'])) {
                     name="nombre"
                     class="form-control"
                     value="<?php echo htmlspecialchars($row['nombre_ingenios']); ?>"
+                    required
                 >
             </div>
         </div>
@@ -86,7 +87,7 @@ if (!empty($_GET['id'])) {
         >
 
         <div class="cengi-form-actions">
-            <a href="index.php" class="btn btn-default">
+            <a href="ver_ingenios.php" class="btn btn-default">
                 Regresar
             </a>
 
