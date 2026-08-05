@@ -17,6 +17,31 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
         exit;
     }
 
+    // Notas por modulo (co-ensenanza): si viene un modulo_id valido para este curso,
+    // el guardado se hace contra control_curso_modulos (una fila por asignacion+modulo)
+    // en vez de control_cursos, que se deja intacta como resumen del curso completo.
+    $moduloId = (int) ($_POST['modulo_id'] ?? 0);
+    if ($moduloId > 0) {
+        $stmtModuloValido = $db->prepare("SELECT id FROM curso_modulos WHERE id = ? AND curso_id = ?");
+        $stmtModuloValido->execute([$moduloId, $cursoId]);
+        if (!$stmtModuloValido->fetch()) {
+            $moduloId = 0; // modulo inexistente o de otro curso: se ignora, cae a control_cursos
+        }
+    }
+
+    // El segundo dropdown (instructor que impartio/califico el modulo) solo lo ve y lo
+    // puede fijar el super admin; para el resto de roles que califican, este guardado no
+    // debe tocar esa columna en absoluto (si no, un guardado posterior de un formador
+    // borraria la trazabilidad que ya habia fijado el super admin).
+    $esSuperadminActual = cengi_es_superadmin();
+    $instructorModuloId = null;
+    if ($moduloId > 0 && $esSuperadminActual) {
+        $instructorModuloIdRaw = trim((string) ($_POST['instructor_modulo_id'] ?? ''));
+        if ($instructorModuloIdRaw !== '' && ctype_digit($instructorModuloIdRaw)) {
+            $instructorModuloId = (int) $instructorModuloIdRaw;
+        }
+    }
+
     $normalizarNota = static function ($valor) {
         if ($valor === null || trim((string) $valor) === '') {
             return null;
@@ -41,6 +66,11 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
         SELECT id_control
         FROM control_cursos
         WHERE asignacion_id = ?
+    ");
+    $stmtVerificarModulo = $db->prepare("
+        SELECT id
+        FROM control_curso_modulos
+        WHERE asignacion_id = ? AND curso_modulo_id = ?
     ");
 
     $db->beginTransaction();
@@ -68,6 +98,58 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
             $asistencia = $normalizarNota($valores['asistencia'] ?? null);
             $evaluacion = $normalizarNota($valores['evaluacion'] ?? null);
             $posevaluacion = $normalizarNota($valores['posevaluacion'] ?? null);
+
+            if ($moduloId > 0) {
+                // Notas por modulo: sin diploma (el diploma sigue siendo a nivel de curso
+                // completo, en control_cursos).
+                $stmtVerificarModulo->execute([$asignacionId, $moduloId]);
+                $existeModulo = (bool) $stmtVerificarModulo->fetch(PDO::FETCH_ASSOC);
+
+                if ($existeModulo && $puedeGestionar) {
+                    $stmt = $db->prepare("
+                        UPDATE control_curso_modulos
+                        SET asistencia = ?, evaluacion = ?, posevaluacion = ?
+                        WHERE asignacion_id = ? AND curso_modulo_id = ?
+                    ");
+                    $stmt->execute([$asistencia, $evaluacion, $posevaluacion, $asignacionId, $moduloId]);
+                } elseif ($existeModulo) {
+                    $stmt = $db->prepare("
+                        UPDATE control_curso_modulos
+                        SET evaluacion = ?, posevaluacion = ?
+                        WHERE asignacion_id = ? AND curso_modulo_id = ?
+                    ");
+                    $stmt->execute([$evaluacion, $posevaluacion, $asignacionId, $moduloId]);
+                } elseif ($puedeGestionar) {
+                    $stmt = $db->prepare("
+                        INSERT INTO control_curso_modulos
+                            (asignacion_id, curso_modulo_id, asistencia, evaluacion, posevaluacion)
+                        VALUES (?, ?, ?, ?, ?)
+                    ");
+                    $stmt->execute([$asignacionId, $moduloId, $asistencia, $evaluacion, $posevaluacion]);
+                } else {
+                    $stmt = $db->prepare("
+                        INSERT INTO control_curso_modulos
+                            (asignacion_id, curso_modulo_id, evaluacion, posevaluacion)
+                        VALUES (?, ?, ?, ?)
+                    ");
+                    $stmt->execute([$asignacionId, $moduloId, $evaluacion, $posevaluacion]);
+                }
+
+                // La trazabilidad de que instructor impartio/califico el modulo solo la
+                // fija el super admin (incluye limpiarla explicitamente si elige "Sin
+                // registrar"); el resto de roles que califican no la tocan.
+                if ($esSuperadminActual) {
+                    $stmt = $db->prepare("
+                        UPDATE control_curso_modulos
+                        SET registrado_por_instructor_id = ?
+                        WHERE asignacion_id = ? AND curso_modulo_id = ?
+                    ");
+                    $stmt->execute([$instructorModuloId, $asignacionId, $moduloId]);
+                }
+
+                continue;
+            }
+
             $diploma = '';
 
             if (
@@ -146,7 +228,7 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
         throw $e;
     }
 
-    header("Location: ver_participante_curso.php?id=$cursoId");
+    header("Location: ver_participante_curso.php?id=$cursoId" . ($moduloId > 0 ? "&modulo_id={$moduloId}" : ''));
     exit;
 }
 

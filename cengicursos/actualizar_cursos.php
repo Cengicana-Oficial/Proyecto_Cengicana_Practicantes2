@@ -7,7 +7,7 @@ cengi_require_admin('ver_cursos.php');
 
 $db = conectar();
 $cursoId = (int) ($_POST['id'] ?? 0);
-$stmtActual = $db->prepare('SELECT codigo_curso, actividad_tipo, area_tecnica, instructor_id, cupo FROM cursos WHERE id = ?');
+$stmtActual = $db->prepare('SELECT codigo_curso, actividad_tipo, area_tecnica, instructor_id, ingenio_id, cupo FROM cursos WHERE id = ?');
 $stmtActual->execute([$cursoId]);
 $actual = $stmtActual->fetch(PDO::FETCH_ASSOC);
 if (!$actual) {
@@ -28,6 +28,10 @@ if (!array_key_exists('area_tecnica', $_POST)) {
 if (!array_key_exists('instructor_id', $_POST)) {
     $datos['instructor_id'] = $actual['instructor_id'] !== null ? (int) $actual['instructor_id'] : null;
 }
+// El formulario ya no pide "Ingenio / institucion": se conserva el valor que el curso
+// ya tenia (o el default de Cengicana como red de seguridad si por alguna razon no lo
+// tenia, ya que la columna sigue siendo NOT NULL).
+$datos['ingenio_id'] = $actual['ingenio_id'] !== null ? (int) $actual['ingenio_id'] : cengi_curso_ingenio_por_defecto($db);
 if (!array_key_exists('cupo', $_POST)) {
     $datos['cupo'] = $actual['cupo'] !== null ? (int) $actual['cupo'] : null;
 }
@@ -64,8 +68,10 @@ try {
 
     if (isset($_POST['modulos_present'])) {
         cengi_curso_guardar_modulos($db, $cursoId, $datos['modulos'], true);
+        cengi_curso_asegurar_enlaces_evaluacion($db, $cursoId, $datos['instructor_id'], $datos['modulos']);
+    } else {
+        cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $datos['instructor_id']);
     }
-    cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $datos['instructor_id']);
     $db->commit();
     header('Location: ver_cursos.php?mensaje=actualizado');
 } catch (Throwable $e) {

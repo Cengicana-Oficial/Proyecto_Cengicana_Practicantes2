@@ -12,6 +12,22 @@ $cursos = $db->query("
     ORDER BY inicio ASC, nombre_cursos ASC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
+$cursoIdParam = (int) ($_GET['curso_id'] ?? 0);
+$cursoBloqueado = null;
+
+if ($cursoIdParam > 0) {
+    foreach ($cursos as $curso) {
+        if ((int) $curso['id'] === $cursoIdParam) {
+            $cursoBloqueado = $curso;
+            break;
+        }
+    }
+
+    if ($cursoBloqueado !== null) {
+        $cursos = [$cursoBloqueado];
+    }
+}
+
 function cengi_curso_etiqueta(array $curso)
 {
     $detalle = [$curso['tipo']];
@@ -96,9 +112,15 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
                 Solicitud de Inscripción
             </h2>
 
-            <p class="text-lg md:text-xl text-white/90">
-                Gestión moderna de capacitaciones industriales y agrícolas.
-            </p>
+            <?php if ($cursoBloqueado !== null): ?>
+                <p class="text-lg md:text-xl text-white/90">
+                    Curso: <?php echo htmlspecialchars(cengi_curso_etiqueta($cursoBloqueado)); ?>
+                </p>
+            <?php else: ?>
+                <p class="text-lg md:text-xl text-white/90">
+                    Gestión moderna de capacitaciones industriales y agrícolas.
+                </p>
+            <?php endif; ?>
 
         </div>
 

@@ -63,48 +63,9 @@ if ($idcurso > 0) {
     $cursoInfo = $stmtCurso->fetch(PDO::FETCH_ASSOC);
 }
 
-$sql = "
-    SELECT
-        a.id AS asignacion_id,
-        a.estado_asignaciones,
-        p.nombre_participantes,
-        p.cui_participantes,
-        p.correo_participantes,
-        p.grado_academico_participantes,
-        p.telefono_participantes,
-        i.nombre_ingenios,
-        cc.asistencia,
-        cc.evaluacion,
-        cc.posevaluacion,
-        cc.diploma
-    FROM asignaciones a
-    INNER JOIN participantes p ON a.participantes_id = p.id
-    INNER JOIN ingenios i ON p.ingenio_id = i.id
-    LEFT JOIN control_cursos cc ON a.id = cc.asignacion_id
-    WHERE a.cursos_id = ?
-";
-
-if ($soloCalifica) {
-    $sql .= " AND a.estado_asignaciones = 1";
-}
-
-if (!cengi_ve_todo_por_rol_o_ingenio()) {
-    $sql .= " AND p.ingenio_id = " . (int) cengi_ingenio_id_actual();
-}
-
-$stmt = $db->prepare($sql);
-$stmt->execute([$idcurso]);
-$filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// KPIs del curso
-$totalInscritos = count($filas);
-$evaluacionesValidas = array_filter($filas, static function ($f) { return is_numeric($f['posevaluacion']); });
-$asistenciasValidas = array_filter($filas, static function ($f) { return is_numeric($f['asistencia']); });
-$evalPromedio = $evaluacionesValidas ? array_sum(array_map(static function ($f) { return (float) $f['posevaluacion']; }, $evaluacionesValidas)) / count($evaluacionesValidas) : null;
-$asistPromedio = $asistenciasValidas ? array_sum(array_map(static function ($f) { return (float) $f['asistencia']; }, $asistenciasValidas)) / count($asistenciasValidas) : null;
-$aprobados = count(array_filter($filas, static function ($f) { return is_numeric($f['posevaluacion']) && (float) $f['posevaluacion'] >= 60; }));
-
-// Contenido del curso (temario)
+// Contenido del curso (temario). Se carga antes que la tabla de participantes
+// porque el selector de modulo (mas abajo) necesita esta lista para validar
+// el "modulo_id" que venga por GET.
 $modulos = [];
 if ($idcurso > 0) {
     $stmtModulos = $db->prepare("SELECT * FROM curso_modulos WHERE curso_id = ? ORDER BY orden");
@@ -117,6 +78,129 @@ if ($idcurso > 0) {
         $modulo['temas'] = $stmtTemas->fetchAll(PDO::FETCH_COLUMN);
     }
     unset($modulo);
+}
+
+// Modulo seleccionado para cargar/editar notas por modulo (seguimiento de co-ensenanza).
+// modulo_id = 0 (o ausente/invalido) conserva el comportamiento historico: notas de
+// resumen del curso completo en control_cursos, sin tocar esa tabla.
+$moduloId = (int) ($_GET['modulo_id'] ?? 0);
+$moduloSeleccionado = null;
+if ($moduloId > 0) {
+    foreach ($modulos as $m) {
+        if ((int) $m['id'] === $moduloId) {
+            $moduloSeleccionado = $m;
+            break;
+        }
+    }
+    if ($moduloSeleccionado === null) {
+        $moduloId = 0; // modulo inexistente o de otro curso: se ignora silenciosamente
+    }
+}
+
+if ($moduloId > 0) {
+    $sql = "
+        SELECT
+            a.id AS asignacion_id,
+            a.estado_asignaciones,
+            p.nombre_participantes,
+            p.cui_participantes,
+            p.correo_participantes,
+            p.grado_academico_participantes,
+            p.telefono_participantes,
+            i.nombre_ingenios,
+            ccm.asistencia,
+            ccm.evaluacion,
+            ccm.posevaluacion,
+            NULL AS diploma
+        FROM asignaciones a
+        INNER JOIN participantes p ON a.participantes_id = p.id
+        INNER JOIN ingenios i ON p.ingenio_id = i.id
+        LEFT JOIN control_curso_modulos ccm ON ccm.asignacion_id = a.id AND ccm.curso_modulo_id = ?
+        WHERE a.cursos_id = ?
+    ";
+} else {
+    $sql = "
+        SELECT
+            a.id AS asignacion_id,
+            a.estado_asignaciones,
+            p.nombre_participantes,
+            p.cui_participantes,
+            p.correo_participantes,
+            p.grado_academico_participantes,
+            p.telefono_participantes,
+            i.nombre_ingenios,
+            cc.asistencia,
+            cc.evaluacion,
+            cc.posevaluacion,
+            cc.diploma
+        FROM asignaciones a
+        INNER JOIN participantes p ON a.participantes_id = p.id
+        INNER JOIN ingenios i ON p.ingenio_id = i.id
+        LEFT JOIN control_cursos cc ON a.id = cc.asignacion_id
+        WHERE a.cursos_id = ?
+    ";
+}
+
+if ($soloCalifica) {
+    $sql .= " AND a.estado_asignaciones = 1";
+}
+
+if (!cengi_ve_todo_por_rol_o_ingenio()) {
+    $sql .= " AND p.ingenio_id = " . (int) cengi_ingenio_id_actual();
+}
+
+$stmt = $db->prepare($sql);
+$stmt->execute($moduloId > 0 ? [$moduloId, $idcurso] : [$idcurso]);
+$filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// KPIs del curso (o del modulo seleccionado, si aplica)
+$totalInscritos = count($filas);
+$evaluacionesValidas = array_filter($filas, static function ($f) { return is_numeric($f['posevaluacion']); });
+$asistenciasValidas = array_filter($filas, static function ($f) { return is_numeric($f['asistencia']); });
+$evalPromedio = $evaluacionesValidas ? array_sum(array_map(static function ($f) { return (float) $f['posevaluacion']; }, $evaluacionesValidas)) / count($evaluacionesValidas) : null;
+$asistPromedio = $asistenciasValidas ? array_sum(array_map(static function ($f) { return (float) $f['asistencia']; }, $asistenciasValidas)) / count($asistenciasValidas) : null;
+$aprobados = count(array_filter($filas, static function ($f) { return is_numeric($f['posevaluacion']) && (float) $f['posevaluacion'] >= 60; }));
+
+// Segundo dropdown (solo super admin): instructor que impartio/califico el modulo
+// seleccionado, para trazabilidad en control_curso_modulos.registrado_por_instructor_id.
+// Si el modulo no tiene instructores propios en curso_modulo_instructores, cae al
+// instructor principal del curso (cursos.instructor_id) -- mismo fallback que ya usa
+// ver_cursos.php/curso_form_helpers.php.
+$moduloInstructores = [];
+$instructorModuloActual = null;
+if ($moduloId > 0 && cengi_es_superadmin()) {
+    $stmtModInstr = $db->prepare("
+        SELECT ins.id, ins.nombre
+        FROM curso_modulo_instructores cmi
+        INNER JOIN instructores ins ON ins.id = cmi.instructor_id
+        WHERE cmi.curso_modulo_id = ?
+        ORDER BY ins.nombre
+    ");
+    $stmtModInstr->execute([$moduloId]);
+    $moduloInstructores = $stmtModInstr->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!$moduloInstructores && !empty($cursoInfo['instructor_id'])) {
+        $stmtInstrPrincipal = $db->prepare("SELECT id, nombre FROM instructores WHERE id = ?");
+        $stmtInstrPrincipal->execute([(int) $cursoInfo['instructor_id']]);
+        $instructorPrincipal = $stmtInstrPrincipal->fetch(PDO::FETCH_ASSOC);
+        if ($instructorPrincipal) {
+            $moduloInstructores = [$instructorPrincipal];
+        }
+    }
+
+    // Preselecciona el dropdown con el instructor ya registrado para este modulo, si
+    // alguna fila de control_curso_modulos ya lo tiene guardado (simplificacion: toma
+    // el primero no nulo, asumiendo que un modulo lo imparte/califica un solo instructor
+    // a la vez).
+    $stmtInstrActual = $db->prepare("
+        SELECT registrado_por_instructor_id
+        FROM control_curso_modulos
+        WHERE curso_modulo_id = ? AND registrado_por_instructor_id IS NOT NULL
+        LIMIT 1
+    ");
+    $stmtInstrActual->execute([$moduloId]);
+    $valorInstrActual = $stmtInstrActual->fetchColumn();
+    $instructorModuloActual = $valorInstrActual !== false ? (int) $valorInstrActual : null;
 }
 
 function cengi_pc_html($valor)
@@ -212,8 +296,26 @@ function cengi_pc_html($valor)
     </div>
 
     <div class="panel panel-success">
-        <div class="panel-heading">
-            <h3 class="panel-title">Participantes del curso</h3>
+        <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+            <div>
+                <h3 class="panel-title">Participantes del curso</h3>
+                <?php if ($modulos): ?>
+                    <small>Elige "Todo el curso" para el resumen general, o un modulo especifico para cargar sus notas por separado.</small>
+                <?php endif; ?>
+            </div>
+            <?php if ($modulos): ?>
+                <form method="GET">
+                    <input type="hidden" name="id" value="<?php echo (int) $idcurso; ?>">
+                    <select name="modulo_id" class="form-control" onchange="this.form.submit()">
+                        <option value="0" <?php echo $moduloId === 0 ? 'selected' : ''; ?>>Todo el curso (resumen general)</option>
+                        <?php foreach ($modulos as $m): ?>
+                            <option value="<?php echo (int) $m['id']; ?>" <?php echo $moduloId === (int) $m['id'] ? 'selected' : ''; ?>>
+                                <?php echo cengi_pc_html($m['nombre']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </form>
+            <?php endif; ?>
         </div>
 
         <div class="panel-body">
@@ -234,6 +336,23 @@ function cengi_pc_html($valor)
             <form action="guardar_control.php" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="accion" value="guardar_general">
             <input type="hidden" name="curso_id" value="<?php echo (int) $idcurso; ?>">
+            <input type="hidden" name="modulo_id" value="<?php echo (int) $moduloId; ?>">
+
+            <?php if ($moduloId > 0 && cengi_es_superadmin() && $moduloInstructores): ?>
+                <div class="form-group" style="max-width:340px;margin-bottom:15px;">
+                    <label class="control-label">Instructor que impartio/califico "<?php echo cengi_pc_html($moduloSeleccionado['nombre'] ?? ''); ?>"</label>
+                    <select name="instructor_modulo_id" class="form-control">
+                        <option value="">-- Sin registrar --</option>
+                        <?php foreach ($moduloInstructores as $ins): ?>
+                            <option value="<?php echo (int) $ins['id']; ?>" <?php echo $instructorModuloActual === (int) $ins['id'] ? 'selected' : ''; ?>>
+                                <?php echo cengi_pc_html($ins['nombre']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="help-block">Se guarda como trazabilidad junto con las notas de este modulo.</p>
+                </div>
+            <?php endif; ?>
+
             <div class="cengi-table-wrap">
             <table class="table table-bordered table-striped">
                 <thead>
@@ -245,14 +364,17 @@ function cengi_pc_html($valor)
                         <?php if ($puedeGestionar): ?><th>Asistencia</th><?php endif; ?>
                         <th>Pre-Evaluacion</th>
                         <th>Pos-Evaluacion</th>
-                        <th>Diploma</th>
+                        <?php if ($moduloId === 0): ?><th>Diploma</th><?php endif; ?>
                         <?php if ($puedeGestionar): ?><th>Acciones</th><?php endif; ?>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($filas)) { ?>
+                        <?php
+                            $cengiColspan = 5 + ($puedeGestionar ? 3 : 0) + ($moduloId === 0 ? 1 : 0);
+                        ?>
                         <tr>
-                            <td colspan="<?php echo $puedeGestionar ? 9 : 6; ?>" class="text-center">
+                            <td colspan="<?php echo $cengiColspan; ?>" class="text-center">
                                 No hay participantes asignados a este curso todavia.
                             </td>
                         </tr>
@@ -311,6 +433,7 @@ function cengi_pc_html($valor)
                                     >
                                 </td>
 
+                                <?php if ($moduloId === 0): ?>
                                 <td>
                                     <?php if ($puedeSubirDiploma): ?>
                                         <input type="file" name="diplomas[<?= (int) $fila['asignacion_id'] ?>]" class="form-control" accept="application/pdf,.pdf">
@@ -324,6 +447,7 @@ function cengi_pc_html($valor)
                                         <span class="text-muted">Sin diploma</span>
                                     <?php } ?>
                                 </td>
+                                <?php endif; ?>
 
                                 <?php if ($puedeGestionar): ?>
                                 <td>
