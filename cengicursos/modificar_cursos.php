@@ -1,7 +1,5 @@
 <?php
-require_once "revisar_permisos.php";
-cengi_require_admin();
-require_once "conexion.php";
+	require_once "revisar_permisos.php";
 	cengi_require_admin();
 	include("conexion.php");
 $db = conectar();
