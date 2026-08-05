@@ -1,38 +1,19 @@
 <?php
+require_once __DIR__ . "/conexion.php";
 
-require_once "conexion.php";
+$db = conectar();
 
-$mysqli = conectar();
+$ingenios = $db->query("SELECT id, nombre_ingenios FROM ingenios ORDER BY nombre_ingenios ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-
-// =====================================
-// OBTENER INGENIOS
-// =====================================
-
-$sqlIngenios = "SELECT * FROM ingenios ORDER BY nombre_ingenios ASC";
-$resultIngenios = $mysqli->query($sqlIngenios);
-
-
-// =====================================
-// FILTRO TIPO
-// =====================================
-
-$tipo = isset($_GET['tipo']) ? $_GET['tipo'] : 'Curso';
-
-
-// =====================================
-// OBTENER CURSOS SEGUN TIPO
-// =====================================
-
-$sqlCursos = "
-    SELECT *
+$cursos = $db->query("
+    SELECT id, nombre_cursos, tipo, jornada_cursos, dias, horario, inicio, fin
     FROM cursos
-    WHERE tipo = '$tipo'
-    ORDER BY nombre_cursos ASC
-";
+    WHERE fin IS NULL OR fin >= CURDATE()
+    ORDER BY inicio ASC, nombre_cursos ASC
+")->fetchAll(PDO::FETCH_ASSOC);
 
-$resultCursos = $mysqli->query($sqlCursos);
-
+$resultado = trim($_GET['resultado'] ?? '');
+$mensajeError = trim($_GET['mensaje'] ?? '');
 ?>
 
 <!DOCTYPE html>
@@ -43,7 +24,7 @@ $resultCursos = $mysqli->query($sqlCursos);
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
-    <title>Solicitud de Inscripción</title>
+    <title>Solicitud de Inscripción | CENGICURSOS</title>
 
     <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
 
@@ -51,7 +32,7 @@ $resultCursos = $mysqli->query($sqlCursos);
 
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="css/inscripcion.css">
 
     <script>
         tailwind.config = {
@@ -82,7 +63,7 @@ $resultCursos = $mysqli->query($sqlCursos);
 <section class="hero-section relative">
 
     <img
-        src="../css/images/formulario.jpeg"
+        src="css/images/formulario.jpeg"
         class="absolute inset-0 w-full h-full object-cover"
     >
 
@@ -110,6 +91,18 @@ $resultCursos = $mysqli->query($sqlCursos);
 <!-- CONTENIDO -->
 
 <main class="max-w-7xl mx-auto px-4 md:px-10 -mt-16 relative z-20 pb-10">
+
+    <?php if ($resultado === 'ok'): ?>
+        <div class="cengi-alert is-success" role="status">
+            <span class="material-symbols-outlined">check_circle</span>
+            <p>Tu solicitud fue enviada correctamente. Nuestro equipo la revisará pronto.</p>
+        </div>
+    <?php elseif ($resultado === 'error'): ?>
+        <div class="cengi-alert is-error" role="alert">
+            <span class="material-symbols-outlined">error</span>
+            <p><?php echo htmlspecialchars($mensajeError !== '' ? $mensajeError : 'No se pudo enviar la solicitud. Intenta nuevamente.'); ?></p>
+        </div>
+    <?php endif; ?>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
@@ -144,6 +137,7 @@ $resultCursos = $mysqli->query($sqlCursos);
                             type="text"
                             name="nombre_participante"
                             class="input-form"
+                            maxlength="255"
                             required
                         >
                     </div>
@@ -157,6 +151,7 @@ $resultCursos = $mysqli->query($sqlCursos);
                             type="text"
                             name="cui_participante"
                             class="input-form"
+                            maxlength="25"
                             required
                         >
                     </div>
@@ -176,6 +171,7 @@ $resultCursos = $mysqli->query($sqlCursos);
                             type="text"
                             name="puesto_participante"
                             class="input-form"
+                            maxlength="255"
                             required
                         >
                     </div>
@@ -189,6 +185,7 @@ $resultCursos = $mysqli->query($sqlCursos);
                             type="text"
                             name="area_participante"
                             class="input-form"
+                            maxlength="255"
                             required
                         >
                     </div>
@@ -208,6 +205,7 @@ $resultCursos = $mysqli->query($sqlCursos);
                             type="email"
                             name="correo"
                             class="input-form"
+                            maxlength="255"
                             required
                         >
                     </div>
@@ -221,6 +219,7 @@ $resultCursos = $mysqli->query($sqlCursos);
                             type="text"
                             name="telefono"
                             class="input-form"
+                            maxlength="50"
                             required
                         >
                     </div>
@@ -236,64 +235,23 @@ $resultCursos = $mysqli->query($sqlCursos);
                         Ingenio
                     </label>
 
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <select
+                        name="ingenio_id"
+                        class="input-form"
+                        required
+                    >
 
-                        <?php while($ingenio = $resultIngenios->fetch_assoc()): ?>
+                        <option value="">
+                            Seleccione
+                        </option>
 
-                            <label class="card-option">
+                        <?php foreach ($ingenios as $ingenio): ?>
+                            <option value="<?php echo (int) $ingenio['id']; ?>">
+                                <?php echo htmlspecialchars($ingenio['nombre_ingenios']); ?>
+                            </option>
+                        <?php endforeach; ?>
 
-                                <input
-                                    type="radio"
-                                    name="ingenio_id"
-                                    value="<?= $ingenio['id'] ?>"
-                                    required
-                                >
-
-                                <span>
-                                    <?= $ingenio['nombre_ingenios'] ?>
-                                </span>
-
-                            </label>
-
-                        <?php endwhile; ?>
-
-                    </div>
-
-                </div>
-
-
-                <!-- FILTROS -->
-
-                <div class="mt-8">
-
-                    <label class="label-form mb-4 block">
-                        Tipo de Capacitación
-                    </label>
-
-                    <div class="flex flex-wrap gap-3">
-
-                        <a
-                            href="?tipo=Curso"
-                            class="px-5 py-2 rounded-xl bg-green-600 text-white font-semibold shadow hover:scale-105 transition"
-                        >
-                            Cursos
-                        </a>
-
-                        <a
-                            href="?tipo=Diplomado"
-                            class="px-5 py-2 rounded-xl bg-blue-600 text-white font-semibold shadow hover:scale-105 transition"
-                        >
-                            Diplomados
-                        </a>
-
-                        <a
-                            href="?tipo=Seminario"
-                            class="px-5 py-2 rounded-xl bg-yellow-500 text-white font-semibold shadow hover:scale-105 transition"
-                        >
-                            Seminarios
-                        </a>
-
-                    </div>
+                    </select>
 
                 </div>
 
@@ -302,43 +260,44 @@ $resultCursos = $mysqli->query($sqlCursos);
 
                 <div class="mt-8">
 
-                    <label class="label-form mb-4 block">
-                        <?= $tipo ?>
+                    <label class="label-form mb-3 block">
+                        Curso
                     </label>
 
-<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <?php while($curso = $resultCursos->fetch_assoc()): ?>
+                    <select
+                        name="curso_id"
+                        class="input-form"
+                        required
+                        <?php echo !$cursos ? 'disabled' : ''; ?>
+                    >
 
-                            <label class="curso-card">
+                        <option value="">
+                            <?php echo $cursos ? 'Seleccione' : 'No hay cursos disponibles por el momento'; ?>
+                        </option>
 
-                                <div class="flex items-center gap-3">
+                        <?php foreach ($cursos as $curso): ?>
+                            <?php
+                            $detalle = [$curso['tipo']];
+                            if ($curso['jornada_cursos'] !== '') {
+                                $detalle[] = $curso['jornada_cursos'];
+                            }
+                            if ($curso['dias'] !== '') {
+                                $detalle[] = $curso['dias'];
+                            }
+                            if ($curso['horario'] !== '') {
+                                $detalle[] = $curso['horario'];
+                            }
+                            if ($curso['inicio']) {
+                                $detalle[] = 'Inicia ' . date('d/m/Y', strtotime($curso['inicio']));
+                            }
+                            $etiqueta = $curso['nombre_cursos'] . ' — ' . implode(' · ', $detalle);
+                            ?>
+                            <option value="<?php echo (int) $curso['id']; ?>">
+                                <?php echo htmlspecialchars($etiqueta); ?>
+                            </option>
+                        <?php endforeach; ?>
 
-                                    <span class="material-symbols-outlined text-secondary">
-                                        school
-                                    </span>
-
-                                    <div>
-
-                                        <p class="font-bold text-primary">
-                                            <?= $curso['nombre_cursos'] ?>
-                                        </p>
-
-                                    </div>
-
-                                </div>
-
-                                <input
-                                    type="checkbox"
-                                    name="curso_id[]"
-                                    value="<?= $curso['id'] ?>"
-                                    class="checkbox-custom"
-                                >
-
-                            </label>
-
-                        <?php endwhile; ?>
-
-                    </div>
+                    </select>
 
                 </div>
 
@@ -430,14 +389,14 @@ $resultCursos = $mysqli->query($sqlCursos);
             <div class="bg-white rounded-2xl shadow-md overflow-hidden">
 
                 <img
-                    src="../css/images/cengi.png"
+                    src="css/images/cengi.png"
                     class="w-40 mx-auto object-contain py-4"
                 >
 
                 <div class="p-5">
 
                     <h3 class="font-bold text-xl text-primary mb-2">
-                        CENGICAÑA DIGITAL 
+                        CENGICAÑA DIGITAL
                         PARA INSCRIBIRTE A LOS CURSOS QUE QUIERAS
                     </h3>
 
@@ -451,7 +410,7 @@ $resultCursos = $mysqli->query($sqlCursos);
 
 </main>
 
-<script src="script.js"></script>
+<script src="js/inscripcion.js"></script>
 
 </body>
 </html>

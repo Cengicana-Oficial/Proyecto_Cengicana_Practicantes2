@@ -48,45 +48,6 @@ body{
     box-shadow: 0 0 0 4px rgba(50,107,0,.1);
 }
 
-.card-option{
-    border: 1px solid #d1d5db;
-    padding: 14px;
-    border-radius: 14px;
-    cursor: pointer;
-    transition: .3s;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: white;
-}
-
-.card-option:hover{
-    border-color: #326b00;
-    background: #f4fff0;
-}
-
-.curso-card{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border: 1px solid #d1d5db;
-    border-radius: 16px;
-    padding: 18px;
-    transition: .3s;
-    cursor: pointer;
-    background: #f9fafb;
-}
-
-.curso-card:hover{
-    border-color: #326b00;
-    transform: translateY(-2px);
-}
-
-.checkbox-custom{
-    width: 20px;
-    height: 20px;
-}
-
 .btn-submit{
     width: 100%;
     background: #03251d;
@@ -108,11 +69,39 @@ body{
     transform: translateY(-2px);
 }
 
+.btn-submit:disabled{
+    opacity: .7;
+    cursor: not-allowed;
+    transform: none;
+}
+
 .sidebar-card-primary{
     background: #03251d;
     color: white;
     padding: 30px;
     border-radius: 24px;
+}
+
+.cengi-alert{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-radius: 14px;
+    margin-bottom: 20px;
+    font-weight: 600;
+}
+
+.cengi-alert.is-success{
+    background: #eafff0;
+    color: #0f5132;
+    border: 1px solid #86e0a6;
+}
+
+.cengi-alert.is-error{
+    background: #fff0f0;
+    color: #7a1f1f;
+    border: 1px solid #f0a8a8;
 }
 
 @media(max-width:768px){

@@ -69,46 +69,20 @@ a {
 .brand {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
     flex: 0 0 auto;
     color: var(--primary-deep);
     text-decoration: none;
+    width: 168px;
+    height: 76px;
+    overflow: hidden;
 }
 
-.brand-symbol {
-    width: 44px;
-    height: 44px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 14px 14px 14px 5px;
-    background: linear-gradient(145deg, var(--primary), var(--primary-strong));
-    color: #fff;
-    box-shadow: 0 8px 18px rgba(94, 155, 29, 0.24);
-}
-
-.brand-symbol .material-symbols-outlined {
-    font-size: 25px;
-}
-
-.brand-text {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.05;
-}
-
-.brand-text strong {
-    font-size: 15px;
-    font-weight: 900;
-    letter-spacing: 0.09em;
-}
-
-.brand-text small {
-    margin-top: 5px;
-    color: var(--muted);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
+.brand-logo {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
 }
 
 .main-nav {
@@ -933,19 +907,14 @@ main {
 }
 
 @media (max-width: 680px) {
-    .brand-text small,
     .user-copy,
     .user-menu > summary > .material-symbols-outlined {
         display: none;
     }
 
-    .brand-symbol {
-        width: 40px;
-        height: 40px;
-    }
-
-    .brand-text strong {
-        font-size: 13px;
+    .brand {
+        width: 138px;
+        height: 62px;
     }
 
     .user-menu > summary {
