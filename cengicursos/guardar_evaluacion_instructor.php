@@ -21,7 +21,21 @@ if ($token === '' || !preg_match('/^[a-f0-9]{32}$/', $token)) {
     exit;
 }
 
-$stmt = $db->prepare('SELECT id FROM enlaces_evaluacion_instructor WHERE token = ?');
+// Se vuelve a resolver el enlace completo (no solo el id) porque curso_nombre,
+// conferencista, modalidad y fecha_curso se guardan con los valores ya conocidos del
+// JOIN, nunca con lo que el participante haya podido enviar en el formulario.
+$stmt = $db->prepare("
+    SELECT
+        e.id AS enlace_id,
+        c.nombre_cursos,
+        c.tipo AS modalidad,
+        c.inicio,
+        i.nombre AS instructor_nombre
+    FROM enlaces_evaluacion_instructor e
+    INNER JOIN cursos c ON c.id = e.curso_id
+    INNER JOIN instructores i ON i.id = e.instructor_id
+    WHERE e.token = ?
+");
 $stmt->execute([$token]);
 $enlace = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -30,37 +44,177 @@ if (!$enlace) {
     exit;
 }
 
-$calificacionTexto = trim((string) ($_POST['calificacion'] ?? ''));
-$comentario = trim((string) ($_POST['comentario'] ?? ''));
+$modalidad = ($enlace['modalidad'] === 'Virtual') ? 'Virtual' : 'Presencial';
+
+/**
+ * Trunca (no rechaza) un texto libre a $max caracteres, igual que el comportamiento
+ * previo de este script para comentario/areas_mejora.
+ */
+function evaluacion_truncar($valor, $max)
+{
+    $valor = trim((string) $valor);
+    if (mb_strlen($valor) > $max) {
+        $valor = mb_substr($valor, 0, $max);
+    }
+    return $valor;
+}
+
+/**
+ * Valida un entero requerido dentro de [1, $max] (usado tanto para las preguntas
+ * Likert de 4 opciones como para las calificaciones de 1 a 10 estrellas).
+ */
+function evaluacion_entero_rango($valorCrudo, $max)
+{
+    $texto = trim((string) $valorCrudo);
+    if ($texto === '' || !ctype_digit($texto)) {
+        return null;
+    }
+    $numero = (int) $texto;
+    if ($numero < 1 || $numero > $max) {
+        return null;
+    }
+    return $numero;
+}
+
+// --- Ingenio: seleccionado por id (FK real) o "otro" con texto libre ---
+$ingenioCrudo = trim((string) ($_POST['ingenio_id'] ?? ''));
+$ingenioOtro = trim((string) ($_POST['ingenio_otro'] ?? ''));
+
+$ingenioId = null;
+if ($ingenioCrudo === '') {
+    evaluacion_error($token, 'Selecciona tu ingenio.');
+} elseif ($ingenioCrudo === 'otro') {
+    if ($ingenioOtro === '') {
+        evaluacion_error($token, 'Especifica el nombre de tu ingenio u organización.');
+    }
+    $ingenioOtro = mb_substr($ingenioOtro, 0, 255);
+} elseif (ctype_digit($ingenioCrudo)) {
+    $stmtIngenio = $db->prepare('SELECT id FROM ingenios WHERE id = ?');
+    $stmtIngenio->execute([(int) $ingenioCrudo]);
+    if (!$stmtIngenio->fetch(PDO::FETCH_ASSOC)) {
+        evaluacion_error($token, 'El ingenio seleccionado no es válido.');
+    }
+    $ingenioId = (int) $ingenioCrudo;
+    $ingenioOtro = '';
+} else {
+    evaluacion_error($token, 'El ingenio seleccionado no es válido.');
+}
+
+// --- Cargo / Sección ---
+$cargo = trim((string) ($_POST['cargo'] ?? ''));
+if ($cargo === '') {
+    evaluacion_error($token, 'Indica tu cargo.');
+}
+$cargo = mb_substr($cargo, 0, 255);
+
+$seccion = trim((string) ($_POST['seccion'] ?? ''));
+if ($seccion === '') {
+    evaluacion_error($token, 'Indica tu sección.');
+}
+$seccion = mb_substr($seccion, 0, 255);
+
+// --- Preguntas Likert "Acerca del instructor" (1..4), mismo texto en ambas ramas ---
+$camposLikertInstructor = [
+    'instructor_lenguaje_claro',
+    'instructor_material_adecuado',
+    'instructor_conocimiento_tema',
+    'instructor_respeto_participantes',
+    'instructor_puntualidad_objetivos',
+];
+
+$valoresLikertInstructor = [];
+foreach ($camposLikertInstructor as $campo) {
+    $valor = evaluacion_entero_rango($_POST[$campo] ?? '', 4);
+    if ($valor === null) {
+        evaluacion_error($token, 'Responde todas las preguntas sobre el instructor.');
+    }
+    $valoresLikertInstructor[$campo] = $valor;
+}
+
+// --- ¿Recibiría otro curso con este instructor? (1..10) ---
+$recomendariaInstructor = evaluacion_entero_rango($_POST['recomendaria_instructor'] ?? '', 10);
+if ($recomendariaInstructor === null) {
+    evaluacion_error($token, 'Selecciona una calificación de 1 a 10 estrellas para el instructor.');
+}
+
+// --- Preguntas Likert "El tema y la logística del evento" (1..4) ---
+$camposLikertLogistica = ['tema_relevancia_utilidad', 'logistica_evento'];
+$valoresLikertLogistica = [];
+foreach ($camposLikertLogistica as $campo) {
+    $valor = evaluacion_entero_rango($_POST[$campo] ?? '', 4);
+    if ($valor === null) {
+        evaluacion_error($token, 'Responde las preguntas sobre el tema y la logística del evento.');
+    }
+    $valoresLikertLogistica[$campo] = $valor;
+}
+
+// --- ¿Recibiría otro curso en el mismo lugar/plataforma? (1..10) ---
+$recomendariaContexto = evaluacion_entero_rango($_POST['recomendaria_contexto'] ?? '', 10);
+if ($recomendariaContexto === null) {
+    evaluacion_error($token, 'Selecciona una calificación de 1 a 10 estrellas para las percepciones finales.');
+}
+
+// --- Texto libre final: capacitaciones necesarias + oportunidades de mejora ---
+$capacitacionesNecesarias = trim((string) ($_POST['capacitaciones_necesarias'] ?? ''));
+if ($capacitacionesNecesarias === '') {
+    evaluacion_error($token, 'Indica qué otras capacitaciones necesitas.');
+}
+$capacitacionesNecesarias = evaluacion_truncar($capacitacionesNecesarias, 2000);
+
 $areasMejora = trim((string) ($_POST['areas_mejora'] ?? ''));
-
-if ($calificacionTexto === '' || !ctype_digit($calificacionTexto)) {
-    evaluacion_error($token, 'Selecciona una calificación de 1 a 5 estrellas.');
+if ($areasMejora === '') {
+    evaluacion_error($token, 'Indica las oportunidades de mejora.');
 }
-
-$calificacion = (int) $calificacionTexto;
-if ($calificacion < 1 || $calificacion > 5) {
-    evaluacion_error($token, 'La calificación debe estar entre 1 y 5 estrellas.');
-}
-
-if (mb_strlen($comentario) > 2000) {
-    $comentario = mb_substr($comentario, 0, 2000);
-}
-
-if (mb_strlen($areasMejora) > 2000) {
-    $areasMejora = mb_substr($areasMejora, 0, 2000);
-}
+$areasMejora = evaluacion_truncar($areasMejora, 2000);
 
 try {
     $stmtInsertar = $db->prepare('
-        INSERT INTO evaluaciones_instructor (enlace_id, calificacion, comentario, areas_mejora)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO evaluaciones_instructor (
+            enlace_id,
+            ingenio_id,
+            ingenio_otro,
+            cargo,
+            seccion,
+            modalidad,
+            curso_nombre,
+            conferencista,
+            fecha_curso,
+            instructor_lenguaje_claro,
+            instructor_material_adecuado,
+            instructor_conocimiento_tema,
+            instructor_respeto_participantes,
+            instructor_puntualidad_objetivos,
+            recomendaria_instructor,
+            tema_relevancia_utilidad,
+            logistica_evento,
+            recomendaria_contexto,
+            capacitaciones_necesarias,
+            areas_mejora
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
     ');
     $stmtInsertar->execute([
-        $enlace['id'],
-        $calificacion,
-        $comentario !== '' ? $comentario : null,
-        $areasMejora !== '' ? $areasMejora : null,
+        $enlace['enlace_id'],
+        $ingenioId,
+        $ingenioOtro,
+        $cargo,
+        $seccion,
+        $modalidad,
+        $enlace['nombre_cursos'],
+        $enlace['instructor_nombre'],
+        $enlace['inicio'] ?: null,
+        $valoresLikertInstructor['instructor_lenguaje_claro'],
+        $valoresLikertInstructor['instructor_material_adecuado'],
+        $valoresLikertInstructor['instructor_conocimiento_tema'],
+        $valoresLikertInstructor['instructor_respeto_participantes'],
+        $valoresLikertInstructor['instructor_puntualidad_objetivos'],
+        $recomendariaInstructor,
+        $valoresLikertLogistica['tema_relevancia_utilidad'],
+        $valoresLikertLogistica['logistica_evento'],
+        $recomendariaContexto,
+        $capacitacionesNecesarias,
+        $areasMejora,
     ]);
 } catch (PDOException $e) {
     error_log('Error al guardar evaluacion de instructor: ' . $e->getMessage());

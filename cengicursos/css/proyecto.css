@@ -3417,7 +3417,7 @@ body.cengi-nav-loading {
 
 .cengi-course-modules-mini {
     display: grid;
-    grid-template-columns: minmax(160px, 1fr) 60px 44px 44px;
+    grid-template-columns: minmax(140px, 1fr) 50px minmax(150px, 1.4fr) 44px 44px;
     align-items: center;
     border-bottom: 1px solid #E8ECE5;
 }
@@ -3572,18 +3572,31 @@ body.cengi-nav-loading {
 }
 
 .cengi-course-module-row {
-    margin-bottom: 7px;
-    display: grid;
-    grid-template-columns: minmax(230px, 1fr) 90px 82px 82px 31px;
-    align-items: center;
-    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #E7EBE4;
+}
+
+.cengi-course-module-row:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: 0;
 }
 
 .cengi-course-module-row.is-head {
     margin-bottom: 5px;
+    padding-bottom: 0;
+    border-bottom: 0;
 }
 
-.cengi-course-module-row.is-head span {
+.cengi-course-module-main {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) 80px 82px 82px 31px;
+    align-items: center;
+    gap: 8px;
+}
+
+.cengi-course-module-row.is-head .cengi-course-module-main span {
     color: #7D8778;
     font-size: 8.5px;
     font-weight: 800;
@@ -3624,6 +3637,83 @@ body.cengi-nav-loading {
     line-height: 29px;
 }
 
+.cengi-course-module-instructors {
+    margin-top: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    border: 1px solid #E7EBE4;
+    border-radius: 8px;
+    background: #FAFBF9;
+}
+
+.cengi-course-module-toggle {
+    margin: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #4B5A45 !important;
+    font-size: 10px !important;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cengi-course-module-toggle input {
+    margin: 0;
+}
+
+.cengi-course-module-toggle[hidden] {
+    display: none;
+}
+
+.cengi-course-module-instructor-single,
+.cengi-course-module-instructor-multi {
+    flex: 1 1 220px;
+    min-width: 200px;
+}
+
+.cengi-course-module-instructor-single[hidden],
+.cengi-course-module-instructor-multi[hidden] {
+    display: none;
+}
+
+.cengi-course-module-instructor-single .form-control {
+    height: 33px;
+}
+
+.cengi-course-module-instructor-row {
+    margin-bottom: 6px;
+    display: flex;
+    gap: 6px;
+}
+
+.cengi-course-module-instructor-row:last-child {
+    margin-bottom: 0;
+}
+
+.cengi-course-module-instructor-row .form-control {
+    height: 33px;
+}
+
+.cengi-course-module-instructor-remove {
+    flex: 0 0 auto;
+    width: 33px;
+    height: 33px;
+    padding: 0;
+    border: 1px solid #E4D6D3;
+    border-radius: 7px;
+    background: #FFF8F7;
+    color: #B05249;
+    line-height: 31px;
+}
+
+.cengi-course-module-instructor-add {
+    border-radius: 7px !important;
+    font-size: 9.5px !important;
+}
+
 .cengi-course-modules-notice {
     margin-top: 11px;
     padding: 10px 12px;
@@ -3648,9 +3738,9 @@ body.cengi-nav-loading {
         grid-template-columns: 1fr;
     }
 
-    .cengi-course-module-row {
-        grid-template-columns: minmax(150px, 1fr) 70px 62px 62px 31px;
-        min-width: 550px;
+    .cengi-course-module-main {
+        grid-template-columns: minmax(130px, 1fr) 60px 62px 62px 31px;
+        min-width: 490px;
     }
 
     .cengi-course-modules-editor {
@@ -3658,7 +3748,7 @@ body.cengi-nav-loading {
     }
 
     .cengi-course-modules-editor-head {
-        min-width: 550px;
+        min-width: 650px;
     }
 }
 

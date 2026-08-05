@@ -31,6 +31,13 @@ if (!$enlace) {
     exit;
 }
 
+// El formulario oficial replica dos ramas casi identicas (Presencial / Virtual),
+// pero la modalidad ya se conoce por el curso (cursos.tipo): no se vuelve a preguntar,
+// solo cambia el rotulo de sección/pregunta que se muestra.
+$modalidad = ($enlace['modalidad'] === 'Virtual') ? 'Virtual' : 'Presencial';
+
+$ingenios = $db->query('SELECT id, nombre_ingenios FROM ingenios ORDER BY nombre_ingenios ASC')->fetchAll(PDO::FETCH_ASSOC);
+
 function cengi_eval_html($valor)
 {
     return htmlspecialchars((string) ($valor ?? ''), ENT_QUOTES, 'UTF-8');
@@ -45,6 +52,41 @@ function cengi_eval_fecha($valor)
     return $tiempo ? date('d/m/Y', $tiempo) : '';
 }
 
+/**
+ * Pregunta tipo Likert de 4 opciones (Excelente/Bueno/Regular/Deficiente), valores 4..1.
+ * Mismo texto/estructura para la rama Presencial y Virtual del formulario oficial.
+ */
+function cengi_eval_likert($name, $pregunta)
+{
+    $opciones = [4 => 'Excelente', 3 => 'Bueno', 2 => 'Regular', 1 => 'Deficiente'];
+    echo '<div class="cengi-eval-likert">';
+    echo '<span class="cengi-eval-likert-question">' . cengi_eval_html($pregunta) . ' <span class="cengi-eval-required">*</span></span>';
+    echo '<div class="cengi-eval-likert-options">';
+    foreach ($opciones as $valor => $texto) {
+        $id = 'cengi_' . $name . '_' . $valor;
+        echo '<input type="radio" id="' . $id . '" name="' . cengi_eval_html($name) . '" value="' . $valor . '" required>';
+        echo '<label for="' . $id . '">' . cengi_eval_html($texto) . '</label>';
+    }
+    echo '</div></div>';
+}
+
+/**
+ * Calificacion de 1 a $max estrellas (el formulario oficial usa 10 estrellas para las
+ * preguntas de recomendacion, distinto de las 5 estrellas del formulario original).
+ */
+function cengi_eval_estrellas($name, $max, $labelTexto)
+{
+    echo '<div class="cengi-eval-field">';
+    echo '<label class="cengi-eval-label">' . cengi_eval_html($labelTexto) . ' <span class="cengi-eval-required">*</span></label>';
+    echo '<div class="cengi-star-rating cengi-star-rating--' . (int) $max . '">';
+    for ($i = (int) $max; $i >= 1; $i--) {
+        $id = 'cengi_' . $name . '_' . $i;
+        echo '<input type="radio" id="' . $id . '" name="' . cengi_eval_html($name) . '" value="' . $i . '" required>';
+        echo '<label for="' . $id . '" title="' . $i . '">★</label>';
+    }
+    echo '</div></div>';
+}
+
 $resultado = trim((string) ($_GET['resultado'] ?? ''));
 $mensajeError = trim((string) ($_GET['mensaje'] ?? ''));
 
@@ -52,6 +94,26 @@ $rangoFechas = cengi_eval_fecha($enlace['inicio']);
 if ($enlace['fin'] && $enlace['fin'] !== $enlace['inicio']) {
     $rangoFechas .= ($rangoFechas !== '' ? ' – ' : '') . cengi_eval_fecha($enlace['fin']);
 }
+
+// Mismas 5 preguntas "Acerca del instructor" y mismas 2 preguntas de "tema y logistica"
+// en ambas ramas del formulario oficial (Presencial/Virtual): solo cambia el rotulo de
+// la seccion, no el texto de las preguntas ni los campos que se guardan.
+$preguntasInstructor = [
+    'instructor_lenguaje_claro' => '¿Utilizó lenguaje claro y apropiado de tal forma que le facilitó el aprendizaje motivando el diálogo y la participación?',
+    'instructor_material_adecuado' => '¿Utilizó material audiovisual y escrito adecuado de tal forma que la información recibida la considera valiosa?',
+    'instructor_conocimiento_tema' => '¿El instructor demostró un conocimiento profundo del tema resolviendo dudas de forma adecuada?',
+    'instructor_respeto_participantes' => '¿El instructor respetó el punto de vista de los participantes?',
+    'instructor_puntualidad_objetivos' => '¿Inició la capacitación en el horario previsto, definió y presentó objetivos?',
+];
+
+$preguntasLogistica = [
+    'tema_relevancia_utilidad' => '¿Qué tan relevante y útil fue el tema del curso para su área de trabajo (considere la utilidad, la actualidad y la secuencia lógica)?',
+    'logistica_evento' => 'Califique la logística del evento (considere el equipo de proyección, las instalaciones y la coordinación)',
+];
+
+$labelContexto = $modalidad === 'Virtual'
+    ? '¿Le gustaría recibir otro curso a través de la misma plataforma de videoconferencia? (10 estrellas representa la mayor calificación)'
+    : 'Le gustaría recibir otro curso en estas instalaciones (donde 10 estrellas representa la mayor calificación)';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -96,7 +158,7 @@ if ($enlace['fin'] && $enlace['fin'] !== $enlace['inicio']) {
 
         .cengi-eval-card {
             width: 100%;
-            max-width: 560px;
+            max-width: 640px;
             background: var(--cengi-surface);
             border-radius: 20px;
             padding: 44px 40px;
@@ -161,6 +223,51 @@ if ($enlace['fin'] && $enlace['fin'] !== $enlace['inicio']) {
             color: #a4342b;
         }
 
+        .cengi-eval-required {
+            color: #a4342b;
+        }
+
+        .cengi-eval-section-title {
+            margin: 30px 0 16px;
+            padding-top: 20px;
+            border-top: 1px solid var(--cengi-border);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--cengi-primary-deep);
+            text-align: left;
+        }
+
+        .cengi-eval-section-title:first-of-type {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: none;
+        }
+
+        .cengi-eval-readonly {
+            background: #f3faec;
+            border: 1px solid var(--cengi-border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 13px;
+            color: var(--cengi-muted);
+            text-align: left;
+            margin: 0 0 20px;
+        }
+
+        .cengi-eval-readonly div {
+            padding: 2px 0;
+        }
+
+        .cengi-eval-readonly strong {
+            color: var(--cengi-ink);
+        }
+
+        .cengi-eval-field {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+
         .cengi-eval-label {
             display: block;
             font-size: 13px;
@@ -170,9 +277,75 @@ if ($enlace['fin'] && $enlace['fin'] !== $enlace['inicio']) {
             text-align: left;
         }
 
+        .cengi-eval-select,
+        .cengi-eval-input {
+            width: 100%;
+            border: 1.5px solid var(--cengi-border);
+            border-radius: 12px;
+            padding: 11px 14px;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            color: var(--cengi-ink);
+            background: #fff;
+        }
+
+        .cengi-eval-select:focus,
+        .cengi-eval-input:focus {
+            outline: none;
+            border-color: var(--cengi-primary);
+        }
+
+        .cengi-eval-likert {
+            margin-bottom: 22px;
+            text-align: left;
+        }
+
+        .cengi-eval-likert-question {
+            display: block;
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--cengi-ink);
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        .cengi-eval-likert-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .cengi-eval-likert-options input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .cengi-eval-likert-options label {
+            flex: 1 1 auto;
+            min-width: 78px;
+            text-align: center;
+            padding: 9px 8px;
+            border: 1.5px solid var(--cengi-border);
+            border-radius: 10px;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--cengi-muted);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .cengi-eval-likert-options input:checked + label {
+            background: linear-gradient(135deg, var(--cengi-primary), var(--cengi-primary-strong));
+            border-color: var(--cengi-primary);
+            color: #fff;
+        }
+
         .cengi-star-rating {
             display: flex;
             flex-direction: row-reverse;
+            flex-wrap: wrap;
             justify-content: center;
             gap: 6px;
             margin-bottom: 26px;
@@ -191,6 +364,10 @@ if ($enlace['fin'] && $enlace['fin'] !== $enlace['inicio']) {
             color: var(--cengi-border);
             cursor: pointer;
             transition: color 0.15s ease, transform 0.15s ease;
+        }
+
+        .cengi-star-rating--10 label {
+            font-size: 26px;
         }
 
         .cengi-star-rating label:hover {
@@ -262,6 +439,10 @@ if ($enlace['fin'] && $enlace['fin'] !== $enlace['inicio']) {
             .cengi-star-rating label {
                 font-size: 34px;
             }
+
+            .cengi-star-rating--10 label {
+                font-size: 22px;
+            }
         }
     </style>
 </head>
@@ -274,7 +455,7 @@ if ($enlace['fin'] && $enlace['fin'] !== $enlace['inicio']) {
     <p class="cengi-eval-instructor">Instructor: <?php echo cengi_eval_html($enlace['instructor_nombre']); ?></p>
     <?php if ($rangoFechas !== '' || $enlace['modalidad']): ?>
         <p class="cengi-eval-meta">
-            <?php echo cengi_eval_html(trim(($enlace['modalidad'] ?? '') . ($rangoFechas !== '' ? ' · ' . $rangoFechas : ''))); ?>
+            <?php echo cengi_eval_html(trim($modalidad . ($rangoFechas !== '' ? ' · ' . $rangoFechas : ''))); ?>
         </p>
     <?php endif; ?>
 
@@ -291,29 +472,80 @@ if ($enlace['fin'] && $enlace['fin'] !== $enlace['inicio']) {
     <form action="guardar_evaluacion_instructor.php" method="POST">
         <input type="hidden" name="token" value="<?php echo cengi_eval_html($enlace['token']); ?>">
 
-        <label class="cengi-eval-label">¿Cómo calificarías al instructor?</label>
-        <div class="cengi-star-rating">
-            <input type="radio" id="cengiStar5" name="calificacion" value="5" required>
-            <label for="cengiStar5" title="5 estrellas">★</label>
-            <input type="radio" id="cengiStar4" name="calificacion" value="4">
-            <label for="cengiStar4" title="4 estrellas">★</label>
-            <input type="radio" id="cengiStar3" name="calificacion" value="3">
-            <label for="cengiStar3" title="3 estrellas">★</label>
-            <input type="radio" id="cengiStar2" name="calificacion" value="2">
-            <label for="cengiStar2" title="2 estrellas">★</label>
-            <input type="radio" id="cengiStar1" name="calificacion" value="1">
-            <label for="cengiStar1" title="1 estrella">★</label>
+        <div class="cengi-eval-section-title">Datos generales</div>
+        <div class="cengi-eval-readonly">
+            <div><strong>Curso:</strong> <?php echo cengi_eval_html($enlace['nombre_cursos']); ?></div>
+            <div><strong>Conferencista:</strong> <?php echo cengi_eval_html($enlace['instructor_nombre']); ?></div>
+            <?php if ($rangoFechas !== ''): ?>
+                <div><strong>Fecha:</strong> <?php echo cengi_eval_html($rangoFechas); ?></div>
+            <?php endif; ?>
+            <div><strong>Modalidad:</strong> <?php echo cengi_eval_html($modalidad); ?></div>
         </div>
 
-        <label class="cengi-eval-label" for="cengiComentario">Comentario (opcional)</label>
-        <textarea class="cengi-eval-textarea" id="cengiComentario" name="comentario" maxlength="2000" placeholder="Cuéntanos qué te pareció el instructor..."></textarea>
+        <div class="cengi-eval-field">
+            <label class="cengi-eval-label" for="cengiIngenio">Ingenio <span class="cengi-eval-required">*</span></label>
+            <select class="cengi-eval-select" id="cengiIngenio" name="ingenio_id" required onchange="cengiToggleIngenioOtro(this)">
+                <option value="">Selecciona tu ingenio...</option>
+                <?php foreach ($ingenios as $ingenioFila): ?>
+                    <option value="<?php echo (int) $ingenioFila['id']; ?>"><?php echo cengi_eval_html($ingenioFila['nombre_ingenios']); ?></option>
+                <?php endforeach; ?>
+                <option value="otro">Otro</option>
+            </select>
+        </div>
 
-        <label class="cengi-eval-label" for="cengiAreasMejora">Áreas de mejora (opcional)</label>
-        <textarea class="cengi-eval-textarea" id="cengiAreasMejora" name="areas_mejora" maxlength="2000" placeholder="¿Qué podría mejorar el instructor?"></textarea>
+        <div class="cengi-eval-field" id="cengiIngenioOtroWrap" style="display:none;">
+            <label class="cengi-eval-label" for="cengiIngenioOtro">Especifica el ingenio u organización</label>
+            <input type="text" class="cengi-eval-input" id="cengiIngenioOtro" name="ingenio_otro" maxlength="255" placeholder="Nombre del ingenio u organización">
+        </div>
+
+        <div class="cengi-eval-field">
+            <label class="cengi-eval-label" for="cengiCargo">Cargo <span class="cengi-eval-required">*</span></label>
+            <input type="text" class="cengi-eval-input" id="cengiCargo" name="cargo" maxlength="255" required placeholder="Tu cargo o puesto de trabajo">
+        </div>
+
+        <div class="cengi-eval-field">
+            <label class="cengi-eval-label" for="cengiSeccion">Sección <span class="cengi-eval-required">*</span></label>
+            <input type="text" class="cengi-eval-input" id="cengiSeccion" name="seccion" maxlength="255" required placeholder="Tu sección o área">
+        </div>
+
+        <div class="cengi-eval-section-title">Acerca del instructor (<?php echo cengi_eval_html($modalidad); ?>)</div>
+        <?php foreach ($preguntasInstructor as $campo => $pregunta): ?>
+            <?php cengi_eval_likert($campo, $pregunta); ?>
+        <?php endforeach; ?>
+        <?php cengi_eval_estrellas('recomendaria_instructor', 10, '¿Le gustaría recibir otro curso con este instructor? (10 estrellas representa la mayor calificación)'); ?>
+
+        <div class="cengi-eval-section-title">El tema y la logística del evento (<?php echo cengi_eval_html($modalidad); ?>)</div>
+        <?php foreach ($preguntasLogistica as $campo => $pregunta): ?>
+            <?php cengi_eval_likert($campo, $pregunta); ?>
+        <?php endforeach; ?>
+
+        <div class="cengi-eval-section-title">Percepciones finales (<?php echo cengi_eval_html($modalidad); ?>)</div>
+        <?php cengi_eval_estrellas('recomendaria_contexto', 10, $labelContexto); ?>
+
+        <label class="cengi-eval-label" for="cengiCapacitaciones">¿Qué otras capacitaciones necesita para desempeñar mejor su trabajo? <span class="cengi-eval-required">*</span></label>
+        <textarea class="cengi-eval-textarea" id="cengiCapacitaciones" name="capacitaciones_necesarias" maxlength="2000" required placeholder="Cuéntanos qué otras capacitaciones te servirían..."></textarea>
+
+        <label class="cengi-eval-label" for="cengiAreasMejora">Oportunidades de mejora <span class="cengi-eval-required">*</span></label>
+        <textarea class="cengi-eval-textarea" id="cengiAreasMejora" name="areas_mejora" maxlength="2000" required placeholder="¿Qué podría mejorar el instructor o la actividad?"></textarea>
 
         <button type="submit" class="cengi-eval-btn">Enviar evaluación</button>
     </form>
 </div>
+
+<script>
+    function cengiToggleIngenioOtro(select) {
+        var wrap = document.getElementById('cengiIngenioOtroWrap');
+        var input = document.getElementById('cengiIngenioOtro');
+        if (select.value === 'otro') {
+            wrap.style.display = 'block';
+            input.setAttribute('required', 'required');
+        } else {
+            wrap.style.display = 'none';
+            input.removeAttribute('required');
+            input.value = '';
+        }
+    }
+</script>
 
 </body>
 </html>

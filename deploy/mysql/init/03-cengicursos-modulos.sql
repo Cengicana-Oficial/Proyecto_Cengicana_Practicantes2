@@ -162,6 +162,60 @@ CREATE TABLE IF NOT EXISTS curso_modulos (
     FOREIGN KEY (curso_id) REFERENCES cursos (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Instructor(es) por modulo (co-ensenanza): un modulo puede tener 0, 1 o varios
+-- instructores propios (distintos o iguales al instructor principal del curso,
+-- cursos.instructor_id). 0 filas para un modulo hereda implicitamente al instructor
+-- principal del curso al momento de mostrarlo/usarlo; ese fallback se resuelve en la
+-- capa de aplicacion (cengicursos/ver_cursos.php, cengicursos/curso_form_helpers.php),
+-- no en la base de datos. Ver tambien
+-- cengicursos/migrations/20260805_curso_modulos_instructor.sql para la migracion
+-- idempotente equivalente sobre un contenedor ya inicializado.
+CREATE TABLE IF NOT EXISTS curso_modulo_instructores (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  curso_modulo_id INT UNSIGNED NOT NULL,
+  instructor_id INT UNSIGNED NOT NULL,
+  creado TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_curso_modulo_instructores (curso_modulo_id, instructor_id),
+  KEY idx_curso_modulo_instructores_modulo (curso_modulo_id),
+  KEY idx_curso_modulo_instructores_instructor (instructor_id),
+  CONSTRAINT fk_curso_modulo_instructores_modulo
+    FOREIGN KEY (curso_modulo_id) REFERENCES curso_modulos (id) ON DELETE CASCADE,
+  CONSTRAINT fk_curso_modulo_instructores_instructor
+    FOREIGN KEY (instructor_id) REFERENCES instructores (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Notas por modulo (co-ensenanza): una fila por participante (asignacion_id) +
+-- modulo (curso_modulo_id), con asistencia/pre-evaluacion/pos-evaluacion propias de
+-- ese modulo. Es aditiva y NO sustituye a control_cursos: esa tabla sigue siendo el
+-- resumen del curso completo (retrocompatibilidad con diploma/exports existentes).
+-- registrado_por_instructor_id es trazabilidad de que instructor impartio/califico
+-- el modulo; solo lo fija el super admin desde cengicursos/ver_participante_curso.php,
+-- para el resto de roles que califican queda NULL. Ver tambien
+-- cengicursos/migrations/20260805_control_curso_modulos.sql para la migracion
+-- idempotente equivalente sobre un contenedor ya inicializado.
+CREATE TABLE IF NOT EXISTS control_curso_modulos (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  asignacion_id INT UNSIGNED NOT NULL,
+  curso_modulo_id INT UNSIGNED NOT NULL,
+  asistencia VARCHAR(50) DEFAULT NULL,
+  evaluacion VARCHAR(50) DEFAULT NULL,
+  posevaluacion VARCHAR(50) DEFAULT NULL,
+  registrado_por_instructor_id INT UNSIGNED NULL,
+  creado TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_control_curso_modulos (asignacion_id, curso_modulo_id),
+  KEY idx_control_curso_modulos_modulo (curso_modulo_id),
+  KEY idx_control_curso_modulos_instructor (registrado_por_instructor_id),
+  CONSTRAINT fk_control_curso_modulos_asignacion
+    FOREIGN KEY (asignacion_id) REFERENCES asignaciones (id) ON DELETE CASCADE,
+  CONSTRAINT fk_control_curso_modulos_modulo
+    FOREIGN KEY (curso_modulo_id) REFERENCES curso_modulos (id) ON DELETE CASCADE,
+  CONSTRAINT fk_control_curso_modulos_instructor
+    FOREIGN KEY (registrado_por_instructor_id) REFERENCES instructores (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS curso_modulo_temas (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   curso_modulo_id INT UNSIGNED NOT NULL,
