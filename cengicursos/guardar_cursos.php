@@ -7,6 +7,7 @@ cengi_require_admin('ver_cursos.php');
 
 $db = conectar();
 $datos = cengi_curso_form_datos();
+$datos['ingenio_id'] = cengi_curso_ingenio_por_defecto($db);
 if (!cengi_curso_form_valido($datos)) {
     header('Location: ver_cursos.php?error=datos');
     exit;
@@ -43,7 +44,7 @@ try {
     }
 
     cengi_curso_guardar_modulos($db, $cursoId, $datos['modulos'], false);
-    cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $datos['instructor_id']);
+    cengi_curso_asegurar_enlaces_evaluacion($db, $cursoId, $datos['instructor_id'], $datos['modulos']);
     $db->commit();
     header('Location: ver_cursos.php?mensaje=creado');
 } catch (Throwable $e) {

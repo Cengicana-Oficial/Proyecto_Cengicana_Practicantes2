@@ -30,12 +30,42 @@ function cengi_curso_form_datos()
             $modulosValidos = false;
             continue;
         }
+        // Instructor(es) del modulo (opcional): un modulo puede tener cero, uno o
+        // varios instructores propios. Se normalizan tres entradas del formulario a una
+        // sola representacion interna, 'instructores' (array de ids, sin duplicados):
+        //   - modulos[key][mismo_principal]: checkbox "mismo instructor que el
+        //     principal"; si viene marcado se ignora cualquier seleccion y el modulo
+        //     queda con 'instructores' vacio (hereda implicitamente al instructor
+        //     principal del curso al momento de mostrarlo/usarlo; ese fallback se
+        //     resuelve donde se consume el dato, no se duplica en la BD).
+        //   - modulos[key][multi_instructor]: checkbox "tendra mas de un instructor";
+        //     si viene marcado se usa el arreglo modulos[key][instructores][], si no se
+        //     usa el select unico modulos[key][instructor_id].
+        $mismoPrincipal = !empty($modulo['mismo_principal']);
+        $multiInstructor = !empty($modulo['multi_instructor']);
+        $instructoresModulo = [];
+        if (!$mismoPrincipal) {
+            if ($multiInstructor) {
+                foreach ((array) ($modulo['instructores'] ?? []) as $instructorTexto) {
+                    $instructorTexto = trim((string) $instructorTexto);
+                    if ($instructorTexto !== '' && ctype_digit($instructorTexto) && (int) $instructorTexto > 0) {
+                        $instructoresModulo[(int) $instructorTexto] = true;
+                    }
+                }
+            } else {
+                $instructorModuloTexto = trim((string) ($modulo['instructor_id'] ?? ''));
+                if ($instructorModuloTexto !== '' && ctype_digit($instructorModuloTexto) && (int) $instructorModuloTexto > 0) {
+                    $instructoresModulo[(int) $instructorModuloTexto] = true;
+                }
+            }
+        }
         $modulos[] = [
             'id' => (int) ($modulo['id'] ?? 0),
             'nombre' => $nombre,
             'horas' => $horas,
             'pre' => !empty($modulo['pre']) ? 1 : 0,
             'post' => !empty($modulo['post']) ? 1 : 0,
+            'instructores' => array_values(array_map('intval', array_keys($instructoresModulo))),
         ];
     }
 
@@ -57,6 +87,22 @@ function cengi_curso_form_datos()
         'modulos' => $modulos,
         'modulos_validos' => $modulosValidos,
     ];
+}
+
+/**
+ * El formulario de creacion/edicion de curso ya no pide "Ingenio / institucion" (los
+ * cursos no son exclusivos de un ingenio: participantes de cualquier institucion se
+ * pueden inscribir). La columna cursos.ingenio_id sigue existiendo y sigue siendo
+ * NOT NULL, asi que se completa automaticamente con Cengicana (la institucion que
+ * organiza los cursos) en vez de pedirselo a quien crea el curso.
+ */
+function cengi_curso_ingenio_por_defecto(PDO $db)
+{
+    $id = $db->query("SELECT id FROM ingenios WHERE nombre_ingenios = 'Cengicana' LIMIT 1")->fetchColumn();
+    if ($id) {
+        return (int) $id;
+    }
+    return (int) $db->query('SELECT MIN(id) FROM ingenios')->fetchColumn();
 }
 
 function cengi_curso_form_valido(array $datos)
@@ -90,15 +136,29 @@ function cengi_curso_guardar_modulos(PDO $db, $cursoId, array $modulos, $actuali
     $orden = 1;
     $stmtInsertar = $db->prepare('INSERT INTO curso_modulos (curso_id, nombre, horas, orden, acepta_pre, acepta_post) VALUES (?, ?, ?, ?, ?, ?)');
     $stmtActualizar = $db->prepare('UPDATE curso_modulos SET nombre = ?, horas = ?, orden = ?, acepta_pre = ?, acepta_post = ? WHERE id = ? AND curso_id = ?');
+    $stmtBorrarInstructoresModulo = $db->prepare('DELETE FROM curso_modulo_instructores WHERE curso_modulo_id = ?');
+    $stmtInsertarInstructorModulo = $db->prepare('INSERT INTO curso_modulo_instructores (curso_modulo_id, instructor_id) VALUES (?, ?)');
     foreach ($modulos as $modulo) {
         $moduloId = (int) $modulo['id'];
         if ($actualizar && $moduloId > 0 && isset($existentes[$moduloId])) {
             $stmtActualizar->execute([$modulo['nombre'], $modulo['horas'], $orden, $modulo['pre'], $modulo['post'], $moduloId, $cursoId]);
-            $conservados[] = $moduloId;
         } else {
             $stmtInsertar->execute([$cursoId, $modulo['nombre'], $modulo['horas'], $orden, $modulo['pre'], $modulo['post']]);
-            $conservados[] = (int) $db->lastInsertId();
+            $moduloId = (int) $db->lastInsertId();
         }
+        $conservados[] = $moduloId;
+
+        // Sincroniza los instructores de este modulo: borra y vuelve a insertar el set
+        // actual (mismo patron "borrar y reinsertar" que se usa abajo para sincronizar
+        // los modulos completos del curso).
+        $stmtBorrarInstructoresModulo->execute([$moduloId]);
+        $instructoresModulo = array_unique(array_map('intval', $modulo['instructores'] ?? []));
+        foreach ($instructoresModulo as $instructorModuloId) {
+            if ($instructorModuloId > 0) {
+                $stmtInsertarInstructorModulo->execute([$moduloId, $instructorModuloId]);
+            }
+        }
+
         $orden++;
     }
 
@@ -142,5 +202,33 @@ function cengi_asegurar_enlace_evaluacion_instructor(PDO $db, $cursoId, $instruc
         // Carrera entre dos peticiones concurrentes contra la misma llave unica
         // (curso_id, instructor_id): la fila ya existe, no es un error real.
         error_log('No fue posible crear el enlace de evaluacion (probable duplicado): ' . $e->getMessage());
+    }
+}
+
+/**
+ * Asegura los enlaces publicos de evaluacion tanto para el instructor principal del
+ * curso como para cualquier instructor distinto asignado a nivel de modulo
+ * (co-ensenanza): cualquier instructor que de al menos un modulo debe tener su propio
+ * enlace de evaluacion, no solo el instructor principal. Centraliza la logica que antes
+ * se repetia en guardar_cursos.php y actualizar_cursos.php.
+ *
+ * @param array $modulos Igual formato que devuelve cengi_curso_form_datos()['modulos'].
+ */
+function cengi_curso_asegurar_enlaces_evaluacion(PDO $db, $cursoId, $instructorPrincipalId, array $modulos)
+{
+    cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $instructorPrincipalId);
+
+    $instructoresModulos = [];
+    foreach ($modulos as $modulo) {
+        foreach ((array) ($modulo['instructores'] ?? []) as $instructorModuloId) {
+            $instructorModuloId = (int) $instructorModuloId;
+            if ($instructorModuloId > 0) {
+                $instructoresModulos[$instructorModuloId] = true;
+            }
+        }
+    }
+
+    foreach (array_keys($instructoresModulos) as $instructorModuloId) {
+        cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $instructorModuloId);
     }
 }
