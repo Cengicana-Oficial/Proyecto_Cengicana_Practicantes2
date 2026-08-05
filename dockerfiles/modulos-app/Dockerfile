@@ -22,6 +22,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY dockerfiles/modulos-app/no-php-uploads.conf /etc/apache2/conf-available/no-php-uploads.conf
 RUN a2enconf no-php-uploads
 
+COPY dockerfiles/modulos-app/error-pages.conf /etc/apache2/conf-available/error-pages.conf
+RUN a2enconf error-pages
+
 WORKDIR /var/www/html
 COPY . /var/www/html
 
