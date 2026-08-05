@@ -4093,6 +4093,16 @@ body.cengi-nav-loading {
     line-height: 1.15;
 }
 
+/* .panel.panel-success y .cengi-directory-filter-card usan overflow:hidden
+   para redondear esquinas, pero eso recorta cualquier .dropdown-menu que se
+   abra dentro (ej. "Descargar listado" en Mi ingenio). Se agrega esta clase
+   a los contenedores puntuales que tienen un dropdown, en vez de tocar la
+   regla compartida por el resto de la app. */
+.cengi-canvas .panel.panel-success.cengi-dropdown-overflow-fix,
+.cengi-directory-filter-card.cengi-dropdown-overflow-fix {
+    overflow: visible;
+}
+
 .cengi-directory-filter-card,
 .cengi-directory-table-card {
     overflow: hidden;
