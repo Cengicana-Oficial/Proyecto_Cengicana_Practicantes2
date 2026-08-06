@@ -4,6 +4,7 @@ require_once 'menu.php';
 
 cengi_require_ver_participantes();
 $db = conectar();
+$puedeEliminar = cengi_puede_eliminar_participantes();
 
 function cengi_dir_html($valor)
 {
@@ -127,7 +128,8 @@ $sql = "SELECT p.id, p.nombre_participantes, p.cui_participantes,
         COUNT(DISTINCT CASE WHEN c.fin IS NULL OR c.fin >= CURDATE() THEN a.id END) AS cursos_activos,
         COUNT(DISTINCT a.id) AS total_cursos,
         AVG(CASE WHEN cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN CAST(cc.posevaluacion AS DECIMAL(6,2)) END) AS evaluacion_promedio,
-        COUNT(DISTINCT d.id) AS diplomas, MAX(c.inicio) AS ultima_capacitacion
+        COUNT(DISTINCT CASE WHEN COALESCE(NULLIF(d.pdf_path, ''), NULLIF(cc.diploma, '')) IS NOT NULL THEN a.id END) AS diplomas,
+        MAX(c.inicio) AS ultima_capacitacion
     FROM participantes p
     INNER JOIN ingenios i ON i.id = p.ingenio_id
     LEFT JOIN asignaciones a ON a.participantes_id = p.id AND a.estado_asignaciones = 1
@@ -188,8 +190,10 @@ $stmtKpi = $db->prepare("SELECT COUNT(DISTINCT p.id) AS personas,
         COALESCE(AVG(COALESCE(t.total_cursos, 0)), 0) AS promedio_cursos
     FROM participantes p
     LEFT JOIN (
-        SELECT a.participantes_id, COUNT(DISTINCT a.id) AS total_cursos, COUNT(DISTINCT d.id) AS diplomas
+        SELECT a.participantes_id, COUNT(DISTINCT a.id) AS total_cursos,
+            COUNT(DISTINCT CASE WHEN COALESCE(NULLIF(d.pdf_path, ''), NULLIF(cc.diploma, '')) IS NOT NULL THEN a.id END) AS diplomas
         FROM asignaciones a
+        LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
         LEFT JOIN diplomas d ON d.tipo = 'curso' AND d.asignacion_id = a.id
         WHERE a.estado_asignaciones = 1 GROUP BY a.participantes_id
     ) t ON t.participantes_id = p.id {$whereKpi}");
@@ -199,6 +203,11 @@ $ingenios = $db->query('SELECT id, nombre_ingenios FROM ingenios ORDER BY nombre
 $exportarUrl = 'directorio_participantes.php?' . http_build_query([
     'q' => $busqueda, 'ingenio_id' => $ingenioFiltro, 'cantidad' => $cantidadFiltro, 'export' => 'csv',
 ]);
+
+// Evita que el navegador sirva una copia cacheada de la tabla (p. ej. al
+// volver con el boton "atras") con conteos desactualizados de cursos/diplomas.
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Pragma: no-cache');
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -257,7 +266,14 @@ $exportarUrl = 'directorio_participantes.php?' . http_build_query([
                         <td><?php echo $participante['evaluacion_promedio'] !== null ? number_format((float) $participante['evaluacion_promedio'], 1) . ' pts' : '—'; ?></td>
                         <td><?php echo (int) $participante['diplomas']; ?></td>
                         <td><?php echo cengi_dir_html(cengi_dir_fecha($participante['ultima_capacitacion'])); ?></td>
-                        <td><button type="button" class="cengi-directory-profile-button" data-toggle="modal" data-target="#directory-profile-modal" data-participant-id="<?php echo (int) $participante['id']; ?>">Ver ficha</button></td>
+                        <td>
+                            <div class="cengi-directory-row-actions">
+                                <button type="button" class="cengi-directory-profile-button" data-toggle="modal" data-target="#directory-profile-modal" data-participant-id="<?php echo (int) $participante['id']; ?>">Ver ficha</button>
+                                <?php if ($puedeEliminar): ?>
+                                    <a class="cengi-action-btn is-delete" href="#" data-href="eliminar_participante.php?origen=directorio&id=<?php echo (int) $participante['id']; ?>" data-toggle="modal" data-target="#directory-confirm-delete" data-tooltip="Eliminar" aria-label="Eliminar participante"><span class="glyphicon glyphicon-trash"></span><span class="sr-only">Eliminar</span></a>
+                                <?php endif; ?>
+                            </div>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -293,6 +309,26 @@ $exportarUrl = 'directorio_participantes.php?' . http_build_query([
     </div></div>
 </div>
 
+<?php if ($puedeEliminar): ?>
+<div class="modal fade" id="directory-confirm-delete" tabindex="-1" role="dialog" aria-labelledby="directory-confirm-delete-label" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="model-header">
+                <button class="close" type="button" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h4 class="modal-title" id="directory-confirm-delete-label">Eliminar participante</h4>
+            </div>
+            <div class="modal-body">
+                ¿Desea eliminar este participante?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <a class="btn btn-danger btn-ok">Eliminar</a>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <script>
 (function ($) {
     'use strict';
@@ -305,6 +341,11 @@ $exportarUrl = 'directorio_participantes.php?' . http_build_query([
 
     $('#directory-filters select').on('change', function () {
         document.getElementById('directory-filters').submit();
+    });
+
+    $('#directory-confirm-delete').on('show.bs.modal', function (event) {
+        var trigger = event.relatedTarget;
+        $(this).find('.btn-ok').attr('href', $(trigger).data('href'));
     });
 
     function initials(name) {

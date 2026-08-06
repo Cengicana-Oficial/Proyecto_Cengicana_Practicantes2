@@ -11,7 +11,6 @@ require_once __DIR__ . "/classes/PHPExcel/IOFactory.php";
 cengi_require_carga_participantes("participantes.php");
 
 $db = conectar();
-$ingenioID = (int) ($_POST['ingenio'] ?? 0);
 $userID = cengi_usuario_actual_id();
 $cursoID = (int) ($_POST['curso'] ?? 0);
 
@@ -64,6 +63,7 @@ function cengi_obtener_filas_archivo($archivoTemporal, $extension)
             cengi_valor_excel($hoja->getCellByColumnAndRow(4, $fila)->getCalculatedValue()),
             cengi_valor_excel($hoja->getCellByColumnAndRow(5, $fila)->getCalculatedValue()),
             cengi_valor_excel($hoja->getCellByColumnAndRow(6, $fila)->getCalculatedValue()),
+            cengi_valor_excel($hoja->getCellByColumnAndRow(7, $fila)->getCalculatedValue()),
         ];
     }
 
@@ -74,6 +74,7 @@ function cengi_obtener_filas_archivo($archivoTemporal, $extension)
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
     <meta charset="utf-8">
     <title>Carga de participantes</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -100,11 +101,10 @@ function cengi_obtener_filas_archivo($archivoTemporal, $extension)
 <?php
 try {
     if (
-        $ingenioID <= 0 ||
         $userID <= 0 ||
         $cursoID <= 0
     ) {
-        cengi_carga_error('Debes seleccionar ingenio y curso antes de cargar el archivo.');
+        cengi_carga_error('Debes seleccionar un curso antes de cargar el archivo.');
     }
 
     if (
@@ -195,6 +195,15 @@ try {
         WHERE id = ?
     ");
 
+    $stmtBuscarIngenio = $db->prepare("
+        SELECT id
+        FROM ingenios
+        WHERE TRIM(nombre_ingenios) = TRIM(?)
+        LIMIT 1
+    ");
+
+    $cacheIngenios = [];
+
     $procesados = 0;
     $creados = 0;
     $actualizados = 0;
@@ -208,16 +217,17 @@ try {
             continue;
         }
 
-        $cui = trim((string) ($fila[0] ?? ''));
-        $nombre = trim((string) ($fila[1] ?? ''));
-        $puesto = trim((string) ($fila[2] ?? ''));
-        $area = trim((string) ($fila[3] ?? ''));
-        $correo = trim((string) ($fila[4] ?? ''));
-        $gradoAcademico = trim((string) ($fila[5] ?? ''));
-        $telefono = trim((string) ($fila[6] ?? ''));
+        $ingenioNombre = trim((string) ($fila[0] ?? ''));
+        $cui = trim((string) ($fila[1] ?? ''));
+        $nombre = trim((string) ($fila[2] ?? ''));
+        $puesto = trim((string) ($fila[3] ?? ''));
+        $area = trim((string) ($fila[4] ?? ''));
+        $correo = trim((string) ($fila[5] ?? ''));
+        $gradoAcademico = trim((string) ($fila[6] ?? ''));
+        $telefono = trim((string) ($fila[7] ?? ''));
         $lineaReal = $indice + 1;
 
-        if ($cui === '' && $nombre === '' && $puesto === '' && $area === '' && $correo === '' && $gradoAcademico === '' && $telefono === '') {
+        if ($ingenioNombre === '' && $cui === '' && $nombre === '' && $puesto === '' && $area === '' && $correo === '' && $gradoAcademico === '' && $telefono === '') {
             continue;
         }
 
@@ -228,6 +238,26 @@ try {
 
         if ($correo !== '' && !filter_var($correo, FILTER_VALIDATE_EMAIL)) {
             $advertencias[] = "Linea {$lineaReal}: se omitio porque el correo electronico no es valido.";
+            continue;
+        }
+
+        if ($ingenioNombre === '') {
+            $advertencias[] = "Linea {$lineaReal}: se omitio porque falta el ingenio.";
+            continue;
+        }
+
+        $claveIngenio = mb_strtolower($ingenioNombre);
+        if (array_key_exists($claveIngenio, $cacheIngenios)) {
+            $ingenioID = $cacheIngenios[$claveIngenio];
+        } else {
+            $stmtBuscarIngenio->execute([$ingenioNombre]);
+            $ingenioID = $stmtBuscarIngenio->fetchColumn();
+            $ingenioID = $ingenioID !== false ? (int) $ingenioID : 0;
+            $cacheIngenios[$claveIngenio] = $ingenioID;
+        }
+
+        if ($ingenioID <= 0) {
+            $advertencias[] = "Linea {$lineaReal}: se omitio porque el ingenio \"{$ingenioNombre}\" no coincide con ningun ingenio registrado.";
             continue;
         }
 

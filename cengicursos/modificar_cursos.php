@@ -48,6 +48,7 @@ if (!$row) {
 <html lang="es">
 
 <head>
+	<link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
 
 	<meta name="viewport" content="width=device-widht, initial-scale=1">
 

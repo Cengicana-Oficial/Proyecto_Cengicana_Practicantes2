@@ -9,6 +9,19 @@ $puedeGestionar = cengi_puede_gestionar_instructores();
 $mensaje = '';
 $mensajeTipo = 'success';
 
+$mensajesCarga = [
+    'evaluaciones' => 'La carga masiva de evaluaciones de instructor finalizó correctamente.',
+];
+$mensajeCarga = trim((string) ($_GET['mensaje'] ?? ''));
+$errorCarga = trim((string) ($_GET['error'] ?? ''));
+if ($mensajeCarga !== '' && isset($mensajesCarga[$mensajeCarga])) {
+    $mensaje = $mensajesCarga[$mensajeCarga];
+    $mensajeTipo = 'success';
+} elseif ($errorCarga !== '') {
+    $mensaje = 'No fue posible completar la carga de evaluaciones. Verifica el archivo e inténtalo nuevamente.';
+    $mensajeTipo = 'error';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar) {
     $accion = trim((string) ($_POST['accion'] ?? ''));
     $nombre = trim((string) ($_POST['nombre'] ?? ''));
@@ -82,6 +95,85 @@ $stmt = $db->prepare("
 ");
 $stmt->execute();
 $instructores = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$statsEncuestaPorInstructor = [];
+$statsEncuestaStmt = $db->query("
+    SELECT
+        eei.instructor_id,
+        COUNT(*) AS total,
+        AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
+        AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
+        AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
+        AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
+        AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
+        AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor,
+        AVG(ei.tema_relevancia_utilidad) AS avg_tema_relevancia_utilidad,
+        AVG(ei.logistica_evento) AS avg_logistica_evento,
+        AVG(ei.recomendaria_contexto) AS avg_recomendaria_contexto
+    FROM evaluaciones_instructor ei
+    INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
+    GROUP BY eei.instructor_id
+");
+foreach ($statsEncuestaStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+    $statsEncuestaPorInstructor[(int) $fila['instructor_id']] = $fila;
+}
+
+$comentariosEncuestaPorInstructor = [];
+$comentariosEncuestaStmt = $db->query("
+    SELECT instructor_id, areas_mejora, capacitaciones_necesarias, creado
+    FROM (
+        SELECT
+            eei.instructor_id AS instructor_id,
+            ei.areas_mejora AS areas_mejora,
+            ei.capacitaciones_necesarias AS capacitaciones_necesarias,
+            ei.creado AS creado,
+            ROW_NUMBER() OVER (PARTITION BY eei.instructor_id ORDER BY ei.creado DESC, ei.id DESC) AS rn
+        FROM evaluaciones_instructor ei
+        INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
+        WHERE
+            (ei.areas_mejora IS NOT NULL AND TRIM(ei.areas_mejora) <> '')
+            OR (ei.capacitaciones_necesarias IS NOT NULL AND TRIM(ei.capacitaciones_necesarias) <> '')
+    ) comentarios_recientes
+    WHERE rn <= 5
+    ORDER BY instructor_id, creado DESC
+");
+foreach ($comentariosEncuestaStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+    $idInstructor = (int) $fila['instructor_id'];
+    if (!isset($comentariosEncuestaPorInstructor[$idInstructor])) {
+        $comentariosEncuestaPorInstructor[$idInstructor] = [];
+    }
+    $comentariosEncuestaPorInstructor[$idInstructor][] = [
+        'areas_mejora' => $fila['areas_mejora'],
+        'capacitaciones_necesarias' => $fila['capacitaciones_necesarias'],
+        'creado' => $fila['creado'],
+    ];
+}
+
+foreach ($instructores as &$instructorFila) {
+    $idInstructor = (int) $instructorFila['id'];
+    $stats = $statsEncuestaPorInstructor[$idInstructor] ?? null;
+    $promedio = static function ($valor) {
+        return $valor !== null ? (float) $valor : null;
+    };
+    $instructorFila['encuesta_satisfaccion'] = [
+        'total' => $stats ? (int) $stats['total'] : 0,
+        'instructor' => [
+            'lenguaje_claro' => $stats ? $promedio($stats['avg_lenguaje_claro']) : null,
+            'material_adecuado' => $stats ? $promedio($stats['avg_material_adecuado']) : null,
+            'conocimiento_tema' => $stats ? $promedio($stats['avg_conocimiento_tema']) : null,
+            'respeto_participantes' => $stats ? $promedio($stats['avg_respeto_participantes']) : null,
+            'puntualidad_objetivos' => $stats ? $promedio($stats['avg_puntualidad_objetivos']) : null,
+        ],
+        'recomendaria_instructor' => $stats ? $promedio($stats['avg_recomendaria_instructor']) : null,
+        'tema' => [
+            'relevancia_utilidad' => $stats ? $promedio($stats['avg_tema_relevancia_utilidad']) : null,
+            'logistica_evento' => $stats ? $promedio($stats['avg_logistica_evento']) : null,
+        ],
+        'recomendaria_contexto' => $stats ? $promedio($stats['avg_recomendaria_contexto']) : null,
+        'comentarios' => $comentariosEncuestaPorInstructor[$idInstructor] ?? [],
+    ];
+}
+unset($instructorFila);
 
 $ediciones = $db->query("
     SELECT
@@ -496,6 +588,7 @@ function cengi_inst_html($valor)
 .cengi-inst-modal .inst-dropzone svg { width: 20px; height: 20px; margin-bottom: 5px; }
 .cengi-inst-modal .inst-notice { display: flex; gap: 8px; margin-bottom: 16px; padding: 11px 14px; border: 1px solid #F4E5AC; border-radius: 9px; background: #FFF6DA; color: #7A5D00; font-size: 11.5px; line-height: 1.5; }
 .cengi-inst-modal .inst-notice svg { width: 15px; height: 15px; flex: 0 0 auto; margin-top: 1px; }
+.cengi-inst-modal .inst-notice.is-error { border-color: #F3B8B8; background: #FDEDED; color: #A32626; }
 .cengi-inst-modal .inst-profile-head { display: flex; align-items: center; gap: 14px; padding: 20px 22px; border-bottom: 1px solid var(--inst-line); }
 .cengi-inst-modal .inst-profile-avatar { width: 52px; height: 52px; flex: 0 0 52px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--inst-green); color: #fff; font: 700 17px 'Space Grotesk', sans-serif; }
 .cengi-inst-modal .inst-profile-copy { flex: 1; min-width: 0; }
@@ -511,10 +604,28 @@ function cengi_inst_html($valor)
 .cengi-inst-modal .inst-eval-box { padding: 14px; border: 1px solid var(--inst-line); border-radius: 9px; }
 .cengi-inst-modal .inst-progress { width: 100%; height: 7px; margin-top: 8px; overflow: hidden; border-radius: 100px; background: #EDEFEA; }
 .cengi-inst-modal .inst-progress span { display: block; height: 100%; border-radius: inherit; background: #FFCC00; }
+.cengi-inst-modal .inst-satisfaction-block { margin-bottom: 24px; }
+.cengi-inst-modal .inst-block-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.cengi-inst-modal .inst-block-title h4 { margin: 0; font: 700 13.5px 'Space Grotesk', sans-serif; color: var(--inst-ink); }
+.cengi-inst-modal .inst-block-hint { margin-top: 2px; color: var(--inst-muted); font-size: 11px; }
+.cengi-inst-modal .inst-chart-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-bottom: 14px; }
+.cengi-inst-modal .inst-chart-card { padding: 14px; border: 1px solid var(--inst-line); border-radius: 9px; background: #FAFBF7; }
+.cengi-inst-modal .inst-chart-card-title { margin-bottom: 10px; color: var(--inst-muted); font-size: 11.5px; font-weight: 600; }
+.cengi-inst-modal .inst-chart-wrap { position: relative; height: 168px; }
+.cengi-inst-modal .inst-score-card .inst-chart-wrap { height: 130px; }
+.cengi-inst-modal .inst-score-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.cengi-inst-modal .inst-score-overlay b { font: 700 24px 'Space Grotesk', sans-serif; color: var(--inst-green-dark); }
+.cengi-inst-modal .inst-score-overlay span { color: var(--inst-muted); font-size: 10.5px; font-weight: 600; }
+.cengi-inst-modal .inst-comments-list { display: flex; flex-direction: column; gap: 8px; }
+.cengi-inst-modal .inst-comment-item { padding: 10px 12px; border: 1px solid var(--inst-line); border-radius: 8px; background: #fff; font-size: 12px; line-height: 1.5; }
+.cengi-inst-modal .inst-comment-item strong { display: block; margin-bottom: 3px; color: var(--inst-green-dark); font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.cengi-inst-modal .inst-comment-item time { display: block; margin-top: 5px; color: var(--inst-muted); font-size: 10.5px; }
+.cengi-inst-modal .inst-satisfaction-divider { margin: 4px 0 20px; border: 0; border-top: 1px dashed var(--inst-line); }
+.cengi-inst-modal .inst-academic-block h4 { margin: 0 0 12px; font: 700 13.5px 'Space Grotesk', sans-serif; color: var(--inst-ink); }
 body.inst-modal-open { overflow: hidden; }
 @media (max-width: 620px) {
     .cengi-inst-modal { padding: 10px; }
-    .cengi-inst-modal .inst-form-grid, .cengi-inst-modal .inst-eval-summary { grid-template-columns: 1fr; }
+    .cengi-inst-modal .inst-form-grid, .cengi-inst-modal .inst-eval-summary, .cengi-inst-modal .inst-chart-grid { grid-template-columns: 1fr; }
     .cengi-inst-modal .inst-profile-stats { flex-wrap: wrap; }
 }
 </style>
@@ -575,33 +686,39 @@ body.inst-modal-open { overflow: hidden; }
             <button class="inst-icon-btn" type="button" data-inst-close aria-label="Cerrar">✕</button>
         </div>
         <div class="inst-modal-body">
-            <div class="inst-form-grid" style="margin-bottom:14px;">
-                <div class="inst-field is-full">
-                    <label for="cargaEdicion">Edición del curso / diplomado <span class="inst-optional">indica el año correcto — es clave para datos históricos</span></label>
-                    <select id="cargaEdicion"></select>
+            <form method="POST" action="carga_evaluaciones_instructor.php" enctype="multipart/form-data" id="formCargaEvaluaciones">
+                <div class="inst-form-grid" style="margin-bottom:14px;">
+                    <div class="inst-field is-full">
+                        <label for="cargaEdicion">Edición del curso / diplomado <span class="inst-optional">indica el año correcto — es clave para datos históricos</span></label>
+                        <select name="curso_id" id="cargaEdicion"></select>
+                    </div>
                 </div>
-            </div>
-            <div class="inst-notice">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
-                <span>No selecciones un solo instructor: un diplomado puede tener varios módulos con distintos instructores. El CSV debe incluir una columna <b>Instructor</b> para identificar a quién califica cada boleta.</span>
-            </div>
-            <div class="inst-field">
-                <label for="evaluacionesCsv">Sube el archivo CSV con las respuestas</label>
-                <label class="inst-dropzone" for="evaluacionesCsv" style="padding:28px;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
-                    <div style="color:var(--inst-ink);font-size:13px;font-weight:600;" id="evaluacionesCsvNombre">Arrastra tu archivo .csv aquí</div>
-                    <div style="margin-top:3px;">Columnas: <b>Instructor</b>, Ingenio, Cargo, Modalidad, P1..P5, P6_Estrellas, Necesidades y Mejoras</div>
-                </label>
-                <input type="file" id="evaluacionesCsv" accept=".csv,text/csv" hidden>
-            </div>
-            <div style="display:flex;gap:10px;justify-content:center;margin-top:14px;">
-                <button class="inst-btn inst-btn-outline" type="button" id="descargarPlantillaCsv">Descargar plantilla CSV</button>
-                <button class="inst-btn inst-btn-primary" type="button" id="seleccionarEvaluacionesCsv">Seleccionar archivo</button>
-            </div>
-            <div class="inst-notice" id="cargaEvaluacionesAviso" style="display:none;margin:18px 0 0;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
-                <span>El archivo quedó seleccionado. El procesamiento masivo de evaluaciones aún no está habilitado en esta versión.</span>
-            </div>
+                <div class="inst-notice">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+                    <span>No selecciones un solo instructor: un diplomado puede tener varios módulos con distintos instructores. El Excel debe incluir una columna <b>Instructor</b> para identificar a quién califica cada boleta.</span>
+                </div>
+                <div class="inst-field">
+                    <label for="evaluacionesCsv">Sube el archivo Excel (.xlsx) con las respuestas</label>
+                    <label class="inst-dropzone" for="evaluacionesCsv" style="padding:28px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+                        <div style="color:var(--inst-ink);font-size:13px;font-weight:600;" id="evaluacionesCsvNombre">Arrastra tu archivo .xlsx aquí</div>
+                        <div style="margin-top:3px;">Columnas: <b>Instructor</b>, Ingenio, Cargo, Sección, las 5 preguntas sobre el instructor (1-4), Recomendaría al instructor (1-10), Relevancia del tema y Logística del evento (1-4), Recomendaría el lugar/plataforma (1-10), Capacitaciones necesarias y Áreas de mejora; además, si la edición es Virtual: manejo de la plataforma (1-4); si es Presencial: calidad de las instalaciones (1-4).</div>
+                    </label>
+                    <input type="file" name="archivo" id="evaluacionesCsv" accept=".xlsx" hidden required>
+                </div>
+                <div style="display:flex;gap:10px;justify-content:center;margin-top:14px;">
+                    <button class="inst-btn inst-btn-outline" type="button" id="descargarPlantillaCsv">Descargar plantilla Excel</button>
+                    <button class="inst-btn inst-btn-primary" type="button" id="seleccionarEvaluacionesCsv">Seleccionar archivo</button>
+                </div>
+                <div class="inst-notice" id="cargaEvaluacionesAviso" style="display:none;margin:18px 0 0;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+                    <span id="cargaEvaluacionesAvisoTexto">El archivo quedó seleccionado.</span>
+                </div>
+                <div class="inst-modal-footer">
+                    <button class="inst-btn inst-btn-outline" type="button" data-inst-close>Cancelar</button>
+                    <button class="inst-btn inst-btn-primary" type="submit">Procesar carga</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -636,13 +753,22 @@ body.inst-modal-open { overflow: hidden; }
     </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script>
 (function () {
     'use strict';
 
+    if (window.Chart) {
+        Chart.defaults.font.family = "'Inter',sans-serif";
+        Chart.defaults.font.size = 11;
+        Chart.defaults.color = '#55705f';
+    }
+
     var instructores = <?php echo json_encode($instructores, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var ediciones = <?php echo json_encode($ediciones, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var puedeGestionar = <?php echo $puedeGestionar ? 'true' : 'false'; ?>;
+    var instDetailCharts = {};
     var instView = 'grid';
     var activeTab = 'directorio';
 
@@ -913,14 +1039,122 @@ body.inst-modal-open { overflow: hidden; }
                         '<td>' + evaluationLinkButton(course.evaluacion_token) + '</td></tr>';
                 }).join('') + '</tbody></table></div>';
         }
-        var rawEvaluation = Number(instructor.evaluacion_promedio);
-        var percentage = Number.isFinite(rawEvaluation) ? Math.max(0, Math.min(100, rawEvaluation <= 5 ? rawEvaluation * 20 : rawEvaluation)) : 0;
-        document.getElementById('instDetEvaluaciones').innerHTML = '<div class="inst-eval-summary"><div class="inst-eval-box"><div class="inst-stat-label">Evaluación promedio registrada</div>' +
-            '<div class="inst-stat-value is-green" style="font-size:26px;margin-top:6px;">' + evaluationValue(instructor.evaluacion_promedio) + '</div><div class="inst-progress"><span style="width:' + percentage + '%"></span></div></div>' +
-            '<div class="inst-eval-box"><div class="inst-stat-label">Cursos con datos de evaluación</div><div class="inst-stat-value" style="font-size:26px;margin-top:6px;">' +
-            courses.filter(function (course) { return course.evaluacion_promedio !== null; }).length + '</div><div class="inst-stat-label" style="margin-top:10px;">Calculado con las evaluaciones finales disponibles.</div></div></div>';
+        renderSatisfactionTab(instructor, courses);
         switchDetailTab(targetTab === 'evaluaciones' ? 'evaluaciones' : 'cursos');
         openModal('modalInstructorDetalle');
+    }
+    function destroyDetailChart(key) {
+        if (instDetailCharts[key]) {
+            instDetailCharts[key].destroy();
+            instDetailCharts[key] = null;
+        }
+    }
+    function buildLikertBarChart(canvasId, key, labels, values, maxScale) {
+        destroyDetailChart(key);
+        var canvas = document.getElementById(canvasId);
+        if (!canvas || typeof Chart === 'undefined') return;
+        instDetailCharts[key] = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{ label: 'Promedio', data: values, backgroundColor: '#73BC25', borderRadius: 5, maxBarThickness: 26 }]
+            },
+            options: {
+                indexAxis: 'y',
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (ctx) { return 'Promedio: ' + (ctx.raw === null ? 'Sin datos' : Number(ctx.raw).toFixed(2)); } } } },
+                scales: { x: { min: 0, max: maxScale, ticks: { stepSize: maxScale === 4 ? 1 : 2 } } },
+                maintainAspectRatio: false,
+                animation: { duration: 350 }
+            }
+        });
+    }
+    function buildScoreDoughnutChart(canvasId, key, value, maxScale) {
+        destroyDetailChart(key);
+        var canvas = document.getElementById(canvasId);
+        if (!canvas || typeof Chart === 'undefined') return;
+        var ratio = Number.isFinite(value) ? Math.max(0, Math.min(1, value / maxScale)) : 0;
+        instDetailCharts[key] = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: ['Puntaje', 'Restante'],
+                datasets: [{ data: [ratio, 1 - ratio], backgroundColor: ['#73BC25', '#EDEFEA'], borderWidth: 0 }]
+            },
+            options: {
+                cutout: '72%',
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                maintainAspectRatio: false,
+                animation: { duration: 350 }
+            }
+        });
+    }
+    function scoreLabel(value, maxScale) {
+        return Number.isFinite(value) ? value.toFixed(1) + '/' + maxScale : '—/' + maxScale;
+    }
+    function renderComentariosSatisfaccion(comentarios) {
+        if (!comentarios.length) {
+            return '<div class="inst-detail-empty">Todavía no hay comentarios cualitativos registrados.</div>';
+        }
+        return '<div class="inst-comments-list">' + comentarios.map(function (comentario) {
+            var partes = [];
+            if (comentario.areas_mejora) partes.push('<div><strong>Oportunidades de mejora</strong>' + escapeHtml(comentario.areas_mejora) + '</div>');
+            if (comentario.capacitaciones_necesarias) partes.push('<div><strong>Capacitaciones necesarias</strong>' + escapeHtml(comentario.capacitaciones_necesarias) + '</div>');
+            return '<div class="inst-comment-item">' + partes.join('') + '<time>' + escapeHtml(formatDate((comentario.creado || '').slice(0, 10))) + '</time></div>';
+        }).join('') + '</div>';
+    }
+    function renderSatisfactionTab(instructor, courses) {
+        var encuesta = instructor.encuesta_satisfaccion || { total: 0, instructor: {}, tema: {}, comentarios: [] };
+        var panel = document.getElementById('instDetEvaluaciones');
+        var academicoAvg = Number(instructor.evaluacion_promedio);
+        var academicoPct = Number.isFinite(academicoAvg) ? Math.max(0, Math.min(100, academicoAvg <= 5 ? academicoAvg * 20 : academicoAvg)) : 0;
+        var academicoHtml = '<div class="inst-academic-block"><h4>Desempeño académico (post-evaluación de cursos)</h4>' +
+            '<div class="inst-eval-summary"><div class="inst-eval-box"><div class="inst-stat-label">Evaluación promedio registrada</div>' +
+            '<div class="inst-stat-value is-green" style="font-size:26px;margin-top:6px;">' + evaluationValue(instructor.evaluacion_promedio) + '</div><div class="inst-progress"><span style="width:' + academicoPct + '%"></span></div></div>' +
+            '<div class="inst-eval-box"><div class="inst-stat-label">Cursos con datos de evaluación</div><div class="inst-stat-value" style="font-size:26px;margin-top:6px;">' +
+            courses.filter(function (course) { return course.evaluacion_promedio !== null; }).length + '</div><div class="inst-stat-label" style="margin-top:10px;">Nota de examen posterior al curso de los participantes; no mide la satisfacción con el instructor.</div></div></div></div>';
+
+        if (!encuesta.total) {
+            panel.innerHTML = '<div class="inst-satisfaction-block"><div class="inst-block-title"><h4>Satisfacción de los participantes (encuesta al instructor)</h4></div>' +
+                '<div class="inst-detail-empty">Aún no hay evaluaciones de satisfacción registradas para este instructor todavía.</div></div>' +
+                '<hr class="inst-satisfaction-divider">' + academicoHtml;
+            destroyDetailChart('acercaInstructor');
+            destroyDetailChart('recomiendaInstructor');
+            destroyDetailChart('temaLogistica');
+            destroyDetailChart('recomiendaContexto');
+            return;
+        }
+
+        panel.innerHTML =
+            '<div class="inst-satisfaction-block">' +
+            '<div class="inst-block-title"><div><h4>Satisfacción de los participantes (encuesta al instructor)</h4>' +
+            '<div class="inst-block-hint">' + Number(encuesta.total) + ' respuesta(s) recibida(s) · escalas Likert 1 (Deficiente) a 4 (Excelente)</div></div></div>' +
+            '<div class="inst-chart-grid">' +
+            '<div class="inst-chart-card"><div class="inst-chart-card-title">Acerca del instructor</div><div class="inst-chart-wrap"><canvas id="instChartAcercaInstructor"></canvas></div></div>' +
+            '<div class="inst-chart-card inst-score-card"><div class="inst-chart-card-title">¿Recomendaría a este instructor?</div>' +
+            '<div class="inst-chart-wrap"><canvas id="instChartRecomiendaInstructor"></canvas><div class="inst-score-overlay"><b>' + scoreLabel(Number(encuesta.recomendaria_instructor), 10) + '</b><span>escala 1–10</span></div></div></div>' +
+            '<div class="inst-chart-card"><div class="inst-chart-card-title">Tema y logística del curso</div><div class="inst-chart-wrap"><canvas id="instChartTemaLogistica"></canvas></div></div>' +
+            '<div class="inst-chart-card inst-score-card"><div class="inst-chart-card-title">¿Recomendaría el lugar/plataforma?</div>' +
+            '<div class="inst-chart-wrap"><canvas id="instChartRecomiendaContexto"></canvas><div class="inst-score-overlay"><b>' + scoreLabel(Number(encuesta.recomendaria_contexto), 10) + '</b><span>escala 1–10</span></div></div></div>' +
+            '</div>' +
+            '<div class="inst-chart-card-title">Comentarios recientes</div>' +
+            renderComentariosSatisfaccion(encuesta.comentarios || []) +
+            '</div>' +
+            '<hr class="inst-satisfaction-divider">' + academicoHtml;
+
+        var instAspectos = encuesta.instructor || {};
+        buildLikertBarChart('instChartAcercaInstructor', 'acercaInstructor',
+            ['Lenguaje claro', 'Material adecuado', 'Conocimiento del tema', 'Respeto a participantes', 'Puntualidad y objetivos'],
+            [instAspectos.lenguaje_claro, instAspectos.material_adecuado, instAspectos.conocimiento_tema, instAspectos.respeto_participantes, instAspectos.puntualidad_objetivos].map(function (value) {
+                return value === null || value === undefined ? null : Number(value);
+            }), 4);
+        buildScoreDoughnutChart('instChartRecomiendaInstructor', 'recomiendaInstructor', Number(encuesta.recomendaria_instructor), 10);
+
+        var temaAspectos = encuesta.tema || {};
+        buildLikertBarChart('instChartTemaLogistica', 'temaLogistica',
+            ['Relevancia del tema', 'Logística del evento'],
+            [temaAspectos.relevancia_utilidad, temaAspectos.logistica_evento].map(function (value) {
+                return value === null || value === undefined ? null : Number(value);
+            }), 4);
+        buildScoreDoughnutChart('instChartRecomiendaContexto', 'recomiendaContexto', Number(encuesta.recomendaria_contexto), 10);
     }
     function switchDetailTab(tab) {
         document.querySelectorAll('[data-detail-tab]').forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-detail-tab') === tab); });
@@ -996,24 +1230,73 @@ body.inst-modal-open { overflow: hidden; }
     });
     var csvInput = document.getElementById('evaluacionesCsv');
     var csvPicker = document.getElementById('seleccionarEvaluacionesCsv');
+    var cargaAviso = document.getElementById('cargaEvaluacionesAviso');
+    var cargaAvisoTexto = document.getElementById('cargaEvaluacionesAvisoTexto');
+    function mostrarAvisoCarga(texto, esError) {
+        if (!cargaAviso || !cargaAvisoTexto) return;
+        cargaAvisoTexto.textContent = texto;
+        cargaAviso.classList.toggle('is-error', !!esError);
+        cargaAviso.style.display = 'flex';
+    }
     if (csvPicker && csvInput) csvPicker.addEventListener('click', function () { csvInput.click(); });
     if (csvInput) csvInput.addEventListener('change', function () {
         if (csvInput.files && csvInput.files[0]) {
             document.getElementById('evaluacionesCsvNombre').textContent = 'Archivo seleccionado: ' + csvInput.files[0].name;
-            document.getElementById('cargaEvaluacionesAviso').style.display = 'flex';
+            mostrarAvisoCarga('El archivo qued\u00F3 seleccionado.', false);
         }
     });
     var templateButton = document.getElementById('descargarPlantillaCsv');
     if (templateButton) templateButton.addEventListener('click', function () {
-        var header = 'Instructor,Ingenio,Cargo,Modalidad,P1,P2,P3,P4,P5,P6_Estrellas,Necesidades,Mejoras\r\n';
-        var url = URL.createObjectURL(new Blob(['\uFEFF' + header], { type: 'text/csv;charset=utf-8' }));
-        var link = document.createElement('a');
-        link.href = url;
-        link.download = 'plantilla_evaluaciones_instructores.csv';
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
+        if (typeof XLSX === 'undefined') return;
+        var columnas = ['Instructor', 'Ingenio', 'Cargo', 'Seccion', 'InstructorLenguajeClaro', 'InstructorMaterialAdecuado', 'InstructorConocimientoTema', 'InstructorRespetoParticipantes', 'InstructorPuntualidadObjetivos', 'RecomendariaInstructor', 'TemaRelevanciaUtilidad', 'LogisticaEvento', 'RecomendariaContexto', 'CapacitacionesNecesarias', 'AreasMejora', 'InstructorManejoPlataforma', 'CalidadInstalaciones'];
+        var anchoColumnas = [24, 18, 16, 14, 12, 12, 12, 12, 12, 12, 12, 12, 12, 32, 32, 14, 14];
+        var estiloEncabezado = {
+            font: { bold: true, color: { rgb: 'FFFFFFFF' } },
+            fill: { patternType: 'solid', fgColor: { rgb: 'FF3E7A12' } },
+            alignment: { horizontal: 'center', vertical: 'center', wrapText: true }
+        };
+        var worksheet = XLSX.utils.aoa_to_sheet([columnas]);
+        columnas.forEach(function (_, indice) {
+            var direccionCelda = XLSX.utils.encode_cell({ r: 0, c: indice });
+            if (worksheet[direccionCelda]) worksheet[direccionCelda].s = estiloEncabezado;
+        });
+        worksheet['!cols'] = anchoColumnas.map(function (ancho) { return { wch: ancho }; });
+        worksheet['!rows'] = [{ hpt: 24 }];
+        var libro = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(libro, worksheet, 'Evaluaciones');
+        XLSX.writeFile(libro, 'plantilla_evaluaciones_instructores.xlsx');
+    });
+    var cargaForm = document.getElementById('formCargaEvaluaciones');
+    if (cargaForm) cargaForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var archivo = csvInput && csvInput.files ? csvInput.files[0] : null;
+        if (!archivo) {
+            mostrarAvisoCarga('Selecciona un archivo Excel (.xlsx) antes de procesar la carga.', true);
+            return;
+        }
+        var botonEnviar = cargaForm.querySelector('button[type="submit"]');
+        if (botonEnviar) botonEnviar.disabled = true;
+        mostrarAvisoCarga('Procesando el archivo...', false);
+        archivo.arrayBuffer().then(function (buffer) {
+            var libro = XLSX.read(buffer, { type: 'array' });
+            var nombreHoja = libro.SheetNames[0];
+            if (!nombreHoja) throw new Error('el archivo Excel no tiene hojas.');
+            var hoja = libro.Sheets[nombreHoja];
+            var textoCsv = XLSX.utils.sheet_to_csv(hoja);
+            if (!textoCsv || !textoCsv.trim()) throw new Error('la hoja seleccionada est\u00E1 vac\u00EDa.');
+            var archivoCsv = new File([new Blob([textoCsv], { type: 'text/csv' })], 'evaluaciones.csv', { type: 'text/csv' });
+            var datosFormulario = new FormData();
+            var edicionSelect = document.getElementById('cargaEdicion');
+            datosFormulario.append('curso_id', edicionSelect ? edicionSelect.value : '');
+            datosFormulario.append('archivo', archivoCsv);
+            return fetch('carga_evaluaciones_instructor.php', { method: 'POST', body: datosFormulario });
+        }).then(function (respuesta) {
+            if (!respuesta) return;
+            window.location.href = respuesta.url;
+        }).catch(function (error) {
+            mostrarAvisoCarga('No se pudo procesar el archivo Excel: ' + (error && error.message ? error.message : 'formato inv\u00E1lido.') + ' Verifica que sea un .xlsx v\u00E1lido e int\u00E9ntalo de nuevo.', true);
+            if (botonEnviar) botonEnviar.disabled = false;
+        });
     });
     var printButton = document.getElementById('imprimirInformeInstructor');
     if (printButton) printButton.addEventListener('click', function () { window.print(); });

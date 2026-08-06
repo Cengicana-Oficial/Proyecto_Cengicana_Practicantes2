@@ -158,6 +158,7 @@ function cengi_org_tipo_label($tipo)
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Organizaciones</title>

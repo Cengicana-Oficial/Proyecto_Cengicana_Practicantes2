@@ -1,6 +1,7 @@
 <?php
 require_once "revisar_permisos.php";
 require_once "conexion.php";
+require_once "curso_form_helpers.php";
 
 cengi_require_calificador('ver_cursos.php');
 
@@ -28,6 +29,16 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
             $moduloId = 0; // modulo inexistente o de otro curso: se ignora, cae a control_cursos
         }
     }
+
+    // Misma regla de visibilidad de Pre/Pos-Evaluacion que en ver_participante_curso.php
+    // (cengi_curso_pre_post_visibles), para decidir si quien solo califica (sin permiso
+    // de gestion) puede guardar Asistencia: si esta vista no muestra ni pre ni post, no
+    // tiene otro campo editable, asi que se le permite tambien guardar asistencia.
+    $stmtModulosCurso = $db->prepare("SELECT * FROM curso_modulos WHERE curso_id = ? ORDER BY orden");
+    $stmtModulosCurso->execute([$cursoId]);
+    $modulosCurso = $stmtModulosCurso->fetchAll(PDO::FETCH_ASSOC);
+    $prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, $moduloId);
+    $puedeGuardarAsistencia = $puedeGestionar || (!$prePostVisibles['pre'] && !$prePostVisibles['post']);
 
     // El segundo dropdown (instructor que impartio/califico el modulo) solo lo ve y lo
     // puede fijar el super admin; para el resto de roles que califican, este guardado no
@@ -105,7 +116,7 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
                 $stmtVerificarModulo->execute([$asignacionId, $moduloId]);
                 $existeModulo = (bool) $stmtVerificarModulo->fetch(PDO::FETCH_ASSOC);
 
-                if ($existeModulo && $puedeGestionar) {
+                if ($existeModulo && $puedeGuardarAsistencia) {
                     $stmt = $db->prepare("
                         UPDATE control_curso_modulos
                         SET asistencia = ?, evaluacion = ?, posevaluacion = ?
@@ -119,7 +130,7 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
                         WHERE asignacion_id = ? AND curso_modulo_id = ?
                     ");
                     $stmt->execute([$evaluacion, $posevaluacion, $asignacionId, $moduloId]);
-                } elseif ($puedeGestionar) {
+                } elseif ($puedeGuardarAsistencia) {
                     $stmt = $db->prepare("
                         INSERT INTO control_curso_modulos
                             (asignacion_id, curso_modulo_id, asistencia, evaluacion, posevaluacion)
@@ -146,6 +157,13 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
                     ");
                     $stmt->execute([$instructorModuloId, $asignacionId, $moduloId]);
                 }
+
+                // Recalcular el resumen del curso completo (control_cursos) como
+                // promedio de las notas de TODOS los modulos del curso que este
+                // participante ya tiene cargadas en control_curso_modulos. Misma
+                // logica que usa la carga masiva por modulo (extraida a
+                // curso_form_helpers.php para no duplicarla).
+                cengi_recalcular_resumen_curso($db, $asignacionId, $cursoId, $puedeGuardarAsistencia);
 
                 continue;
             }
@@ -175,14 +193,14 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
             $stmtVerificarLote->execute([$asignacionId]);
             $existe = (bool) $stmtVerificarLote->fetch(PDO::FETCH_ASSOC);
 
-            if ($existe && $puedeGestionar && $diploma !== '') {
+            if ($existe && $puedeGuardarAsistencia && $diploma !== '') {
                 $stmt = $db->prepare("
                     UPDATE control_cursos
                     SET asistencia = ?, evaluacion = ?, posevaluacion = ?, diploma = ?
                     WHERE asignacion_id = ?
                 ");
                 $stmt->execute([$asistencia, $evaluacion, $posevaluacion, $diploma, $asignacionId]);
-            } elseif ($existe && $puedeGestionar) {
+            } elseif ($existe && $puedeGuardarAsistencia) {
                 $stmt = $db->prepare("
                     UPDATE control_cursos
                     SET asistencia = ?, evaluacion = ?, posevaluacion = ?
@@ -203,7 +221,7 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
                     WHERE asignacion_id = ?
                 ");
                 $stmt->execute([$evaluacion, $posevaluacion, $asignacionId]);
-            } elseif ($puedeGestionar) {
+            } elseif ($puedeGuardarAsistencia) {
                 $stmt = $db->prepare("
                     INSERT INTO control_cursos
                         (asignacion_id, asistencia, evaluacion, posevaluacion, diploma)

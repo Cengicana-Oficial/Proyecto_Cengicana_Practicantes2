@@ -39,6 +39,7 @@ $resultado = $stmt->get_result();
 
 <html lang="es">
 <head>
+    <link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
