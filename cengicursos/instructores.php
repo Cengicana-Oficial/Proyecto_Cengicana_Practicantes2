@@ -9,6 +9,30 @@ $puedeGestionar = cengi_puede_gestionar_instructores();
 $mensaje = '';
 $mensajeTipo = 'success';
 
+/**
+ * Traduce los codigos de error de subida de PHP (UPLOAD_ERR_*) a un mensaje
+ * legible para el usuario. Antes de este cambio, cualquier error distinto de
+ * UPLOAD_ERR_OK (por ejemplo, un CV que supera upload_max_filesize/post_max_size)
+ * se ignoraba en silencio: el instructor se guardaba sin CV y el usuario nunca
+ * se enteraba de que el archivo no se guardo.
+ */
+function cengi_mensaje_error_subida_cv(int $codigoError): string
+{
+    switch ($codigoError) {
+        case UPLOAD_ERR_INI_SIZE:
+        case UPLOAD_ERR_FORM_SIZE:
+            return 'El archivo supera el tamaño máximo permitido para subir CVs.';
+        case UPLOAD_ERR_PARTIAL:
+            return 'El archivo se subió solo parcialmente. Intenta nuevamente.';
+        case UPLOAD_ERR_NO_TMP_DIR:
+        case UPLOAD_ERR_CANT_WRITE:
+        case UPLOAD_ERR_EXTENSION:
+            return 'El servidor no pudo procesar el archivo. Contacta al administrador.';
+        default:
+            return 'No fue posible subir el archivo del CV.';
+    }
+}
+
 $mensajesCarga = [
     'evaluaciones' => 'La carga masiva de evaluaciones de instructor finalizó correctamente.',
 ];
@@ -18,7 +42,12 @@ if ($mensajeCarga !== '' && isset($mensajesCarga[$mensajeCarga])) {
     $mensaje = $mensajesCarga[$mensajeCarga];
     $mensajeTipo = 'success';
 } elseif ($errorCarga !== '') {
-    $mensaje = 'No fue posible completar la carga de evaluaciones. Verifica el archivo e inténtalo nuevamente.';
+    if (!empty($_SESSION['cengi_error_carga_evaluaciones'])) {
+        $mensaje = (string) $_SESSION['cengi_error_carga_evaluaciones'];
+        unset($_SESSION['cengi_error_carga_evaluaciones']);
+    } else {
+        $mensaje = 'No fue posible completar la carga de evaluaciones. Verifica el archivo e inténtalo nuevamente.';
+    }
     $mensajeTipo = 'error';
 }
 
@@ -30,13 +59,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar) {
     $telefono = trim((string) ($_POST['telefono'] ?? ''));
 
     $cvPath = null;
-    if (isset($_FILES['cv']) && $_FILES['cv']['error'] === UPLOAD_ERR_OK) {
-        $extension = strtolower(pathinfo($_FILES['cv']['name'], PATHINFO_EXTENSION));
-        if (in_array($extension, ['pdf', 'doc', 'docx'], true)) {
-            $nombreArchivo = time() . '_' . preg_replace('/[^a-zA-Z0-9_.-]/', '_', $_FILES['cv']['name']);
-            $ruta = '../uploads/instructores/' . $nombreArchivo;
-            if (move_uploaded_file($_FILES['cv']['tmp_name'], $ruta)) {
-                $cvPath = $ruta;
+    $cvError = null;
+    if (isset($_FILES['cv']) && $_FILES['cv']['error'] !== UPLOAD_ERR_NO_FILE) {
+        if ($_FILES['cv']['error'] !== UPLOAD_ERR_OK) {
+            $cvError = cengi_mensaje_error_subida_cv($_FILES['cv']['error']);
+        } else {
+            $extension = strtolower(pathinfo($_FILES['cv']['name'], PATHINFO_EXTENSION));
+            if (!in_array($extension, ['pdf', 'doc', 'docx'], true)) {
+                $cvError = 'El CV debe ser un archivo PDF, DOC o DOCX.';
+            } else {
+                $nombreArchivo = time() . '_' . preg_replace('/[^a-zA-Z0-9_.-]/', '_', $_FILES['cv']['name']);
+                $ruta = '../uploads/instructores/' . $nombreArchivo;
+                if (move_uploaded_file($_FILES['cv']['tmp_name'], $ruta)) {
+                    $cvPath = $ruta;
+                } else {
+                    $cvError = 'No fue posible guardar el archivo del CV en el servidor.';
+                }
             }
         }
     }
@@ -49,6 +87,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar) {
             ");
             $stmt->execute([$nombre, $especialidad, $correo, $telefono, $cvPath]);
             $mensaje = 'Instructor registrado correctamente.';
+            if ($cvError !== null) {
+                $mensaje .= ' El CV no se guardó: ' . $cvError;
+                $mensajeTipo = 'error';
+            }
         } elseif ($accion === 'actualizar') {
             $id = (int) ($_POST['id'] ?? 0);
             if ($id > 0 && $nombre !== '') {
@@ -64,6 +106,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar) {
                     $stmt->execute([$nombre, $especialidad, $correo, $telefono, $id]);
                 }
                 $mensaje = 'Instructor actualizado correctamente.';
+                if ($cvError !== null) {
+                    $mensaje .= ' El CV no se guardó: ' . $cvError;
+                    $mensajeTipo = 'error';
+                }
             }
         } elseif ($accion === 'toggle_estado') {
             $id = (int) ($_POST['id'] ?? 0);
@@ -149,12 +195,22 @@ foreach ($comentariosEncuestaStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
     ];
 }
 
+// cv_path se guarda como ruta relativa (p. ej. "../uploads/instructores/xxx.pdf")
+// relativa al directorio de este script; is_file() la resuelve igual que
+// move_uploaded_file() la escribió, sin depender de la URL del navegador.
+// Registros con cv_path apuntando a un archivo que ya no existe en disco
+// (por ejemplo, tras un rebuild del contenedor sin volumen persistente para
+// uploads/) deben tratarse como "sin CV" en vez de mostrar un enlace roto.
+$instructorTieneCvDisponible = [];
 foreach ($instructores as &$instructorFila) {
     $idInstructor = (int) $instructorFila['id'];
     $stats = $statsEncuestaPorInstructor[$idInstructor] ?? null;
     $promedio = static function ($valor) {
         return $valor !== null ? (float) $valor : null;
     };
+    $cvDisponible = !empty($instructorFila['cv_path']) && is_file($instructorFila['cv_path']);
+    $instructorFila['cv_disponible'] = $cvDisponible;
+    $instructorTieneCvDisponible[$idInstructor] = $cvDisponible;
     $instructorFila['encuesta_satisfaccion'] = [
         'total' => $stats ? (int) $stats['total'] : 0,
         'instructor' => [
@@ -208,12 +264,14 @@ $ediciones = $db->query("
 
 $anios = [];
 $nombresCursos = [];
-foreach ($ediciones as $fila) {
-    if (!empty($fila['anio'])) {
-        $anios[(string) $fila['anio']] = true;
+foreach ($ediciones as &$edicionFila) {
+    if (!empty($edicionFila['anio'])) {
+        $anios[(string) $edicionFila['anio']] = true;
     }
-    $nombresCursos[(string) $fila['nombre_cursos']] = true;
+    $nombresCursos[(string) $edicionFila['nombre_cursos']] = true;
+    $edicionFila['instructor_cv_disponible'] = $instructorTieneCvDisponible[(int) $edicionFila['instructor_id']] ?? false;
 }
+unset($edicionFila);
 $anios = array_keys($anios);
 rsort($anios, SORT_NUMERIC);
 $nombresCursos = array_keys($nombresCursos);
@@ -852,7 +910,7 @@ body.inst-modal-open { overflow: hidden; }
             '<button class="inst-icon-btn" type="submit" title="' + nextLabel + ' instructor"><span class="glyphicon ' + icon + '"></span></button></form></div>';
     }
     function cvChip(instructor, previewId) {
-        return instructor.cv_path ? '<button class="inst-chip is-cv" type="button" data-cv-preview="' + previewId + '">📄 Ver CV</button>' : '<span class="inst-chip is-missing">⚠ Sin CV</span>';
+        return instructor.cv_disponible ? '<button class="inst-chip is-cv" type="button" data-cv-preview="' + previewId + '">📄 Ver CV</button>' : '<span class="inst-chip is-missing">⚠ Sin CV</span>';
     }
     function evaluationLinkButton(token) {
         if (!token) return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" disabled title="Este curso todavía no tiene enlace de evaluación">Sin enlace</button>';
@@ -875,7 +933,7 @@ body.inst-modal-open { overflow: hidden; }
         }
     }
     function cvPreview(instructor, previewId, isList) {
-        if (!instructor.cv_path) return '';
+        if (!instructor.cv_disponible) return '';
         var path = escapeHtml(instructor.cv_path);
         return '<div class="inst-cv-preview" id="' + previewId + '"' + (isList ? ' style="margin:0;padding-left:60px;"' : '') + '><div class="inst-cv-row"><div class="inst-cv-doc"></div>' +
             '<div style="flex:1;min-width:0;"><div style="margin-bottom:6px;font-size:11.5px;font-weight:600;overflow-wrap:anywhere;">' + escapeHtml(cvName(instructor.cv_path)) + '</div>' +
@@ -959,7 +1017,7 @@ body.inst-modal-open { overflow: hidden; }
                 '<div class="inst-table-scroll"><table class="inst-table"><thead><tr><th>Año</th><th>Instructor</th><th>Especialidad</th><th>Estado</th><th>Evaluación prom.</th><th>Cupo</th><th>CV</th></tr></thead><tbody>' +
                 rows.map(function (course) {
                     var status = courseStatus(course);
-                    var cv = course.instructor_cv ? '<a class="inst-chip is-cv" href="' + escapeHtml(course.instructor_cv) + '" target="_blank" rel="noopener">📄 Ver CV</a>' : '<span class="inst-chip is-missing">⚠ Sin CV</span>';
+                    var cv = course.instructor_cv_disponible ? '<a class="inst-chip is-cv" href="' + escapeHtml(course.instructor_cv) + '" target="_blank" rel="noopener">📄 Ver CV</a>' : '<span class="inst-chip is-missing">⚠ Sin CV</span>';
                     return '<tr><td style="font-family:JetBrains Mono,monospace;font-size:11px;">' + escapeHtml(course.anio || '—') + '</td><td style="font-weight:600;">' + escapeHtml(course.instructor_nombre || 'Sin asignar') + '</td>' +
                         '<td>' + escapeHtml(course.instructor_especialidad || '—') + '</td><td><span class="inst-badge ' + status.className + '">' + status.label + '</span></td>' +
                         '<td>' + evaluationValue(course.evaluacion_promedio) + '</td><td>' + escapeHtml(course.cupo || course.total_inscritos || '—') + '</td><td>' + cv + '</td></tr>';
@@ -1017,6 +1075,7 @@ body.inst-modal-open { overflow: hidden; }
     function openInstructorDetail(id, targetTab) {
         var instructor = instructores.find(function (item) { return Number(item.id) === Number(id); });
         if (!instructor) return;
+        document.getElementById('modalInstructorDetalle').dataset.instructorId = id;
         var courses = instructorEditions(id);
         document.getElementById('instDetAv').textContent = initials(instructor.nombre);
         document.getElementById('instDetName').textContent = instructor.nombre || 'Instructor';
@@ -1024,7 +1083,7 @@ body.inst-modal-open { overflow: hidden; }
         document.getElementById('instDetCursos').textContent = Number(instructor.total_cursos || 0);
         document.getElementById('instDetEval').textContent = evaluationValue(instructor.evaluacion_promedio);
         document.getElementById('instDetEstado').textContent = Number(instructor.estado) === 1 ? 'Activo' : 'Inactivo';
-        document.getElementById('instDetCv').innerHTML = instructor.cv_path ?
+        document.getElementById('instDetCv').innerHTML = instructor.cv_disponible ?
             '<a class="inst-chip is-cv" href="' + escapeHtml(instructor.cv_path) + '" target="_blank" rel="noopener">📄 ' + escapeHtml(cvName(instructor.cv_path)) + '</a>' :
             '<span class="inst-chip is-missing">⚠ Sin CV cargado</span>';
         var history = document.getElementById('instDetHistorial');
@@ -1298,8 +1357,28 @@ body.inst-modal-open { overflow: hidden; }
             if (botonEnviar) botonEnviar.disabled = false;
         });
     });
+    // El informe PDF se genera en el servidor con Dompdf (informe_instructor_pdf.php)
+    // en vez de depender de window.print()/@media print: se abre el endpoint con el
+    // id del instructor actualmente mostrado en la ficha y el navegador descarga el
+    // PDF resultante directamente.
     var printButton = document.getElementById('imprimirInformeInstructor');
-    if (printButton) printButton.addEventListener('click', function () { window.print(); });
+    if (printButton) printButton.addEventListener('click', function () {
+        var modal = document.getElementById('modalInstructorDetalle');
+        var id = modal ? modal.dataset.instructorId : '';
+        if (id) window.open('informe_instructor_pdf.php?id=' + encodeURIComponent(id), '_blank');
+    });
+
+    // Auto-oculta el banner de aviso (.cengi-feedback, exito o error de la carga de
+    // evaluaciones/creacion-edicion de instructor) despues de unos segundos, para que
+    // no quede fijo en pantalla indefinidamente.
+    var feedbackBanner = document.querySelector('.cengi-feedback');
+    if (feedbackBanner) {
+        setTimeout(function () {
+            feedbackBanner.style.transition = 'opacity 0.4s ease';
+            feedbackBanner.style.opacity = '0';
+            setTimeout(function () { feedbackBanner.style.display = 'none'; }, 400);
+        }, 3500);
+    }
 
     populateLoadEditionSelect();
     renderInstructors();

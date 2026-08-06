@@ -7,5 +7,5 @@
 	<script src="js/jquery-3.2.1.min.js"></script>
 	<script src="js/bootstrap.min.js"></script>
 	<!--<script type="text/javascript" src="ajax_requi.js"></script>-->
-	<script type="text/javascript" src="main.js"></script>
+	<script type="text/javascript" src="js/main.js"></script>
 </head>

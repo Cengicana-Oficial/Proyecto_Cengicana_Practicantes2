@@ -266,6 +266,7 @@ try {
         $db->rollBack();
     }
     error_log('Error en carga de evaluaciones de instructor: ' . $e->getMessage());
+    $_SESSION['cengi_error_carga_evaluaciones'] = $e->getMessage();
     header('Location: ' . $destino . '?error=evaluaciones');
 }
 exit;
