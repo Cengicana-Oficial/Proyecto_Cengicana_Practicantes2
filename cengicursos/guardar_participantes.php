@@ -108,6 +108,7 @@ if ($error === 0) {
 
 <html lang="es">
 	<head>
+		<link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
 
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<link href="css/bootstrap.min.css" rel="stylesheet">

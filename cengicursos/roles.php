@@ -240,7 +240,7 @@ function cengi_iniciales_usuario($nombre)
 
     <div class="cengi-ref-notice">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
-        <span>Los roles de <strong>Instructor</strong> y <strong>Participante</strong> no se gestionan en SIGEC: instructores y participantes acceden al contenido, tareas y evaluaciones a través de la plataforma <strong>Moodle</strong>, que se sincroniza con SIGEC mediante la integración señalada abajo.</span>
+        <span>Los roles de <strong>Instructor</strong> y <strong>Participante</strong> no se gestionan en Cengicursos: instructores y participantes acceden al contenido, tareas y evaluaciones a través de la plataforma <strong>Moodle</strong>, que se sincroniza con Cengicursos mediante la integración señalada abajo.</span>
     </div>
 
     <section class="cengi-ref-section cengi-permissions-section">

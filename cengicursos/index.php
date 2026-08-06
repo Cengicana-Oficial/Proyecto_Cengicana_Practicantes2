@@ -105,6 +105,7 @@ $categoriaValores = array_map(static function ($fila) { return (int) $fila[1]; }
 
 <html lang="es">
 <head>
+	<link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<meta charset="utf-8">
 	<link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">

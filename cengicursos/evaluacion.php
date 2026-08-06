@@ -108,16 +108,29 @@ $preguntasInstructor = [
 
 $preguntasLogistica = [
     'tema_relevancia_utilidad' => '¿Qué tan relevante y útil fue el tema del curso para su área de trabajo (considere la utilidad, la actualidad y la secuencia lógica)?',
-    'logistica_evento' => 'Califique la logística del evento (considere el equipo de proyección, las instalaciones y la coordinación)',
 ];
+
+// "Instalaciones" ya se pregunta aparte (solo Presencial, ver $labelCalidadInstalaciones), y no
+// tiene sentido para un curso Virtual: esta pregunta se adapta por modalidad en vez de repetir
+// "instalaciones" para ambas ramas como antes.
+$labelLogisticaEvento = $modalidad === 'Virtual'
+    ? 'Califique la logística del evento (considere la calidad de la conexión, las herramientas utilizadas y la coordinación)'
+    : 'Califique la logística del evento (considere el equipo de proyección y la coordinación)';
 
 $labelContexto = $modalidad === 'Virtual'
     ? '¿Le gustaría recibir otro curso a través de la misma plataforma de videoconferencia? (10 estrellas representa la mayor calificación)'
     : 'Le gustaría recibir otro curso en estas instalaciones (donde 10 estrellas representa la mayor calificación)';
+
+// Preguntas exclusivas de una sola rama (a diferencia de $preguntasInstructor/$preguntasLogistica,
+// no se preguntan en ambas modalidades): manejo de la plataforma virtual por parte del instructor
+// (solo Virtual) y calidad de las instalaciones fisicas (solo Presencial).
+$labelInstructorManejoPlataforma = '¿El instructor manejó adecuadamente la plataforma virtual (conexión, herramientas, cámara, pantalla compartida, etc.)?';
+$labelCalidadInstalaciones = '¿Cómo calificaría las instalaciones donde se impartió la capacitación?';
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Evaluación de instructor | CENGICURSOS</title>
@@ -512,12 +525,19 @@ $labelContexto = $modalidad === 'Virtual'
         <?php foreach ($preguntasInstructor as $campo => $pregunta): ?>
             <?php cengi_eval_likert($campo, $pregunta); ?>
         <?php endforeach; ?>
+        <?php if ($modalidad === 'Virtual'): ?>
+            <?php cengi_eval_likert('instructor_manejo_plataforma', $labelInstructorManejoPlataforma); ?>
+        <?php endif; ?>
         <?php cengi_eval_estrellas('recomendaria_instructor', 10, '¿Le gustaría recibir otro curso con este instructor? (10 estrellas representa la mayor calificación)'); ?>
 
         <div class="cengi-eval-section-title">El tema y la logística del evento (<?php echo cengi_eval_html($modalidad); ?>)</div>
         <?php foreach ($preguntasLogistica as $campo => $pregunta): ?>
             <?php cengi_eval_likert($campo, $pregunta); ?>
         <?php endforeach; ?>
+        <?php cengi_eval_likert('logistica_evento', $labelLogisticaEvento); ?>
+        <?php if ($modalidad === 'Presencial'): ?>
+            <?php cengi_eval_likert('calidad_instalaciones', $labelCalidadInstalaciones); ?>
+        <?php endif; ?>
 
         <div class="cengi-eval-section-title">Percepciones finales (<?php echo cengi_eval_html($modalidad); ?>)</div>
         <?php cengi_eval_estrellas('recomendaria_contexto', 10, $labelContexto); ?>

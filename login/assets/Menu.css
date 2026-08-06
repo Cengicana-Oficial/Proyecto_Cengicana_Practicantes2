@@ -79,10 +79,9 @@ a {
 
 .brand-logo {
     display: block;
-    width: 5%;
-    height: 5%;
-    object-fit: cover;
-    object-position: center;
+    width: 150px;
+    height: auto;
+    object-fit: contain;
 }
 
 .main-nav {

@@ -131,6 +131,15 @@ foreach ($camposLikertInstructor as $campo) {
     $valoresLikertInstructor[$campo] = $valor;
 }
 
+// --- ¿El instructor manejó bien la plataforma virtual? (1..4, solo aplica si Virtual) ---
+$instructorManejoPlataforma = null;
+if ($modalidad === 'Virtual') {
+    $instructorManejoPlataforma = evaluacion_entero_rango($_POST['instructor_manejo_plataforma'] ?? '', 4);
+    if ($instructorManejoPlataforma === null) {
+        evaluacion_error($token, 'Responde si el instructor manejó adecuadamente la plataforma virtual.');
+    }
+}
+
 // --- ¿Recibiría otro curso con este instructor? (1..10) ---
 $recomendariaInstructor = evaluacion_entero_rango($_POST['recomendaria_instructor'] ?? '', 10);
 if ($recomendariaInstructor === null) {
@@ -146,6 +155,15 @@ foreach ($camposLikertLogistica as $campo) {
         evaluacion_error($token, 'Responde las preguntas sobre el tema y la logística del evento.');
     }
     $valoresLikertLogistica[$campo] = $valor;
+}
+
+// --- ¿Cómo calificaría las instalaciones? (1..4, solo aplica si Presencial) ---
+$calidadInstalaciones = null;
+if ($modalidad === 'Presencial') {
+    $calidadInstalaciones = evaluacion_entero_rango($_POST['calidad_instalaciones'] ?? '', 4);
+    if ($calidadInstalaciones === null) {
+        evaluacion_error($token, 'Responde cómo calificaría las instalaciones donde se impartió la capacitación.');
+    }
 }
 
 // --- ¿Recibiría otro curso en el mismo lugar/plataforma? (1..10) ---
@@ -184,14 +202,16 @@ try {
             instructor_conocimiento_tema,
             instructor_respeto_participantes,
             instructor_puntualidad_objetivos,
+            instructor_manejo_plataforma,
             recomendaria_instructor,
             tema_relevancia_utilidad,
             logistica_evento,
+            calidad_instalaciones,
             recomendaria_contexto,
             capacitaciones_necesarias,
             areas_mejora
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
     ');
     $stmtInsertar->execute([
@@ -209,9 +229,11 @@ try {
         $valoresLikertInstructor['instructor_conocimiento_tema'],
         $valoresLikertInstructor['instructor_respeto_participantes'],
         $valoresLikertInstructor['instructor_puntualidad_objetivos'],
+        $instructorManejoPlataforma,
         $recomendariaInstructor,
         $valoresLikertLogistica['tema_relevancia_utilidad'],
         $valoresLikertLogistica['logistica_evento'],
+        $calidadInstalaciones,
         $recomendariaContexto,
         $capacitacionesNecesarias,
         $areasMejora,

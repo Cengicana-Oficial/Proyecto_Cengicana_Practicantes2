@@ -68,7 +68,6 @@ function menu_render()
     $iniciales = $iniciales !== '' ? $iniciales : 'U';
     ?>
 <style>
-    #cengiPrimaryNav a[href='ver_categorias.php'],
     #cengiPrimaryNav a[href='exportaringenios.php'],
     #cengiPrimaryNav a[href='exportarcursos.php'] {
         display: none;
@@ -223,7 +222,7 @@ function menu_render()
             <span class="glyphicon glyphicon-log-out"></span>
             <span>Salir</span>
         </a>
-        <div class="cengi-sidebar-version">SIGEC &middot; Cengicursos &middot; Zafra 2025&ndash;2026</div>
+        <div class="cengi-sidebar-version">Cengicursos &middot; Zafra 2025&ndash;2026</div>
     </div>
 </aside>
 
