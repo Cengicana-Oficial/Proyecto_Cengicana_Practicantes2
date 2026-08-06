@@ -55,6 +55,7 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
 <html class="light" lang="es">
 
 <head>
+    <link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
 
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -479,22 +480,10 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
         </div>
 
         <p class="text-sm text-gray-500 mb-6">
-            Todos los participantes del archivo se inscribirán al mismo ingenio, curso y tipo de pago que selecciones aquí.
+            Todos los participantes del archivo se inscribirán al mismo curso y tipo de pago que selecciones aquí; el ingenio de cada participante se toma del archivo.
         </p>
 
         <form action="carga_inscripcion.php" method="POST" enctype="multipart/form-data" id="formCargaMasiva">
-
-            <div class="mt-2">
-                <label class="label-form">Ingenio</label>
-                <select name="ingenio_id" class="input-form" required>
-                    <option value="">Seleccione</option>
-                    <?php foreach ($ingenios as $ingenio): ?>
-                        <option value="<?php echo (int) $ingenio['id']; ?>">
-                            <?php echo htmlspecialchars($ingenio['nombre_ingenios']); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
 
             <div class="mt-5">
                 <label class="label-form">Curso</label>
@@ -524,7 +513,7 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
                 <label class="label-form">Archivo CSV</label>
 
                 <div class="rounded-xl bg-container p-4 text-sm text-gray-600 mb-3">
-                    <strong>Formato requerido:</strong> CUI, NOMBRE, PUESTO, AREA, CORREO_ELECTRONICO, GRADO_ACADEMICO, TELEFONO
+                    <strong>Formato requerido:</strong> INGENIO, CUI, NOMBRE, PUESTO, AREA, CORREO_ELECTRONICO, GRADO_ACADEMICO, TELEFONO
                     <br>
                     <a href="plantilla_participantes.php" class="text-secondary font-semibold underline">Descargar plantilla (Excel)</a>
                     <br>

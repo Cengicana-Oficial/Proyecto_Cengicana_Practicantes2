@@ -175,6 +175,116 @@ function cengi_curso_guardar_modulos(PDO $db, $cursoId, array $modulos, $actuali
 }
 
 /**
+ * Determina, para una vista de calificacion dada (un modulo puntual o "todo el
+ * curso"), si las columnas Pre-Evaluacion y Pos-Evaluacion deben mostrarse (y
+ * ser editables). Se basa en curso_modulos.acepta_pre / acepta_post:
+ *
+ * - $moduloId > 0: usa unicamente el modulo con ese id.
+ * - $moduloId == 0 ("todo el curso"): si el curso no tiene modulos, ambas
+ *   quedan ocultas (solo asistencia); si tiene, se muestra pre/post si ALGUN
+ *   modulo del curso acepta esa evaluacion.
+ *
+ * @param array $modulos Lista de modulos del curso, cada uno con al menos las
+ *                        llaves 'id', 'acepta_pre', 'acepta_post' (tal como se
+ *                        cargan con "SELECT * FROM curso_modulos WHERE
+ *                        curso_id = ? ORDER BY orden"). Se pasa la misma lista
+ *                        desde ver_participante_curso.php y guardar_control.php
+ *                        para no duplicar esta regla con criterios distintos.
+ * @return array{pre: bool, post: bool}
+ */
+function cengi_curso_pre_post_visibles(array $modulos, $moduloId)
+{
+    $moduloId = (int) $moduloId;
+
+    if ($moduloId > 0) {
+        foreach ($modulos as $modulo) {
+            if ((int) $modulo['id'] === $moduloId) {
+                return [
+                    'pre' => !empty($modulo['acepta_pre']),
+                    'post' => !empty($modulo['acepta_post']),
+                ];
+            }
+        }
+        return ['pre' => false, 'post' => false];
+    }
+
+    if (!$modulos) {
+        return ['pre' => false, 'post' => false];
+    }
+
+    $pre = false;
+    $post = false;
+    foreach ($modulos as $modulo) {
+        if (!empty($modulo['acepta_pre'])) {
+            $pre = true;
+        }
+        if (!empty($modulo['acepta_post'])) {
+            $post = true;
+        }
+    }
+
+    return ['pre' => $pre, 'post' => $post];
+}
+
+/**
+ * Recalcula el resumen del curso completo (control_cursos) para un participante
+ * como el promedio de las notas de TODOS los modulos del curso que ese
+ * participante ya tiene cargadas en control_curso_modulos (se relee completo,
+ * no se suma incrementalmente). Los modulos sin nota aun se excluyen del
+ * promedio: AVG() de MySQL ya ignora los NULL, asi que si el participante no
+ * tiene ninguna nota de modulo, el resultado es NULL (no 0), igual que antes
+ * de calificar.
+ *
+ * El diploma es exclusivo del flujo "todo el curso": no se toca aqui. La
+ * columna asistencia solo se persiste en control_cursos si $puedeGestionar es
+ * true, igual que el resto de los flujos de guardado de este modulo.
+ *
+ * Se llama justo despues de guardar cada fila de control_curso_modulos, tanto
+ * desde el guardado manual (guardar_control.php) como desde la carga masiva
+ * por modulo (carga_calificaciones_modulo.php).
+ */
+function cengi_recalcular_resumen_curso(PDO $db, $asignacionId, $cursoId, $puedeGestionar)
+{
+    $stmtPromedioModulos = $db->prepare("
+        SELECT
+            AVG(CAST(ccm.asistencia AS DECIMAL(10,2))) AS asistencia_prom,
+            AVG(CAST(ccm.evaluacion AS DECIMAL(10,2))) AS evaluacion_prom,
+            AVG(CAST(ccm.posevaluacion AS DECIMAL(10,2))) AS posevaluacion_prom
+        FROM control_curso_modulos ccm
+        INNER JOIN curso_modulos cm ON cm.id = ccm.curso_modulo_id
+        WHERE ccm.asignacion_id = ? AND cm.curso_id = ?
+    ");
+    $stmtPromedioModulos->execute([$asignacionId, $cursoId]);
+    $promediosModulos = $stmtPromedioModulos->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $asistenciaProm = $promediosModulos['asistencia_prom'] ?? null;
+    $evaluacionProm = $promediosModulos['evaluacion_prom'] ?? null;
+    $posevaluacionProm = $promediosModulos['posevaluacion_prom'] ?? null;
+
+    $stmtVerificarLote = $db->prepare("
+        SELECT id_control
+        FROM control_cursos
+        WHERE asignacion_id = ?
+    ");
+    $stmtVerificarLote->execute([$asignacionId]);
+    $existeControlCurso = (bool) $stmtVerificarLote->fetch(PDO::FETCH_ASSOC);
+
+    if ($existeControlCurso && $puedeGestionar) {
+        $stmt = $db->prepare("UPDATE control_cursos SET asistencia = ?, evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ?");
+        $stmt->execute([$asistenciaProm, $evaluacionProm, $posevaluacionProm, $asignacionId]);
+    } elseif ($existeControlCurso) {
+        $stmt = $db->prepare("UPDATE control_cursos SET evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ?");
+        $stmt->execute([$evaluacionProm, $posevaluacionProm, $asignacionId]);
+    } elseif ($puedeGestionar) {
+        $stmt = $db->prepare("INSERT INTO control_cursos (asignacion_id, asistencia, evaluacion, posevaluacion, diploma) VALUES (?, ?, ?, ?, '')");
+        $stmt->execute([$asignacionId, $asistenciaProm, $evaluacionProm, $posevaluacionProm]);
+    } else {
+        $stmt = $db->prepare("INSERT INTO control_cursos (asignacion_id, evaluacion, posevaluacion, diploma) VALUES (?, ?, ?, '')");
+        $stmt->execute([$asignacionId, $evaluacionProm, $posevaluacionProm]);
+    }
+}
+
+/**
  * Asegura que exista un enlace publico de evaluacion para la combinacion
  * curso_id + instructor_id (idempotente: no se regenera si ya existe).
  * Se debe llamar cada vez que un curso se guarda/actualiza con un instructor

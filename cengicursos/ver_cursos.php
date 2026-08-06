@@ -308,7 +308,7 @@ function cengi_curso_modal_atributos(array $curso)
 }
 ?>
 
-<?php if (false): // Diseño legado reemplazado por la vista SIGEC solicitada. ?>
+<?php if (false): // Diseño legado reemplazado por la vista Cengicursos solicitada. ?>
 <html lang="es">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -573,9 +573,10 @@ function cengi_curso_modal_atributos(array $curso)
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Cursos · SIGEC</title>
+    <title>Cursos · Cengicursos</title>
     <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
     <link rel="stylesheet" type="text/css" href="css/proyecto.css">

@@ -7,6 +7,7 @@ $db = conectar();
 <!DOCTYPE html>
 <html lang="es">
 <head>
+	<link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
 	<meta name="viewport" content="width=device-widht, initial-scale=1">
 	<link href="css/bootstrap.min.css" rel="stylesheet">
 	<link href="css/bootstrap-theme.css" rel="stylesheet">
@@ -31,18 +32,6 @@ $db = conectar();
 			<div class="panel-body">
 				<form  method="POST" action="carga_participantes.php" enctype="multipart/form-data" autocomplete="off" accept-charset="UTF-8">
 				<div class="cengi-form-grid">
-				<div class="form-group">
-					<label for="ingenio" class="control-label">Ingenio</label>
-					<?php
-						$stmtIngenios = $db->query("SELECT id, nombre_ingenios FROM cengi_cursos.ingenios ORDER BY nombre_ingenios");
-					?>
-					<select class="form-control" id="ingenio" name="ingenio" required>
-					<?php while ($ingenio = $stmtIngenios->fetch(PDO::FETCH_ASSOC)) {?>
-						<option value="<?php echo (int) $ingenio['id']; ?>"><?php echo htmlspecialchars($ingenio['nombre_ingenios']); ?></option>
-					<?php } ?>
-					</select>
-				</div>
-
 			<div class="form-group">
 					<label for="user" class="control-label">Delegado</label>
 					<?php
@@ -72,7 +61,7 @@ $db = conectar();
 				</div>
 				</div>
 				<div class="alert alert-info">
-					<strong>Columnas:</strong> CUI, NOMBRE, PUESTO, AREA, CORREO_ELECTRONICO, GRADO_ACADEMICO, TELEFONO.
+					<strong>Columnas:</strong> INGENIO, CUI, NOMBRE, PUESTO, AREA, CORREO_ELECTRONICO, GRADO_ACADEMICO, TELEFONO.
 					<a href="plantilla_participantes.csv" download>Descargar plantilla CSV</a>
 				</div>
 

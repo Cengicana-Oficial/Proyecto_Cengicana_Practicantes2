@@ -2018,7 +2018,7 @@ body.cengi-nav-loading {
     }
 }
 
-/* ===== Cursos: vista SIGEC basada en Cengicursos2.html ===== */
+/* ===== Cursos: vista Cengicursos basada en Cengicursos2.html ===== */
 
 .cengi-canvas .cengi-courses-page {
     width: calc(100% - var(--cengi-sidebar-width));
@@ -4302,6 +4302,14 @@ body.cengi-nav-loading {
     color: #1E2A1A;
     text-decoration: none;
     outline: none;
+}
+
+.cengi-directory-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
 }
 
 .cengi-directory-table-scroll {

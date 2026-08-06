@@ -206,11 +206,11 @@ if ($ingenioId > 0) {
     $kpi['asistencia_prom'] = $asistenciaFila['asistencia_prom'] !== null ? (float) $asistenciaFila['asistencia_prom'] : null;
 
     $stmt = $db->prepare("
-        SELECT COUNT(DISTINCT d.id)
-        FROM diplomas d
-        INNER JOIN asignaciones a ON a.id = d.asignacion_id
+        SELECT COUNT(DISTINCT CASE WHEN COALESCE(NULLIF(d.pdf_path, ''), NULLIF(cc.diploma, '')) IS NOT NULL THEN a.id END)
+        FROM asignaciones a
         INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ?
-        WHERE d.tipo = 'curso'
+        LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
+        LEFT JOIN diplomas d ON d.tipo = 'curso' AND d.asignacion_id = a.id
     ");
     $stmt->execute([$ingenioId]);
     $kpi['diplomas'] = (int) $stmt->fetchColumn();
@@ -277,7 +277,7 @@ if ($ingenioId > 0) {
             COUNT(DISTINCT CASE WHEN c.fin IS NULL OR c.fin >= CURDATE() THEN a.id END) AS cursos_activos,
             COUNT(DISTINCT a.id) AS total_cursos,
             AVG(CASE WHEN cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.posevaluacion AS DECIMAL(6,2)) END) AS evaluacion_promedio,
-            COUNT(DISTINCT d.id) AS diplomas,
+            COUNT(DISTINCT CASE WHEN COALESCE(NULLIF(d.pdf_path, ''), NULLIF(cc.diploma, '')) IS NOT NULL THEN a.id END) AS diplomas,
             MAX(c.inicio) AS ultima_capacitacion
         FROM participantes p
         LEFT JOIN asignaciones a ON a.participantes_id = p.id AND a.estado_asignaciones = 1

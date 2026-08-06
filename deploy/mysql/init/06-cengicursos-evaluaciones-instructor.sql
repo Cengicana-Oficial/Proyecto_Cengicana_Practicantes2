@@ -14,11 +14,16 @@
 -- calificacion 1-10 "recomendaria el lugar/plataforma" (cual de las dos preguntas es se
 -- sabe por la columna modalidad) y las 2 preguntas de texto libre finales
 -- (capacitaciones_necesarias / areas_mejora, esta ultima mapea a "Oportunidades de
--- mejora" del formulario oficial). Ver tambien
+-- mejora" del formulario oficial). Ademas incluye dos preguntas Likert exclusivas de una
+-- sola rama (NULL cuando no aplica): instructor_manejo_plataforma (solo Virtual, dentro
+-- de "Acerca del instructor") y calidad_instalaciones (solo Presencial, dentro de "El
+-- tema y la logistica del evento"). Ver tambien
 -- cengicursos/migrations/20260805_evaluaciones_instructor.sql (version original, 3
--- campos) y cengicursos/migrations/20260805_evaluacion_instructor_formulario_completo.sql
+-- campos), cengicursos/migrations/20260805_evaluacion_instructor_formulario_completo.sql
 -- (migracion idempotente equivalente para transformar un contenedor que ya tenia el
--- esquema original de 3 campos).
+-- esquema original de 3 campos) y
+-- cengicursos/migrations/20260805_evaluacion_instructor_preguntas_modalidad.sql
+-- (agrega instructor_manejo_plataforma / calidad_instalaciones).
 --
 -- Es aditiva e idempotente (CREATE TABLE IF NOT EXISTS), igual que 03-/04-/05-.
 -- Como aplicarla manualmente sobre un contenedor MySQL que ya existe:
@@ -58,9 +63,11 @@ CREATE TABLE IF NOT EXISTS evaluaciones_instructor (
   instructor_conocimiento_tema TINYINT UNSIGNED NOT NULL DEFAULT 0,
   instructor_respeto_participantes TINYINT UNSIGNED NOT NULL DEFAULT 0,
   instructor_puntualidad_objetivos TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  instructor_manejo_plataforma TINYINT UNSIGNED NULL,
   recomendaria_instructor TINYINT UNSIGNED NOT NULL DEFAULT 0,
   tema_relevancia_utilidad TINYINT UNSIGNED NOT NULL DEFAULT 0,
   logistica_evento TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  calidad_instalaciones TINYINT UNSIGNED NULL,
   recomendaria_contexto TINYINT UNSIGNED NOT NULL DEFAULT 0,
   capacitaciones_necesarias TEXT NULL,
   areas_mejora TEXT NULL,

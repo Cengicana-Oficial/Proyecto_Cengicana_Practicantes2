@@ -67,6 +67,7 @@ function cengi_carga_inscripcion_filas($archivoTemporal, $extension)
             cengi_carga_inscripcion_valor_excel($hoja->getCellByColumnAndRow(4, $fila)->getCalculatedValue()),
             cengi_carga_inscripcion_valor_excel($hoja->getCellByColumnAndRow(5, $fila)->getCalculatedValue()),
             cengi_carga_inscripcion_valor_excel($hoja->getCellByColumnAndRow(6, $fila)->getCalculatedValue()),
+            cengi_carga_inscripcion_valor_excel($hoja->getCellByColumnAndRow(7, $fila)->getCalculatedValue()),
         ];
     }
 
@@ -80,13 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $db = conectar();
 
-$ingenioId = (int) ($_POST['ingenio_id'] ?? 0);
 $cursoId = (int) ($_POST['curso_id'] ?? 0);
 $tipoPago = trim((string) ($_POST['tipo_pago'] ?? ''));
-
-if ($ingenioId <= 0) {
-    cengi_carga_inscripcion_error('Selecciona un ingenio.');
-}
 
 if ($cursoId <= 0) {
     cengi_carga_inscripcion_error('Selecciona un curso.');
@@ -94,12 +90,6 @@ if ($cursoId <= 0) {
 
 if (!in_array($tipoPago, ['Ingenio', 'Propio'], true)) {
     cengi_carga_inscripcion_error('Selecciona un tipo de pago válido.');
-}
-
-$stmtIngenio = $db->prepare("SELECT id FROM ingenios WHERE id = ?");
-$stmtIngenio->execute([$ingenioId]);
-if (!$stmtIngenio->fetch()) {
-    cengi_carga_inscripcion_error('El ingenio seleccionado no es válido.');
 }
 
 $stmtCurso = $db->prepare("SELECT id FROM cursos WHERE id = ?");
@@ -152,21 +142,24 @@ $advertencias = [];
 
 try {
     $stmt = $db->prepare($sql);
+    $stmtBuscarIngenio = $db->prepare("SELECT id FROM ingenios WHERE TRIM(nombre_ingenios) = TRIM(?) LIMIT 1");
+    $cacheIngenios = [];
 
     $db->beginTransaction();
 
     foreach ($filasDatos as $indice => $fila) {
         $lineaReal = $indice + 2;
 
-        $cui = trim((string) ($fila[0] ?? ''));
-        $nombre = trim((string) ($fila[1] ?? ''));
-        $puesto = trim((string) ($fila[2] ?? ''));
-        $area = trim((string) ($fila[3] ?? ''));
-        $correo = trim((string) ($fila[4] ?? ''));
-        $gradoAcademico = trim((string) ($fila[5] ?? ''));
-        $telefono = trim((string) ($fila[6] ?? ''));
+        $ingenioNombre = trim((string) ($fila[0] ?? ''));
+        $cui = trim((string) ($fila[1] ?? ''));
+        $nombre = trim((string) ($fila[2] ?? ''));
+        $puesto = trim((string) ($fila[3] ?? ''));
+        $area = trim((string) ($fila[4] ?? ''));
+        $correo = trim((string) ($fila[5] ?? ''));
+        $gradoAcademico = trim((string) ($fila[6] ?? ''));
+        $telefono = trim((string) ($fila[7] ?? ''));
 
-        if ($cui === '' && $nombre === '' && $puesto === '' && $area === '' && $correo === '' && $gradoAcademico === '' && $telefono === '') {
+        if ($ingenioNombre === '' && $cui === '' && $nombre === '' && $puesto === '' && $area === '' && $correo === '' && $gradoAcademico === '' && $telefono === '') {
             continue;
         }
 
@@ -178,6 +171,28 @@ try {
 
         if (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {
             $advertencias[] = "Línea {$lineaReal}: se omitió porque el correo electrónico no es válido.";
+            $omitidos++;
+            continue;
+        }
+
+        if ($ingenioNombre === '') {
+            $advertencias[] = "Línea {$lineaReal}: se omitió porque falta el ingenio.";
+            $omitidos++;
+            continue;
+        }
+
+        $claveIngenio = mb_strtolower($ingenioNombre);
+        if (array_key_exists($claveIngenio, $cacheIngenios)) {
+            $ingenioId = $cacheIngenios[$claveIngenio];
+        } else {
+            $stmtBuscarIngenio->execute([$ingenioNombre]);
+            $ingenioId = $stmtBuscarIngenio->fetchColumn();
+            $ingenioId = $ingenioId !== false ? (int) $ingenioId : 0;
+            $cacheIngenios[$claveIngenio] = $ingenioId;
+        }
+
+        if ($ingenioId <= 0) {
+            $advertencias[] = "Línea {$lineaReal}: se omitió porque el ingenio \"{$ingenioNombre}\" no coincide con ningún ingenio registrado.";
             $omitidos++;
             continue;
         }
@@ -211,6 +226,7 @@ try {
 <html class="light" lang="es">
 
 <head>
+    <link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Carga masiva de inscripción | CENGICURSOS</title>

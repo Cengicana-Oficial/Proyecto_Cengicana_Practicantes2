@@ -1,6 +1,7 @@
 <?php
 require_once "conexion.php";
 require_once "menu.php";
+require_once "curso_form_helpers.php";
 
 cengi_require_calificador('ver_cursos.php');
 
@@ -96,6 +97,16 @@ if ($moduloId > 0) {
         $moduloId = 0; // modulo inexistente o de otro curso: se ignora silenciosamente
     }
 }
+
+// Visibilidad de las columnas Pre/Pos-Evaluacion para esta vista (modulo puntual
+// o "todo el curso"): si un modulo/curso no las requiere, esas columnas no se
+// muestran. Cuando ninguna de las dos aplica, quien solo califica (sin permiso
+// de gestion) tambien puede ver/editar Asistencia, para no quedarse sin ningun
+// campo editable en esa fila.
+$prePostVisibles = cengi_curso_pre_post_visibles($modulos, $moduloId);
+$mostrarPre = $prePostVisibles['pre'];
+$mostrarPost = $prePostVisibles['post'];
+$mostrarAsistencia = $puedeGestionar || (!$mostrarPre && !$mostrarPost);
 
 if ($moduloId > 0) {
     $sql = "
@@ -207,6 +218,9 @@ function cengi_pc_html($valor)
 {
     return htmlspecialchars((string) ($valor ?? ''), ENT_QUOTES, 'UTF-8');
 }
+
+$mensaje = trim((string) ($_GET['mensaje'] ?? ''));
+$error = trim((string) ($_GET['error'] ?? ''));
 ?>
 
 <html lang="es">
@@ -215,6 +229,19 @@ function cengi_pc_html($valor)
 <?php menu_render(); ?>
 
 <div class="container">
+    <?php if ($mensaje !== ''): ?>
+        <div class="alert alert-success alert-dismissible cengi-flash" role="alert">
+            <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+            <?php echo $mensaje === 'calificacion' ? 'Las calificaciones se guardaron correctamente.' : 'La operación se completó correctamente.'; ?>
+        </div>
+    <?php endif; ?>
+    <?php if ($error !== ''): ?>
+        <div class="alert alert-danger alert-dismissible cengi-flash" role="alert">
+            <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+            No fue posible completar la operación. Verifica los datos e inténtalo nuevamente.
+        </div>
+    <?php endif; ?>
+
     <div class="panel panel-success">
         <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
             <div>
@@ -325,6 +352,17 @@ function cengi_pc_html($valor)
                 </div>
             <?php endif; ?>
 
+            <?php if ($moduloId > 0): ?>
+                <div style="margin-bottom: 20px; text-align: right;">
+                    <a href="exportar_notas_modulo.php?curso_id=<?php echo (int) $idcurso; ?>&modulo_id=<?php echo (int) $moduloId; ?>" class="btn btn-default">
+                        <span class="glyphicon glyphicon-download-alt"></span> Descargar listado de este modulo
+                    </a>
+                    <button type="button" class="btn btn-default" data-toggle="modal" data-target="#bulk-grades-modulo-modal">
+                        <span class="glyphicon glyphicon-upload"></span> Cargar notas de este modulo
+                    </button>
+                </div>
+            <?php endif; ?>
+
             <?php if ($puedeGestionar): ?>
                 <div style="margin-bottom: 20px; text-align: right;">
                     <a href="agregar_participantes1.php?curso_id=<?php echo $idcurso; ?>" class="btn btn-success">
@@ -361,9 +399,9 @@ function cengi_pc_html($valor)
                         <th>CUI</th>
                         <th>Ingenio</th>
                         <?php if ($puedeGestionar): ?><th>Estado</th><?php endif; ?>
-                        <?php if ($puedeGestionar): ?><th>Asistencia</th><?php endif; ?>
-                        <th>Pre-Evaluacion</th>
-                        <th>Pos-Evaluacion</th>
+                        <?php if ($mostrarAsistencia): ?><th>Asistencia</th><?php endif; ?>
+                        <?php if ($mostrarPre): ?><th>Pre-Evaluacion</th><?php endif; ?>
+                        <?php if ($mostrarPost): ?><th>Pos-Evaluacion</th><?php endif; ?>
                         <?php if ($moduloId === 0): ?><th>Diploma</th><?php endif; ?>
                         <?php if ($puedeGestionar): ?><th>Acciones</th><?php endif; ?>
                     </tr>
@@ -371,7 +409,13 @@ function cengi_pc_html($valor)
                 <tbody>
                     <?php if (empty($filas)) { ?>
                         <?php
-                            $cengiColspan = 5 + ($puedeGestionar ? 3 : 0) + ($moduloId === 0 ? 1 : 0);
+                            $cengiColspan = 3
+                                + ($puedeGestionar ? 1 : 0)
+                                + ($mostrarAsistencia ? 1 : 0)
+                                + ($mostrarPre ? 1 : 0)
+                                + ($mostrarPost ? 1 : 0)
+                                + ($moduloId === 0 ? 1 : 0)
+                                + ($puedeGestionar ? 1 : 0);
                         ?>
                         <tr>
                             <td colspan="<?php echo $cengiColspan; ?>" class="text-center">
@@ -395,7 +439,7 @@ function cengi_pc_html($valor)
                                     </td>
                                 <?php endif; ?>
 
-                                <?php if ($puedeGestionar): ?>
+                                <?php if ($mostrarAsistencia): ?>
                                     <td>
                                         <input
                                             type="number"
@@ -409,6 +453,7 @@ function cengi_pc_html($valor)
                                     </td>
                                 <?php endif; ?>
 
+                                <?php if ($mostrarPre): ?>
                                 <td>
                                     <input
                                         type="number"
@@ -420,7 +465,9 @@ function cengi_pc_html($valor)
                                         value="<?= htmlspecialchars($fila['evaluacion']) ?>"
                                     >
                                 </td>
+                                <?php endif; ?>
 
+                                <?php if ($mostrarPost): ?>
                                 <td>
                                     <input
                                         type="number"
@@ -432,10 +479,11 @@ function cengi_pc_html($valor)
                                         value="<?= htmlspecialchars($fila['posevaluacion']) ?>"
                                     >
                                 </td>
+                                <?php endif; ?>
 
                                 <?php if ($moduloId === 0): ?>
                                 <td>
-                                    <?php if ($puedeSubirDiploma): ?>
+                                    <?php if ($puedeSubirDiploma && empty($fila['diploma'])): ?>
                                         <input type="file" name="diplomas[<?= (int) $fila['asignacion_id'] ?>]" class="form-control" accept="application/pdf,.pdf">
                                         <br>
                                     <?php endif; ?>
@@ -482,6 +530,23 @@ function cengi_pc_html($valor)
         </div>
     </div>
 </div>
+
+<?php if ($moduloId > 0): ?>
+<div class="modal fade cengi-participant-modal" id="bulk-grades-modulo-modal" tabindex="-1" role="dialog" aria-labelledby="bulk-grades-modulo-title">
+    <div class="modal-dialog" role="document"><div class="modal-content">
+        <form action="carga_calificaciones_modulo.php" method="post" enctype="multipart/form-data">
+            <div class="modal-header"><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button><span class="cengi-modal-icon"><span class="glyphicon glyphicon-upload"></span></span><div><h4 class="modal-title" id="bulk-grades-modulo-title">Cargar notas del modulo</h4><p>Actualiza los resultados de "<?php echo cengi_pc_html($moduloSeleccionado['nombre'] ?? ''); ?>" desde un archivo CSV.</p></div></div>
+            <div class="modal-body">
+                <input type="hidden" name="curso_id" value="<?php echo (int) $idcurso; ?>">
+                <input type="hidden" name="modulo_id" value="<?php echo (int) $moduloId; ?>">
+                <div class="cengi-upload-guide"><strong>Formato requerido</strong><span>CUI, ASISTENCIA, PRE_EVALUACION, POST_EVALUACION</span><small>Los valores deben estar entre 0 y 100. Usa el listado descargado como plantilla.</small></div>
+                <label class="cengi-upload-dropzone" for="bulk-grades-modulo-file"><span class="glyphicon glyphicon-cloud-upload"></span><strong>Selecciona el archivo CSV</strong><small>Máximo 5 MB</small><input type="file" id="bulk-grades-modulo-file" name="archivo" accept=".csv,text/csv" required></label>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Procesar archivo</button></div>
+        </form>
+    </div></div>
+</div>
+<?php endif; ?>
 
 <div class="container">
     <div class="row">

@@ -385,7 +385,7 @@ function cengi_puede_gestionar_roles()
 
 /**
  * Clasifica un nombre de rol de usuarios_menu en uno de los 3 niveles
- * administrativos que gestiona SIGEC (ver pagina roles.php). Instructor y
+ * administrativos que gestiona Cengicursos (ver pagina roles.php). Instructor y
  * Participante/Estudiante no se gestionan aqui (acceden via Moodle) y se
  * excluyen antes de llamar a esta funcion.
  */
