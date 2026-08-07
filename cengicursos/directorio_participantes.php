@@ -103,7 +103,7 @@ if ($fichaId > 0) {
 $busqueda = trim((string) ($_GET['q'] ?? ''));
 $ingenioFiltro = (int) ($_GET['ingenio_id'] ?? 0);
 $cantidadFiltro = trim((string) ($_GET['cantidad'] ?? ''));
-$condiciones = [];
+$condiciones = ['p.estado_participantes = 1'];
 $params = [];
 
 if ($busqueda !== '') {
@@ -179,9 +179,9 @@ if (($_GET['export'] ?? '') === 'csv') {
 }
 
 $paramsKpi = [];
-$whereKpi = '';
+$whereKpi = 'WHERE p.estado_participantes = 1';
 if (!cengi_ve_todo_por_rol_o_ingenio()) {
-    $whereKpi = 'WHERE p.ingenio_id = ?';
+    $whereKpi .= ' AND p.ingenio_id = ?';
     $paramsKpi[] = cengi_ingenio_id_actual();
 }
 $stmtKpi = $db->prepare("SELECT COUNT(DISTINCT p.id) AS personas,

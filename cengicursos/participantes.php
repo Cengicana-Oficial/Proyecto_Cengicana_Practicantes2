@@ -34,7 +34,7 @@ if (!cengi_ve_todo_por_rol_o_ingenio()) {
 }
 $whereCursos = $condicionesCurso ? 'WHERE ' . implode(' AND ', $condicionesCurso) : '';
 $stmtCursos = $db->prepare("
-    SELECT c.id, c.nombre_cursos, YEAR(COALESCE(c.inicio, c.creado)) AS anio
+    SELECT c.id, c.nombre_cursos, c.codigo_curso, YEAR(COALESCE(c.inicio, c.creado)) AS anio
     FROM cursos c
     $whereCursos
     ORDER BY anio DESC, c.nombre_cursos
@@ -189,7 +189,12 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
     <?php if ($error !== ''): ?>
         <div class="alert alert-danger alert-dismissible cengi-flash" role="alert">
             <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
-            No fue posible completar la operación. Verifica los datos e inténtalo nuevamente.
+            <?php
+            $errores = [
+                'cui_duplicado' => 'Ya existe otro participante registrado con ese CUI. Verifica el número e inténtalo nuevamente.',
+            ];
+            echo cengi_part_html($errores[$error] ?? 'No fue posible completar la operación. Verifica los datos e inténtalo nuevamente.');
+            ?>
         </div>
     <?php endif; ?>
 
@@ -199,8 +204,14 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                 <label for="curso_id">Curso</label>
                 <select class="form-control" name="curso_id" id="curso_id">
                     <?php foreach ($cursos as $curso): ?>
+                        <?php
+                        $codigoCurso = $curso['codigo_curso'] ?? '';
+                        if ($codigoCurso === null || $codigoCurso === '') {
+                            $codigoCurso = 'CEN-' . str_pad((string) $curso['id'], 3, '0', STR_PAD_LEFT);
+                        }
+                        ?>
                         <option value="<?php echo (int) $curso['id']; ?>" <?php echo (int) $curso['id'] === $cursoId ? 'selected' : ''; ?>>
-                            <?php echo cengi_part_html($curso['nombre_cursos'] . (!empty($curso['anio']) ? ' — ' . $curso['anio'] : '')); ?>
+                            <?php echo cengi_part_html($codigoCurso . ' — ' . $curso['nombre_cursos'] . (!empty($curso['anio']) ? ' — ' . $curso['anio'] : '')); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -296,7 +307,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                                 <?php if ($puedeEditar): ?>
                                     <button type="button" class="cengi-action-btn participant-edit-trigger" data-toggle="modal" data-target="#participant-edit-modal" data-id="<?php echo (int) $fila['participante_id']; ?>" data-ingenio="<?php echo (int) $fila['ingenio_id']; ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-position="<?php echo cengi_part_html($fila['puesto_participantes']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-email="<?php echo cengi_part_html($fila['correo_participantes']); ?>" data-degree="<?php echo cengi_part_html($fila['grado_academico_participantes']); ?>" data-phone="<?php echo cengi_part_html($fila['telefono_participantes']); ?>" data-state="<?php echo (int) $fila['estado_participantes'] === 1 && (int) $fila['estado_asignaciones'] === 1 ? 1 : 0; ?>" aria-label="Editar" data-tooltip="Editar"><span class="glyphicon glyphicon-pencil"></span></button>
                                 <?php endif; ?>
-                                <button type="button" class="cengi-action-btn participant-profile-trigger" data-toggle="modal" data-target="#participant-profile-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-company="<?php echo cengi_part_html($fila['nombre_ingenios']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-email="<?php echo cengi_part_html($fila['correo_participantes']); ?>" data-degree="<?php echo cengi_part_html($fila['grado_academico_participantes']); ?>" data-phone="<?php echo cengi_part_html($fila['telefono_participantes']); ?>" data-history="<?php echo cengi_part_html($historialJson); ?>" aria-label="Ver perfil" data-tooltip="Ver perfil"><span class="glyphicon glyphicon-eye-open"></span></button>
+                                <button type="button" class="cengi-action-btn participant-profile-trigger" data-toggle="modal" data-target="#participant-profile-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-company="<?php echo cengi_part_html($fila['nombre_ingenios']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-email="<?php echo cengi_part_html($fila['correo_participantes']); ?>" data-degree="<?php echo cengi_part_html($fila['grado_academico_participantes']); ?>" data-phone="<?php echo cengi_part_html($fila['telefono_participantes']); ?>" data-history="<?php echo cengi_part_html($historialJson); ?>" data-assignment="<?php echo (int) $fila['asignacion_id']; ?>" data-assignment-active="<?php echo (int) $fila['estado_asignaciones'] === 1 ? 1 : 0; ?>" aria-label="Ver perfil" data-tooltip="Ver perfil"><span class="glyphicon glyphicon-eye-open"></span></button>
                                 <?php if ($puedeEliminar && (int) $fila['estado_asignaciones'] === 1): ?>
                                     <button type="button" class="cengi-action-btn is-delete is-labeled participant-delete-trigger" data-toggle="modal" data-target="#confirm-participant-delete" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-href="remover_participante_curso.php?asignacion_id=<?php echo (int) $fila['asignacion_id']; ?>&amp;curso_id=<?php echo $cursoId; ?>" aria-label="Remover del curso"><span class="glyphicon glyphicon-remove"></span><span>Remover del curso</span></button>
                                 <?php endif; ?>
@@ -393,7 +404,12 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
     <div class="modal-dialog" role="document"><div class="modal-content">
         <div class="modal-header"><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button><span class="cengi-modal-icon"><span class="glyphicon glyphicon-user"></span></span><div><h4 class="modal-title" id="participant-profile-title">Perfil del participante</h4><p>Información e historial de cursos.</p></div></div>
         <div class="modal-body"><div class="cengi-participant-profile-head"><span class="cengi-participant-profile-avatar" id="participant-profile-avatar">P</span><div><h3 id="participant-profile-name"></h3><p id="participant-profile-meta"></p><small id="participant-profile-cui"></small></div></div><div class="cengi-directory-profile-details"><div><span>Correo electrónico</span><strong id="participant-profile-email">—</strong></div><div><span>Teléfono</span><strong id="participant-profile-phone">—</strong></div><div><span>Grado académico</span><strong id="participant-profile-degree">—</strong></div></div><h5 class="cengi-participant-history-title">Historial de cursos</h5><div class="cengi-participant-history" id="participant-profile-history"></div></div>
-        <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button></div>
+        <div class="modal-footer">
+            <?php if ($puedeEliminar): ?>
+                <button type="button" class="btn btn-danger" id="participant-profile-delete-trigger" style="margin-right:auto;" hidden><span class="glyphicon glyphicon-remove"></span> Desasignar del curso</button>
+            <?php endif; ?>
+            <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+        </div>
     </div></div>
 </div>
 
@@ -409,6 +425,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
 <script>
 (function () {
     'use strict';
+    var CENGI_CURSO_ID = <?php echo (int) $cursoId; ?>;
     var filters = document.getElementById('participant-filters');
     ['curso_id', 'estado'].forEach(function (id) {
         var field = document.getElementById(id);
@@ -475,12 +492,40 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
             var attendance = item.asistencia !== null && item.asistencia !== '' ? item.asistencia + '% asistencia' : 'Sin asistencia';
             return '<div class="cengi-participant-history-item"><span class="glyphicon glyphicon-book"></span><div><strong>' + escapeHtml(item.nombre_cursos) + '</strong><small>' + escapeHtml(item.anio || '') + ' · ' + escapeHtml(attendance) + '</small></div><b>' + escapeHtml(note) + '</b></div>';
         }).join('') : '<div class="cengi-participants-empty is-small">No hay otros cursos registrados.</div>';
+
+        var $deleteTrigger = $('#participant-profile-delete-trigger');
+        if ($deleteTrigger.length) {
+            var assignmentId = trigger.getAttribute('data-assignment') || '';
+            var assignmentActive = trigger.getAttribute('data-assignment-active') === '1';
+            if (assignmentActive && assignmentId && CENGI_CURSO_ID > 0) {
+                $deleteTrigger
+                    .data('name', name)
+                    .data('href', 'remover_participante_curso.php?asignacion_id=' + encodeURIComponent(assignmentId) + '&curso_id=' + CENGI_CURSO_ID)
+                    .removeAttr('hidden');
+            } else {
+                $deleteTrigger.attr('hidden', true).removeData('name').removeData('href');
+            }
+        }
+    });
+
+    $(document).on('click', '#participant-profile-delete-trigger', function () {
+        var $btn = $(this);
+        var name = $btn.data('name') || '';
+        var href = $btn.data('href') || '#';
+        if (!href || href === '#') return;
+        $('#participant-profile-modal').one('hidden.bs.modal', function () {
+            document.getElementById('participant-delete-name').textContent = name;
+            $('#confirm-participant-delete').find('.btn-ok').attr('href', href);
+            $('#confirm-participant-delete').modal('show');
+        });
+        $('#participant-profile-modal').modal('hide');
     });
 
     $('#confirm-participant-delete').on('show.bs.modal', function (event) {
         var trigger = event.relatedTarget;
-        document.getElementById('participant-delete-name').textContent = trigger ? trigger.getAttribute('data-name') : '';
-        $(this).find('.btn-ok').attr('href', trigger ? trigger.getAttribute('data-href') : '#');
+        if (!trigger) return;
+        document.getElementById('participant-delete-name').textContent = trigger.getAttribute('data-name') || '';
+        $(this).find('.btn-ok').attr('href', trigger.getAttribute('data-href') || '#');
     });
 })();
 </script>

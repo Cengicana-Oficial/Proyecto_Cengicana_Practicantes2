@@ -1,6 +1,13 @@
 <?php
 require_once __DIR__ . '/revisar_permisos.php';
 require_once __DIR__ . '/conexion.php';
+require_once __DIR__ . '/vendor/autoload.php';
+
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 cengi_require_calificador('ver_cursos.php');
 
@@ -54,6 +61,7 @@ $sql = "
     INNER JOIN participantes p ON p.id = a.participantes_id
     LEFT JOIN control_curso_modulos ccm ON ccm.asignacion_id = a.id AND ccm.curso_modulo_id = ?
     WHERE a.cursos_id = ?
+    AND a.estado_asignaciones = 1
 ";
 $params = [$moduloId, $cursoId];
 if (!cengi_ve_todo_por_rol_o_ingenio()) {
@@ -71,26 +79,70 @@ function cengi_notas_modulo_valor($valor)
     return is_numeric($valor) ? $valor : '';
 }
 
-$nombreArchivo = 'notas_modulo_' . $cursoId . '_' . $moduloId . '.csv';
+// Mismo orden de columnas por posicion que carga_calificaciones_modulo.php ya
+// sabe leer (CUI, ASISTENCIA, PRE_EVALUACION, POST_EVALUACION); NOMBRE se
+// agrega solo como referencia humana en el indice 4, el parser por indice no
+// la lee.
+$encabezados = ['CUI', 'ASISTENCIA', 'PRE_EVALUACION', 'POST_EVALUACION', 'NOMBRE'];
 
-header('Content-Type: text/csv; charset=UTF-8');
-header('Content-Disposition: attachment; filename="' . $nombreArchivo . '"');
-header('Pragma: no-cache');
-header('Expires: 0');
+$hoja = new Spreadsheet();
+$sheet = $hoja->getActiveSheet();
+$sheet->setTitle('Notas modulo');
 
-$salida = fopen('php://output', 'w');
-// Mismo orden de columnas por posicion que carga_calificaciones.php ya sabe
-// leer (CUI, ASISTENCIA, PRE_EVALUACION, POST_EVALUACION); NOMBRE se agrega
-// solo como referencia humana en el indice 4, el parser por indice no la lee.
-fputcsv($salida, ['CUI', 'ASISTENCIA', 'PRE_EVALUACION', 'POST_EVALUACION', 'NOMBRE']);
+$sheet->fromArray($encabezados, null, 'A1');
+
+$filaExcel = 2;
 foreach ($filas as $fila) {
-    fputcsv($salida, [
-        $fila['cui_participantes'],
+    $sheet->fromArray([
+        (string) $fila['cui_participantes'],
         cengi_notas_modulo_valor($fila['asistencia']),
         cengi_notas_modulo_valor($fila['evaluacion']),
         cengi_notas_modulo_valor($fila['posevaluacion']),
-        $fila['nombre_participantes'],
+        (string) $fila['nombre_participantes'],
+    ], null, 'A' . $filaExcel);
+    $filaExcel++;
+}
+
+$ultimaFila = max($filaExcel - 1, 1);
+
+// Encabezado en negrita con relleno de color, columnas CUI/NOMBRE resaltadas
+// en gris para distinguirlas visualmente de las columnas editables.
+$sheet->getStyle('A1:E1')->applyFromArray([
+    'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+    'fill' => [
+        'fillType' => Fill::FILL_SOLID,
+        'startColor' => ['rgb' => '1B5E20'],
+    ],
+    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+]);
+
+if ($ultimaFila > 1) {
+    $sheet->getStyle('A1:E' . $ultimaFila)->applyFromArray([
+        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'CCCCCC']]],
+    ]);
+    $sheet->getStyle('A2:A' . $ultimaFila)->applyFromArray([
+        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F2F2F2']],
+    ]);
+    $sheet->getStyle('E2:E' . $ultimaFila)->applyFromArray([
+        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F2F2F2']],
     ]);
 }
-fclose($salida);
+
+foreach (['A' => 20, 'B' => 14, 'C' => 16, 'D' => 16, 'E' => 32] as $columna => $ancho) {
+    $sheet->getColumnDimension($columna)->setWidth($ancho);
+}
+
+// Congela la fila de encabezado para que se mantenga visible al desplazarse.
+$sheet->freezePane('A2');
+
+$nombreArchivo = 'notas_modulo_' . $cursoId . '_' . $moduloId . '.xlsx';
+
+header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+header('Content-Disposition: attachment; filename="' . $nombreArchivo . '"');
+header('Cache-Control: max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+$writer = new Xlsx($hoja);
+$writer->save('php://output');
 exit;

@@ -917,6 +917,10 @@ body.inst-modal-open { overflow: hidden; }
         return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-copy-eval-token="' + escapeHtml(token) + '">' +
             '<span class="glyphicon glyphicon-link" aria-hidden="true"></span> Copiar link de evaluación</button>';
     }
+    function courseReportButton(course) {
+        return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" onclick="window.open(\'informe_instructor_curso_pdf.php?instructor_id=' + Number(course.instructor_id) + '&curso_id=' + Number(course.curso_id) + '\', \'_blank\')">' +
+            '<span class="glyphicon glyphicon-file" aria-hidden="true"></span> Reporte del curso</button>';
+    }
     function copyEvaluationLink(token, button) {
         var url = window.location.origin + '/cengicursos/evaluacion.php?token=' + encodeURIComponent(token);
         var restoreLabel = button.innerHTML;
@@ -1095,7 +1099,7 @@ body.inst-modal-open { overflow: hidden; }
                     var range = formatDate(course.inicio) + (course.fin && course.fin !== course.inicio ? ' – ' + formatDate(course.fin) : '');
                     return '<tr><td style="font-weight:600;">' + escapeHtml(course.nombre_cursos) + '</td><td>' + escapeHtml(course.ingenio || '—') + '</td><td>' + escapeHtml(range) + '</td>' +
                         '<td>' + escapeHtml(course.modalidad || '—') + '</td><td>' + Number(course.total_inscritos || 0) + '</td>' +
-                        '<td>' + evaluationLinkButton(course.evaluacion_token) + '</td></tr>';
+                        '<td>' + evaluationLinkButton(course.evaluacion_token) + ' ' + courseReportButton(course) + '</td></tr>';
                 }).join('') + '</tbody></table></div>';
         }
         renderSatisfactionTab(instructor, courses);

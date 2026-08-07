@@ -40,19 +40,6 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
     $prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, $moduloId);
     $puedeGuardarAsistencia = $puedeGestionar || (!$prePostVisibles['pre'] && !$prePostVisibles['post']);
 
-    // El segundo dropdown (instructor que impartio/califico el modulo) solo lo ve y lo
-    // puede fijar el super admin; para el resto de roles que califican, este guardado no
-    // debe tocar esa columna en absoluto (si no, un guardado posterior de un formador
-    // borraria la trazabilidad que ya habia fijado el super admin).
-    $esSuperadminActual = cengi_es_superadmin();
-    $instructorModuloId = null;
-    if ($moduloId > 0 && $esSuperadminActual) {
-        $instructorModuloIdRaw = trim((string) ($_POST['instructor_modulo_id'] ?? ''));
-        if ($instructorModuloIdRaw !== '' && ctype_digit($instructorModuloIdRaw)) {
-            $instructorModuloId = (int) $instructorModuloIdRaw;
-        }
-    }
-
     $normalizarNota = static function ($valor) {
         if ($valor === null || trim((string) $valor) === '') {
             return null;
@@ -144,18 +131,6 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
                         VALUES (?, ?, ?, ?)
                     ");
                     $stmt->execute([$asignacionId, $moduloId, $evaluacion, $posevaluacion]);
-                }
-
-                // La trazabilidad de que instructor impartio/califico el modulo solo la
-                // fija el super admin (incluye limpiarla explicitamente si elige "Sin
-                // registrar"); el resto de roles que califican no la tocan.
-                if ($esSuperadminActual) {
-                    $stmt = $db->prepare("
-                        UPDATE control_curso_modulos
-                        SET registrado_por_instructor_id = ?
-                        WHERE asignacion_id = ? AND curso_modulo_id = ?
-                    ");
-                    $stmt->execute([$instructorModuloId, $asignacionId, $moduloId]);
                 }
 
                 // Recalcular el resumen del curso completo (control_cursos) como

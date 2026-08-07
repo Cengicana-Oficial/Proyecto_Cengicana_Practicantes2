@@ -103,6 +103,7 @@ try {
         $db->rollBack();
     }
     error_log('Error al actualizar participante: ' . $e->getMessage());
-    header('Location: ' . $destino . '&error=actualizar');
+    $codigoError = $e instanceof PDOException && $e->getCode() === '23000' ? 'cui_duplicado' : 'actualizar';
+    header('Location: ' . $destino . '&error=' . $codigoError);
 }
 exit;

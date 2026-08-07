@@ -9,6 +9,7 @@ $db = conectar();
 $puedeGestionar = cengi_puede_gestionar();
 $soloCalifica = cengi_puede_calificar() && !$puedeGestionar;
 $puedeSubirDiploma = cengi_puede_subir_diploma();
+$puedeEliminar = cengi_puede_eliminar_participantes();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar && trim((string) ($_POST['accion'] ?? '')) === 'agregar_modulo') {
     $cursoIdModulo = (int) ($_POST['curso_id'] ?? 0);
@@ -62,6 +63,18 @@ if ($idcurso > 0) {
     ");
     $stmtCurso->execute([$idcurso]);
     $cursoInfo = $stmtCurso->fetch(PDO::FETCH_ASSOC);
+}
+
+// Ingenios para el bloque "Participante nuevo" del modal de agregar participante
+// (mismo listado que usa agregar_participantes1.php). Solo se necesita si el
+// usuario puede gestionar (es quien ve el boton/modal).
+$ingeniosParaModal = [];
+if ($puedeGestionar) {
+    $ingeniosParaModal = $db->query("
+        SELECT id, nombre_ingenios
+        FROM ingenios
+        ORDER BY nombre_ingenios
+    ")->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // Contenido del curso (temario). Se carga antes que la tabla de participantes
@@ -128,6 +141,7 @@ if ($moduloId > 0) {
         INNER JOIN ingenios i ON p.ingenio_id = i.id
         LEFT JOIN control_curso_modulos ccm ON ccm.asignacion_id = a.id AND ccm.curso_modulo_id = ?
         WHERE a.cursos_id = ?
+        AND a.estado_asignaciones = 1
     ";
 } else {
     $sql = "
@@ -149,11 +163,8 @@ if ($moduloId > 0) {
         INNER JOIN ingenios i ON p.ingenio_id = i.id
         LEFT JOIN control_cursos cc ON a.id = cc.asignacion_id
         WHERE a.cursos_id = ?
+        AND a.estado_asignaciones = 1
     ";
-}
-
-if ($soloCalifica) {
-    $sql .= " AND a.estado_asignaciones = 1";
 }
 
 if (!cengi_ve_todo_por_rol_o_ingenio()) {
@@ -171,48 +182,6 @@ $asistenciasValidas = array_filter($filas, static function ($f) { return is_nume
 $evalPromedio = $evaluacionesValidas ? array_sum(array_map(static function ($f) { return (float) $f['posevaluacion']; }, $evaluacionesValidas)) / count($evaluacionesValidas) : null;
 $asistPromedio = $asistenciasValidas ? array_sum(array_map(static function ($f) { return (float) $f['asistencia']; }, $asistenciasValidas)) / count($asistenciasValidas) : null;
 $aprobados = count(array_filter($filas, static function ($f) { return is_numeric($f['posevaluacion']) && (float) $f['posevaluacion'] >= 60; }));
-
-// Segundo dropdown (solo super admin): instructor que impartio/califico el modulo
-// seleccionado, para trazabilidad en control_curso_modulos.registrado_por_instructor_id.
-// Si el modulo no tiene instructores propios en curso_modulo_instructores, cae al
-// instructor principal del curso (cursos.instructor_id) -- mismo fallback que ya usa
-// ver_cursos.php/curso_form_helpers.php.
-$moduloInstructores = [];
-$instructorModuloActual = null;
-if ($moduloId > 0 && cengi_es_superadmin()) {
-    $stmtModInstr = $db->prepare("
-        SELECT ins.id, ins.nombre
-        FROM curso_modulo_instructores cmi
-        INNER JOIN instructores ins ON ins.id = cmi.instructor_id
-        WHERE cmi.curso_modulo_id = ?
-        ORDER BY ins.nombre
-    ");
-    $stmtModInstr->execute([$moduloId]);
-    $moduloInstructores = $stmtModInstr->fetchAll(PDO::FETCH_ASSOC);
-
-    if (!$moduloInstructores && !empty($cursoInfo['instructor_id'])) {
-        $stmtInstrPrincipal = $db->prepare("SELECT id, nombre FROM instructores WHERE id = ?");
-        $stmtInstrPrincipal->execute([(int) $cursoInfo['instructor_id']]);
-        $instructorPrincipal = $stmtInstrPrincipal->fetch(PDO::FETCH_ASSOC);
-        if ($instructorPrincipal) {
-            $moduloInstructores = [$instructorPrincipal];
-        }
-    }
-
-    // Preselecciona el dropdown con el instructor ya registrado para este modulo, si
-    // alguna fila de control_curso_modulos ya lo tiene guardado (simplificacion: toma
-    // el primero no nulo, asumiendo que un modulo lo imparte/califica un solo instructor
-    // a la vez).
-    $stmtInstrActual = $db->prepare("
-        SELECT registrado_por_instructor_id
-        FROM control_curso_modulos
-        WHERE curso_modulo_id = ? AND registrado_por_instructor_id IS NOT NULL
-        LIMIT 1
-    ");
-    $stmtInstrActual->execute([$moduloId]);
-    $valorInstrActual = $stmtInstrActual->fetchColumn();
-    $instructorModuloActual = $valorInstrActual !== false ? (int) $valorInstrActual : null;
-}
 
 function cengi_pc_html($valor)
 {
@@ -232,7 +201,13 @@ $error = trim((string) ($_GET['error'] ?? ''));
     <?php if ($mensaje !== ''): ?>
         <div class="alert alert-success alert-dismissible cengi-flash" role="alert">
             <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
-            <?php echo $mensaje === 'calificacion' ? 'Las calificaciones se guardaron correctamente.' : 'La operación se completó correctamente.'; ?>
+            <?php
+            $cengiMensajesSeguimiento = [
+                'calificacion' => 'Las calificaciones se guardaron correctamente.',
+                'removido' => 'El participante fue removido del curso correctamente.',
+            ];
+            echo $cengiMensajesSeguimiento[$mensaje] ?? 'La operación se completó correctamente.';
+            ?>
         </div>
     <?php endif; ?>
     <?php if ($error !== ''): ?>
@@ -365,9 +340,9 @@ $error = trim((string) ($_GET['error'] ?? ''));
 
             <?php if ($puedeGestionar): ?>
                 <div style="margin-bottom: 20px; text-align: right;">
-                    <a href="agregar_participantes1.php?curso_id=<?php echo $idcurso; ?>" class="btn btn-success">
+                    <button type="button" class="btn btn-success" data-toggle="modal" data-target="#add-participant-modal">
                         Agregar participante al curso
-                    </a>
+                    </button>
                 </div>
             <?php endif; ?>
 
@@ -376,21 +351,6 @@ $error = trim((string) ($_GET['error'] ?? ''));
             <input type="hidden" name="curso_id" value="<?php echo (int) $idcurso; ?>">
             <input type="hidden" name="modulo_id" value="<?php echo (int) $moduloId; ?>">
 
-            <?php if ($moduloId > 0 && cengi_es_superadmin() && $moduloInstructores): ?>
-                <div class="form-group" style="max-width:340px;margin-bottom:15px;">
-                    <label class="control-label">Instructor que impartio/califico "<?php echo cengi_pc_html($moduloSeleccionado['nombre'] ?? ''); ?>"</label>
-                    <select name="instructor_modulo_id" class="form-control">
-                        <option value="">-- Sin registrar --</option>
-                        <?php foreach ($moduloInstructores as $ins): ?>
-                            <option value="<?php echo (int) $ins['id']; ?>" <?php echo $instructorModuloActual === (int) $ins['id'] ? 'selected' : ''; ?>>
-                                <?php echo cengi_pc_html($ins['nombre']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <p class="help-block">Se guarda como trazabilidad junto con las notas de este modulo.</p>
-                </div>
-            <?php endif; ?>
-
             <div class="cengi-table-wrap">
             <table class="table table-bordered table-striped">
                 <thead>
@@ -398,7 +358,6 @@ $error = trim((string) ($_GET['error'] ?? ''));
                         <th>Nombre</th>
                         <th>CUI</th>
                         <th>Ingenio</th>
-                        <?php if ($puedeGestionar): ?><th>Estado</th><?php endif; ?>
                         <?php if ($mostrarAsistencia): ?><th>Asistencia</th><?php endif; ?>
                         <?php if ($mostrarPre): ?><th>Pre-Evaluacion</th><?php endif; ?>
                         <?php if ($mostrarPost): ?><th>Pos-Evaluacion</th><?php endif; ?>
@@ -410,7 +369,6 @@ $error = trim((string) ($_GET['error'] ?? ''));
                     <?php if (empty($filas)) { ?>
                         <?php
                             $cengiColspan = 3
-                                + ($puedeGestionar ? 1 : 0)
                                 + ($mostrarAsistencia ? 1 : 0)
                                 + ($mostrarPre ? 1 : 0)
                                 + ($mostrarPost ? 1 : 0)
@@ -429,15 +387,6 @@ $error = trim((string) ($_GET['error'] ?? ''));
                                 <td><strong><?= htmlspecialchars($fila['nombre_participantes']) ?></strong><br><small><?= htmlspecialchars(implode(' · ', array_filter([$fila['correo_participantes'], $fila['telefono_participantes'], $fila['grado_academico_participantes']]))) ?></small></td>
                                 <td><?= htmlspecialchars($fila['cui_participantes']) ?></td>
                                 <td><?= htmlspecialchars($fila['nombre_ingenios']) ?></td>
-                                <?php if ($puedeGestionar): ?>
-                                    <td>
-                                        <?php if ((int) $fila['estado_asignaciones'] === 1) { ?>
-                                            <span class="label label-success">Activo</span>
-                                        <?php } else { ?>
-                                            <span class="label label-default">Inactivo</span>
-                                        <?php } ?>
-                                    </td>
-                                <?php endif; ?>
 
                                 <?php if ($mostrarAsistencia): ?>
                                     <td>
@@ -500,16 +449,21 @@ $error = trim((string) ($_GET['error'] ?? ''));
                                 <?php if ($puedeGestionar): ?>
                                 <td>
                                     <div class="cengi-row-actions">
-                                        <?php $estadoActivo = (int) $fila['estado_asignaciones'] === 1; ?>
-                                        <a
-                                            href="toggle_asignacion.php?id=<?= (int) $fila['asignacion_id'] ?>&curso_id=<?= $idcurso ?>&estado=<?= (int) $fila['estado_asignaciones'] ?>"
-                                            class="cengi-action-btn <?php echo $estadoActivo ? 'is-toggle-on' : 'is-toggle-off'; ?>"
-                                            data-tooltip="<?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?>"
-                                            aria-label="<?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?>"
-                                        >
-                                            <span class="glyphicon <?php echo $estadoActivo ? 'glyphicon-eye-close' : 'glyphicon-eye-open'; ?>"></span>
-                                            <span class="sr-only"><?php echo $estadoActivo ? 'Desactivar del curso' : 'Reactivar en curso'; ?></span>
-                                        </a>
+                                        <?php if ($puedeEliminar): ?>
+                                            <button
+                                                type="button"
+                                                class="cengi-action-btn is-delete participant-delete-trigger"
+                                                data-toggle="modal"
+                                                data-target="#confirm-participant-delete"
+                                                data-name="<?= htmlspecialchars($fila['nombre_participantes']) ?>"
+                                                data-href="remover_participante_curso.php?asignacion_id=<?= (int) $fila['asignacion_id'] ?>&amp;curso_id=<?= $idcurso ?>&amp;return_to=seguimiento"
+                                                data-tooltip="Desasignar del curso"
+                                                aria-label="Desasignar del curso"
+                                            >
+                                                <span class="glyphicon glyphicon-remove"></span>
+                                                <span class="sr-only">Desasignar del curso</span>
+                                            </button>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                                 <?php endif; ?>
@@ -535,17 +489,264 @@ $error = trim((string) ($_GET['error'] ?? ''));
 <div class="modal fade cengi-participant-modal" id="bulk-grades-modulo-modal" tabindex="-1" role="dialog" aria-labelledby="bulk-grades-modulo-title">
     <div class="modal-dialog" role="document"><div class="modal-content">
         <form action="carga_calificaciones_modulo.php" method="post" enctype="multipart/form-data">
-            <div class="modal-header"><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button><span class="cengi-modal-icon"><span class="glyphicon glyphicon-upload"></span></span><div><h4 class="modal-title" id="bulk-grades-modulo-title">Cargar notas del modulo</h4><p>Actualiza los resultados de "<?php echo cengi_pc_html($moduloSeleccionado['nombre'] ?? ''); ?>" desde un archivo CSV.</p></div></div>
+            <div class="modal-header"><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button><span class="cengi-modal-icon"><span class="glyphicon glyphicon-upload"></span></span><div><h4 class="modal-title" id="bulk-grades-modulo-title">Cargar notas del modulo</h4><p>Actualiza los resultados de "<?php echo cengi_pc_html($moduloSeleccionado['nombre'] ?? ''); ?>" desde el archivo Excel (.xlsx) descargado.</p></div></div>
             <div class="modal-body">
                 <input type="hidden" name="curso_id" value="<?php echo (int) $idcurso; ?>">
                 <input type="hidden" name="modulo_id" value="<?php echo (int) $moduloId; ?>">
-                <div class="cengi-upload-guide"><strong>Formato requerido</strong><span>CUI, ASISTENCIA, PRE_EVALUACION, POST_EVALUACION</span><small>Los valores deben estar entre 0 y 100. Usa el listado descargado como plantilla.</small></div>
-                <label class="cengi-upload-dropzone" for="bulk-grades-modulo-file"><span class="glyphicon glyphicon-cloud-upload"></span><strong>Selecciona el archivo CSV</strong><small>Máximo 5 MB</small><input type="file" id="bulk-grades-modulo-file" name="archivo" accept=".csv,text/csv" required></label>
+                <div class="cengi-upload-guide"><strong>Formato requerido</strong><span>CUI, ASISTENCIA, PRE_EVALUACION, POST_EVALUACION</span><small>Los valores deben estar entre 0 y 100. Descarga el listado de este modulo, llénalo y súbelo tal cual (Excel .xlsx, tambien se acepta CSV).</small></div>
+                <label class="cengi-upload-dropzone" for="bulk-grades-modulo-file"><span class="glyphicon glyphicon-cloud-upload"></span><strong>Selecciona el archivo Excel (.xlsx)</strong><small>Máximo 5 MB</small><input type="file" id="bulk-grades-modulo-file" name="archivo" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" required></label>
             </div>
             <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Procesar archivo</button></div>
         </form>
     </div></div>
 </div>
+<?php endif; ?>
+
+<?php if ($puedeGestionar): ?>
+<div class="modal fade cengi-participant-modal" id="add-participant-modal" tabindex="-1" role="dialog" aria-labelledby="add-participant-title">
+    <div class="modal-dialog" role="document"><div class="modal-content">
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            <span class="cengi-modal-icon"><span class="glyphicon glyphicon-user"></span></span>
+            <div>
+                <h4 class="modal-title" id="add-participant-title">Agregar participante al curso</h4>
+                <p>Asigna a alguien que ya esta registrado o crea un participante nuevo para "<?php echo cengi_pc_html($cursoInfo['nombre_cursos'] ?? ''); ?>".</p>
+            </div>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="control-label" style="display:block;">¿Deseas asignar un participante existente o agregar uno nuevo?</label>
+                <label class="radio-inline"><input type="radio" name="tipo_participante" value="existente" id="cengi-tipo-existente" checked> Participante existente</label>
+                <label class="radio-inline"><input type="radio" name="tipo_participante" value="nuevo" id="cengi-tipo-nuevo"> Participante nuevo</label>
+            </div>
+
+            <div id="cengi-bloque-existente">
+                <form id="cengi-form-existente" method="POST" action="asignar_participante_existente.php">
+                    <input type="hidden" name="curso_id" value="<?php echo (int) $idcurso; ?>">
+                    <input type="hidden" name="participante_id" id="cengi-participante-id-input" value="">
+                    <div class="form-group">
+                        <label for="cengi-buscar-participante" class="control-label">Buscar por nombre o CUI</label>
+                        <div class="cengi-combo">
+                            <div class="input-group">
+                                <input type="text" id="cengi-buscar-participante" class="form-control" placeholder="Escribe para buscar o abre la lista..." autocomplete="off">
+                                <span class="input-group-btn">
+                                    <button type="button" class="btn btn-default" id="cengi-buscar-toggle" tabindex="-1" aria-label="Mostrar lista de participantes">
+                                        <span class="caret"></span>
+                                    </button>
+                                </span>
+                            </div>
+                            <div id="cengi-buscar-resultados" class="cengi-combo-menu list-group"></div>
+                        </div>
+                    </div>
+                    <div id="cengi-participante-seleccionado" class="alert alert-info" style="display:none;margin-top:10px;">
+                        Participante seleccionado: <strong id="cengi-participante-seleccionado-nombre"></strong>
+                        <button type="button" class="close" id="cengi-participante-seleccionado-limpiar" aria-label="Quitar selección"><span aria-hidden="true">&times;</span></button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="cengi-bloque-nuevo" style="display:none;">
+                <form id="cengi-form-nuevo" method="POST" action="guardar_participante_curso.php" autocomplete="off">
+                    <input type="hidden" name="curso" value="<?php echo (int) $idcurso; ?>">
+                    <div class="cengi-participant-modal-grid">
+                        <div class="form-group">
+                            <label for="cengi-nuevo-cui" class="control-label">CUI</label>
+                            <input type="text" class="form-control" id="cengi-nuevo-cui" name="cui" placeholder="0000-00000-0000" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cengi-nuevo-nombre" class="control-label">Nombre</label>
+                            <input type="text" class="form-control" id="cengi-nuevo-nombre" name="nombre" placeholder="Nombre del participante" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cengi-nuevo-ingenio" class="control-label">Ingenio</label>
+                            <select class="form-control" id="cengi-nuevo-ingenio" name="ingenio" required>
+                                <option value="">Selecciona un ingenio</option>
+                                <?php foreach ($ingeniosParaModal as $ingenioModal): ?>
+                                    <option value="<?php echo (int) $ingenioModal['id']; ?>"><?php echo cengi_pc_html($ingenioModal['nombre_ingenios']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="cengi-nuevo-area" class="control-label">Area</label>
+                            <input type="text" class="form-control" id="cengi-nuevo-area" name="area" placeholder="Area" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cengi-nuevo-puesto" class="control-label">Puesto</label>
+                            <input type="text" class="form-control" id="cengi-nuevo-puesto" name="puesto" placeholder="Puesto" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cengi-nuevo-correo" class="control-label">Correo electrónico</label>
+                            <input type="email" class="form-control" id="cengi-nuevo-correo" name="correo" maxlength="255" placeholder="persona@ejemplo.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="cengi-nuevo-grado" class="control-label">Grado académico</label>
+                            <input type="text" class="form-control" id="cengi-nuevo-grado" name="grado_academico" maxlength="255" placeholder="Licenciatura, técnico, diversificado...">
+                        </div>
+                        <div class="form-group">
+                            <label for="cengi-nuevo-telefono" class="control-label">Teléfono</label>
+                            <input type="tel" class="form-control" id="cengi-nuevo-telefono" name="telefono" maxlength="50" placeholder="Número de teléfono">
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+            <button type="submit" form="cengi-form-existente" class="btn btn-success" id="cengi-btn-asignar-existente" disabled>Asignar al curso</button>
+            <button type="submit" form="cengi-form-nuevo" class="btn btn-success" id="cengi-btn-guardar-nuevo" style="display:none;">Guardar y asignar</button>
+        </div>
+    </div></div>
+</div>
+
+<script>
+(function ($) {
+    'use strict';
+
+    var $modal = $('#add-participant-modal');
+    if (!$modal.length) {
+        return;
+    }
+
+    var $radios = $('input[name="tipo_participante"]', $modal);
+    var $bloqueExistente = $('#cengi-bloque-existente');
+    var $bloqueNuevo = $('#cengi-bloque-nuevo');
+    var $btnExistente = $('#cengi-btn-asignar-existente');
+    var $btnNuevo = $('#cengi-btn-guardar-nuevo');
+    var $buscarInput = $('#cengi-buscar-participante');
+    var $buscarToggle = $('#cengi-buscar-toggle');
+    var $resultados = $('#cengi-buscar-resultados');
+    var $seleccionadoBox = $('#cengi-participante-seleccionado');
+    var $seleccionadoNombre = $('#cengi-participante-seleccionado-nombre');
+    var $participanteIdInput = $('#cengi-participante-id-input');
+    var buscarTimeout = null;
+    var buscarRequest = null;
+
+    function abrirDropdown() {
+        $resultados.addClass('open');
+    }
+
+    function cerrarDropdown() {
+        $resultados.removeClass('open');
+    }
+
+    function buscarParticipantes(termino) {
+        if (buscarRequest) {
+            buscarRequest.abort();
+        }
+        $resultados.empty().append($('<div>', { class: 'list-group-item text-muted' }).text('Buscando...'));
+        abrirDropdown();
+        buscarRequest = $.ajax({
+            url: 'buscar_participantes_ajax.php',
+            data: { q: termino },
+            dataType: 'json',
+            cache: false
+        }).done(function (participantes) {
+            $resultados.empty();
+            if (!participantes.length) {
+                $resultados.append($('<div>', { class: 'list-group-item text-muted' }).text('No se encontraron participantes.'));
+                return;
+            }
+            participantes.forEach(function (participante) {
+                $('<button>', {
+                    type: 'button',
+                    class: 'list-group-item',
+                    text: participante.nombre + ' — CUI ' + participante.cui + ' (' + participante.ingenio + ')'
+                }).on('click', function () {
+                    seleccionarParticipante(participante);
+                }).appendTo($resultados);
+            });
+        }).fail(function (xhr, status) {
+            if (status === 'abort') {
+                return;
+            }
+            $resultados.empty().append($('<div>', { class: 'list-group-item text-danger' }).text('No fue posible buscar participantes.'));
+        });
+    }
+
+    function mostrarBloque(tipo) {
+        if (tipo === 'nuevo') {
+            $bloqueExistente.hide();
+            $bloqueNuevo.show();
+            $btnExistente.hide();
+            $btnNuevo.show();
+        } else {
+            $bloqueNuevo.hide();
+            $bloqueExistente.show();
+            $btnNuevo.hide();
+            $btnExistente.show();
+        }
+    }
+
+    $radios.on('change', function () {
+        mostrarBloque($(this).val());
+    });
+
+    function limpiarSeleccion() {
+        $participanteIdInput.val('');
+        $seleccionadoBox.hide();
+        $seleccionadoNombre.text('');
+        $btnExistente.prop('disabled', true);
+    }
+
+    function seleccionarParticipante(participante) {
+        $participanteIdInput.val(participante.id);
+        $seleccionadoNombre.text(participante.nombre + ' (CUI ' + participante.cui + ' · ' + participante.ingenio + ')');
+        $seleccionadoBox.show();
+        $btnExistente.prop('disabled', false);
+        cerrarDropdown();
+        $buscarInput.val('');
+    }
+
+    $('#cengi-participante-seleccionado-limpiar').on('click', function () {
+        limpiarSeleccion();
+    });
+
+    $buscarInput.on('input', function () {
+        var termino = $.trim($(this).val());
+        limpiarSeleccion();
+        window.clearTimeout(buscarTimeout);
+        buscarTimeout = window.setTimeout(function () {
+            buscarParticipantes(termino);
+        }, 300);
+    });
+
+    // Al enfocar (o abrir con el caret) sin haber escrito nada, se muestra
+    // el listado completo (limitado) a modo de dropdown para elegir.
+    $buscarInput.on('focus', function () {
+        if ($resultados.hasClass('open')) {
+            return;
+        }
+        buscarParticipantes($.trim($(this).val()));
+    });
+
+    $buscarToggle.on('click', function () {
+        if ($resultados.hasClass('open')) {
+            cerrarDropdown();
+            return;
+        }
+        $buscarInput.focus();
+        buscarParticipantes($.trim($buscarInput.val()));
+    });
+
+    $(document).on('click', function (event) {
+        if (!$(event.target).closest('.cengi-combo').length) {
+            cerrarDropdown();
+        }
+    });
+
+    $modal.on('hidden.bs.modal', function () {
+        $radios.filter('[value="existente"]').prop('checked', true);
+        mostrarBloque('existente');
+        limpiarSeleccion();
+        cerrarDropdown();
+        $resultados.empty();
+        $buscarInput.val('');
+        document.getElementById('cengi-form-nuevo').reset();
+    });
+
+    mostrarBloque('existente');
+})(jQuery);
+</script>
 <?php endif; ?>
 
 <div class="container">
@@ -555,5 +756,25 @@ $error = trim((string) ($_GET['error'] ?? ''));
         </div>
     </div>
 </div>
+
+<?php if ($puedeEliminar): ?>
+<div class="modal fade cengi-participant-modal" id="confirm-participant-delete" tabindex="-1" role="dialog" aria-labelledby="participant-delete-title">
+    <div class="modal-dialog cengi-modal-compact" role="document"><div class="modal-content cengi-confirm-content">
+        <div class="modal-body"><span class="cengi-confirm-icon"><span class="glyphicon glyphicon-remove"></span></span><h4 id="participant-delete-title">Remover del curso</h4><p>¿Deseas remover a <strong id="participant-delete-name"></strong> de este curso? El participante seguirá disponible y sus demás asignaciones no serán modificadas.</p></div>
+        <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><a class="btn btn-danger btn-ok" href="#">Sí, remover</a></div>
+    </div></div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    $('#confirm-participant-delete').on('show.bs.modal', function (event) {
+        var trigger = event.relatedTarget;
+        document.getElementById('participant-delete-name').textContent = trigger ? trigger.getAttribute('data-name') : '';
+        $(this).find('.btn-ok').attr('href', trigger ? trigger.getAttribute('data-href') : '#');
+    });
+})();
+</script>
+<?php endif; ?>
 </body>
 </html>
