@@ -47,3 +47,14 @@ RUN if [ -f cengicursos/composer.json ]; then \
 
 RUN chown -R www-data:www-data /var/www/html
 
+# Nota: este chown solo afecta el contenido copiado dentro de la imagen. Los
+# directorios montados como bind mount en runtime (p. ej. `./uploads` en
+# docker-compose.prod.yml) conservan la propiedad/permisos del host y NO
+# quedan cubiertos por este RUN. Ver dockerfiles/modulos-app/entrypoint.sh,
+# que corrige eso en cada arranque del contenedor.
+COPY dockerfiles/modulos-app/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["apache2-foreground"]
+
