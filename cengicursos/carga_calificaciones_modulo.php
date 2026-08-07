@@ -2,6 +2,9 @@
 require_once 'revisar_permisos.php';
 require_once 'conexion.php';
 require_once 'curso_form_helpers.php';
+require_once __DIR__ . '/vendor/autoload.php';
+
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 cengi_require_calificador('ver_cursos.php');
 
@@ -40,8 +43,9 @@ try {
     if ((int) ($_FILES['archivo']['size'] ?? 0) > 5 * 1024 * 1024) {
         throw new RuntimeException('El archivo supera el límite de 5 MB.');
     }
-    if (strtolower(pathinfo((string) $_FILES['archivo']['name'], PATHINFO_EXTENSION)) !== 'csv') {
-        throw new RuntimeException('La carga de calificaciones requiere un archivo CSV.');
+    $extension = strtolower(pathinfo((string) $_FILES['archivo']['name'], PATHINFO_EXTENSION));
+    if (!in_array($extension, ['xlsx', 'csv'], true)) {
+        throw new RuntimeException('La carga de calificaciones requiere un archivo XLSX o CSV.');
     }
 
     // El modulo debe pertenecer al curso indicado (mismo estilo de
@@ -68,13 +72,26 @@ try {
         throw new RuntimeException('El curso no está disponible para este usuario.');
     }
 
-    $archivo = fopen($_FILES['archivo']['tmp_name'], 'r');
-    if ($archivo === false) {
-        throw new RuntimeException('No fue posible leer el archivo CSV.');
+    // Ambos formatos se normalizan a un mismo arreglo de filas (cada una un
+    // arreglo indexado 0..n) antes de entrar al mismo bucle de validacion/
+    // guardado, para no duplicar esa logica por formato.
+    $filasDatos = [];
+    if ($extension === 'xlsx') {
+        $hojaCargada = IOFactory::load($_FILES['archivo']['tmp_name']);
+        $filasDatos = $hojaCargada->getActiveSheet()->toArray(null, true, true, false);
+    } else {
+        $archivo = fopen($_FILES['archivo']['tmp_name'], 'r');
+        if ($archivo === false) {
+            throw new RuntimeException('No fue posible leer el archivo CSV.');
+        }
+        $muestra = fgets($archivo);
+        rewind($archivo);
+        $separador = substr_count((string) $muestra, ';') > substr_count((string) $muestra, ',') ? ';' : ',';
+        while (($fila = fgetcsv($archivo, 0, $separador)) !== false) {
+            $filasDatos[] = $fila;
+        }
+        fclose($archivo);
     }
-    $muestra = fgets($archivo);
-    rewind($archivo);
-    $separador = substr_count((string) $muestra, ';') > substr_count((string) $muestra, ',') ? ';' : ',';
 
     $sqlAsignacion = 'SELECT a.id
         FROM asignaciones a
@@ -97,14 +114,15 @@ try {
     $db->beginTransaction();
     $filaNumero = 0;
     $procesados = 0;
-    while (($fila = fgetcsv($archivo, 0, $separador)) !== false) {
+    foreach ($filasDatos as $fila) {
         $filaNumero++;
-        if (count($fila) < 4) {
+        if (!is_array($fila) || count($fila) < 4) {
             if ($filaNumero === 1) {
                 continue;
             }
             throw new RuntimeException('La fila ' . $filaNumero . ' no contiene las cuatro columnas requeridas.');
         }
+        $fila = array_values($fila);
         $cui = preg_replace('/[^0-9A-Za-z-]/', '', trim((string) $fila[0]));
         if ($filaNumero === 1 && in_array(strtolower($cui), ['cui', 'dpi'], true)) {
             continue;
@@ -145,7 +163,6 @@ try {
 
         $procesados++;
     }
-    fclose($archivo);
 
     if ($procesados === 0) {
         throw new RuntimeException('El archivo no contiene registros para procesar.');

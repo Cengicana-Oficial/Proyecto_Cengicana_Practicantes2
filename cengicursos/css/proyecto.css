@@ -3295,6 +3295,36 @@ body.cengi-nav-loading {
 .cengi-participant-modal input[type="file"].form-control { height: auto; }
 .cengi-participant-modal .form-control:focus { border-color: var(--cengi-primary); box-shadow: 0 0 0 2px rgba(163, 211, 0, .22); }
 
+.cengi-combo { position: relative; }
+.cengi-combo-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 1070;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #dfe5dc;
+    border-radius: 7px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .14);
+}
+.cengi-combo-menu.open { display: block; }
+.cengi-combo-menu .list-group-item {
+    cursor: pointer;
+    border-left: none;
+    border-right: none;
+    font-size: 11.5px;
+}
+.cengi-combo-menu .list-group-item:first-child { border-top: none; }
+.cengi-combo-menu .list-group-item:last-child { border-bottom: none; }
+.cengi-combo-menu .list-group-item:hover { background: #f4f8ef; }
+.cengi-combo-menu .list-group-item.text-muted,
+.cengi-combo-menu .list-group-item.text-danger { cursor: default; }
+.cengi-combo-menu .list-group-item.text-muted:hover,
+.cengi-combo-menu .list-group-item.text-danger:hover { background: #fff; }
+
 .cengi-participant-modal .modal-footer {
     padding: 14px 22px 18px;
     display: flex;

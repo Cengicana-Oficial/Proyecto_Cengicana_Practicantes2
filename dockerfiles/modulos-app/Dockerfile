@@ -10,12 +10,17 @@ RUN sed -i 's|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|ht
         libpq-dev \
         libzip-dev \
         libonig-dev \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libpng-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         mysqli \
         pdo_mysql \
         pdo_pgsql \
         zip \
         mbstring \
+        gd \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 
