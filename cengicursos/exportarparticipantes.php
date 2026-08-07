@@ -36,7 +36,7 @@ if (!cengi_ve_todo_por_rol_o_ingenio()) {
     )';
     $paramsCurso[] = cengi_ingenio_id_actual();
 }
-$stmtCurso = $db->prepare('SELECT c.id, c.nombre_cursos FROM cursos c WHERE '
+$stmtCurso = $db->prepare('SELECT c.id, c.nombre_cursos, c.codigo_curso FROM cursos c WHERE '
     . implode(' AND ', $condicionesCurso) . ' LIMIT 1');
 $stmtCurso->execute($paramsCurso);
 $curso = $stmtCurso->fetch(PDO::FETCH_ASSOC);
@@ -44,6 +44,11 @@ if (!$curso) {
     http_response_code(404);
     exit('El curso no existe o no está disponible para este usuario.');
 }
+
+$codigoCurso = $curso['codigo_curso'] !== null && $curso['codigo_curso'] !== ''
+    ? $curso['codigo_curso']
+    : ('CEN-' . str_pad((string) $curso['id'], 3, '0', STR_PAD_LEFT));
+$curso['codigo_curso'] = $codigoCurso;
 
 $condiciones = ['a.cursos_id = ?'];
 $params = [$cursoId];
@@ -96,11 +101,11 @@ function cengi_export_numero($valor, $porcentaje = false)
     return $porcentaje ? $numero . '%' : $numero;
 }
 
-$encabezados = ['Curso', 'Participante', 'CUI', 'Ingenio', 'Correo electrónico', 'Grado académico', 'Teléfono', 'Puesto', 'Área', 'Estado', 'Asistencia', 'Pre-evaluación', 'Post-evaluación'];
+$encabezados = ['Código', 'Curso', 'Participante', 'CUI', 'Ingenio', 'Correo electrónico', 'Grado académico', 'Teléfono', 'Puesto', 'Área', 'Estado', 'Asistencia', 'Pre-evaluación', 'Post-evaluación'];
 $filasExportacion = [];
 foreach ($participantes as $fila) {
     $filasExportacion[] = [
-        $curso['nombre_cursos'], $fila['nombre_participantes'], $fila['cui_participantes'],
+        $codigoCurso, $curso['nombre_cursos'], $fila['nombre_participantes'], $fila['cui_participantes'],
         $fila['nombre_ingenios'], $fila['correo_participantes'], $fila['grado_academico_participantes'],
         $fila['telefono_participantes'], $fila['puesto_participantes'], $fila['area_participantes'],
         cengi_export_estado($fila), cengi_export_numero($fila['asistencia'], true),
@@ -108,7 +113,7 @@ foreach ($participantes as $fila) {
     ];
 }
 
-$nombreArchivoBase = 'participantes_curso_' . $cursoId;
+$nombreArchivoBase = 'participantes_' . $codigoCurso . '_' . preg_replace('/[^a-zA-Z0-9_.-]/', '_', $curso['nombre_cursos']);
 
 if ($formato === 'excel') {
     cengi_export_enviar_excel(
@@ -116,7 +121,7 @@ if ($formato === 'excel') {
         $filasExportacion,
         'Participantes ' . $curso['nombre_cursos'],
         $nombreArchivoBase,
-        [28, 28, 16, 22, 30, 22, 16, 20, 20, 12, 12, 14, 14]
+        [16, 28, 28, 16, 22, 30, 22, 16, 20, 20, 12, 12, 14, 14]
     );
 }
 
@@ -135,7 +140,7 @@ function cengi_pdf_pagina_participantes(array $filas, array $curso, $pagina, $to
     ];
     $ancho = array_sum(array_column($columnas, 1));
     $c = "0.10 0.28 0.16 rg\n" . cengi_export_pdf_texto($x, 558, 'Listado de participantes', 16, true);
-    $c .= "0.15 0.15 0.15 rg\n" . cengi_export_pdf_texto($x, 538, 'Curso: ' . cengi_export_pdf_recortar($curso['nombre_cursos'], 100), 10, true);
+    $c .= "0.15 0.15 0.15 rg\n" . cengi_export_pdf_texto($x, 538, 'Curso: ' . $curso['codigo_curso'] . ' — ' . cengi_export_pdf_recortar($curso['nombre_cursos'], 90), 10, true);
     $filtro = 'Estado: ' . ucfirst($estado) . ($busqueda !== '' ? '  |  Búsqueda: ' . cengi_export_pdf_recortar($busqueda, 65) : '');
     $c .= cengi_export_pdf_texto($x, 523, $filtro, 8);
     $c .= cengi_export_pdf_texto(744, 558, 'Pág. ' . $pagina . '/' . $total, 8);

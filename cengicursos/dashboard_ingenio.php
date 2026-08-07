@@ -153,6 +153,57 @@ if ($fichaId > 0) {
 }
 
 // ---------------------------------------------------------------------
+// Detalle AJAX: participantes de un curso, siempre acotado al $ingenioId ya
+// resuelto arriba (nunca se vuelve a leer $_GET['ingenio_id'] para decidir el
+// filtro real), para que un usuario de ingenio jamas pueda ver participantes
+// de otro ingenio en un curso. Solo lectura, sin ninguna accion de escritura.
+// ---------------------------------------------------------------------
+$cursoDetalleId = (int) ($_GET['curso_detalle_id'] ?? 0);
+if ($cursoDetalleId > 0) {
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+
+    if ($ingenioId <= 0) {
+        http_response_code(404);
+        echo json_encode(['error' => 'No hay un ingenio disponible para esta cuenta.']);
+        exit;
+    }
+
+    $stmtCursoDetalle = $db->prepare("SELECT c.id, c.codigo_curso, c.nombre_cursos,
+            ca.descripcion_categorias_cursos AS categoria, c.tipo AS modalidad, c.inicio, c.fin
+        FROM cursos c
+        INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
+        WHERE c.id = ? LIMIT 1");
+    $stmtCursoDetalle->execute([$cursoDetalleId]);
+    $cursoDetalle = $stmtCursoDetalle->fetch(PDO::FETCH_ASSOC);
+
+    if (!$cursoDetalle) {
+        http_response_code(404);
+        echo json_encode(['error' => 'El curso no existe.']);
+        exit;
+    }
+
+    $stmtParticipantesCurso = $db->prepare("SELECT p.id, p.nombre_participantes, p.cui_participantes, p.puesto_participantes,
+            a.estado_asignaciones, cc.asistencia, cc.evaluacion, cc.posevaluacion,
+            COALESCE(NULLIF(d.pdf_path, ''), NULLIF(cc.diploma, '')) AS diploma,
+            d.codigo_unico AS diploma_codigo
+        FROM asignaciones a
+        INNER JOIN participantes p ON p.id = a.participantes_id
+        LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
+        LEFT JOIN (
+            SELECT asignacion_id, MAX(pdf_path) AS pdf_path, MAX(codigo_unico) AS codigo_unico
+            FROM diplomas WHERE tipo = 'curso' GROUP BY asignacion_id
+        ) d ON d.asignacion_id = a.id
+        WHERE a.cursos_id = ? AND p.ingenio_id = ?
+        ORDER BY p.nombre_participantes");
+    $stmtParticipantesCurso->execute([$cursoDetalleId, $ingenioId]);
+    $participantesCurso = $stmtParticipantesCurso->fetchAll(PDO::FETCH_ASSOC);
+
+    echo json_encode(['curso' => $cursoDetalle, 'participantes' => $participantesCurso], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+// ---------------------------------------------------------------------
 // KPIs, graficas, cursos y participantes del ingenio resuelto.
 // ---------------------------------------------------------------------
 $busqueda = trim((string) ($_GET['q'] ?? ''));
@@ -381,11 +432,11 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
         <div class="cengi-table-wrap">
             <table class="table table-striped table-bordered table-hover">
                 <thead>
-                    <tr><th>Código</th><th>Curso</th><th>Categoría</th><th>Modalidad</th><th>Inicio</th><th>Fin</th><th>Inscritos</th><th>Asistencia</th><th>Evaluación final</th><th>Estado</th></tr>
+                    <tr><th>Código</th><th>Curso</th><th>Categoría</th><th>Modalidad</th><th>Inicio</th><th>Fin</th><th>Inscritos</th><th>Asistencia</th><th>Evaluación final</th><th>Estado</th><th>Acciones</th></tr>
                 </thead>
                 <tbody>
                     <?php if (!$cursosIngenio): ?>
-                        <tr><td colspan="10" class="text-center">Tu ingenio todavía no tiene cursos con participantes inscritos.</td></tr>
+                        <tr><td colspan="11" class="text-center">Tu ingenio todavía no tiene cursos con participantes inscritos.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($cursosIngenio as $c):
                         [$estadoLabel, $estadoClase] = cengi_dbi_estado_curso($c['inicio'], $c['fin']);
@@ -401,6 +452,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                             <td><?php echo $c['asistencia_prom'] !== null ? number_format((float) $c['asistencia_prom'], 0) . '%' : '—'; ?></td>
                             <td><?php echo $c['eval_prom'] !== null ? number_format((float) $c['eval_prom'], 0) . ' pts' : '—'; ?></td>
                             <td><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo $estadoLabel; ?></span></td>
+                            <td><button type="button" class="cengi-directory-profile-button" data-toggle="modal" data-target="#dashboard-ingenio-course-modal" data-curso-id="<?php echo (int) $c['id']; ?>">Ver participantes</button></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -481,6 +533,32 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                 <div class="cengi-directory-course-list" id="dashboard-ingenio-profile-courses"></div>
             </div>
             <div class="cengi-directory-modal-error" id="dashboard-ingenio-profile-error" hidden></div>
+        </div>
+        <footer class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button></footer>
+    </div></div>
+</div>
+
+<div class="modal fade cengi-directory-modal" id="dashboard-ingenio-course-modal" tabindex="-1" role="dialog" aria-labelledby="dashboard-ingenio-course-name">
+    <div class="modal-dialog" role="document"><div class="modal-content">
+        <header class="cengi-directory-profile-head">
+            <span class="cengi-directory-profile-avatar" id="dashboard-ingenio-course-avatar"><span class="glyphicon glyphicon-book" aria-hidden="true"></span></span>
+            <div><h2 id="dashboard-ingenio-course-name">Participantes del curso</h2><p id="dashboard-ingenio-course-subtitle"></p></div>
+            <button type="button" class="cengi-directory-modal-close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">×</span></button>
+        </header>
+        <div class="modal-body">
+            <div class="cengi-directory-modal-loading" id="dashboard-ingenio-course-loading"><span class="glyphicon glyphicon-refresh"></span> Cargando participantes…</div>
+            <div id="dashboard-ingenio-course-content" hidden>
+                <h3 class="cengi-directory-history-title">Participantes de tu ingenio en este curso</h3>
+                <div class="cengi-table-wrap">
+                    <table class="table table-striped table-bordered cengi-directory-table">
+                        <thead>
+                            <tr><th>Participante</th><th>CUI</th><th>Estado</th><th>Asistencia</th><th>Evaluación</th><th>Diploma</th></tr>
+                        </thead>
+                        <tbody id="dashboard-ingenio-course-participants"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="cengi-directory-modal-error" id="dashboard-ingenio-course-error" hidden></div>
         </div>
         <footer class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button></footer>
     </div></div>
@@ -634,6 +712,84 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
     $modal.on('hidden.bs.modal', function () {
         if (request) request.abort();
         request = null;
+    });
+
+    var courseRequest = null;
+    var $courseModal = $('#dashboard-ingenio-course-modal');
+    var $courseLoading = $('#dashboard-ingenio-course-loading');
+    var $courseContent = $('#dashboard-ingenio-course-content');
+    var $courseError = $('#dashboard-ingenio-course-error');
+    var $courseParticipants = $('#dashboard-ingenio-course-participants');
+
+    function renderCourseParticipantRow(participant) {
+        var estadoLabel = Number(participant.estado_asignaciones) === 1 ? 'Activo' : 'Inactivo';
+        var $row = $('<tr>');
+        $row.append($('<td>').append(
+            $('<div>', {class: 'cengi-directory-person'})
+                .append($('<span>', {class: 'cengi-directory-avatar'}).text(initials(participant.nombre_participantes)))
+                .append($('<span>').append($('<strong>').text(participant.nombre_participantes || '—')).append($('<small>').text(participant.puesto_participantes || '')))
+        ));
+        $row.append($('<td>').text(participant.cui_participantes || '—'));
+        $row.append($('<td>').text(estadoLabel));
+        $row.append($('<td>').text(valueOrDash(participant.asistencia, '%')));
+        $row.append($('<td>').text(valueOrDash(participant.evaluacion, ' pts')));
+
+        var href = diplomaHref(participant.diploma);
+        var $diplomaCell = $('<td>');
+        if (href) {
+            var label = participant.diploma_codigo ? 'Ver diploma · ' + participant.diploma_codigo : 'Ver diploma';
+            $diplomaCell.append($('<a>', {class: 'cengi-directory-diploma-link', href: href, target: '_blank', rel: 'noopener'})
+                .append($('<span>', {class: 'glyphicon glyphicon-file', 'aria-hidden': 'true'}))
+                .append(document.createTextNode(' ' + label)));
+        } else {
+            $diplomaCell.text('—');
+        }
+        $row.append($diplomaCell);
+        return $row;
+    }
+
+    function renderCourseDetail(data) {
+        var course = data.curso || {};
+        var participants = data.participantes || [];
+        var dateText = formatDate(course.inicio);
+        if (course.fin && course.fin !== '0000-00-00') dateText += ' – ' + formatDate(course.fin);
+        var meta = [course.categoria, course.modalidad, dateText].filter(Boolean).join(' · ');
+
+        $('#dashboard-ingenio-course-name').text(course.nombre_cursos || 'Participantes del curso');
+        $('#dashboard-ingenio-course-subtitle').text((course.codigo_curso ? course.codigo_curso + ' · ' : '') + meta);
+        $courseParticipants.empty();
+        if (!participants.length) {
+            $courseParticipants.append($('<tr>').append($('<td>', {colspan: 6, class: 'text-center'}).text('Tu ingenio no tiene participantes inscritos en este curso.')));
+        } else {
+            participants.forEach(function (participant) { $courseParticipants.append(renderCourseParticipantRow(participant)); });
+        }
+        $courseLoading.attr('hidden', true);
+        $courseError.attr('hidden', true);
+        $courseContent.removeAttr('hidden');
+    }
+
+    $courseModal.on('show.bs.modal', function (event) {
+        var trigger = event.relatedTarget;
+        var cursoId = trigger ? trigger.getAttribute('data-curso-id') : '';
+        if (courseRequest) courseRequest.abort();
+        $('#dashboard-ingenio-course-name').text('Participantes del curso');
+        $('#dashboard-ingenio-course-subtitle').text('');
+        $courseContent.attr('hidden', true);
+        $courseError.attr('hidden', true).text('');
+        $courseLoading.removeAttr('hidden');
+        courseRequest = $.ajax({url: 'dashboard_ingenio.php', data: {curso_detalle_id: cursoId, ingenio_id: currentIngenioId}, dataType: 'json', cache: false})
+            .done(renderCourseDetail).fail(function (xhr, status) {
+                if (status === 'abort') return;
+                var message = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'No fue posible cargar los participantes. Intenta nuevamente.';
+                $courseLoading.attr('hidden', true);
+                $courseContent.attr('hidden', true);
+                $courseError.text(message).removeAttr('hidden');
+            });
+    });
+
+    $courseModal.on('hidden.bs.modal', function () {
+        if (courseRequest) courseRequest.abort();
+        courseRequest = null;
     });
 })(jQuery);
 </script>

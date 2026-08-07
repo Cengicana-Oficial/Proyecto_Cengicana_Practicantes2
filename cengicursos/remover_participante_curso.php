@@ -7,7 +7,15 @@ cengi_require_eliminar_participantes('participantes.php');
 $db = conectar();
 $asignacionId = (int) ($_GET['asignacion_id'] ?? 0);
 $cursoId = (int) ($_GET['curso_id'] ?? 0);
-$destino = 'participantes.php?curso_id=' . $cursoId;
+$returnTo = trim((string) ($_GET['return_to'] ?? ''));
+
+if ($returnTo === 'seguimiento') {
+    $destino = 'ver_participante_curso.php?id=' . $cursoId;
+    $destinoExito = $destino . '&mensaje=removido';
+} else {
+    $destino = 'participantes.php?curso_id=' . $cursoId;
+    $destinoExito = $destino . '&estado=activo&mensaje=removido';
+}
 
 if ($asignacionId <= 0 || $cursoId <= 0) {
     header('Location: ' . $destino . '&error=remover');
@@ -41,7 +49,7 @@ try {
     ");
     $stmt->execute([$asignacionId, $cursoId]);
 
-    header('Location: ' . $destino . '&estado=activo&mensaje=removido');
+    header('Location: ' . $destinoExito);
 } catch (Throwable $e) {
     error_log('Error al remover participante del curso: ' . $e->getMessage());
     header('Location: ' . $destino . '&error=remover');
