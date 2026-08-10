@@ -218,6 +218,10 @@ function menu_render()
     </nav>
 
     <div class="cengi-sidebar-foot">
+        <a href="../login/Menu.php" class="cengi-nav-item cengi-menu-link">
+            <span class="glyphicon glyphicon-home"></span>
+            <span>Menu principal</span>
+        </a>
         <a href="logout.php?act=logout" class="cengi-nav-item cengi-logout-link">
             <span class="glyphicon glyphicon-log-out"></span>
             <span>Salir</span>

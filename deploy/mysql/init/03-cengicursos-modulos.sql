@@ -227,6 +227,30 @@ CREATE TABLE IF NOT EXISTS curso_modulo_temas (
     FOREIGN KEY (curso_modulo_id) REFERENCES curso_modulos (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Materiales del curso: seccion "Contenido del curso" en
+-- cengicursos/ver_participante_curso.php, con un titulo + link a una carpeta
+-- compartida externa (Google Drive, OneDrive, etc.) por item. Igual que
+-- curso_modulos, curso_id referencia la edicion especifica del curso (cursos.id).
+-- creado_por/creado_por_nombre son un snapshot (no hay FK cruzada posible: los
+-- usuarios viven en "usuarios_menu", separada de "cengi_cursos"). Ver tambien
+-- cengicursos/migrations/20260810_curso_contenidos.sql para la migracion
+-- idempotente equivalente sobre un contenedor ya inicializado.
+CREATE TABLE IF NOT EXISTS curso_contenidos (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  curso_id INT UNSIGNED NOT NULL,
+  titulo VARCHAR(255) NOT NULL,
+  url VARCHAR(500) NOT NULL,
+  orden INT UNSIGNED NOT NULL DEFAULT 0,
+  creado_por INT NULL,
+  creado_por_nombre VARCHAR(255) NOT NULL DEFAULT '',
+  creado TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_curso_contenidos_curso (curso_id),
+  CONSTRAINT fk_curso_contenidos_curso
+    FOREIGN KEY (curso_id) REFERENCES cursos (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS diplomas (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   tipo ENUM('curso','evento') NOT NULL,
