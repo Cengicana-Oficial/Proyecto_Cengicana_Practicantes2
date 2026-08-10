@@ -30,10 +30,12 @@ $stmt = $db->prepare("
         c.nombre_cursos,
         c.tipo AS modalidad,
         c.inicio,
-        i.nombre AS instructor_nombre
+        i.nombre AS instructor_nombre,
+        cm.nombre AS modulo_nombre
     FROM enlaces_evaluacion_instructor e
     INNER JOIN cursos c ON c.id = e.curso_id
     INNER JOIN instructores i ON i.id = e.instructor_id
+    LEFT JOIN curso_modulos cm ON cm.id = e.curso_modulo_id
     WHERE e.token = ?
 ");
 $stmt->execute([$token]);
@@ -195,6 +197,7 @@ try {
             seccion,
             modalidad,
             curso_nombre,
+            modulo_nombre,
             conferencista,
             fecha_curso,
             instructor_lenguaje_claro,
@@ -211,7 +214,7 @@ try {
             capacitaciones_necesarias,
             areas_mejora
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
     ');
     $stmtInsertar->execute([
@@ -222,6 +225,7 @@ try {
         $seccion,
         $modalidad,
         $enlace['nombre_cursos'],
+        $enlace['modulo_nombre'] ?? '',
         $enlace['instructor_nombre'],
         $enlace['inicio'] ?: null,
         $valoresLikertInstructor['instructor_lenguaje_claro'],

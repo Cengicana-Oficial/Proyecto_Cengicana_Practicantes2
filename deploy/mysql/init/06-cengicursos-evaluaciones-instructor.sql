@@ -29,6 +29,13 @@
 -- Como aplicarla manualmente sobre un contenedor MySQL que ya existe:
 --   docker compose -f docker-compose.prod.yml exec -T mysql \
 --     mysql -u root -p cengi_cursos < deploy/mysql/init/06-cengicursos-evaluaciones-instructor.sql
+--
+-- curso_modulo_id (NULL = evaluacion de curso completo; NOT NULL = evaluacion de ese
+-- modulo especifico para ese instructor) y la UNIQUE KEY (curso_id, instructor_id,
+-- curso_modulo_id) reflejan ya el esquema final de
+-- cengicursos/migrations/20260810_evaluacion_modulo_instructor.sql -- ver ese archivo
+-- para el detalle de por que solo los modulos con asignacion explicita en
+-- curso_modulo_instructores generan su propio enlace.
 
 USE cengi_cursos;
 
@@ -36,15 +43,19 @@ CREATE TABLE IF NOT EXISTS enlaces_evaluacion_instructor (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   curso_id INT UNSIGNED NOT NULL,
   instructor_id INT UNSIGNED NOT NULL,
+  curso_modulo_id INT UNSIGNED NULL,
   token VARCHAR(64) NOT NULL,
   creado TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_enlace_eval_curso_instructor (curso_id, instructor_id),
+  UNIQUE KEY uq_enlace_eval_curso_instructor_modulo (curso_id, instructor_id, curso_modulo_id),
   UNIQUE KEY uq_enlace_eval_token (token),
+  KEY idx_enlace_eval_curso_modulo (curso_modulo_id),
   CONSTRAINT fk_enlace_eval_curso
     FOREIGN KEY (curso_id) REFERENCES cursos (id) ON DELETE CASCADE,
   CONSTRAINT fk_enlace_eval_instructor
-    FOREIGN KEY (instructor_id) REFERENCES instructores (id) ON DELETE CASCADE
+    FOREIGN KEY (instructor_id) REFERENCES instructores (id) ON DELETE CASCADE,
+  CONSTRAINT fk_enlace_eval_curso_modulo
+    FOREIGN KEY (curso_modulo_id) REFERENCES curso_modulos (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- cargas_evaluaciones_instructor: historial de cargas masivas (Excel/CSV) de
@@ -77,6 +88,7 @@ CREATE TABLE IF NOT EXISTS evaluaciones_instructor (
   seccion VARCHAR(255) NOT NULL DEFAULT '',
   modalidad VARCHAR(60) NOT NULL DEFAULT '',
   curso_nombre VARCHAR(255) NOT NULL DEFAULT '',
+  modulo_nombre VARCHAR(255) NOT NULL DEFAULT '',
   conferencista VARCHAR(255) NOT NULL DEFAULT '',
   fecha_curso DATE NULL,
   instructor_lenguaje_claro TINYINT UNSIGNED NOT NULL DEFAULT 0,

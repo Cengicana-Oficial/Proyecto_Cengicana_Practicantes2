@@ -124,6 +124,42 @@ $camposEstudiante = $esEstudiante
     ? ', COALESCE(cc.posevaluacion, cc.evaluacion, 0) AS nota'
     : ', NULL AS nota';
 
+$porPaginaOpciones = [10, 15, 20];
+$porPagina = (int) ($_GET['por_pagina'] ?? 15);
+if (!in_array($porPagina, $porPaginaOpciones, true)) {
+    $porPagina = 15;
+}
+$paginaActual = (int) ($_GET['pagina'] ?? 1);
+if ($paginaActual < 1) {
+    $paginaActual = 1;
+}
+
+$sqlConteo = "
+    SELECT COUNT(*)
+    FROM cursos c
+    INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
+    INNER JOIN ingenios i ON i.id = c.ingenio_id
+    LEFT JOIN instructores ins ON ins.id = c.instructor_id
+    {$joinsEstudiante}
+    {$where}
+";
+$stmtConteo = $db->prepare($sqlConteo);
+$stmtConteo->execute($params);
+$totalCursos = (int) $stmtConteo->fetchColumn();
+
+$totalPaginas = max(1, (int) ceil($totalCursos / $porPagina));
+if ($paginaActual > $totalPaginas) {
+    $paginaActual = $totalPaginas;
+}
+$offset = ($paginaActual - 1) * $porPagina;
+
+function cengi_curso_pagina_url(int $pagina): string
+{
+    $query = $_GET;
+    $query['pagina'] = $pagina;
+    return 'ver_cursos.php?' . http_build_query($query);
+}
+
 $sql = "
     SELECT
         c.id AS idcurso,
@@ -154,10 +190,18 @@ $sql = "
     {$joinsEstudiante}
     {$where}
     ORDER BY c.inicio DESC, c.nombre_cursos
+    LIMIT ? OFFSET ?
 ";
 
 $stmt = $db->prepare($sql);
-$stmt->execute($params);
+$posicion = 1;
+foreach ($params as $valorParam) {
+    $stmt->bindValue($posicion, $valorParam);
+    $posicion++;
+}
+$stmt->bindValue($posicion++, $porPagina, PDO::PARAM_INT);
+$stmt->bindValue($posicion++, $offset, PDO::PARAM_INT);
+$stmt->execute();
 $cursos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $modulosPorCurso = [];
@@ -631,6 +675,11 @@ function cengi_curso_modal_atributos(array $curso)
                     <option value="<?php echo cengi_curso_html($opcionModalidad); ?>" <?php echo $modalidad === $opcionModalidad ? 'selected' : ''; ?>><?php echo cengi_curso_html($opcionModalidad); ?></option>
                 <?php endforeach; ?>
             </select>
+            <select name="por_pagina" aria-label="Cursos por página">
+                <?php foreach ($porPaginaOpciones as $opcionPorPagina): ?>
+                    <option value="<?php echo $opcionPorPagina; ?>" <?php echo $opcionPorPagina === $porPagina ? 'selected' : ''; ?>><?php echo $opcionPorPagina; ?> por página</option>
+                <?php endforeach; ?>
+            </select>
             <button type="submit" class="cengi-filter-submit" aria-label="Aplicar filtros"><span class="glyphicon glyphicon-filter" aria-hidden="true"></span><span>Filtrar</span></button>
             <?php if ($busqueda !== '' || $categoriaId > 0 || $estado !== '' || $modalidad !== '' || $anio !== (string) $anioActual): ?>
                 <a href="ver_cursos.php" class="cengi-filter-clear" aria-label="Limpiar filtros">Limpiar</a>
@@ -663,16 +712,16 @@ function cengi_curso_modal_atributos(array $curso)
                 ?>
                     <tr class="cengi-course-row">
                         <td class="is-expand"><button type="button" class="cengi-course-expand" data-course-toggle="course-detail-<?php echo $cursoId; ?>" aria-controls="course-detail-<?php echo $cursoId; ?>" aria-expanded="false" aria-label="Mostrar detalle de <?php echo cengi_curso_html($row['nombre_cursos']); ?>"><span class="glyphicon glyphicon-menu-down" aria-hidden="true"></span></button></td>
-                        <td class="cengi-course-code"><?php echo cengi_curso_html(cengi_curso_codigo_visible($row)); ?></td>
-                        <td class="cengi-course-name"><strong><?php echo cengi_curso_html($row['nombre_cursos']); ?></strong><small><?php echo cengi_curso_html($row['descripcion_categorias_cursos']); ?> · edición <?php echo cengi_curso_html($edicion); ?></small></td>
-                        <td><?php echo cengi_curso_html($row['descripcion_categorias_cursos']); ?></td>
-                        <td><?php echo cengi_curso_html($row['tipo'] ?: 'Sin definir'); ?></td>
-                        <td class="is-date"><?php echo cengi_curso_fecha($row['inicio']); ?></td>
-                        <td class="is-date"><?php echo cengi_curso_fecha($row['fin']); ?></td>
-                        <td class="cengi-course-progress-cell"><div class="cengi-course-progress" aria-label="<?php echo cengi_curso_html($avanceLabel); ?>"><span style="width:<?php echo $avance; ?>%;<?php echo $avance === 100 ? 'background:#CED2D5;' : ''; ?>"></span></div><small><?php echo cengi_curso_html($avanceLabel); ?></small></td>
-                        <td><?php echo cengi_curso_html($row['instructor_nombre'] ?: 'Sin asignar'); ?></td>
-                        <td><?php echo (int) $row['inscritos']; ?><?php echo (int) $row['cupo'] > 0 ? ' / ' . (int) $row['cupo'] : ''; ?></td>
-                        <td><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo cengi_curso_html($estadoLabel); ?></span></td>
+                        <td class="cengi-course-code" data-label="Código"><?php echo cengi_curso_html(cengi_curso_codigo_visible($row)); ?></td>
+                        <td class="cengi-course-name" data-label="Curso"><strong><?php echo cengi_curso_html($row['nombre_cursos']); ?></strong><small><?php echo cengi_curso_html($row['descripcion_categorias_cursos']); ?> · edición <?php echo cengi_curso_html($edicion); ?></small></td>
+                        <td data-label="Categoría"><?php echo cengi_curso_html($row['descripcion_categorias_cursos']); ?></td>
+                        <td data-label="Modalidad"><?php echo cengi_curso_html($row['tipo'] ?: 'Sin definir'); ?></td>
+                        <td class="is-date" data-label="Fecha inicio"><?php echo cengi_curso_fecha($row['inicio']); ?></td>
+                        <td class="is-date" data-label="Fecha fin"><?php echo cengi_curso_fecha($row['fin']); ?></td>
+                        <td class="cengi-course-progress-cell" data-label="Avance"><div class="cengi-course-progress" aria-label="<?php echo cengi_curso_html($avanceLabel); ?>"><span style="width:<?php echo $avance; ?>%;<?php echo $avance === 100 ? 'background:#CED2D5;' : ''; ?>"></span></div><small><?php echo cengi_curso_html($avanceLabel); ?></small></td>
+                        <td data-label="Instructor"><?php echo cengi_curso_html($row['instructor_nombre'] ?: 'Sin asignar'); ?></td>
+                        <td data-label="Cupo"><?php echo (int) $row['inscritos']; ?><?php echo (int) $row['cupo'] > 0 ? ' / ' . (int) $row['cupo'] : ''; ?></td>
+                        <td data-label="Estado"><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo cengi_curso_html($estadoLabel); ?></span></td>
                         <td class="is-actions"><div class="cengi-row-actions">
                             <?php if ($puedeGestionar || $puedeCalificar): ?><a class="cengi-action-btn is-view" href="ver_participante_curso.php?id=<?php echo $cursoId; ?>" data-tooltip="Ver participantes" aria-label="Ver participantes"><span class="glyphicon glyphicon-eye-open"></span></a><?php endif; ?>
                             <?php if ($puedeGestionar): ?>
@@ -717,6 +766,43 @@ function cengi_curso_modal_atributos(array $curso)
                 </tbody>
             </table>
         </div>
+        <?php if ($totalCursos > 0):
+            $primerRegistro = $offset + 1;
+            $ultimoRegistro = min($offset + $porPagina, $totalCursos);
+        ?>
+            <div class="cengi-courses-pagination">
+                <div class="cengi-courses-pagination-info">
+                    Mostrando <?php echo $primerRegistro; ?>–<?php echo $ultimoRegistro; ?> de <?php echo $totalCursos; ?> cursos
+                </div>
+                <?php if ($totalPaginas > 1): ?>
+                    <nav class="cengi-courses-pagination-nav" aria-label="Paginación de cursos">
+                        <a class="cengi-pagination-btn is-prev<?php echo $paginaActual <= 1 ? ' is-disabled' : ''; ?>" href="<?php echo $paginaActual > 1 ? cengi_curso_html(cengi_curso_pagina_url($paginaActual - 1)) : '#'; ?>" aria-label="Página anterior"<?php echo $paginaActual <= 1 ? ' aria-disabled="true" tabindex="-1"' : ''; ?>><span class="glyphicon glyphicon-chevron-left" aria-hidden="true"></span><span>Anterior</span></a>
+                        <div class="cengi-pagination-pages">
+                            <?php
+                            $ventana = 2;
+                            $rangoInicio = max(1, $paginaActual - $ventana);
+                            $rangoFin = min($totalPaginas, $paginaActual + $ventana);
+                            if ($rangoInicio > 1): ?>
+                                <a class="cengi-pagination-page" href="<?php echo cengi_curso_html(cengi_curso_pagina_url(1)); ?>">1</a>
+                                <?php if ($rangoInicio > 2): ?><span class="cengi-pagination-ellipsis">&hellip;</span><?php endif; ?>
+                            <?php endif; ?>
+                            <?php for ($pagina = $rangoInicio; $pagina <= $rangoFin; $pagina++): ?>
+                                <?php if ($pagina === $paginaActual): ?>
+                                    <span class="cengi-pagination-page is-current" aria-current="page"><?php echo $pagina; ?></span>
+                                <?php else: ?>
+                                    <a class="cengi-pagination-page" href="<?php echo cengi_curso_html(cengi_curso_pagina_url($pagina)); ?>"><?php echo $pagina; ?></a>
+                                <?php endif; ?>
+                            <?php endfor; ?>
+                            <?php if ($rangoFin < $totalPaginas): ?>
+                                <?php if ($rangoFin < $totalPaginas - 1): ?><span class="cengi-pagination-ellipsis">&hellip;</span><?php endif; ?>
+                                <a class="cengi-pagination-page" href="<?php echo cengi_curso_html(cengi_curso_pagina_url($totalPaginas)); ?>"><?php echo $totalPaginas; ?></a>
+                            <?php endif; ?>
+                        </div>
+                        <a class="cengi-pagination-btn is-next<?php echo $paginaActual >= $totalPaginas ? ' is-disabled' : ''; ?>" href="<?php echo $paginaActual < $totalPaginas ? cengi_curso_html(cengi_curso_pagina_url($paginaActual + 1)) : '#'; ?>" aria-label="Página siguiente"<?php echo $paginaActual >= $totalPaginas ? ' aria-disabled="true" tabindex="-1"' : ''; ?>><span>Siguiente</span><span class="glyphicon glyphicon-chevron-right" aria-hidden="true"></span></a>
+                    </nav>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
     </section>
 </main>
 
