@@ -331,6 +331,7 @@ $error = trim((string) ($_GET['error'] ?? ''));
                 'contenido_agregado' => 'El material se agregó correctamente.',
                 'contenido_actualizado' => 'El material se actualizó correctamente.',
                 'contenido_eliminado' => 'El material se eliminó correctamente.',
+                'diploma_eliminado' => 'El diploma se eliminó correctamente.',
             ];
             echo $cengiMensajesSeguimiento[$mensaje] ?? 'La operación se completó correctamente.';
             ?>
@@ -342,6 +343,7 @@ $error = trim((string) ($_GET['error'] ?? ''));
             <?php
             $cengiErroresSeguimiento = [
                 'url_invalida' => 'El link ingresado no es una URL http/https válida. Verifica el enlace e inténtalo nuevamente.',
+                'eliminar_diploma' => 'No fue posible eliminar el diploma. Verifica que exista e inténtalo nuevamente.',
             ];
             echo $cengiErroresSeguimiento[$error] ?? 'No fue posible completar la operación. Verifica los datos e inténtalo nuevamente.';
             ?>
@@ -690,6 +692,21 @@ $error = trim((string) ($_GET['error'] ?? ''));
                                         <a href="<?= cengi_pc_href($fila['diploma']) ?>" target="_blank" class="btn btn-info btn-sm">
                                             Ver PDF
                                         </a>
+                                        <?php if ($puedeSubirDiploma): ?>
+                                            <button
+                                                type="button"
+                                                class="btn btn-danger btn-sm diploma-delete-trigger"
+                                                data-toggle="modal"
+                                                data-target="#confirm-diploma-delete"
+                                                data-name="<?= htmlspecialchars($fila['nombre_participantes']) ?>"
+                                                data-href="eliminar_diploma_participante.php?asignacion_id=<?= (int) $fila['asignacion_id'] ?>&amp;curso_id=<?= $idcurso ?>"
+                                                data-tooltip="Eliminar diploma"
+                                                aria-label="Eliminar diploma"
+                                            >
+                                                <span class="glyphicon glyphicon-trash"></span>
+                                                Eliminar diploma
+                                            </button>
+                                        <?php endif; ?>
                                     <?php } elseif (!$puedeGestionar) { ?>
                                         <span class="text-muted">Sin diploma</span>
                                     <?php } ?>
@@ -1021,6 +1038,26 @@ $error = trim((string) ($_GET['error'] ?? ''));
     $('#confirm-participant-delete').on('show.bs.modal', function (event) {
         var trigger = event.relatedTarget;
         document.getElementById('participant-delete-name').textContent = trigger ? trigger.getAttribute('data-name') : '';
+        $(this).find('.btn-ok').attr('href', trigger ? trigger.getAttribute('data-href') : '#');
+    });
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($puedeSubirDiploma): ?>
+<div class="modal fade cengi-participant-modal" id="confirm-diploma-delete" tabindex="-1" role="dialog" aria-labelledby="diploma-delete-title">
+    <div class="modal-dialog cengi-modal-compact" role="document"><div class="modal-content cengi-confirm-content">
+        <div class="modal-body"><span class="cengi-confirm-icon"><span class="glyphicon glyphicon-trash"></span></span><h4 id="diploma-delete-title">Eliminar diploma</h4><p>¿Deseas eliminar el diploma de <strong id="diploma-delete-name"></strong>? Esta acción no se puede deshacer y el participante podrá volver a subir uno nuevo.</p></div>
+        <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><a class="btn btn-danger btn-ok" href="#">Sí, eliminar</a></div>
+    </div></div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    $('#confirm-diploma-delete').on('show.bs.modal', function (event) {
+        var trigger = event.relatedTarget;
+        document.getElementById('diploma-delete-name').textContent = trigger ? trigger.getAttribute('data-name') : '';
         $(this).find('.btn-ok').attr('href', trigger ? trigger.getAttribute('data-href') : '#');
     });
 })();

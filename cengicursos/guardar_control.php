@@ -157,10 +157,13 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
 
                 if ($extension === 'pdf' && $mime === 'application/pdf') {
                     $nombrePDF = time() . "_{$asignacionId}_" . preg_replace('/[^a-zA-Z0-9_.-]/', '_', $nombreOriginal);
-                    $ruta = "../uploads/diplomas/" . $nombrePDF;
+                    // cengi_guardar_archivo_subido() (conexion.php) usa una ruta de
+                    // filesystem absoluta para escribir y devuelve una URL raiz-absoluta
+                    // ("/uploads/...") en vez de la ruta relativa fragil que se usaba antes.
+                    $rutaGuardada = cengi_guardar_archivo_subido($archivoTemporal, 'diplomas', $nombrePDF);
 
-                    if (move_uploaded_file($archivoTemporal, $ruta)) {
-                        $diploma = $ruta;
+                    if ($rutaGuardada !== null) {
+                        $diploma = $rutaGuardada;
                     }
                 }
             }
@@ -241,10 +244,13 @@ if (
 
     if ($extension === 'pdf' && $mime === 'application/pdf') {
         $nombrePDF = time() . "_" . preg_replace('/[^a-zA-Z0-9_.-]/', '_', $_FILES['diploma']['name']);
-        $ruta = "../uploads/diplomas/" . $nombrePDF;
+        // cengi_guardar_archivo_subido() (conexion.php) usa una ruta de filesystem
+        // absoluta para escribir y devuelve una URL raiz-absoluta ("/uploads/...")
+        // en vez de la ruta relativa fragil que se usaba antes.
+        $rutaGuardada = cengi_guardar_archivo_subido($_FILES['diploma']['tmp_name'], 'diplomas', $nombrePDF);
 
-        if (move_uploaded_file($_FILES['diploma']['tmp_name'], $ruta)) {
-            $diploma = $ruta;
+        if ($rutaGuardada !== null) {
+            $diploma = $rutaGuardada;
         }
     }
 }
