@@ -47,9 +47,30 @@ CREATE TABLE IF NOT EXISTS enlaces_evaluacion_instructor (
     FOREIGN KEY (instructor_id) REFERENCES instructores (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- cargas_evaluaciones_instructor: historial de cargas masivas (Excel/CSV) de
+-- evaluaciones de instructor, para poder retirar una carga completa de una sola vez
+-- desde cengicursos/instructores.php (ver
+-- cengicursos/migrations/20260810_cargas_evaluaciones_instructor.sql para la
+-- explicacion completa del diseno: por que se referencia por curso_id y no por
+-- enlace_id/instructor_id, y por que usuario_id/usuario_nombre son un snapshot).
+CREATE TABLE IF NOT EXISTS cargas_evaluaciones_instructor (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  curso_id INT UNSIGNED NOT NULL,
+  usuario_id INT UNSIGNED NULL,
+  usuario_nombre VARCHAR(255) NOT NULL DEFAULT '',
+  archivo_nombre VARCHAR(255) NULL,
+  total_filas INT UNSIGNED NOT NULL DEFAULT 0,
+  creado TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_carga_eval_instructor_curso (curso_id),
+  CONSTRAINT fk_carga_eval_instructor_curso
+    FOREIGN KEY (curso_id) REFERENCES cursos (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS evaluaciones_instructor (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   enlace_id INT UNSIGNED NOT NULL,
+  carga_id INT UNSIGNED NULL,
   ingenio_id INT UNSIGNED NULL,
   ingenio_otro VARCHAR(255) NOT NULL DEFAULT '',
   cargo VARCHAR(255) NOT NULL DEFAULT '',
@@ -74,9 +95,12 @@ CREATE TABLE IF NOT EXISTS evaluaciones_instructor (
   creado TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_eval_instructor_enlace (enlace_id),
+  KEY idx_eval_instructor_carga (carga_id),
   KEY idx_eval_instructor_ingenio (ingenio_id),
   CONSTRAINT fk_eval_instructor_enlace
     FOREIGN KEY (enlace_id) REFERENCES enlaces_evaluacion_instructor (id) ON DELETE CASCADE,
+  CONSTRAINT fk_eval_instructor_carga
+    FOREIGN KEY (carga_id) REFERENCES cargas_evaluaciones_instructor (id) ON DELETE CASCADE,
   CONSTRAINT fk_eval_instructor_ingenio
     FOREIGN KEY (ingenio_id) REFERENCES ingenios (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
