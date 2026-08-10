@@ -85,7 +85,14 @@ if ($fichaId > 0) {
     $stmtHistorial->execute([$fichaId]);
     $cursosFicha = $stmtHistorial->fetchAll(PDO::FETCH_ASSOC);
     $resumen = ['total' => count($cursosFicha), 'completados' => 0, 'activos' => 0, 'diplomas' => 0];
-    foreach ($cursosFicha as $cursoFicha) {
+    foreach ($cursosFicha as &$cursoFicha) {
+        // El path guardado en BD (diplomas.pdf_path o control_cursos.diploma) puede
+        // venir en formatos legados fragiles ("../uploads/...", rutas de filesystem
+        // absolutas, etc.). Se normaliza aqui a la URL raiz-absoluta correcta antes de
+        // exponerlo en el JSON, para que diplomaHref() en el JS no dependa de resolver
+        // el string tal cual quedo guardado.
+        $cursoFicha['diploma'] = cengi_normalizar_url_archivo($cursoFicha['diploma']);
+
         if ($cursoFicha['estado_curso'] === 'finalizado') {
             $resumen['completados']++;
         } elseif ($cursoFicha['estado_curso'] === 'activo') {
@@ -95,6 +102,7 @@ if ($fichaId > 0) {
             $resumen['diplomas']++;
         }
     }
+    unset($cursoFicha);
 
     echo json_encode(['participante' => $ficha, 'resumen' => $resumen, 'cursos' => $cursosFicha], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
