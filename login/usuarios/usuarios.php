@@ -72,7 +72,7 @@ $sql = "
         u.correo,
         r.nombre_rol,
         COALESCE(i.nombre_ingenio, 'Sin ingenio') AS ingenio,
-        COALESCE(GROUP_CONCAT(DISTINCT m.nombre ORDER BY m.nombre SEPARATOR ', '), 'Sin modulo') AS modulos
+        GROUP_CONCAT(DISTINCT m.nombre ORDER BY m.nombre SEPARATOR ', ') AS modulos
     FROM usuarios u
     INNER JOIN roles r ON r.id = u.rol_id
     LEFT JOIN ingenios i ON i.id = u.ingenio_id
@@ -95,54 +95,131 @@ $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $titulo = $scopeConfig['title'] ?? 'Usuarios del sistema';
 ?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usuarios | CENGICAÑA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/ingenios.css?v=<?= @filemtime(__DIR__ . '/../assets/ingenios.css') ?: '1' ?>">
+</head>
+<body>
+<div class="ingenios-shell">
+    <a href="../Menu.php" class="btn-back">
+        <span class="material-symbols-outlined">arrow_back</span>
+        Volver al panel
+    </a>
 
-<link rel="stylesheet" href="../assets/usuarios.css">
+    <div class="ingenios-topbar">
+        <div class="page-heading">
+            <span class="eyebrow">Administración</span>
+            <h1><?= htmlspecialchars($titulo) ?></h1>
+            <p>Gestiona los usuarios registrados y los módulos a los que tienen acceso.</p>
+        </div>
 
-<a href="../Menu.php" class="btn-volver">Volver</a>
+        <a href="crear_usuario.php<?= $scope ? '?scope=' . urlencode($scope) : '' ?>" class="btn-primary">
+            <span class="material-symbols-outlined">add</span>
+            Crear usuario
+        </a>
+    </div>
 
-<h2><?php echo htmlspecialchars($titulo); ?></h2>
+    <div class="ingenios-card">
+        <div class="ingenios-card-head">
+            <strong>Usuarios registrados</strong>
+            <span class="ingenios-count"><?= count($usuarios) ?></span>
+        </div>
 
-<a href="crear_usuario.php<?php echo $scope ? '?scope=' . urlencode($scope) : ''; ?>">Crear usuario</a>
-
-<table border="1">
-<tr>
-    <th>ID</th>
-    <th>Nombre</th>
-    <th>Correo</th>
-    <th>Ingenio</th>
-    <th>Rol</th>
-    <th>Modulos</th>
-    <th>Acciones</th>
-</tr>
-
-<?php foreach ($usuarios as $usuario): ?>
-<tr>
-    <td><?php echo (int) $usuario['id']; ?></td>
-    <td><?php echo htmlspecialchars($usuario['nombre']); ?></td>
-    <td><?php echo htmlspecialchars($usuario['correo']); ?></td>
-    <td><?php echo htmlspecialchars($usuario['ingenio']); ?></td>
-    <td><?php echo htmlspecialchars($usuario['nombre_rol']); ?></td>
-    <td><?php echo htmlspecialchars($usuario['modulos']); ?></td>
-    <td>
-        <a href="editar_usuario.php?id=<?php echo (int) $usuario['id']; ?><?php echo $scope ? '&scope=' . urlencode($scope) : ''; ?>">Editar</a>
-        <?php if (strtolower((string) $usuario['nombre_rol']) !== 'superadmin'): ?>
-            <a href="#" class="btn-delete" data-id="<?php echo (int) $usuario['id']; ?>">Eliminar</a>
+        <?php if (count($usuarios) === 0): ?>
+            <div class="empty-state">
+                <span class="material-symbols-outlined">group</span>
+                <strong>Aún no hay usuarios registrados</strong>
+                <span>Crea el primero con el botón "Crear usuario".</span>
+            </div>
         <?php else: ?>
-            <span>Bloqueado</span>
+            <table class="ingenios-table">
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Correo</th>
+                    <th>Ingenio</th>
+                    <th>Rol</th>
+                    <th>Módulos</th>
+                    <th>Acciones</th>
+                </tr>
+
+                <?php foreach ($usuarios as $usuario): ?>
+                    <?php $esUsuarioSuperadmin = strtolower((string) $usuario['nombre_rol']) === 'superadmin'; ?>
+                    <tr>
+                        <td><span class="id-chip">#<?= (int) $usuario['id'] ?></span></td>
+                        <td>
+                            <div class="ingenio-name">
+                                <span class="ingenio-icon">
+                                    <span class="material-symbols-outlined">person</span>
+                                </span>
+                                <?= htmlspecialchars($usuario['nombre']) ?>
+                            </div>
+                        </td>
+                        <td><?= htmlspecialchars($usuario['correo']) ?></td>
+                        <td><?= htmlspecialchars($usuario['ingenio']) ?></td>
+                        <td><?= htmlspecialchars($usuario['nombre_rol']) ?></td>
+                        <td>
+                            <?php
+                            $modulosUsuarioLista = array_filter(array_map('trim', explode(',', (string) ($usuario['modulos'] ?? ''))));
+                            ?>
+                            <?php if ($modulosUsuarioLista): ?>
+                                <div class="module-badges">
+                                    <?php foreach ($modulosUsuarioLista as $moduloNombre): ?>
+                                        <span class="module-badge"><?= htmlspecialchars($moduloNombre) ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php else: ?>
+                                <span class="text-muted-small">Sin módulo</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <div class="row-actions">
+                                <a class="action-btn"
+                                   href="editar_usuario.php?id=<?= (int) $usuario['id'] ?><?= $scope ? '&scope=' . urlencode($scope) : '' ?>"
+                                   title="Editar">
+                                    <span class="material-symbols-outlined">edit</span>
+                                </a>
+
+                                <?php if (!$esUsuarioSuperadmin): ?>
+                                    <a class="action-btn is-danger btn-delete" href="#"
+                                       data-url="eliminar_usuario.php?id=<?= (int) $usuario['id'] ?><?= $scope ? '&scope=' . urlencode($scope) : '' ?>"
+                                       title="Eliminar">
+                                        <span class="material-symbols-outlined">delete</span>
+                                    </a>
+                                <?php else: ?>
+                                    <span class="badge-protected">
+                                        <span class="material-symbols-outlined">lock</span>
+                                        Bloqueado
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </table>
         <?php endif; ?>
-    </td>
-</tr>
-<?php endforeach; ?>
-</table>
+    </div>
+</div>
 
-<div id="deleteModal" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:none;justify-content:center;align-items:center;z-index:9999;">
-    <div style="background:white;padding:30px;border-radius:15px;width:320px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.3);">
-        <h3>Eliminar usuario?</h3>
-        <p>Esta accion no se puede deshacer.</p>
+<div id="deleteModal" class="modal">
+    <div class="modal-content">
+        <div class="confirm-icon">
+            <span class="material-symbols-outlined">warning</span>
+        </div>
+        <h3>¿Eliminar usuario?</h3>
+        <p>Esta acción no se puede deshacer.</p>
 
-        <div style="margin-top:20px;display:flex;gap:10px;">
-            <button id="cancelBtn" style="flex:1;padding:10px;border:none;background:#ccc;border-radius:8px;cursor:pointer;">Cancelar</button>
-            <a id="confirmDelete" href="#" style="flex:1;padding:10px;background:#e74c3c;color:white;text-decoration:none;border-radius:8px;display:flex;justify-content:center;align-items:center;">Eliminar</a>
+        <div class="modal-buttons">
+            <button id="cancelBtn" type="button">Cancelar</button>
+            <a id="confirmDelete" href="#">Eliminar</a>
         </div>
     </div>
 </div>
@@ -152,21 +229,19 @@ const modal = document.getElementById("deleteModal");
 const confirmBtn = document.getElementById("confirmDelete");
 const cancelBtn = document.getElementById("cancelBtn");
 
-document.querySelectorAll(".btn-delete").forEach((btn) => {
-    btn.addEventListener("click", function (e) {
-        e.preventDefault();
-        confirmBtn.href = "eliminar_usuario.php?id=" + this.getAttribute("data-id");
-        modal.style.display = "flex";
-    });
+document.querySelectorAll(".btn-delete").forEach(btn => {
+  btn.addEventListener("click", function (e) {
+    e.preventDefault();
+    confirmBtn.href = this.getAttribute("data-url");
+    modal.classList.add("active");
+  });
 });
 
-cancelBtn.addEventListener("click", () => {
-    modal.style.display = "none";
-});
+cancelBtn.onclick = () => modal.classList.remove("active");
 
-window.addEventListener("click", (e) => {
-    if (e.target === modal) {
-        modal.style.display = "none";
-    }
-});
+window.onclick = (e) => {
+  if (e.target === modal) modal.classList.remove("active");
+};
 </script>
+</body>
+</html>

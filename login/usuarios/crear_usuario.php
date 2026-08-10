@@ -147,75 +147,123 @@ $roles = $stmtRoles->fetchAll(PDO::FETCH_ASSOC);
 $stmtIngenios = $conn->query("SELECT id, nombre_ingenio FROM ingenios ORDER BY nombre_ingenio");
 $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
 ?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crear usuario | CENGICAÑA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/ingenios.css?v=<?= @filemtime(__DIR__ . '/../assets/ingenios.css') ?: '1' ?>">
+</head>
+<body>
+<div class="ingenios-shell">
+    <a href="<?= htmlspecialchars($destinoRegreso) ?>" class="btn-back">
+        <span class="material-symbols-outlined">arrow_back</span>
+        Volver
+    </a>
 
-<link rel="stylesheet" href="../assets/usuarios.css">
-
-<a href="<?php echo htmlspecialchars($destinoRegreso); ?>" class="btn-volver">Volver</a>
-
-<?php if (!empty($error)): ?>
-    <p style="color:#b42318;font-weight:700;"><?php echo htmlspecialchars($error); ?></p>
-<?php endif; ?>
-
-<form method="POST">
-    <h2>Crear usuario</h2>
-
-    <input type="text" name="nombre" placeholder="Nombre" value="<?php echo htmlspecialchars($_POST['nombre'] ?? ''); ?>" required>
-    <input type="email" name="correo" placeholder="Correo" value="<?php echo htmlspecialchars($_POST['correo'] ?? ''); ?>" required>
-    <input type="password" name="contrasena" placeholder="Contrasena" required>
-
-    <label>Rol</label>
-    <select name="rol_id" id="rolSelect" required>
-        <option value="">Seleccione un rol</option>
-        <?php foreach ($roles as $rol): ?>
-            <option value="<?php echo (int) $rol['id']; ?>" <?php echo ((int) ($rol['id']) === (int) ($_POST['rol_id'] ?? 0)) ? 'selected' : ''; ?>>
-                <?php echo htmlspecialchars($rol['nombre_rol']); ?>
-            </option>
-        <?php endforeach; ?>
-    </select>
-
-    <label>Ingenio asignado</label>
-    <select name="ingenio_id" required>
-        <option value="">Seleccione un ingenio</option>
-        <?php foreach ($ingenios as $ingenio): ?>
-            <option value="<?php echo (int) $ingenio['id']; ?>" <?php echo ((int) ($ingenio['id']) === (int) ($_POST['ingenio_id'] ?? 0)) ? 'selected' : ''; ?>>
-                <?php echo htmlspecialchars($ingenio['nombre_ingenio']); ?>
-            </option>
-        <?php endforeach; ?>
-    </select>
-    <p class="form-help">Este campo es obligatorio para que los filtros por ingenio funcionen correctamente.</p>
-
-    <?php if ($scopeConfig): ?>
-        <label>Modulo asignado</label>
-        <div class="module-badges">
-            <?php foreach ($modulosDisponibles as $modulo): ?>
-                <span class="module-badge"><?php echo htmlspecialchars($modulo['nombre']); ?></span>
-            <?php endforeach; ?>
+    <?php if (!empty($error)): ?>
+        <div class="alert-banner">
+            <span class="material-symbols-outlined">error</span>
+            <span><?= htmlspecialchars($error) ?></span>
         </div>
-        <p class="form-help">Este usuario se guardara automaticamente en el modulo <?php echo htmlspecialchars($scopeConfig['label']); ?>.</p>
-    <?php elseif ($esSuperadmin): ?>
-        <div id="moduloContainer">
-            <label>Modulos asignados</label>
-            <select name="modulo_ids[]" multiple size="6" class="multi-select">
-                <?php foreach ($modulosDisponibles as $modulo): ?>
-                    <option value="<?php echo (int) $modulo['id']; ?>">
-                        <?php echo htmlspecialchars($modulo['nombre']); ?>
+    <?php endif; ?>
+
+    <form method="POST" class="form-card form-card-wide">
+        <h1>Crear usuario</h1>
+        <p class="form-sub">Registra un nuevo usuario y asígnale un rol, ingenio y módulos.</p>
+
+        <div class="form-field">
+            <label for="nombre">Nombre</label>
+            <input id="nombre" type="text" name="nombre" placeholder="Nombre completo"
+                   value="<?= htmlspecialchars($_POST['nombre'] ?? '') ?>" required autofocus>
+        </div>
+
+        <div class="form-field">
+            <label for="correo">Correo</label>
+            <input id="correo" type="email" name="correo" placeholder="correo@cengicana.org"
+                   value="<?= htmlspecialchars($_POST['correo'] ?? '') ?>" required>
+        </div>
+
+        <div class="form-field">
+            <label for="contrasena">Contraseña</label>
+            <input id="contrasena" type="password" name="contrasena" placeholder="Contraseña" required>
+        </div>
+
+        <div class="form-field">
+            <label for="rolSelect">Rol</label>
+            <select id="rolSelect" name="rol_id" required>
+                <option value="">Seleccione un rol</option>
+                <?php foreach ($roles as $rol): ?>
+                    <option value="<?= (int) $rol['id'] ?>" <?= ((int) $rol['id'] === (int) ($_POST['rol_id'] ?? 0)) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($rol['nombre_rol']) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
-            <p class="form-help">Mantiene presionada la tecla Ctrl para seleccionar mas de un modulo.</p>
         </div>
-    <?php elseif (!empty($modulosDisponibles)): ?>
-        <label>Modulo asignado</label>
-        <div class="module-badges">
-            <?php foreach ($modulosDisponibles as $modulo): ?>
-                <span class="module-badge"><?php echo htmlspecialchars($modulo['nombre']); ?></span>
-            <?php endforeach; ?>
-        </div>
-        <p class="form-help">Como administrador de modulo, solo puedes crear usuarios para tu propio modulo.</p>
-    <?php endif; ?>
 
-    <button type="submit">Crear usuario</button>
-</form>
+        <div class="form-field">
+            <label for="ingenio_id">Ingenio asignado</label>
+            <select id="ingenio_id" name="ingenio_id" required>
+                <option value="">Seleccione un ingenio</option>
+                <?php foreach ($ingenios as $ingenio): ?>
+                    <option value="<?= (int) $ingenio['id'] ?>" <?= ((int) $ingenio['id'] === (int) ($_POST['ingenio_id'] ?? 0)) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($ingenio['nombre_ingenio']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <p class="form-help">Este campo es obligatorio para que los filtros por ingenio funcionen correctamente.</p>
+        </div>
+
+        <?php if ($scopeConfig): ?>
+            <div class="form-field">
+                <label>Módulo asignado</label>
+                <div class="module-badges">
+                    <?php foreach ($modulosDisponibles as $modulo): ?>
+                        <span class="module-badge"><?= htmlspecialchars($modulo['nombre']) ?></span>
+                    <?php endforeach; ?>
+                </div>
+                <p class="form-help">Este usuario se guardará automáticamente en el módulo <?= htmlspecialchars($scopeConfig['label']) ?>.</p>
+            </div>
+        <?php elseif ($esSuperadmin): ?>
+            <div class="form-field" id="moduloContainer">
+                <label>Módulos asignados</label>
+                <div class="module-picker">
+                    <?php foreach ($modulosDisponibles as $modulo): ?>
+                        <label class="module-chip">
+                            <input type="checkbox" name="modulo_ids[]" value="<?= (int) $modulo['id'] ?>">
+                            <span class="material-symbols-outlined">widgets</span>
+                            <?= htmlspecialchars($modulo['nombre']) ?>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <p class="form-help">Selecciona uno o más módulos para este usuario.</p>
+            </div>
+        <?php elseif (!empty($modulosDisponibles)): ?>
+            <div class="form-field">
+                <label>Módulo asignado</label>
+                <div class="module-badges">
+                    <?php foreach ($modulosDisponibles as $modulo): ?>
+                        <span class="module-badge"><?= htmlspecialchars($modulo['nombre']) ?></span>
+                    <?php endforeach; ?>
+                </div>
+                <p class="form-help">Como administrador de módulo, solo puedes crear usuarios para tu propio módulo.</p>
+            </div>
+        <?php endif; ?>
+
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">
+                <span class="material-symbols-outlined">check</span>
+                Crear usuario
+            </button>
+            <a href="<?= htmlspecialchars($destinoRegreso) ?>" class="btn-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>
 
 <?php if ($esSuperadmin && !$scopeConfig): ?>
 <script>
@@ -224,5 +272,13 @@ document.getElementById("rolSelect").addEventListener("change", function () {
     if (!moduloDiv) return;
     moduloDiv.style.display = this.value === "1" ? "none" : "block";
 });
+
+document.querySelectorAll(".module-chip input[type=\"checkbox\"]").forEach(function (cb) {
+    cb.addEventListener("change", function () {
+        cb.closest(".module-chip").classList.toggle("is-checked", cb.checked);
+    });
+});
 </script>
 <?php endif; ?>
+</body>
+</html>

@@ -7,6 +7,48 @@ if (!isset($_SESSION['id_usuario'])) {
     exit;
 }
 
+/**
+ * Muestra una página de aviso con el mismo lenguaje visual del módulo
+ * (usada cuando no se puede continuar con la edición) y termina la
+ * ejecución.
+ */
+function usuarios_mostrar_aviso($titulo, $mensaje, $volverA = 'usuarios.php')
+{
+    ?>
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title><?= htmlspecialchars($titulo) ?> | CENGICAÑA</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="../assets/ingenios.css?v=<?= @filemtime(__DIR__ . '/../assets/ingenios.css') ?: '1' ?>">
+    </head>
+    <body>
+    <div class="ingenios-shell">
+        <a href="<?= htmlspecialchars($volverA) ?>" class="btn-back">
+            <span class="material-symbols-outlined">arrow_back</span>
+            Volver
+        </a>
+
+        <div class="confirm-card">
+            <div class="confirm-icon">
+                <span class="material-symbols-outlined">warning</span>
+            </div>
+            <h1><?= htmlspecialchars($titulo) ?></h1>
+            <p><?= htmlspecialchars($mensaje) ?></p>
+            <a href="<?= htmlspecialchars($volverA) ?>" class="btn-primary">Volver al listado</a>
+        </div>
+    </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
 function user_scope_config($scope)
 {
     $scope = strtolower(trim((string) $scope));
@@ -35,7 +77,7 @@ $scopeConfig = user_scope_config($scope);
 $id = (int) ($_GET['id'] ?? 0);
 
 if ($id <= 0) {
-    die("ID invalido");
+    usuarios_mostrar_aviso("ID inválido", "No se recibió un identificador de usuario válido.", $scopeConfig['return_url'] ?? 'usuarios.php');
 }
 
 if (!$esSuperadmin && !$scopeConfig) {
@@ -48,7 +90,7 @@ $stmtUsuario->execute([$id]);
 $usuario = $stmtUsuario->fetch(PDO::FETCH_ASSOC);
 
 if (!$usuario) {
-    die("Usuario no encontrado");
+    usuarios_mostrar_aviso("Usuario no encontrado", "El usuario que intentas editar ya no existe.", $scopeConfig['return_url'] ?? 'usuarios.php');
 }
 
 $modulosActualesUsuario = [];
@@ -172,74 +214,121 @@ $roles = $stmtRoles->fetchAll(PDO::FETCH_ASSOC);
 $stmtIngenios = $conn->query("SELECT id, nombre_ingenio FROM ingenios ORDER BY nombre_ingenio");
 $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
 ?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar usuario | CENGICAÑA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/ingenios.css?v=<?= @filemtime(__DIR__ . '/../assets/ingenios.css') ?: '1' ?>">
+</head>
+<body>
+<div class="ingenios-shell">
+    <a href="<?= htmlspecialchars($destinoRegreso) ?>" class="btn-back">
+        <span class="material-symbols-outlined">arrow_back</span>
+        Volver
+    </a>
 
-<link rel="stylesheet" href="../assets/usuarios.css">
-
-<a href="<?php echo htmlspecialchars($destinoRegreso); ?>" class="btn-volver">Volver</a>
-
-<?php if (!empty($error)): ?>
-    <p style="color:#b42318;font-weight:700;"><?php echo htmlspecialchars($error); ?></p>
-<?php endif; ?>
-
-<form method="POST">
-    <h2>Editar usuario</h2>
-
-    <input name="nombre" value="<?php echo htmlspecialchars($usuario['nombre']); ?>" required>
-    <input name="correo" value="<?php echo htmlspecialchars($usuario['correo']); ?>" required>
-    <input type="password" name="contrasena" placeholder="Nueva contrasena (opcional)">
-
-    <label>Rol</label>
-    <select name="rol_id" id="rolSelect" required>
-        <?php foreach ($roles as $rol): ?>
-            <option value="<?php echo (int) $rol['id']; ?>" <?php echo ((int) $rol['id'] === (int) $usuario['rol_id']) ? 'selected' : ''; ?>>
-                <?php echo htmlspecialchars($rol['nombre_rol']); ?>
-            </option>
-        <?php endforeach; ?>
-    </select>
-
-    <label>Ingenio asignado</label>
-    <select name="ingenio_id" required>
-        <option value="">Seleccione un ingenio</option>
-        <?php foreach ($ingenios as $ingenio): ?>
-            <option value="<?php echo (int) $ingenio['id']; ?>" <?php echo ((int) $ingenio['id'] === (int) ($usuario['ingenio_id'] ?? 0)) ? 'selected' : ''; ?>>
-                <?php echo htmlspecialchars($ingenio['nombre_ingenio']); ?>
-            </option>
-        <?php endforeach; ?>
-    </select>
-    <p class="form-help">Mantener el ingenio correcto es necesario para que el usuario solo vea su informacion.</p>
-
-    <?php if ($scopeConfig): ?>
-        <label>Modulo asignado</label>
-        <div class="module-badges">
-            <?php foreach ($modulosDisponibles as $modulo): ?>
-                <span class="module-badge"><?php echo htmlspecialchars($modulo['nombre']); ?></span>
-            <?php endforeach; ?>
+    <?php if (!empty($error)): ?>
+        <div class="alert-banner">
+            <span class="material-symbols-outlined">error</span>
+            <span><?= htmlspecialchars($error) ?></span>
         </div>
-        <p class="form-help">Este usuario seguira vinculado al modulo <?php echo htmlspecialchars($scopeConfig['label']); ?>.</p>
-    <?php elseif ($esSuperadmin): ?>
-        <div id="moduloContainer">
-            <label>Modulos asignados</label>
-            <select name="modulo_ids[]" multiple size="6" class="multi-select">
-                <?php foreach ($modulosDisponibles as $modulo): ?>
-                    <option value="<?php echo (int) $modulo['id']; ?>" <?php echo in_array((int) $modulo['id'], $modulosUsuarioActuales, true) ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($modulo['nombre']); ?>
+    <?php endif; ?>
+
+    <form method="POST" class="form-card form-card-wide">
+        <h1>Editar usuario</h1>
+        <p class="form-sub">Actualiza los datos del usuario #<?= (int) $usuario['id'] ?>.</p>
+
+        <div class="form-field">
+            <label for="nombre">Nombre</label>
+            <input id="nombre" name="nombre" value="<?= htmlspecialchars($usuario['nombre']) ?>" required autofocus>
+        </div>
+
+        <div class="form-field">
+            <label for="correo">Correo</label>
+            <input id="correo" name="correo" value="<?= htmlspecialchars($usuario['correo']) ?>" required>
+        </div>
+
+        <div class="form-field">
+            <label for="contrasena">Nueva contraseña</label>
+            <input id="contrasena" type="password" name="contrasena" placeholder="Nueva contraseña (opcional)">
+        </div>
+
+        <div class="form-field">
+            <label for="rolSelect">Rol</label>
+            <select id="rolSelect" name="rol_id" required>
+                <?php foreach ($roles as $rol): ?>
+                    <option value="<?= (int) $rol['id'] ?>" <?= ((int) $rol['id'] === (int) $usuario['rol_id']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($rol['nombre_rol']) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
-            <p class="form-help">Mantiene presionada la tecla Ctrl para seleccionar mas de un modulo.</p>
         </div>
-    <?php elseif (!empty($modulosDisponibles)): ?>
-        <label>Modulo asignado</label>
-        <div class="module-badges">
-            <?php foreach ($modulosDisponibles as $modulo): ?>
-                <span class="module-badge"><?php echo htmlspecialchars($modulo['nombre']); ?></span>
-            <?php endforeach; ?>
-        </div>
-        <p class="form-help">Como administrador de modulo, solo puedes administrar usuarios del mismo modulo.</p>
-    <?php endif; ?>
 
-    <button>Guardar</button>
-</form>
+        <div class="form-field">
+            <label for="ingenio_id">Ingenio asignado</label>
+            <select id="ingenio_id" name="ingenio_id" required>
+                <option value="">Seleccione un ingenio</option>
+                <?php foreach ($ingenios as $ingenio): ?>
+                    <option value="<?= (int) $ingenio['id'] ?>" <?= ((int) $ingenio['id'] === (int) ($usuario['ingenio_id'] ?? 0)) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($ingenio['nombre_ingenio']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <p class="form-help">Mantener el ingenio correcto es necesario para que el usuario solo vea su información.</p>
+        </div>
+
+        <?php if ($scopeConfig): ?>
+            <div class="form-field">
+                <label>Módulo asignado</label>
+                <div class="module-badges">
+                    <?php foreach ($modulosDisponibles as $modulo): ?>
+                        <span class="module-badge"><?= htmlspecialchars($modulo['nombre']) ?></span>
+                    <?php endforeach; ?>
+                </div>
+                <p class="form-help">Este usuario seguirá vinculado al módulo <?= htmlspecialchars($scopeConfig['label']) ?>.</p>
+            </div>
+        <?php elseif ($esSuperadmin): ?>
+            <div class="form-field" id="moduloContainer">
+                <label>Módulos asignados</label>
+                <div class="module-picker">
+                    <?php foreach ($modulosDisponibles as $modulo): ?>
+                        <?php $moduloMarcado = in_array((int) $modulo['id'], $modulosUsuarioActuales, true); ?>
+                        <label class="module-chip<?= $moduloMarcado ? ' is-checked' : '' ?>">
+                            <input type="checkbox" name="modulo_ids[]" value="<?= (int) $modulo['id'] ?>" <?= $moduloMarcado ? 'checked' : '' ?>>
+                            <span class="material-symbols-outlined">widgets</span>
+                            <?= htmlspecialchars($modulo['nombre']) ?>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <p class="form-help">Selecciona uno o más módulos para este usuario.</p>
+            </div>
+        <?php elseif (!empty($modulosDisponibles)): ?>
+            <div class="form-field">
+                <label>Módulo asignado</label>
+                <div class="module-badges">
+                    <?php foreach ($modulosDisponibles as $modulo): ?>
+                        <span class="module-badge"><?= htmlspecialchars($modulo['nombre']) ?></span>
+                    <?php endforeach; ?>
+                </div>
+                <p class="form-help">Como administrador de módulo, solo puedes administrar usuarios del mismo módulo.</p>
+            </div>
+        <?php endif; ?>
+
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">
+                <span class="material-symbols-outlined">check</span>
+                Guardar cambios
+            </button>
+            <a href="<?= htmlspecialchars($destinoRegreso) ?>" class="btn-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>
 
 <?php if ($esSuperadmin && !$scopeConfig): ?>
 <script>
@@ -248,5 +337,13 @@ document.getElementById("rolSelect").addEventListener("change", function () {
     if (!moduloDiv) return;
     moduloDiv.style.display = this.value === "1" ? "none" : "block";
 });
+
+document.querySelectorAll(".module-chip input[type=\"checkbox\"]").forEach(function (cb) {
+    cb.addEventListener("change", function () {
+        cb.closest(".module-chip").classList.toggle("is-checked", cb.checked);
+    });
+});
 </script>
 <?php endif; ?>
+</body>
+</html>

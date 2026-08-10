@@ -69,11 +69,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar) {
                 $cvError = 'El CV debe ser un archivo PDF, DOC o DOCX.';
             } else {
                 $nombreArchivo = time() . '_' . preg_replace('/[^a-zA-Z0-9_.-]/', '_', $_FILES['cv']['name']);
-                $ruta = '../uploads/instructores/' . $nombreArchivo;
-                if (move_uploaded_file($_FILES['cv']['tmp_name'], $ruta)) {
-                    $cvPath = $ruta;
-                } else {
-                    $cvError = 'No fue posible guardar el archivo del CV en el servidor.';
+                $directorioDestino = '../uploads/instructores';
+                $ruta = $directorioDestino . '/' . $nombreArchivo;
+
+                // En despliegues Docker, "uploads/" suele ser un bind mount cuyo
+                // dueño/permisos vienen del host, no de la imagen: el chown hecho
+                // en el Dockerfile en tiempo de build no aplica a ese volumen en
+                // runtime. Verificamos aquí para poder dar un mensaje concreto en
+                // vez del genérico "no fue posible" cuando move_uploaded_file falla.
+                if (!is_dir($directorioDestino)) {
+                    $creado = @mkdir($directorioDestino, 0775, true);
+                    if (!$creado && !is_dir($directorioDestino)) {
+                        $cvError = 'El directorio de subida no existe y no pudo crearse en el servidor.';
+                        error_log(sprintf(
+                            'cengicursos/instructores.php: no se pudo crear el directorio de subida "%s" (revisar permisos del volumen montado en el host).',
+                            realpath('..') . '/uploads/instructores'
+                        ));
+                    }
+                }
+
+                if ($cvError === null && !is_writable($directorioDestino)) {
+                    $cvError = 'El directorio de subida no tiene permisos de escritura en el servidor.';
+                    error_log(sprintf(
+                        'cengicursos/instructores.php: el directorio de subida "%s" no es escribible por el usuario del servidor web (revisar chown/chmod del volumen montado, p. ej. "uploads/" en docker-compose.prod.yml).',
+                        realpath($directorioDestino) ?: $directorioDestino
+                    ));
+                }
+
+                if ($cvError === null) {
+                    if (move_uploaded_file($_FILES['cv']['tmp_name'], $ruta)) {
+                        $cvPath = $ruta;
+                    } else {
+                        $cvError = 'No fue posible guardar el archivo del CV en el servidor.';
+                        $ultimoError = error_get_last();
+                        error_log(sprintf(
+                            'cengicursos/instructores.php: move_uploaded_file("%s", "%s") fallo. Ultimo error PHP: %s',
+                            $_FILES['cv']['tmp_name'],
+                            $ruta,
+                            $ultimoError['message'] ?? 'desconocido'
+                        ));
+                    }
                 }
             }
         }
