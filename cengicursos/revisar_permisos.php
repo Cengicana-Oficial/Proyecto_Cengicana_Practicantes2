@@ -203,6 +203,14 @@ function cengi_puede_subir_diploma()
         || cengi_tiene_permiso('gestionar_notas_cengi');
 }
 
+function cengi_require_subir_diploma($redirect = 'ver_cursos.php')
+{
+    if (!cengi_puede_subir_diploma()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
 function cengi_puede_ver_usuarios()
 {
     return cengi_es_admin()
