@@ -26,6 +26,14 @@ function cengi_dip_html($valor)
     return htmlspecialchars((string) ($valor ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
+// Igual que cengi_dip_html(), pero para usarse especificamente en el href de un enlace a
+// un archivo subido (pdf_path): normaliza el path legado (ver cengi_normalizar_url_archivo()
+// en conexion.php) antes de escaparlo, en vez de imprimir el string de BD tal cual.
+function cengi_dip_href($valor)
+{
+    return htmlspecialchars(cengi_normalizar_url_archivo($valor), ENT_QUOTES, 'UTF-8');
+}
+
 function cengi_dip_mover_archivo(array $archivo, $carpeta)
 {
     $extension = strtolower(pathinfo($archivo['name'], PATHINFO_EXTENSION));
@@ -33,8 +41,10 @@ function cengi_dip_mover_archivo(array $archivo, $carpeta)
         return null;
     }
     $nombreArchivo = time() . '_' . preg_replace('/[^a-zA-Z0-9_.-]/', '_', $archivo['name']);
-    $ruta = "../uploads/{$carpeta}/" . $nombreArchivo;
-    return move_uploaded_file($archivo['tmp_name'], $ruta) ? $ruta : null;
+    // cengi_guardar_archivo_subido() (conexion.php) usa una ruta de filesystem
+    // absoluta para escribir y devuelve una URL raiz-absoluta ("/uploads/...")
+    // en vez de la ruta relativa fragil que se usaba antes.
+    return cengi_guardar_archivo_subido($archivo['tmp_name'], $carpeta, $nombreArchivo);
 }
 
 $tab = $_GET['tab'] ?? 'generar';
@@ -384,7 +394,7 @@ if ($eventoSeleccionadoId > 0) {
                                         <td class="mono cengi-cert-code"><?php echo cengi_dip_html($d['codigo_unico']); ?></td>
                                         <td class="cengi-cert-action-cell">
                                             <?php if ($d['pdf_path']): ?>
-                                                <a href="<?php echo cengi_dip_html($d['pdf_path']); ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
+                                                <a href="<?php echo cengi_dip_href($d['pdf_path']); ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
                                             <?php else: ?>
                                                 <span class="text-muted">Sin PDF</span>
                                             <?php endif; ?>
@@ -456,7 +466,7 @@ if ($eventoSeleccionadoId > 0) {
                                     <td><?php echo cengi_dip_html($d['nombre_participantes']); ?></td>
                                     <td>
                                         <?php if ($d['pdf_path']): ?>
-                                            <a href="<?php echo cengi_dip_html($d['pdf_path']); ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
+                                            <a href="<?php echo cengi_dip_href($d['pdf_path']); ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
                                         <?php else: ?>
                                             <span class="text-muted">Pendiente</span>
                                         <?php endif; ?>
@@ -535,7 +545,7 @@ if ($eventoSeleccionadoId > 0) {
                                     <td><?php echo cengi_dip_html($ep['nombre_invitado']); ?></td>
                                     <td>
                                         <?php if ($ep['pdf_path']): ?>
-                                            <a href="<?php echo cengi_dip_html($ep['pdf_path']); ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
+                                            <a href="<?php echo cengi_dip_href($ep['pdf_path']); ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
                                         <?php else: ?>
                                             <span class="text-muted">Pendiente</span>
                                         <?php endif; ?>

@@ -121,6 +121,16 @@ function cengi_part_html($valor)
     return htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8');
 }
 
+// Igual que cengi_part_html(), pero para el href/data-diploma de un archivo subido:
+// normaliza el path legado (cengi_normalizar_url_archivo() en conexion.php) antes de
+// escaparlo, en vez de imprimir el string de BD tal cual. El atributo data-diploma se
+// asigna directo como .href en JS (ver participant-grades-trigger mas abajo), asi que
+// tiene que llegar ya normalizado desde aqui.
+function cengi_part_href($valor)
+{
+    return htmlspecialchars(cengi_normalizar_url_archivo($valor), ENT_QUOTES, 'UTF-8');
+}
+
 function cengi_part_iniciales($nombre)
 {
     $partes = preg_split('/\s+/', trim((string) $nombre));
@@ -296,13 +306,13 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                         <td><strong><?php echo cengi_part_nota($fila['posevaluacion']); ?></strong></td>
                         <td>
                             <?php if (!empty($fila['diploma'])): ?>
-                                <a class="cengi-participant-diploma" href="<?php echo cengi_part_html($fila['diploma']); ?>" target="_blank" rel="noopener"><span class="glyphicon glyphicon-file"></span> PDF</a>
+                                <a class="cengi-participant-diploma" href="<?php echo cengi_part_href($fila['diploma']); ?>" target="_blank" rel="noopener"><span class="glyphicon glyphicon-file"></span> PDF</a>
                             <?php else: ?><span class="text-muted">—</span><?php endif; ?>
                         </td>
                         <td>
                             <div class="cengi-row-actions">
                                 <?php if ($puedeCalificar): ?>
-                                    <button type="button" class="cengi-action-btn participant-grades-trigger" data-toggle="modal" data-target="#participant-grades-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-assignment="<?php echo (int) $fila['asignacion_id']; ?>" data-attendance="<?php echo cengi_part_html($fila['asistencia']); ?>" data-pre="<?php echo cengi_part_html($fila['evaluacion']); ?>" data-post="<?php echo cengi_part_html($fila['posevaluacion']); ?>" data-diploma="<?php echo cengi_part_html($fila['diploma']); ?>" aria-label="Calificaciones" data-tooltip="Calificaciones"><span class="glyphicon glyphicon-education"></span></button>
+                                    <button type="button" class="cengi-action-btn participant-grades-trigger" data-toggle="modal" data-target="#participant-grades-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-assignment="<?php echo (int) $fila['asignacion_id']; ?>" data-attendance="<?php echo cengi_part_html($fila['asistencia']); ?>" data-pre="<?php echo cengi_part_html($fila['evaluacion']); ?>" data-post="<?php echo cengi_part_html($fila['posevaluacion']); ?>" data-diploma="<?php echo cengi_part_href($fila['diploma']); ?>" aria-label="Calificaciones" data-tooltip="Calificaciones"><span class="glyphicon glyphicon-education"></span></button>
                                 <?php endif; ?>
                                 <?php if ($puedeEditar): ?>
                                     <button type="button" class="cengi-action-btn participant-edit-trigger" data-toggle="modal" data-target="#participant-edit-modal" data-id="<?php echo (int) $fila['participante_id']; ?>" data-ingenio="<?php echo (int) $fila['ingenio_id']; ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-position="<?php echo cengi_part_html($fila['puesto_participantes']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-email="<?php echo cengi_part_html($fila['correo_participantes']); ?>" data-degree="<?php echo cengi_part_html($fila['grado_academico_participantes']); ?>" data-phone="<?php echo cengi_part_html($fila['telefono_participantes']); ?>" data-state="<?php echo (int) $fila['estado_participantes'] === 1 && (int) $fila['estado_asignaciones'] === 1 ? 1 : 0; ?>" aria-label="Editar" data-tooltip="Editar"><span class="glyphicon glyphicon-pencil"></span></button>

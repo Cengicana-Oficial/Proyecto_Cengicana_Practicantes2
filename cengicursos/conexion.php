@@ -152,6 +152,130 @@ function conectar_usuarios_menu()
 }
 
 /**
+ * Mueve un archivo ya subido por HTTP (tmp_name de $_FILES) a
+ * uploads/{subcarpeta}/ dentro del repo, y devuelve una URL absoluta desde
+ * la raiz del sitio ("/uploads/{subcarpeta}/archivo.pdf") lista para usarse
+ * como href, tanto desde PHP como desde JS.
+ *
+ * Antes, cada punto de subida (diplomas.php, guardar_control.php) construia
+ * la ruta de destino como una cadena RELATIVA de filesystem ("../uploads/..")
+ * y guardaba ese mismo string relativo en la BD para usarlo despues como
+ * href. Eso es fragil por dos razones: (1) move_uploaded_file() con una ruta
+ * relativa depende del cwd del proceso PHP en ese momento, que no esta
+ * garantizado que sea el directorio del script en todos los entornos/SAPIs
+ * (puede diferir entre local y produccion aunque el codigo sea identico); y
+ * (2) un string relativo solo se resuelve bien como URL si quien lo consume
+ * lo hace desde la misma profundidad de directorio (o via `new URL(path,
+ * location.href)` desde esa misma pagina), lo cual no es un invariante real
+ * del sistema.
+ *
+ * Esta funcion usa __DIR__ (ubicacion real del archivo conexion.php en
+ * cengicursos/, siempre correcta sin importar el cwd) para calcular la ruta
+ * de escritura, y guarda/devuelve una URL raiz-absoluta ("/uploads/...").
+ * cengicursos/ y uploads/ son directorios hermanos bajo el DocumentRoot (ver
+ * dockerfiles/modulos-app/error-pages.conf, que ya asume rutas raiz-absolutas
+ * como "/cengicursos/404.php"), asi que "/uploads/..." sirve igual sin
+ * importar desde que pagina o profundidad se genere el enlace.
+ *
+ * Los registros historicos en BD que ya tienen el formato relativo antiguo
+ * ("../uploads/...") siguen funcionando: el navegador resuelve igual de bien
+ * un href relativo que uno raiz-absoluto: ambos formatos pueden convivir sin
+ * necesidad de migrar datos existentes.
+ *
+ * Devuelve null si algo falla (y deja detalle en error_log para diagnostico).
+ */
+function cengi_guardar_archivo_subido($rutaTemporal, $subcarpeta, $nombreArchivo)
+{
+    $directorioAbsoluto = __DIR__ . '/../uploads/' . $subcarpeta;
+
+    if (!is_dir($directorioAbsoluto)) {
+        $creado = @mkdir($directorioAbsoluto, 0775, true);
+        if (!$creado && !is_dir($directorioAbsoluto)) {
+            error_log(sprintf(
+                'cengicursos: no se pudo crear el directorio de subida "%s" (revisar el volumen "uploads/" montado en el host, ver docker-compose.prod.yml).',
+                $directorioAbsoluto
+            ));
+            return null;
+        }
+    }
+
+    if (!is_writable($directorioAbsoluto)) {
+        error_log(sprintf(
+            'cengicursos: el directorio de subida "%s" no es escribible por el usuario del servidor web (revisar chown/chmod del volumen montado; ver dockerfiles/modulos-app/entrypoint.sh).',
+            realpath($directorioAbsoluto) ?: $directorioAbsoluto
+        ));
+        return null;
+    }
+
+    $rutaAbsolutaDestino = $directorioAbsoluto . '/' . $nombreArchivo;
+
+    if (!move_uploaded_file($rutaTemporal, $rutaAbsolutaDestino)) {
+        $ultimoError = error_get_last();
+        error_log(sprintf(
+            'cengicursos: move_uploaded_file("%s", "%s") fallo. Ultimo error PHP: %s',
+            $rutaTemporal,
+            $rutaAbsolutaDestino,
+            $ultimoError['message'] ?? 'desconocido'
+        ));
+        return null;
+    }
+
+    return '/uploads/' . $subcarpeta . '/' . $nombreArchivo;
+}
+
+/**
+ * Normaliza cualquier valor guardado historicamente en BD para un archivo de
+ * subida (diplomas.pdf_path, control_cursos.diploma, etc.) a la URL
+ * raiz-absoluta correcta ("/uploads/{subcarpeta}/archivo.pdf") que
+ * cengi_guardar_archivo_subido() devuelve hoy en dia.
+ *
+ * Existen registros antiguos guardados antes de esa migracion con formatos
+ * distintos: rutas relativas de filesystem ("../uploads/diplomas/x.pdf"),
+ * rutas absolutas de filesystem completas ("/var/www/html/uploads/..." o
+ * incluso con separadores de Windows), o rutas que arrastran el prefijo del
+ * modulo ("cengicursos/uploads/..."). Ninguno de esos formatos es seguro de
+ * usar tal cual como href: solo "funcionan por accidente" si la pagina que
+ * los consume esta exactamente al mismo nivel de profundidad que cuando se
+ * guardaron. Esta funcion no asume eso: siempre devuelve el mismo formato
+ * raiz-absoluto sin importar como haya quedado guardado el valor original.
+ *
+ * Devuelve '' si el valor esta vacio. Si el valor ya es una URL http(s)
+ * completa, se respeta tal cual.
+ */
+function cengi_normalizar_url_archivo($valor)
+{
+    $valor = trim((string) ($valor ?? ''));
+
+    if ($valor === '') {
+        return '';
+    }
+
+    if (preg_match('#^https?://#i', $valor)) {
+        return $valor;
+    }
+
+    // Normaliza separadores de Windows por si algun path legado se guardo con backslashes.
+    $valor = str_replace('\\', '/', $valor);
+
+    // "uploads/" es el unico segmento realmente relevante para armar la URL: sin importar
+    // cuanto prefijo de filesystem o de modulo traiga por delante (".." , "/var/www/html",
+    // "cengicursos", etc.), nos quedamos solo con esa parte.
+    $posicionUploads = stripos($valor, 'uploads/');
+    if ($posicionUploads !== false) {
+        return '/' . substr($valor, $posicionUploads);
+    }
+
+    // Ya viene como URL raiz-absoluta ("/algo/..."): se respeta tal cual.
+    if ($valor[0] === '/') {
+        return $valor;
+    }
+
+    // Cualquier otro formato relativo no reconocido: se interpreta como relativo a la
+    // raiz del sitio en vez de dejarlo depender de la profundidad de la pagina actual.
+    return '/' . ltrim($valor, './');
+}
+
+/**
  * Conexion PDO hacia usuarios_menu, usada unicamente por las pantallas de
  * Cengicursos que necesitan reutilizar los helpers de PDO de
  * login/config/permisos_roles.php (roles.php). El resto del modulo sigue

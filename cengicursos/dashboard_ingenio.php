@@ -137,7 +137,12 @@ if ($fichaId > 0) {
     $cursosFicha = $stmtHistorial->fetchAll(PDO::FETCH_ASSOC);
 
     $resumen = ['total' => count($cursosFicha), 'completados' => 0, 'activos' => 0, 'diplomas' => 0];
-    foreach ($cursosFicha as $cursoFicha) {
+    foreach ($cursosFicha as &$cursoFicha) {
+        // Normaliza cualquier formato legado de path (ver conexion.php) a la URL
+        // raiz-absoluta correcta antes de exponerlo en el JSON, igual que en
+        // directorio_participantes.php.
+        $cursoFicha['diploma'] = cengi_normalizar_url_archivo($cursoFicha['diploma']);
+
         if ($cursoFicha['estado_curso'] === 'finalizado') {
             $resumen['completados']++;
         } elseif ($cursoFicha['estado_curso'] === 'activo') {
@@ -147,6 +152,7 @@ if ($fichaId > 0) {
             $resumen['diplomas']++;
         }
     }
+    unset($cursoFicha);
 
     echo json_encode(['participante' => $ficha, 'resumen' => $resumen, 'cursos' => $cursosFicha], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
@@ -198,6 +204,13 @@ if ($cursoDetalleId > 0) {
         ORDER BY p.nombre_participantes");
     $stmtParticipantesCurso->execute([$cursoDetalleId, $ingenioId]);
     $participantesCurso = $stmtParticipantesCurso->fetchAll(PDO::FETCH_ASSOC);
+
+    // Misma normalizacion de path legado (ver conexion.php) que en el bloque de
+    // ficha_id de arriba, antes de exponer el path en el JSON.
+    foreach ($participantesCurso as &$participanteCurso) {
+        $participanteCurso['diploma'] = cengi_normalizar_url_archivo($participanteCurso['diploma']);
+    }
+    unset($participanteCurso);
 
     echo json_encode(['curso' => $cursoDetalle, 'participantes' => $participantesCurso], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
