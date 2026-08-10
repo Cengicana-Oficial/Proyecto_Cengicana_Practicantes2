@@ -11,6 +11,111 @@ $soloCalifica = cengi_puede_calificar() && !$puedeGestionar;
 $puedeSubirDiploma = cengi_puede_subir_diploma();
 $puedeEliminar = cengi_puede_eliminar_participantes();
 
+// Materiales del curso (links a carpetas compartidas externas): tanto quien gestiona
+// el curso como quien solo califica (instructor) pueden agregar/editar/eliminar, ya
+// que ambos ya pasaron el guard cengi_require_calificador() de arriba. No hay una
+// audiencia de "solo lectura" distinta en esta pagina.
+$puedeGestionarContenido = $puedeGestionar || cengi_puede_calificar();
+
+/**
+ * Valida que $url sea una URL http/https bien formada antes de guardarla o
+ * imprimirla como <iframe src="..."> / <a href="...">. Devuelve la URL validada
+ * (tal como la devuelve filter_var) o null si no pasa la validacion -- rechaza
+ * explicitamente esquemas como "javascript:" o URLs mal formadas en vez de
+ * guardarlas silenciosamente en otro formato.
+ */
+function cengi_validar_url_contenido($url)
+{
+    $url = trim((string) $url);
+    if ($url === '') {
+        return null;
+    }
+
+    $urlFiltrada = filter_var($url, FILTER_VALIDATE_URL);
+    if ($urlFiltrada === false) {
+        return null;
+    }
+
+    $esquema = strtolower((string) parse_url($urlFiltrada, PHP_URL_SCHEME));
+    if ($esquema !== 'http' && $esquema !== 'https') {
+        return null;
+    }
+
+    return $urlFiltrada;
+}
+
+/**
+ * Mejor esfuerzo para convertir el link guardado en una URL apta para <iframe>.
+ * Muchos proveedores (SharePoint, Dropbox, a veces Drive) bloquean el embed via
+ * X-Frame-Options/CSP y el iframe queda en blanco -- por eso el link "Abrir en una
+ * pestaña nueva" siempre se muestra tambien, sin depender de que el iframe cargue.
+ * Solo se reconoce especificamente el patron de carpeta de Google Drive, que tiene
+ * una URL de embed dedicada mucho mas confiable que la URL de carpeta normal.
+ */
+function cengi_contenido_embed_url($url)
+{
+    if (preg_match('#drive\.google\.com/drive/(?:u/\d+/)?folders/([a-zA-Z0-9_-]+)#i', $url, $coincidencia)) {
+        return 'https://drive.google.com/embeddedfolderview?id=' . $coincidencia[1] . '#list';
+    }
+
+    return $url;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionarContenido && trim((string) ($_POST['accion'] ?? '')) === 'agregar_contenido') {
+    $cursoIdContenido = (int) ($_POST['curso_id'] ?? 0);
+    $tituloContenido = trim((string) ($_POST['titulo'] ?? ''));
+    $urlContenido = cengi_validar_url_contenido($_POST['url'] ?? '');
+
+    if ($cursoIdContenido > 0 && $tituloContenido !== '' && $urlContenido !== null) {
+        $stmtOrden = $db->prepare("SELECT COALESCE(MAX(orden), 0) + 1 FROM curso_contenidos WHERE curso_id = ?");
+        $stmtOrden->execute([$cursoIdContenido]);
+        $ordenContenido = (int) $stmtOrden->fetchColumn();
+
+        $usuarioIdContenido = !empty($_SESSION['id_usuario']) ? (int) $_SESSION['id_usuario'] : null;
+        $usuarioNombreContenido = trim((string) ($_SESSION['usuario'] ?? ''));
+
+        $stmt = $db->prepare("INSERT INTO curso_contenidos (curso_id, titulo, url, orden, creado_por, creado_por_nombre) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$cursoIdContenido, $tituloContenido, $urlContenido, $ordenContenido, $usuarioIdContenido, $usuarioNombreContenido]);
+
+        header('Location: ver_participante_curso.php?id=' . $cursoIdContenido . '&mensaje=contenido_agregado');
+        exit;
+    }
+
+    header('Location: ver_participante_curso.php?id=' . $cursoIdContenido . '&error=url_invalida');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionarContenido && trim((string) ($_POST['accion'] ?? '')) === 'editar_contenido') {
+    $contenidoIdEditar = (int) ($_POST['contenido_id'] ?? 0);
+    $cursoIdContenido = (int) ($_POST['curso_id'] ?? 0);
+    $tituloContenido = trim((string) ($_POST['titulo'] ?? ''));
+    $urlContenido = cengi_validar_url_contenido($_POST['url'] ?? '');
+
+    if ($contenidoIdEditar > 0 && $cursoIdContenido > 0 && $tituloContenido !== '' && $urlContenido !== null) {
+        $stmt = $db->prepare("UPDATE curso_contenidos SET titulo = ?, url = ? WHERE id = ? AND curso_id = ?");
+        $stmt->execute([$tituloContenido, $urlContenido, $contenidoIdEditar, $cursoIdContenido]);
+
+        header('Location: ver_participante_curso.php?id=' . $cursoIdContenido . '&mensaje=contenido_actualizado');
+        exit;
+    }
+
+    header('Location: ver_participante_curso.php?id=' . $cursoIdContenido . '&error=url_invalida');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionarContenido && trim((string) ($_POST['accion'] ?? '')) === 'eliminar_contenido') {
+    $contenidoIdEliminar = (int) ($_POST['contenido_id'] ?? 0);
+    $cursoIdContenido = (int) ($_POST['curso_id'] ?? 0);
+
+    if ($contenidoIdEliminar > 0 && $cursoIdContenido > 0) {
+        $stmt = $db->prepare("DELETE FROM curso_contenidos WHERE id = ? AND curso_id = ?");
+        $stmt->execute([$contenidoIdEliminar, $cursoIdContenido]);
+    }
+
+    header('Location: ver_participante_curso.php?id=' . $cursoIdContenido . '&mensaje=contenido_eliminado');
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar && trim((string) ($_POST['accion'] ?? '')) === 'agregar_modulo') {
     $cursoIdModulo = (int) ($_POST['curso_id'] ?? 0);
     $nombreModulo = trim((string) ($_POST['nombre_modulo'] ?? ''));
@@ -92,6 +197,16 @@ if ($idcurso > 0) {
         $modulo['temas'] = $stmtTemas->fetchAll(PDO::FETCH_COLUMN);
     }
     unset($modulo);
+}
+
+// Materiales del curso (links a carpetas compartidas externas: Drive/OneDrive/etc.).
+// A diferencia del temario, esto se guarda por esta edicion especifica del curso
+// (curso_id) y no se replica manualmente entre "hermanos" del mismo nombre_cursos.
+$contenidos = [];
+if ($idcurso > 0) {
+    $stmtContenidos = $db->prepare("SELECT * FROM curso_contenidos WHERE curso_id = ? ORDER BY orden, id");
+    $stmtContenidos->execute([$idcurso]);
+    $contenidos = $stmtContenidos->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // Modulo seleccionado para cargar/editar notas por modulo (seguimiento de co-ensenanza).
@@ -188,6 +303,14 @@ function cengi_pc_html($valor)
     return htmlspecialchars((string) ($valor ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
+// Igual que cengi_pc_html(), pero para el href de un archivo subido (diploma): normaliza
+// el path legado (cengi_normalizar_url_archivo() en conexion.php) antes de escaparlo, en
+// vez de imprimir el string de BD tal cual.
+function cengi_pc_href($valor)
+{
+    return htmlspecialchars(cengi_normalizar_url_archivo($valor), ENT_QUOTES, 'UTF-8');
+}
+
 $mensaje = trim((string) ($_GET['mensaje'] ?? ''));
 $error = trim((string) ($_GET['error'] ?? ''));
 ?>
@@ -205,6 +328,9 @@ $error = trim((string) ($_GET['error'] ?? ''));
             $cengiMensajesSeguimiento = [
                 'calificacion' => 'Las calificaciones se guardaron correctamente.',
                 'removido' => 'El participante fue removido del curso correctamente.',
+                'contenido_agregado' => 'El material se agregó correctamente.',
+                'contenido_actualizado' => 'El material se actualizó correctamente.',
+                'contenido_eliminado' => 'El material se eliminó correctamente.',
             ];
             echo $cengiMensajesSeguimiento[$mensaje] ?? 'La operación se completó correctamente.';
             ?>
@@ -213,7 +339,12 @@ $error = trim((string) ($_GET['error'] ?? ''));
     <?php if ($error !== ''): ?>
         <div class="alert alert-danger alert-dismissible cengi-flash" role="alert">
             <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
-            No fue posible completar la operación. Verifica los datos e inténtalo nuevamente.
+            <?php
+            $cengiErroresSeguimiento = [
+                'url_invalida' => 'El link ingresado no es una URL http/https válida. Verifica el enlace e inténtalo nuevamente.',
+            ];
+            echo $cengiErroresSeguimiento[$error] ?? 'No fue posible completar la operación. Verifica los datos e inténtalo nuevamente.';
+            ?>
         </div>
     <?php endif; ?>
 
@@ -290,6 +421,125 @@ $error = trim((string) ($_GET['error'] ?? ''));
                     </div>
                     <div class="form-group cengi-form-full">
                         <button type="submit" class="btn btn-success btn-sm">Guardar modulo</button>
+                    </div>
+                </form>
+            </details>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <div class="panel panel-success">
+        <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <h3 class="panel-title">Materiales del curso</h3>
+                <small>Links a carpetas compartidas (Google Drive, OneDrive, etc.) con el material de este curso</small>
+            </div>
+        </div>
+        <div class="panel-body">
+            <?php if (!$contenidos): ?>
+                <div class="cengi-empty">Este curso todavía no tiene materiales/enlaces compartidos.</div>
+            <?php else: ?>
+                <?php foreach ($contenidos as $contenido): ?>
+                    <?php $embedUrlContenido = cengi_contenido_embed_url($contenido['url']); ?>
+                    <div style="border:1px solid var(--cengi-border);border-radius:9px;padding:12px 14px;margin-bottom:10px;">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+                            <div>
+                                <div style="font-weight:700;font-size:12.5px;"><?php echo cengi_pc_html($contenido['titulo']); ?></div>
+                                <a href="<?php echo cengi_pc_html($contenido['url']); ?>" target="_blank" rel="noopener" class="text-muted" style="font-size:11px;">
+                                    <span class="glyphicon glyphicon-new-window"></span> Abrir carpeta en una pestaña nueva
+                                </a>
+                            </div>
+                            <?php if ($puedeGestionarContenido): ?>
+                            <div class="cengi-row-actions">
+                                <button
+                                    type="button"
+                                    class="cengi-action-btn"
+                                    data-toggle="modal"
+                                    data-target="#edit-contenido-modal-<?php echo (int) $contenido['id']; ?>"
+                                    data-tooltip="Editar material"
+                                    aria-label="Editar material"
+                                >
+                                    <span class="glyphicon glyphicon-pencil"></span>
+                                    <span class="sr-only">Editar material</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="cengi-action-btn is-delete contenido-delete-trigger"
+                                    data-toggle="modal"
+                                    data-target="#confirm-contenido-delete"
+                                    data-name="<?php echo cengi_pc_html($contenido['titulo']); ?>"
+                                    data-contenido-id="<?php echo (int) $contenido['id']; ?>"
+                                    data-curso-id="<?php echo (int) $idcurso; ?>"
+                                    data-tooltip="Eliminar material"
+                                    aria-label="Eliminar material"
+                                >
+                                    <span class="glyphicon glyphicon-trash"></span>
+                                    <span class="sr-only">Eliminar material</span>
+                                </button>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                        <div style="margin-top:8px;">
+                            <iframe
+                                src="<?php echo cengi_pc_html($embedUrlContenido); ?>"
+                                style="width:100%;height:400px;border:1px solid var(--cengi-border);border-radius:6px;"
+                                loading="lazy"
+                                title="<?php echo cengi_pc_html($contenido['titulo']); ?>"
+                            ></iframe>
+                            <p class="text-muted" style="font-size:10.5px;margin-top:4px;">
+                                Si el contenido de arriba no se muestra, es porque el proveedor no permite mostrarlo embebido dentro de otra pagina. Usa el link "Abrir carpeta en una pestaña nueva".
+                            </p>
+                        </div>
+                    </div>
+
+                    <?php if ($puedeGestionarContenido): ?>
+                    <div class="modal fade" id="edit-contenido-modal-<?php echo (int) $contenido['id']; ?>" tabindex="-1" role="dialog" aria-labelledby="edit-contenido-title-<?php echo (int) $contenido['id']; ?>">
+                        <div class="modal-dialog" role="document"><div class="modal-content">
+                            <form method="POST">
+                                <div class="modal-header">
+                                    <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span></button>
+                                    <h4 class="modal-title" id="edit-contenido-title-<?php echo (int) $contenido['id']; ?>">Editar material</h4>
+                                </div>
+                                <div class="modal-body">
+                                    <input type="hidden" name="accion" value="editar_contenido">
+                                    <input type="hidden" name="curso_id" value="<?php echo (int) $idcurso; ?>">
+                                    <input type="hidden" name="contenido_id" value="<?php echo (int) $contenido['id']; ?>">
+                                    <div class="form-group">
+                                        <label class="control-label">Título</label>
+                                        <input type="text" name="titulo" class="form-control" value="<?php echo cengi_pc_html($contenido['titulo']); ?>" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="control-label">Link de carpeta compartida</label>
+                                        <input type="url" name="url" class="form-control" value="<?php echo cengi_pc_html($contenido['url']); ?>" required>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-success">Guardar cambios</button>
+                                </div>
+                            </form>
+                        </div></div>
+                    </div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            <?php endif; ?>
+
+            <?php if ($puedeGestionarContenido): ?>
+            <details style="margin-top:10px;">
+                <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--cengi-primary-deep);">+ Agregar material / enlace</summary>
+                <form method="POST" class="cengi-form-grid" style="margin-top:10px;">
+                    <input type="hidden" name="accion" value="agregar_contenido">
+                    <input type="hidden" name="curso_id" value="<?php echo (int) $idcurso; ?>">
+                    <div class="form-group">
+                        <label class="control-label">Título</label>
+                        <input type="text" name="titulo" class="form-control" required>
+                    </div>
+                    <div class="form-group cengi-form-full">
+                        <label class="control-label">Link de carpeta compartida (Google Drive, OneDrive, etc.)</label>
+                        <input type="url" name="url" class="form-control" placeholder="https://drive.google.com/drive/folders/..." required>
+                    </div>
+                    <div class="form-group cengi-form-full">
+                        <button type="submit" class="btn btn-success btn-sm">Guardar material</button>
                     </div>
                 </form>
             </details>
@@ -437,7 +687,7 @@ $error = trim((string) ($_GET['error'] ?? ''));
                                         <br>
                                     <?php endif; ?>
                                     <?php if (!empty($fila['diploma'])) { ?>
-                                        <a href="<?= htmlspecialchars($fila['diploma']) ?>" target="_blank" class="btn btn-info btn-sm">
+                                        <a href="<?= cengi_pc_href($fila['diploma']) ?>" target="_blank" class="btn btn-info btn-sm">
                                             Ver PDF
                                         </a>
                                     <?php } elseif (!$puedeGestionar) { ?>
@@ -772,6 +1022,32 @@ $error = trim((string) ($_GET['error'] ?? ''));
         var trigger = event.relatedTarget;
         document.getElementById('participant-delete-name').textContent = trigger ? trigger.getAttribute('data-name') : '';
         $(this).find('.btn-ok').attr('href', trigger ? trigger.getAttribute('data-href') : '#');
+    });
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($puedeGestionarContenido): ?>
+<div class="modal fade cengi-participant-modal" id="confirm-contenido-delete" tabindex="-1" role="dialog" aria-labelledby="contenido-delete-title">
+    <div class="modal-dialog cengi-modal-compact" role="document"><div class="modal-content cengi-confirm-content">
+        <form method="POST" id="confirm-contenido-delete-form">
+            <input type="hidden" name="accion" value="eliminar_contenido">
+            <input type="hidden" name="curso_id" id="contenido-delete-curso-id" value="">
+            <input type="hidden" name="contenido_id" id="contenido-delete-id" value="">
+            <div class="modal-body"><span class="cengi-confirm-icon"><span class="glyphicon glyphicon-trash"></span></span><h4 id="contenido-delete-title">Eliminar material</h4><p>¿Deseas eliminar <strong id="contenido-delete-name"></strong>? Esta acción no se puede deshacer.</p></div>
+            <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-danger">Sí, eliminar</button></div>
+        </form>
+    </div></div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    $('#confirm-contenido-delete').on('show.bs.modal', function (event) {
+        var trigger = event.relatedTarget;
+        document.getElementById('contenido-delete-name').textContent = trigger ? trigger.getAttribute('data-name') : '';
+        document.getElementById('contenido-delete-id').value = trigger ? trigger.getAttribute('data-contenido-id') : '';
+        document.getElementById('contenido-delete-curso-id').value = trigger ? trigger.getAttribute('data-curso-id') : '';
     });
 })();
 </script>

@@ -191,6 +191,16 @@ body.cengi-canvas {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.cengi-menu-link {
+    color: #D9E6C8;
+}
+
+.cengi-menu-link:hover,
+.cengi-menu-link:focus {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+}
+
 .cengi-logout-link {
     color: #f3b3ab;
 }
