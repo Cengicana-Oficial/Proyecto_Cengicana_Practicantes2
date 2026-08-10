@@ -83,9 +83,15 @@ try {
         LIMIT 1
     ');
     $stmtEnlace = $db->prepare('SELECT id FROM enlaces_evaluacion_instructor WHERE curso_id = ? AND instructor_id = ?');
+    $stmtCrearCarga = $db->prepare('
+        INSERT INTO cargas_evaluaciones_instructor (curso_id, usuario_id, usuario_nombre, archivo_nombre, total_filas)
+        VALUES (?, ?, ?, ?, 0)
+    ');
+    $stmtActualizarTotalCarga = $db->prepare('UPDATE cargas_evaluaciones_instructor SET total_filas = ? WHERE id = ?');
     $stmtInsertar = $db->prepare('
         INSERT INTO evaluaciones_instructor (
             enlace_id,
+            carga_id,
             ingenio_id,
             ingenio_otro,
             cargo,
@@ -108,11 +114,24 @@ try {
             capacitaciones_necesarias,
             areas_mejora
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
     ');
 
     $db->beginTransaction();
+
+    // Se crea el registro de la carga (historial para poder retirarla completa despues
+    // desde eliminar_carga_evaluacion_instructor.php) antes del loop de filas, para poder
+    // usar su id como carga_id en cada INSERT de evaluaciones_instructor. Se guarda con
+    // total_filas = 0 y se actualiza al final, cuando ya se sabe cuantas filas realmente
+    // se procesaron.
+    $usuarioActual = cengi_cargar_usuario_actual();
+    $usuarioId = !empty($_SESSION['id_usuario']) ? (int) $_SESSION['id_usuario'] : null;
+    $usuarioNombre = trim((string) ($usuarioActual['nombre'] ?? ($_SESSION['usuario'] ?? '')));
+    $archivoNombreOriginal = mb_substr(trim((string) ($_FILES['archivo']['name'] ?? '')), 0, 255);
+    $stmtCrearCarga->execute([$cursoId, $usuarioId, $usuarioNombre, $archivoNombreOriginal !== '' ? $archivoNombreOriginal : null]);
+    $cargaId = (int) $db->lastInsertId();
+
     $filaNumero = 0;
     $procesados = 0;
     while (($fila = fgetcsv($archivo, 0, $separador)) !== false) {
@@ -227,6 +246,7 @@ try {
 
         $stmtInsertar->execute([
             $enlaceId,
+            $cargaId,
             $ingenioId,
             $ingenioOtro,
             $cargo,
@@ -256,6 +276,7 @@ try {
     if ($procesados === 0) {
         throw new RuntimeException('El archivo no contiene registros para procesar.');
     }
+    $stmtActualizarTotalCarga->execute([$procesados, $cargaId]);
     $db->commit();
     header('Location: ' . $destino . '?mensaje=evaluaciones');
 } catch (Throwable $e) {

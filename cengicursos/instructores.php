@@ -312,6 +312,87 @@ rsort($anios, SORT_NUMERIC);
 $nombresCursos = array_keys($nombresCursos);
 sort($nombresCursos, SORT_NATURAL | SORT_FLAG_CASE);
 
+// Historial de cargas de evaluaciones de instructor (cargas masivas + envios
+// individuales), para el modal "modalHistorialCargas": permite ver quien/cuando subio
+// cada carga y retirarla (carga completa o evaluacion individual) sin tener que borrar
+// fila por fila. Es un listado global (no por instructor) porque una sola carga masiva
+// puede incluir boletas de varios instructores a la vez (ver
+// cengicursos/migrations/20260810_cargas_evaluaciones_instructor.sql).
+$historialCargasEvaluaciones = [];
+if ($puedeGestionar) {
+    $stmtHistorialMasivo = $db->query("
+        SELECT
+            cei.id AS carga_id,
+            cei.archivo_nombre,
+            cei.usuario_nombre,
+            cei.total_filas,
+            cei.creado,
+            c.nombre_cursos AS curso_nombre,
+            GROUP_CONCAT(DISTINCT i.nombre ORDER BY i.nombre SEPARATOR ', ') AS instructores_nombres
+        FROM cargas_evaluaciones_instructor cei
+        LEFT JOIN cursos c ON c.id = cei.curso_id
+        LEFT JOIN evaluaciones_instructor ei ON ei.carga_id = cei.id
+        LEFT JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
+        LEFT JOIN instructores i ON i.id = eei.instructor_id
+        GROUP BY cei.id, cei.archivo_nombre, cei.usuario_nombre, cei.total_filas, cei.creado, c.nombre_cursos
+        ORDER BY cei.creado DESC
+        LIMIT 300
+    ");
+    foreach ($stmtHistorialMasivo->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+        $historialCargasEvaluaciones[] = [
+            'tipo' => 'masiva',
+            'carga_id' => (int) $fila['carga_id'],
+            'evaluacion_id' => null,
+            'fecha' => $fila['creado'],
+            'curso_nombre' => $fila['curso_nombre'],
+            'archivo_nombre' => $fila['archivo_nombre'],
+            'usuario_nombre' => $fila['usuario_nombre'],
+            'total_filas' => (int) $fila['total_filas'],
+            'instructores_nombres' => $fila['instructores_nombres'],
+        ];
+    }
+
+    $stmtHistorialIndividual = $db->query("
+        SELECT
+            ei.id AS evaluacion_id,
+            ei.creado,
+            ei.curso_nombre,
+            ei.conferencista AS instructor_nombre,
+            ei.cargo,
+            ei.seccion,
+            ei.ingenio_otro,
+            ing.nombre_ingenios AS ingenio_nombre
+        FROM evaluaciones_instructor ei
+        LEFT JOIN ingenios ing ON ing.id = ei.ingenio_id
+        WHERE ei.carga_id IS NULL
+        ORDER BY ei.creado DESC
+        LIMIT 300
+    ");
+    foreach ($stmtHistorialIndividual->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+        $ingenioReferencia = trim((string) ($fila['ingenio_nombre'] ?? '')) !== ''
+            ? $fila['ingenio_nombre']
+            : ($fila['ingenio_otro'] ?? '');
+        $historialCargasEvaluaciones[] = [
+            'tipo' => 'individual',
+            'carga_id' => null,
+            'evaluacion_id' => (int) $fila['evaluacion_id'],
+            'fecha' => $fila['creado'],
+            'curso_nombre' => $fila['curso_nombre'],
+            'instructor_nombre' => $fila['instructor_nombre'],
+            // El formulario publico es anonimo respecto al nombre de quien lo llena, asi
+            // que el "quien" que se muestra en el historial es cargo + seccion + ingenio
+            // (los unicos datos identificadores que el participante si escribe).
+            'cargo' => $fila['cargo'],
+            'seccion' => $fila['seccion'],
+            'ingenio_referencia' => $ingenioReferencia,
+        ];
+    }
+
+    usort($historialCargasEvaluaciones, static function ($a, $b) {
+        return strcmp((string) $b['fecha'], (string) $a['fecha']);
+    });
+}
+
 function cengi_inst_html($valor)
 {
     return htmlspecialchars((string) ($valor ?? ''), ENT_QUOTES, 'UTF-8');
@@ -600,6 +681,10 @@ function cengi_inst_html($valor)
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
                             Carga masiva de evaluaciones
                         </button>
+                        <button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-inst-open="modalHistorialCargas">
+                            <span class="glyphicon glyphicon-time" aria-hidden="true"></span>
+                            Historial de cargas
+                        </button>
                         <button class="inst-btn inst-btn-primary" type="button" id="nuevoInstructorBtn">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
                             Nuevo instructor
@@ -815,6 +900,21 @@ body.inst-modal-open { overflow: hidden; }
         </div>
     </div>
 </div>
+
+<div class="cengi-inst-modal" id="modalHistorialCargas" aria-hidden="true">
+    <div class="inst-modal-card is-wide" role="dialog" aria-modal="true" aria-labelledby="historialCargasTitulo">
+        <div class="inst-modal-head">
+            <div>
+                <h3 id="historialCargasTitulo">Historial de cargas de evaluaciones</h3>
+                <div class="inst-modal-sub">Retira evaluaciones enviadas por error: una carga masiva completa, o un envío individual del formulario público</div>
+            </div>
+            <button class="inst-icon-btn" type="button" data-inst-close aria-label="Cerrar">✕</button>
+        </div>
+        <div class="inst-modal-body">
+            <div id="historialCargasLista"></div>
+        </div>
+    </div>
+</div>
 <?php endif; ?>
 
 <div class="cengi-inst-modal" id="modalInstructorDetalle" aria-hidden="true">
@@ -860,6 +960,7 @@ body.inst-modal-open { overflow: hidden; }
 
     var instructores = <?php echo json_encode($instructores, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var ediciones = <?php echo json_encode($ediciones, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    var historialCargas = <?php echo json_encode($historialCargasEvaluaciones, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var puedeGestionar = <?php echo $puedeGestionar ? 'true' : 'false'; ?>;
     var instDetailCharts = {};
     var instView = 'grid';
@@ -1258,6 +1359,70 @@ body.inst-modal-open { overflow: hidden; }
         document.querySelectorAll('[data-detail-tab]').forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-detail-tab') === tab); });
         document.querySelectorAll('[data-detail-panel]').forEach(function (panel) { panel.hidden = panel.getAttribute('data-detail-panel') !== tab; });
     }
+    function formatDateTime(dateValue) {
+        if (!dateValue) return 'Sin fecha';
+        var normalized = String(dateValue).replace(' ', 'T');
+        var date = new Date(normalized);
+        if (isNaN(date.getTime())) return 'Sin fecha';
+        return date.toLocaleString('es-GT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+    function renderHistorialCargas() {
+        var contenedor = document.getElementById('historialCargasLista');
+        if (!contenedor) return;
+        if (!historialCargas.length) {
+            contenedor.innerHTML = '<div class="inst-detail-empty">Todavía no se ha registrado ninguna carga ni envío de evaluaciones.</div>';
+            return;
+        }
+        contenedor.innerHTML = '<div style="overflow-x:auto;"><table class="inst-table"><thead><tr>' +
+            '<th>Tipo</th><th>Fecha</th><th>Curso / edición</th><th>Detalle</th><th>Filas</th><th></th>' +
+            '</tr></thead><tbody>' +
+            historialCargas.map(function (item) {
+                if (item.tipo === 'masiva') {
+                    var detalle = 'Archivo: ' + escapeHtml(item.archivo_nombre || 'Sin nombre') +
+                        '<br>Instructor(es): ' + escapeHtml(item.instructores_nombres || 'Sin datos') +
+                        '<br>Subido por: ' + escapeHtml(item.usuario_nombre || 'Desconocido');
+                    return '<tr>' +
+                        '<td><span class="inst-badge is-planned">Carga masiva</span></td>' +
+                        '<td>' + escapeHtml(formatDateTime(item.fecha)) + '</td>' +
+                        '<td>' + escapeHtml(item.curso_nombre || '—') + '</td>' +
+                        '<td style="font-size:11.5px;">' + detalle + '</td>' +
+                        '<td>' + Number(item.total_filas || 0) + '</td>' +
+                        '<td><button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-retirar-carga="' + Number(item.carga_id) + '">Retirar carga</button></td>' +
+                        '</tr>';
+                }
+                var quien = [item.cargo, item.seccion, item.ingenio_referencia].filter(Boolean).map(escapeHtml).join(' · ') || 'Sin datos de contacto';
+                return '<tr>' +
+                    '<td><span class="inst-badge is-active">Individual</span></td>' +
+                    '<td>' + escapeHtml(formatDateTime(item.fecha)) + '</td>' +
+                    '<td>' + escapeHtml(item.curso_nombre || '—') + '</td>' +
+                    '<td style="font-size:11.5px;">Instructor: ' + escapeHtml(item.instructor_nombre || '—') + '<br>Enviado por: ' + quien + '</td>' +
+                    '<td>1</td>' +
+                    '<td><button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-retirar-evaluacion="' + Number(item.evaluacion_id) + '">Retirar evaluación</button></td>' +
+                    '</tr>';
+            }).join('') + '</tbody></table></div>';
+    }
+    function retirarCargaEvaluacion(payload, boton) {
+        if (boton) boton.disabled = true;
+        var datosFormulario = new FormData();
+        Object.keys(payload).forEach(function (clave) { datosFormulario.append(clave, payload[clave]); });
+        fetch('eliminar_carga_evaluacion_instructor.php', { method: 'POST', body: datosFormulario })
+            .then(function (respuesta) { return respuesta.json(); })
+            .then(function (resultado) {
+                if (resultado && resultado.ok) {
+                    // Recargar la pagina refresca tanto el historial como las
+                    // estadisticas agregadas del/los instructor(es) afectado(s), igual
+                    // que ya hace la carga masiva tras terminar de procesar un archivo.
+                    window.location.reload();
+                    return;
+                }
+                alert((resultado && resultado.mensaje) ? resultado.mensaje : 'No fue posible retirar el registro seleccionado.');
+                if (boton) boton.disabled = false;
+            })
+            .catch(function () {
+                alert('No fue posible retirar el registro seleccionado. Verifica tu conexión e inténtalo de nuevo.');
+                if (boton) boton.disabled = false;
+            });
+    }
     function populateLoadEditionSelect() {
         var select = document.getElementById('cargaEdicion');
         if (!select) return;
@@ -1303,8 +1468,27 @@ body.inst-modal-open { overflow: hidden; }
         if (detailButton) { openInstructorDetail(detailButton.getAttribute('data-detail-instructor'), detailButton.getAttribute('data-detail-target')); return; }
         var editButton = event.target.closest('[data-edit-instructor]');
         if (editButton) { editInstructor(editButton.getAttribute('data-edit-instructor')); return; }
+        var retirarCargaBoton = event.target.closest('[data-retirar-carga]');
+        if (retirarCargaBoton) {
+            if (window.confirm('¿Retirar esta carga masiva completa? Se eliminarán todas sus evaluaciones y no se puede deshacer.')) {
+                retirarCargaEvaluacion({ carga_id: retirarCargaBoton.getAttribute('data-retirar-carga') }, retirarCargaBoton);
+            }
+            return;
+        }
+        var retirarEvaluacionBoton = event.target.closest('[data-retirar-evaluacion]');
+        if (retirarEvaluacionBoton) {
+            if (window.confirm('¿Retirar esta evaluación individual? No se puede deshacer.')) {
+                retirarCargaEvaluacion({ evaluacion_id: retirarEvaluacionBoton.getAttribute('data-retirar-evaluacion') }, retirarEvaluacionBoton);
+            }
+            return;
+        }
         var openButton = event.target.closest('[data-inst-open]');
-        if (openButton) { openModal(openButton.getAttribute('data-inst-open')); return; }
+        if (openButton) {
+            var modalObjetivo = openButton.getAttribute('data-inst-open');
+            if (modalObjetivo === 'modalHistorialCargas') renderHistorialCargas();
+            openModal(modalObjetivo);
+            return;
+        }
         var closeButton = event.target.closest('[data-inst-close]');
         if (closeButton) closeModal(closeButton.closest('.cengi-inst-modal'));
     });
