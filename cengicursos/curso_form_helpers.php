@@ -123,6 +123,14 @@ function cengi_curso_form_valido(array $datos)
         && $codigoValido;
 }
 
+/**
+ * Guarda (inserta/actualiza) los modulos de un curso y sus instructores por modulo.
+ *
+ * @return int[] $conservados: los ids reales de curso_modulos (recien insertados o ya
+ *               existentes) en el mismo orden que el $modulos de entrada. Permite
+ *               relacionar despues cada entrada de $modulos con su id real de
+ *               curso_modulos (p. ej. al crear enlaces de evaluacion por modulo).
+ */
 function cengi_curso_guardar_modulos(PDO $db, $cursoId, array $modulos, $actualizar)
 {
     $existentes = [];
@@ -172,6 +180,8 @@ function cengi_curso_guardar_modulos(PDO $db, $cursoId, array $modulos, $actuali
             $stmt->execute([$cursoId]);
         }
     }
+
+    return $conservados;
 }
 
 /**
@@ -286,31 +296,40 @@ function cengi_recalcular_resumen_curso(PDO $db, $asignacionId, $cursoId, $puede
 
 /**
  * Asegura que exista un enlace publico de evaluacion para la combinacion
- * curso_id + instructor_id (idempotente: no se regenera si ya existe).
- * Se debe llamar cada vez que un curso se guarda/actualiza con un instructor
- * asignado. No hace nada si $instructorId es nulo/0.
+ * curso_id + instructor_id + curso_modulo_id (idempotente: no se regenera si ya existe).
+ * Se debe llamar cada vez que un curso (o un modulo con instructor propio) se
+ * guarda/actualiza con un instructor asignado. No hace nada si $instructorId es nulo/0.
+ *
+ * @param int|null $cursoModuloId Null (por defecto) crea/asegura el enlace de
+ *                  evaluacion del CURSO COMPLETO para ese instructor (comportamiento
+ *                  original, sin cambios). Un id de curso_modulos crea/asegura el
+ *                  enlace de evaluacion de ESE MODULO especifico para ese instructor.
  */
-function cengi_asegurar_enlace_evaluacion_instructor(PDO $db, $cursoId, $instructorId)
+function cengi_asegurar_enlace_evaluacion_instructor(PDO $db, $cursoId, $instructorId, $cursoModuloId = null)
 {
     $cursoId = (int) $cursoId;
     $instructorId = (int) $instructorId;
+    $cursoModuloId = $cursoModuloId !== null ? (int) $cursoModuloId : null;
     if ($cursoId <= 0 || $instructorId <= 0) {
         return;
     }
 
-    $stmt = $db->prepare('SELECT id FROM enlaces_evaluacion_instructor WHERE curso_id = ? AND instructor_id = ?');
-    $stmt->execute([$cursoId, $instructorId]);
+    // Se usa el operador NULL-safe <=> (no =) porque con PDO un parametro NULL en
+    // "columna = ?" nunca hace match con filas NULL.
+    $stmt = $db->prepare('SELECT id FROM enlaces_evaluacion_instructor WHERE curso_id = ? AND instructor_id = ? AND curso_modulo_id <=> ?');
+    $stmt->execute([$cursoId, $instructorId, $cursoModuloId]);
     if ($stmt->fetch(PDO::FETCH_ASSOC)) {
         return;
     }
 
     $token = bin2hex(random_bytes(16));
     try {
-        $stmtInsertar = $db->prepare('INSERT INTO enlaces_evaluacion_instructor (curso_id, instructor_id, token) VALUES (?, ?, ?)');
-        $stmtInsertar->execute([$cursoId, $instructorId, $token]);
+        $stmtInsertar = $db->prepare('INSERT INTO enlaces_evaluacion_instructor (curso_id, instructor_id, curso_modulo_id, token) VALUES (?, ?, ?, ?)');
+        $stmtInsertar->execute([$cursoId, $instructorId, $cursoModuloId, $token]);
     } catch (PDOException $e) {
         // Carrera entre dos peticiones concurrentes contra la misma llave unica
-        // (curso_id, instructor_id): la fila ya existe, no es un error real.
+        // (curso_id, instructor_id, curso_modulo_id): la fila ya existe, no es un
+        // error real.
         error_log('No fue posible crear el enlace de evaluacion (probable duplicado): ' . $e->getMessage());
     }
 }
@@ -319,12 +338,22 @@ function cengi_asegurar_enlace_evaluacion_instructor(PDO $db, $cursoId, $instruc
  * Asegura los enlaces publicos de evaluacion tanto para el instructor principal del
  * curso como para cualquier instructor distinto asignado a nivel de modulo
  * (co-ensenanza): cualquier instructor que de al menos un modulo debe tener su propio
- * enlace de evaluacion, no solo el instructor principal. Centraliza la logica que antes
- * se repetia en guardar_cursos.php y actualizar_cursos.php.
+ * enlace de evaluacion de curso completo, no solo el instructor principal. Ademas,
+ * para los modulos que tienen asignacion EXPLICITA de instructor(es) propios (es decir
+ * $modulo['instructores'] no vacio, ver comentarios de cengi_curso_form_datos()), se
+ * asegura tambien un enlace de evaluacion especifico de ese modulo. Los modulos que
+ * heredan al instructor principal por fallback ($modulo['instructores'] vacio) no
+ * generan enlace de modulo aparte: para esos, el enlace de curso completo ya existente
+ * sigue siendo lo unico que aplica. Centraliza la logica que antes se repetia en
+ * guardar_cursos.php y actualizar_cursos.php.
  *
  * @param array $modulos Igual formato que devuelve cengi_curso_form_datos()['modulos'].
+ * @param array $moduloIds Ids reales de curso_modulos devueltos por
+ *              cengi_curso_guardar_modulos(), en el mismo orden que $modulos. Se
+ *              necesitan para poder crear el enlace de evaluacion por modulo (que
+ *              requiere el id real de curso_modulos, no el id que venia del formulario).
  */
-function cengi_curso_asegurar_enlaces_evaluacion(PDO $db, $cursoId, $instructorPrincipalId, array $modulos)
+function cengi_curso_asegurar_enlaces_evaluacion(PDO $db, $cursoId, $instructorPrincipalId, array $modulos, array $moduloIds = [])
 {
     cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $instructorPrincipalId);
 
@@ -340,5 +369,25 @@ function cengi_curso_asegurar_enlaces_evaluacion(PDO $db, $cursoId, $instructorP
 
     foreach (array_keys($instructoresModulos) as $instructorModuloId) {
         cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $instructorModuloId);
+    }
+
+    // Enlaces de evaluacion por modulo: solo para modulos con asignacion EXPLICITA de
+    // instructor en curso_modulo_instructores (modulo['instructores'] no vacio). Los
+    // modulos que heredan al instructor principal por fallback (instructores vacio) no
+    // generan enlace de modulo aparte -- el enlace de curso completo ya los cubre.
+    foreach ($modulos as $indice => $modulo) {
+        $instructoresDeEsteModulo = array_unique(array_map('intval', (array) ($modulo['instructores'] ?? [])));
+        if (!$instructoresDeEsteModulo) {
+            continue;
+        }
+        $cursoModuloId = (int) ($moduloIds[$indice] ?? 0);
+        if ($cursoModuloId <= 0) {
+            continue;
+        }
+        foreach ($instructoresDeEsteModulo as $instructorModuloId) {
+            if ($instructorModuloId > 0) {
+                cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $instructorModuloId, $cursoModuloId);
+            }
+        }
     }
 }

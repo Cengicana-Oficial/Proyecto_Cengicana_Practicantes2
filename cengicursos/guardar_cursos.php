@@ -43,8 +43,8 @@ try {
         $stmtCodigo->execute([$codigoGenerado, $cursoId]);
     }
 
-    cengi_curso_guardar_modulos($db, $cursoId, $datos['modulos'], false);
-    cengi_curso_asegurar_enlaces_evaluacion($db, $cursoId, $datos['instructor_id'], $datos['modulos']);
+    $moduloIds = cengi_curso_guardar_modulos($db, $cursoId, $datos['modulos'], false);
+    cengi_curso_asegurar_enlaces_evaluacion($db, $cursoId, $datos['instructor_id'], $datos['modulos'], $moduloIds);
     $db->commit();
     header('Location: ver_cursos.php?mensaje=creado');
 } catch (Throwable $e) {

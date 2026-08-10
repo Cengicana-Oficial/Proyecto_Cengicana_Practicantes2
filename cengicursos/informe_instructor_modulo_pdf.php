@@ -1,9 +1,11 @@
 <?php
 /**
- * Genera el "informe de instructor" como un PDF real (Dompdf), en vez de
- * depender de window.print()/@media print del navegador: Dompdf renderiza un
- * documento HTML propio en el servidor (basado en tablas y bloques simples,
- * sin flexbox/grid ni JS/canvas) y lo envía como archivo adjunto.
+ * Genera el "informe de instructor" para UN modulo puntual de un curso como
+ * PDF real (Dompdf), analogo a informe_instructor_curso_pdf.php pero a nivel
+ * de curso_modulos en vez de curso completo. Este archivo es independiente y
+ * no debe compartir helpers con aquel (se definen versiones propias abajo,
+ * con sufijo _modulo, para evitar colision de nombre de funcion si algun dia
+ * se incluyen ambos archivos juntos).
  *
  * Requiere el mismo guard de permisos que instructores.php (sin bypass).
  */
@@ -17,12 +19,12 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
-function cengi_pdf_html($valor)
+function cengi_pdf_modulo_html($valor)
 {
     return htmlspecialchars((string) ($valor ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
-function cengi_pdf_formato_fecha($fecha)
+function cengi_pdf_modulo_formato_fecha($fecha)
 {
     if (empty($fecha)) {
         return 'Sin fecha';
@@ -36,7 +38,7 @@ function cengi_pdf_formato_fecha($fecha)
     return sprintf('%02d %s %d', (int) date('d', $timestamp), $meses[(int) date('n', $timestamp)], (int) date('Y', $timestamp));
 }
 
-function cengi_pdf_evaluacion_texto($valor)
+function cengi_pdf_modulo_evaluacion_texto($valor)
 {
     if ($valor === null || $valor === '') {
         return '—';
@@ -44,41 +46,58 @@ function cengi_pdf_evaluacion_texto($valor)
     return number_format((float) $valor, 1);
 }
 
-function cengi_pdf_barra_progreso($valor, float $escalaMaxima): string
+function cengi_pdf_modulo_barra_progreso($valor, float $escalaMaxima): string
 {
     $porcentaje = $valor !== null ? max(0, min(100, ((float) $valor / $escalaMaxima) * 100)) : 0;
     return '<div class="pdf-progress-track"><div class="pdf-progress-fill" style="width:' . number_format($porcentaje, 2, '.', '') . '%;"></div></div>';
 }
 
-$id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-if (!$id) {
+$instructorId = filter_input(INPUT_GET, 'instructor_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+$cursoModuloId = filter_input(INPUT_GET, 'curso_modulo_id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+if (!$instructorId || !$cursoModuloId) {
     http_response_code(400);
-    echo 'Parámetro "id" inválido.';
+    echo 'Parámetros "instructor_id" y "curso_modulo_id" son requeridos y deben ser enteros positivos.';
     exit;
 }
 
 $db = conectar();
 
 $stmt = $db->prepare("
-    SELECT
-        i.*,
-        (SELECT COUNT(*) FROM cursos c WHERE c.instructor_id = i.id) AS total_cursos,
-        (
-            SELECT AVG(CAST(cc.posevaluacion AS DECIMAL(6,2)))
-            FROM cursos c
-            INNER JOIN asignaciones a ON a.cursos_id = c.id
-            INNER JOIN control_cursos cc ON cc.asignacion_id = a.id
-            WHERE c.instructor_id = i.id AND cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?$'
-        ) AS evaluacion_promedio
+    SELECT i.id, i.nombre, i.especialidad, i.estado
     FROM instructores i
     WHERE i.id = ?
 ");
-$stmt->execute([$id]);
+$stmt->execute([$instructorId]);
 $instructor = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$instructor) {
     http_response_code(404);
     echo 'El instructor solicitado no existe.';
+    exit;
+}
+
+$moduloStmt = $db->prepare("
+    SELECT
+        cm.id AS modulo_id,
+        cm.nombre AS modulo_nombre,
+        cm.horas AS modulo_horas,
+        c.id AS curso_id,
+        c.nombre_cursos,
+        c.tipo AS modalidad,
+        c.inicio,
+        c.fin,
+        ing.nombre_ingenios AS ingenio
+    FROM curso_modulos cm
+    INNER JOIN cursos c ON c.id = cm.curso_id
+    INNER JOIN ingenios ing ON ing.id = c.ingenio_id
+    WHERE cm.id = ?
+");
+$moduloStmt->execute([$cursoModuloId]);
+$modulo = $moduloStmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$modulo) {
+    http_response_code(404);
+    echo 'El módulo solicitado no existe.';
     exit;
 }
 
@@ -96,9 +115,9 @@ $statsStmt = $db->prepare("
         AVG(ei.recomendaria_contexto) AS avg_recomendaria_contexto
     FROM evaluaciones_instructor ei
     INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-    WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NULL
+    WHERE eei.instructor_id = ? AND eei.curso_modulo_id = ?
 ");
-$statsStmt->execute([$id]);
+$statsStmt->execute([$instructorId, $cursoModuloId]);
 $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
 
 $promedio = static function ($valor) {
@@ -127,7 +146,7 @@ $comentariosStmt = $db->prepare("
     SELECT ei.areas_mejora, ei.capacitaciones_necesarias, ei.creado
     FROM evaluaciones_instructor ei
     INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-    WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NULL
+    WHERE eei.instructor_id = ? AND eei.curso_modulo_id = ?
         AND (
             (ei.areas_mejora IS NOT NULL AND TRIM(ei.areas_mejora) <> '')
             OR (ei.capacitaciones_necesarias IS NOT NULL AND TRIM(ei.capacitaciones_necesarias) <> '')
@@ -135,108 +154,39 @@ $comentariosStmt = $db->prepare("
     ORDER BY ei.creado DESC, ei.id DESC
     LIMIT 5
 ");
-$comentariosStmt->execute([$id]);
+$comentariosStmt->execute([$instructorId, $cursoModuloId]);
 $comentarios = $comentariosStmt->fetchAll(PDO::FETCH_ASSOC);
 
-$evaluacionesModuloStmt = $db->prepare("
-    SELECT
-        cm.id AS modulo_id,
-        cm.nombre AS modulo_nombre,
-        cm.orden AS modulo_orden,
-        c.nombre_cursos,
-        COUNT(*) AS total,
-        AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
-        AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
-        AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
-        AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
-        AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
-        AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor
-    FROM evaluaciones_instructor ei
-    INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-    INNER JOIN curso_modulos cm ON cm.id = eei.curso_modulo_id
-    INNER JOIN cursos c ON c.id = eei.curso_id
-    WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NOT NULL
-    GROUP BY cm.id, cm.nombre, c.nombre_cursos, cm.orden
-    ORDER BY c.nombre_cursos, cm.orden
-");
-$evaluacionesModuloStmt->execute([$id]);
-$evaluacionesModulo = $evaluacionesModuloStmt->fetchAll(PDO::FETCH_ASSOC);
-
-$edicionesStmt = $db->prepare("
-    SELECT
-        c.nombre_cursos,
-        c.tipo AS modalidad,
-        c.inicio,
-        c.fin,
-        ing.nombre_ingenios AS ingenio,
-        (SELECT COUNT(*) FROM asignaciones a WHERE a.cursos_id = c.id) AS total_inscritos,
-        (
-            SELECT AVG(CAST(cc.posevaluacion AS DECIMAL(6,2)))
-            FROM asignaciones a
-            INNER JOIN control_cursos cc ON cc.asignacion_id = a.id
-            WHERE a.cursos_id = c.id AND cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?$'
-        ) AS evaluacion_promedio
-    FROM cursos c
-    INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
-    INNER JOIN ingenios ing ON ing.id = c.ingenio_id
-    WHERE c.instructor_id = ?
-    ORDER BY c.nombre_cursos, c.inicio DESC
-");
-$edicionesStmt->execute([$id]);
-$ediciones = $edicionesStmt->fetchAll(PDO::FETCH_ASSOC);
-
-$ingeniosInstructor = [];
-foreach ($ediciones as $edicionFila) {
-    $nombreIngenio = trim((string) ($edicionFila['ingenio'] ?? ''));
-    if ($nombreIngenio !== '' && !in_array($nombreIngenio, $ingeniosInstructor, true)) {
-        $ingeniosInstructor[] = $nombreIngenio;
-    }
-}
-$ingenioTexto = 'Sin institución asociada';
-if (count($ingeniosInstructor) === 1) {
-    $ingenioTexto = $ingeniosInstructor[0];
-} elseif (count($ingeniosInstructor) > 1) {
-    $ingenioTexto = 'Varios ingenios';
-}
-
+$ingenioTexto = trim((string) ($modulo['ingenio'] ?? '')) !== '' ? (string) $modulo['ingenio'] : 'Sin institución asociada';
 $estadoTexto = ((int) $instructor['estado']) === 1 ? 'Activo' : 'Inactivo';
 $fechaGeneracion = date('d/m/Y H:i');
+$nombreInstructor = (string) ($instructor['nombre'] ?? 'Instructor');
+$especialidadInstructor = trim((string) ($instructor['especialidad'] ?? '')) !== ''
+    ? (string) $instructor['especialidad']
+    : 'Sin especialidad';
+$nombreCurso = (string) ($modulo['nombre_cursos'] ?? 'Curso sin nombre');
+$nombreModulo = (string) ($modulo['modulo_nombre'] ?? 'Módulo sin nombre');
+$modalidadCurso = trim((string) ($modulo['modalidad'] ?? '')) !== '' ? (string) $modulo['modalidad'] : '—';
+$horasModulo = $modulo['modulo_horas'] !== null ? $modulo['modulo_horas'] : null;
+
+$rangoFechas = cengi_pdf_modulo_formato_fecha($modulo['inicio']);
+if (!empty($modulo['fin']) && $modulo['fin'] !== $modulo['inicio']) {
+    $rangoFechas .= ' &ndash; ' . cengi_pdf_modulo_formato_fecha($modulo['fin']);
+}
 
 // ---------------------------------------------------------------------
 // Construccion del HTML del PDF.
 //
 // Dompdf no soporta flexbox ni CSS grid, y no ejecuta JavaScript ni dibuja
-// <canvas> (los graficos Chart.js de la SPA quedan fuera). Por eso el
-// layout de este documento usa unicamente <table> para las filas de
-// estadisticas/cursos y <div> con "width" en % + "background-color" para
-// representar las barras de progreso de las escalas Likert (esto si lo
-// soporta el motor de render de Dompdf). La tipografia usa DejaVu Sans
-// (viene embebida con Dompdf) en vez de 'Space Grotesk'/'Inter', que no
-// estan disponibles para el renderizador.
+// <canvas>. Por eso el layout de este documento usa unicamente <table>
+// para las filas de estadisticas y <div> con "width" en % +
+// "background-color" para representar las barras de progreso de las
+// escalas Likert (esto si lo soporta el motor de render de Dompdf). La
+// tipografia usa DejaVu Sans (viene embebida con Dompdf).
 // ---------------------------------------------------------------------
 
-$filasCursos = '';
-if (empty($ediciones)) {
-    $filasCursos = '<tr><td colspan="5" class="pdf-empty">Este instructor todavía no tiene cursos asociados.</td></tr>';
-} else {
-    foreach ($ediciones as $curso) {
-        $rango = cengi_pdf_formato_fecha($curso['inicio']);
-        if (!empty($curso['fin']) && $curso['fin'] !== $curso['inicio']) {
-            $rango .= ' &ndash; ' . cengi_pdf_formato_fecha($curso['fin']);
-        }
-        $filasCursos .= '<tr>'
-            . '<td>' . cengi_pdf_html($curso['nombre_cursos']) . '</td>'
-            . '<td>' . cengi_pdf_html($curso['ingenio'] ?: '—') . '</td>'
-            . '<td>' . $rango . '</td>'
-            . '<td>' . cengi_pdf_html($curso['modalidad'] ?: '—') . '</td>'
-            . '<td>' . (int) $curso['total_inscritos'] . '</td>'
-            . '<td>' . cengi_pdf_evaluacion_texto($curso['evaluacion_promedio']) . '</td>'
-            . '</tr>';
-    }
-}
-
 if ($encuesta['total'] === 0) {
-    $seccionSatisfaccion = '<p class="pdf-empty">Aún no hay evaluaciones de satisfacción registradas para este instructor todavía.</p>';
+    $seccionSatisfaccion = '<p class="pdf-empty">Aún no hay evaluaciones de satisfacción registradas para este instructor en este módulo.</p>';
 } else {
     $aspectosInstructor = [
         'Lenguaje claro' => $encuesta['instructor']['lenguaje_claro'],
@@ -248,8 +198,8 @@ if ($encuesta['total'] === 0) {
     $filasLikertInstructor = '';
     foreach ($aspectosInstructor as $etiqueta => $valor) {
         $filasLikertInstructor .= '<tr>'
-            . '<td class="pdf-likert-label">' . cengi_pdf_html($etiqueta) . '</td>'
-            . '<td class="pdf-likert-bar">' . cengi_pdf_barra_progreso($valor, 4) . '</td>'
+            . '<td class="pdf-likert-label">' . cengi_pdf_modulo_html($etiqueta) . '</td>'
+            . '<td class="pdf-likert-bar">' . cengi_pdf_modulo_barra_progreso($valor, 4) . '</td>'
             . '<td class="pdf-likert-value">' . ($valor !== null ? number_format($valor, 1) . '/4' : '—/4') . '</td>'
             . '</tr>';
     }
@@ -261,8 +211,8 @@ if ($encuesta['total'] === 0) {
     $filasLikertTema = '';
     foreach ($aspectosTema as $etiqueta => $valor) {
         $filasLikertTema .= '<tr>'
-            . '<td class="pdf-likert-label">' . cengi_pdf_html($etiqueta) . '</td>'
-            . '<td class="pdf-likert-bar">' . cengi_pdf_barra_progreso($valor, 4) . '</td>'
+            . '<td class="pdf-likert-label">' . cengi_pdf_modulo_html($etiqueta) . '</td>'
+            . '<td class="pdf-likert-bar">' . cengi_pdf_modulo_barra_progreso($valor, 4) . '</td>'
             . '<td class="pdf-likert-value">' . ($valor !== null ? number_format($valor, 1) . '/4' : '—/4') . '</td>'
             . '</tr>';
     }
@@ -277,7 +227,7 @@ if ($encuesta['total'] === 0) {
             <tbody>' . $filasLikertInstructor . '</tbody>
         </table>
         <table class="pdf-table pdf-table-likert">
-            <thead><tr><th colspan="3">Tema y logística del curso</th></tr></thead>
+            <thead><tr><th colspan="3">Tema y logística del módulo</th></tr></thead>
             <tbody>' . $filasLikertTema . '</tbody>
         </table>
         <table class="pdf-table pdf-table-scores">
@@ -294,68 +244,22 @@ if ($encuesta['total'] === 0) {
         </table>';
 }
 
-$seccionComentarios = '<p class="pdf-empty">Todavía no hay comentarios cualitativos registrados.</p>';
+$seccionComentarios = '<p class="pdf-empty">Todavía no hay comentarios cualitativos registrados para este módulo.</p>';
 if (!empty($comentarios)) {
     $itemsComentarios = '';
     foreach ($comentarios as $comentario) {
         $partes = '';
         if (!empty($comentario['areas_mejora'])) {
-            $partes .= '<div><strong>Oportunidades de mejora:</strong> ' . cengi_pdf_html($comentario['areas_mejora']) . '</div>';
+            $partes .= '<div><strong>Oportunidades de mejora:</strong> ' . cengi_pdf_modulo_html($comentario['areas_mejora']) . '</div>';
         }
         if (!empty($comentario['capacitaciones_necesarias'])) {
-            $partes .= '<div><strong>Capacitaciones necesarias:</strong> ' . cengi_pdf_html($comentario['capacitaciones_necesarias']) . '</div>';
+            $partes .= '<div><strong>Capacitaciones necesarias:</strong> ' . cengi_pdf_modulo_html($comentario['capacitaciones_necesarias']) . '</div>';
         }
         $itemsComentarios .= '<div class="pdf-comment-item">' . $partes
-            . '<div class="pdf-comment-date">' . cengi_pdf_formato_fecha($comentario['creado']) . '</div></div>';
+            . '<div class="pdf-comment-date">' . cengi_pdf_modulo_formato_fecha($comentario['creado']) . '</div></div>';
     }
     $seccionComentarios = $itemsComentarios;
 }
-
-$seccionEvaluacionesModulo = '<p class="pdf-empty">Este instructor todavía no tiene evaluaciones de módulo registradas.</p>';
-if (!empty($evaluacionesModulo)) {
-    $filasModulo = '';
-    foreach ($evaluacionesModulo as $filaModulo) {
-        $aspectosPromedio = array_filter([
-            $filaModulo['avg_lenguaje_claro'],
-            $filaModulo['avg_material_adecuado'],
-            $filaModulo['avg_conocimiento_tema'],
-            $filaModulo['avg_respeto_participantes'],
-            $filaModulo['avg_puntualidad_objetivos'],
-        ], static function ($valor) {
-            return $valor !== null;
-        });
-        $promedioGeneral = !empty($aspectosPromedio)
-            ? array_sum(array_map('floatval', $aspectosPromedio)) / count($aspectosPromedio)
-            : null;
-        $recomendaria = $filaModulo['avg_recomendaria_instructor'] !== null ? (float) $filaModulo['avg_recomendaria_instructor'] : null;
-        $filasModulo .= '<tr>'
-            . '<td>' . cengi_pdf_html($filaModulo['nombre_cursos']) . '</td>'
-            . '<td>' . cengi_pdf_html($filaModulo['modulo_nombre']) . '</td>'
-            . '<td>' . (int) $filaModulo['total'] . '</td>'
-            . '<td>' . ($promedioGeneral !== null ? number_format($promedioGeneral, 1) . '/4' : '—/4') . '</td>'
-            . '<td>' . ($recomendaria !== null ? number_format($recomendaria, 1) . '/10' : '—/10') . '</td>'
-            . '</tr>';
-    }
-    $seccionEvaluacionesModulo = '
-        <table class="pdf-table">
-            <thead>
-                <tr><th>Curso</th><th>Módulo</th><th>Respuestas</th><th>Promedio general</th><th>Recomendaría al instructor</th></tr>
-            </thead>
-            <tbody>' . $filasModulo . '</tbody>
-        </table>';
-}
-
-$evaluacionPromedio = $instructor['evaluacion_promedio'] !== null ? (float) $instructor['evaluacion_promedio'] : null;
-$cursosConEvaluacion = 0;
-foreach ($ediciones as $curso) {
-    if ($curso['evaluacion_promedio'] !== null) {
-        $cursosConEvaluacion++;
-    }
-}
-$nombreInstructor = (string) ($instructor['nombre'] ?? 'Instructor');
-$especialidadInstructor = trim((string) ($instructor['especialidad'] ?? '')) !== ''
-    ? (string) $instructor['especialidad']
-    : 'Sin especialidad';
 
 $html = '<!DOCTYPE html>
 <html lang="es">
@@ -397,53 +301,28 @@ $html = '<!DOCTYPE html>
 </head>
 <body>
     <div class="pdf-header">
-        <div class="pdf-header-name">' . cengi_pdf_html($nombreInstructor) . '</div>
-        <div class="pdf-header-sub">' . cengi_pdf_html($especialidadInstructor) . ' &middot; ' . cengi_pdf_html($ingenioTexto) . '</div>
-        <div class="pdf-header-meta">Estado: ' . cengi_pdf_html($estadoTexto) . ' &middot; Informe generado el ' . cengi_pdf_html($fechaGeneracion) . '</div>
+        <div class="pdf-header-name">' . cengi_pdf_modulo_html($nombreInstructor) . '</div>
+        <div class="pdf-header-sub">Curso: ' . cengi_pdf_modulo_html($nombreCurso) . ' &middot; Módulo: ' . cengi_pdf_modulo_html($nombreModulo) . ' &middot; ' . cengi_pdf_modulo_html($ingenioTexto) . '</div>
+        <div class="pdf-header-meta">' . cengi_pdf_modulo_html($especialidadInstructor) . ' &middot; Modalidad: ' . cengi_pdf_modulo_html($modalidadCurso) . ' &middot; Fechas del curso: ' . $rangoFechas . '</div>
+        <div class="pdf-header-meta">Estado del instructor: ' . cengi_pdf_modulo_html($estadoTexto) . ' &middot; Informe generado el ' . cengi_pdf_modulo_html($fechaGeneracion) . '</div>
     </div>
 
     <table class="pdf-stats">
         <tr>
-            <td><div class="pdf-stat-value">' . (int) ($instructor['total_cursos'] ?? 0) . '</div><div class="pdf-stat-label">Cursos impartidos</div></td>
-            <td><div class="pdf-stat-value">' . cengi_pdf_evaluacion_texto($evaluacionPromedio) . '</div><div class="pdf-stat-label">Evaluación promedio (post-evaluación académica)</div></td>
-            <td><div class="pdf-stat-value">' . cengi_pdf_html($estadoTexto) . '</div><div class="pdf-stat-label">Estado del instructor</div></td>
+            <td><div class="pdf-stat-value">' . ($horasModulo !== null ? cengi_pdf_modulo_html($horasModulo) : '—') . '</div><div class="pdf-stat-label">Horas del módulo</div></td>
+            <td><div class="pdf-stat-value">' . cengi_pdf_modulo_html($nombreModulo) . '</div><div class="pdf-stat-label">Módulo evaluado</div></td>
+            <td><div class="pdf-stat-value">' . cengi_pdf_modulo_html($modalidadCurso) . '</div><div class="pdf-stat-label">Modalidad del curso</div></td>
         </tr>
     </table>
 
     <div class="pdf-section">
-        <div class="pdf-section-title">Cursos impartidos</div>
-        <table class="pdf-table">
-            <thead>
-                <tr><th>Curso</th><th>Ingenio</th><th>Fecha</th><th>Modalidad</th><th>Participantes</th><th>Evaluación</th></tr>
-            </thead>
-            <tbody>' . $filasCursos . '</tbody>
-        </table>
-    </div>
-
-    <div class="pdf-section">
-        <div class="pdf-section-title">Satisfacción de los participantes (encuesta al instructor)</div>
+        <div class="pdf-section-title">Satisfacción de los participantes</div>
         ' . $seccionSatisfaccion . '
-    </div>
-
-    <div class="pdf-section">
-        <div class="pdf-section-title">Evaluaciones por módulo</div>
-        ' . $seccionEvaluacionesModulo . '
     </div>
 
     <div class="pdf-section">
         <div class="pdf-section-title">Comentarios recientes</div>
         ' . $seccionComentarios . '
-    </div>
-
-    <div class="pdf-section">
-        <div class="pdf-section-title">Desempeño académico</div>
-        <table class="pdf-stats">
-            <tr>
-                <td><div class="pdf-stat-value">' . cengi_pdf_evaluacion_texto($evaluacionPromedio) . '</div><div class="pdf-stat-label">Evaluación promedio registrada</div></td>
-                <td><div class="pdf-stat-value">' . $cursosConEvaluacion . '</div><div class="pdf-stat-label">Cursos con datos de evaluación</div></td>
-            </tr>
-        </table>
-        <p class="pdf-hint">Nota de examen posterior al curso de los participantes; no mide la satisfacción con el instructor.</p>
     </div>
 
     <div class="pdf-footer">CENGICAÑA &middot; Cengicursos &middot; Informe generado automáticamente</div>
@@ -460,10 +339,12 @@ $dompdf->loadHtml($html, 'UTF-8');
 $dompdf->setPaper('letter', 'portrait');
 $dompdf->render();
 
-$nombreArchivo = 'informe-instructor-' . preg_replace('/[^a-z0-9-]+/', '-', strtolower(trim((string) $nombreInstructor))) . '.pdf';
+$slugInstructor = preg_replace('/[^a-z0-9-]+/', '-', strtolower(trim((string) $nombreInstructor)));
+$slugModulo = preg_replace('/[^a-z0-9-]+/', '-', strtolower(trim((string) $nombreModulo)));
+$nombreArchivo = 'informe-instructor-' . trim((string) $slugInstructor, '-') . '-modulo-' . trim((string) $slugModulo, '-') . '.pdf';
 $nombreArchivo = trim($nombreArchivo, '-');
 if ($nombreArchivo === '' || $nombreArchivo === '.pdf') {
-    $nombreArchivo = 'informe-instructor-' . $id . '.pdf';
+    $nombreArchivo = 'informe-instructor-' . $instructorId . '-modulo-' . $cursoModuloId . '.pdf';
 }
 
 $dompdf->stream($nombreArchivo, ['Attachment' => true]);

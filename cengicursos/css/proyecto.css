@@ -2414,6 +2414,97 @@ body.cengi-nav-loading {
     color: #4B5A45;
 }
 
+.cengi-canvas .cengi-courses-pagination {
+    padding: 12px 18px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-top: 1px solid #E4E7E1;
+    background: #FAFBF8;
+}
+
+.cengi-canvas .cengi-courses-pagination-info {
+    color: #4B5A45;
+    font-size: 11px;
+}
+
+.cengi-canvas .cengi-courses-pagination-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.cengi-canvas .cengi-pagination-btn {
+    min-height: 32px;
+    padding: 6px 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #E4E7E1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #4B5A45;
+    font-size: 11.5px;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.cengi-canvas .cengi-pagination-btn:hover {
+    background: #F2F4EF;
+    color: #1E2A1A;
+    text-decoration: none;
+}
+
+.cengi-canvas .cengi-pagination-btn.is-disabled {
+    pointer-events: none;
+    opacity: 0.45;
+}
+
+.cengi-canvas .cengi-pagination-pages {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.cengi-canvas .cengi-pagination-page {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #E4E7E1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #4B5A45;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.cengi-canvas .cengi-pagination-page:hover {
+    background: #F2F4EF;
+    color: #1E2A1A;
+    text-decoration: none;
+}
+
+.cengi-canvas .cengi-pagination-page.is-current {
+    border-color: var(--cengi-primary);
+    background: var(--cengi-primary);
+    color: #ffffff;
+}
+
+.cengi-canvas .cengi-pagination-ellipsis {
+    padding: 0 2px;
+    color: #A3AAA0;
+    font-size: 11.5px;
+}
+
 @media (max-width: 1180px) {
     .cengi-canvas .cengi-course-create {
         margin-left: 0;
@@ -2452,6 +2543,135 @@ body.cengi-nav-loading {
     .cengi-canvas .cengi-course-detail {
         padding-left: 20px;
         grid-template-columns: 1fr;
+    }
+
+    .cengi-canvas .cengi-courses-pagination {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .cengi-canvas .cengi-courses-pagination-nav {
+        justify-content: space-between;
+    }
+
+    .cengi-canvas .cengi-pagination-pages {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* ---- Tabla de cursos en modo tarjeta (sin scroll horizontal) ---- */
+
+    .cengi-canvas .cengi-courses-table-wrap {
+        overflow-x: visible;
+    }
+
+    .cengi-canvas .cengi-courses-table {
+        display: block;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .cengi-canvas .cengi-courses-table thead {
+        display: none;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody {
+        display: block;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-row {
+        position: relative;
+        display: block;
+        margin-bottom: 10px;
+        padding: 40px 14px 12px;
+        border: 1px solid #E4E7E1;
+        border-radius: 10px 10px 0 0;
+        background: #ffffff;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-row:has(+ tr.cengi-course-detail-row[hidden]) {
+        border-radius: 10px;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-row td {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px 0;
+        border-bottom: 1px dashed #EEF0EA;
+        background: transparent;
+        text-align: right;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-row td[data-label]::before {
+        flex-shrink: 0;
+        margin-right: 10px;
+        color: #7B8676;
+        font-size: 8.5px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-align: left;
+        text-transform: uppercase;
+        content: attr(data-label);
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-row td.cengi-course-name,
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-row td.cengi-course-progress-cell {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-row td.cengi-course-name::before,
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-row td.cengi-course-progress-cell::before {
+        margin-bottom: 4px;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-row td.is-expand {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        left: auto;
+        width: auto;
+        padding: 0;
+        border-bottom: 0;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-row td.is-actions {
+        display: block;
+        width: auto;
+        margin-top: 6px;
+        padding: 10px 0 0;
+        border-bottom: 0;
+        border-top: 1px solid #EEF0EA;
+        white-space: normal;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-row td:last-of-type {
+        border-bottom: 0;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-detail-row {
+        display: block;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-detail-row[hidden] {
+        display: none;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-detail-row td {
+        display: block;
+        padding: 0 !important;
+    }
+
+    .cengi-canvas .cengi-courses-table tbody tr.cengi-course-detail-row .cengi-course-detail {
+        margin: -10px 0 10px;
+        border: 1px solid #E4E7E1;
+        border-top: 0;
+        border-radius: 0 0 10px 10px;
+        padding: 14px;
     }
 }
 
@@ -3209,6 +3429,16 @@ body.cengi-nav-loading {
     max-width: 560px;
 }
 
+/* El combo de busqueda de "Agregar participante al curso" ahora vive en el
+   flujo normal del documento (ver .cengi-combo-menu mas abajo) y ocupa mas
+   alto fijo para mostrar ~3 resultados, asi que este modal en particular
+   necesita un poco mas de ancho que el resto de modales que comparten
+   .cengi-participant-modal. */
+#add-participant-modal.cengi-participant-modal .modal-dialog {
+    width: min(760px, calc(100vw - 40px));
+    max-width: 760px;
+}
+
 .cengi-participant-modal .modal-content {
     overflow: hidden;
     border: 1px solid #e2e7de;
@@ -3306,19 +3536,24 @@ body.cengi-nav-loading {
 .cengi-participant-modal .form-control:focus { border-color: var(--cengi-primary); box-shadow: 0 0 0 2px rgba(163, 211, 0, .22); }
 
 .cengi-combo { position: relative; }
+/* El combo de busqueda de "Agregar participante al curso"
+   (ver_participante_curso.php) vive dentro de .modal-body, que tiene
+   overflow-y:auto para permitir scroll en el bloque de "Participante
+   nuevo" en pantallas chicas. Un .cengi-combo-menu con position:absolute
+   se recortaba por ese overflow sin importar el z-index, y position:fixed
+   anclado con JS resultaba peor (se desalineaba/parpadeaba). En vez de
+   flotar sobre el formulario, el listado queda en el flujo normal del
+   documento con una altura fija (~3 filas visibles) y su propio scroll;
+   si crece, el .modal-body ya tiene overflow-y:auto para acomodarlo. */
 .cengi-combo-menu {
     display: none;
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    z-index: 1070;
-    max-height: 220px;
+    margin-top: 4px;
+    height: 138px;
     overflow-y: auto;
     background: #fff;
     border: 1px solid #dfe5dc;
     border-radius: 7px;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, .14);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
 }
 .cengi-combo-menu.open { display: block; }
 .cengi-combo-menu .list-group-item {

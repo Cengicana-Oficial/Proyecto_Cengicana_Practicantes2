@@ -82,7 +82,12 @@ try {
         SELECT id FROM ingenios WHERE ' . cengi_sql_texto_normalizado('nombre_ingenios') . ' = ' . cengi_sql_texto_normalizado('?') . '
         LIMIT 1
     ');
-    $stmtEnlace = $db->prepare('SELECT id FROM enlaces_evaluacion_instructor WHERE curso_id = ? AND instructor_id = ?');
+    $stmtModulo = $db->prepare('
+        SELECT id, nombre FROM curso_modulos
+        WHERE curso_id = ? AND ' . cengi_sql_texto_normalizado('nombre') . ' = ' . cengi_sql_texto_normalizado('?') . '
+        LIMIT 1
+    ');
+    $stmtEnlace = $db->prepare('SELECT id FROM enlaces_evaluacion_instructor WHERE curso_id = ? AND instructor_id = ? AND curso_modulo_id <=> ?');
     $stmtCrearCarga = $db->prepare('
         INSERT INTO cargas_evaluaciones_instructor (curso_id, usuario_id, usuario_nombre, archivo_nombre, total_filas)
         VALUES (?, ?, ?, ?, 0)
@@ -98,6 +103,7 @@ try {
             seccion,
             modalidad,
             curso_nombre,
+            modulo_nombre,
             conferencista,
             fecha_curso,
             instructor_lenguaje_claro,
@@ -114,7 +120,7 @@ try {
             capacitaciones_necesarias,
             areas_mejora
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
     ');
 
@@ -152,6 +158,7 @@ try {
         }
 
         $ingenioNombre = trim((string) $fila[1]);
+        $moduloNombre = trim((string) ($fila[17] ?? ''));
         $cargo = cengi_carga_eval_truncar($fila[2], 255);
         $seccion = cengi_carga_eval_truncar($fila[3], 255);
 
@@ -224,6 +231,18 @@ try {
         // texto crudo de la celda del CSV.
         $instructorNombreCanonico = (string) $instructorFila['nombre'];
 
+        $cursoModuloId = null;
+        $moduloNombreCanonico = '';
+        if ($moduloNombre !== '') {
+            $stmtModulo->execute([$cursoId, $moduloNombre]);
+            $moduloFila = $stmtModulo->fetch(PDO::FETCH_ASSOC);
+            if (!$moduloFila) {
+                throw new RuntimeException('La fila ' . $filaNumero . ' indica un módulo que no existe en esta edición de curso: "' . $moduloNombre . '".');
+            }
+            $cursoModuloId = (int) $moduloFila['id'];
+            $moduloNombreCanonico = (string) $moduloFila['nombre'];
+        }
+
         $ingenioId = null;
         $ingenioOtro = '';
         if ($ingenioNombre === '') {
@@ -237,8 +256,8 @@ try {
             $ingenioOtro = mb_substr($ingenioNombre, 0, 255);
         }
 
-        cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $instructorId);
-        $stmtEnlace->execute([$cursoId, $instructorId]);
+        cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $instructorId, $cursoModuloId);
+        $stmtEnlace->execute([$cursoId, $instructorId, $cursoModuloId]);
         $enlaceId = (int) $stmtEnlace->fetchColumn();
         if ($enlaceId <= 0) {
             throw new RuntimeException('La fila ' . $filaNumero . ' no pudo vincularse a un enlace de evaluación válido.');
@@ -253,6 +272,7 @@ try {
             $seccion,
             $modalidad,
             $curso['nombre_cursos'],
+            $moduloNombreCanonico,
             $instructorNombreCanonico,
             $curso['inicio'] ?: null,
             $lenguajeClaro,

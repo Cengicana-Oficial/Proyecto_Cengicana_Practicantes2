@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . "/conexion.php";
+require_once __DIR__ . "/correo.php";
 
 function inscripcion_error($mensaje)
 {
@@ -51,11 +52,13 @@ if ($cursoId <= 0) {
     inscripcion_error('Selecciona un curso.');
 }
 
-$stmtCurso = $db->prepare("SELECT id FROM cursos WHERE id = ?");
+$stmtCurso = $db->prepare("SELECT id, nombre_cursos FROM cursos WHERE id = ?");
 $stmtCurso->execute([$cursoId]);
-if (!$stmtCurso->fetch()) {
+$cursoSeleccionado = $stmtCurso->fetch();
+if (!$cursoSeleccionado) {
     inscripcion_error('El curso seleccionado no es válido.');
 }
+$nombreCurso = $cursoSeleccionado['nombre_cursos'] ?? '';
 
 $sql = "
     INSERT INTO solicitudes_inscripcion (
@@ -89,6 +92,38 @@ try {
 } catch (PDOException $e) {
     error_log("Error al guardar solicitud de inscripcion: " . $e->getMessage());
     inscripcion_error('No fue posible enviar tu solicitud. Intenta más tarde.');
+}
+
+try {
+
+    $solicitud = [
+        'nombre_participante' => $nombreParticipante,
+        'correo' => $correo,
+        'nombre_cursos' => $nombreCurso,
+    ];
+
+    require __DIR__ . '/correos/plantilla_recibida.php';
+
+    $correoEnviado = cengi_enviar_correo(
+        $correo,
+        $nombreParticipante,
+        'Hemos recibido tu solicitud de inscripción',
+        $html
+    );
+
+    if (!$correoEnviado) {
+        error_log(
+            "No se pudo enviar correo de confirmacion de solicitud recibida " .
+            "para {$correo}"
+        );
+    }
+
+} catch (Throwable $mailError) {
+
+    error_log(
+        "Error enviando correo de confirmacion de solicitud recibida: " .
+        $mailError->getMessage()
+    );
 }
 
 header("Location: inscripcion.php?resultado=ok");

@@ -16,10 +16,12 @@ if ($token !== '' && preg_match('/^[a-f0-9]{32}$/', $token)) {
             c.inicio,
             c.fin,
             i.nombre AS instructor_nombre,
-            i.especialidad AS instructor_especialidad
+            i.especialidad AS instructor_especialidad,
+            cm.nombre AS modulo_nombre
         FROM enlaces_evaluacion_instructor e
         INNER JOIN cursos c ON c.id = e.curso_id
         INNER JOIN instructores i ON i.id = e.instructor_id
+        LEFT JOIN curso_modulos cm ON cm.id = e.curso_modulo_id
         WHERE e.token = ?
     ");
     $stmt->execute([$token]);
@@ -465,6 +467,9 @@ $labelCalidadInstalaciones = '¿Cómo calificaría las instalaciones donde se im
     <img class="cengi-eval-logo" src="img/logo-comite-capacitacion.png" alt="CENGICAÑA">
     <h1 class="cengi-eval-title">Evaluación del instructor</h1>
     <p class="cengi-eval-course"><?php echo cengi_eval_html($enlace['nombre_cursos']); ?></p>
+    <?php if (!empty($enlace['modulo_nombre'])): ?>
+        <p class="cengi-eval-course">Módulo: <?php echo cengi_eval_html($enlace['modulo_nombre']); ?></p>
+    <?php endif; ?>
     <p class="cengi-eval-instructor">Instructor: <?php echo cengi_eval_html($enlace['instructor_nombre']); ?></p>
     <?php if ($rangoFechas !== '' || $enlace['modalidad']): ?>
         <p class="cengi-eval-meta">
@@ -488,6 +493,9 @@ $labelCalidadInstalaciones = '¿Cómo calificaría las instalaciones donde se im
         <div class="cengi-eval-section-title">Datos generales</div>
         <div class="cengi-eval-readonly">
             <div><strong>Curso:</strong> <?php echo cengi_eval_html($enlace['nombre_cursos']); ?></div>
+            <?php if (!empty($enlace['modulo_nombre'])): ?>
+                <div><strong>Módulo:</strong> <?php echo cengi_eval_html($enlace['modulo_nombre']); ?></div>
+            <?php endif; ?>
             <div><strong>Conferencista:</strong> <?php echo cengi_eval_html($enlace['instructor_nombre']); ?></div>
             <?php if ($rangoFechas !== ''): ?>
                 <div><strong>Fecha:</strong> <?php echo cengi_eval_html($rangoFechas); ?></div>

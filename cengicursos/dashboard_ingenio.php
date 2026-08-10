@@ -118,7 +118,6 @@ if ($fichaId > 0) {
             COALESCE(NULLIF(d.pdf_path, ''), NULLIF(cc.diploma, '')) AS diploma,
             d.codigo_unico AS diploma_codigo, d.emitido_en AS diploma_fecha,
             CASE
-                WHEN a.estado_asignaciones <> 1 THEN 'inactivo'
                 WHEN c.fin IS NOT NULL AND c.fin < CURDATE() THEN 'finalizado'
                 ELSE 'activo'
             END AS estado_curso
@@ -131,7 +130,7 @@ if ($fichaId > 0) {
                    MAX(codigo_unico) AS codigo_unico, MAX(emitido_en) AS emitido_en
             FROM diplomas WHERE tipo = 'curso' GROUP BY asignacion_id
         ) d ON d.asignacion_id = a.id
-        WHERE a.participantes_id = ?
+        WHERE a.participantes_id = ? AND a.estado_asignaciones = 1
         ORDER BY COALESCE(c.inicio, c.creado) DESC, c.nombre_cursos");
     $stmtHistorial->execute([$fichaId]);
     $cursosFicha = $stmtHistorial->fetchAll(PDO::FETCH_ASSOC);

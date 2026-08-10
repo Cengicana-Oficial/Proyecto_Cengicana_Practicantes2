@@ -1,6 +1,7 @@
 <?php
 require_once "conexion.php";
 require_once "menu.php";
+require_once "curso_form_helpers.php";
 
 cengi_require_ver_instructores();
 
@@ -230,6 +231,110 @@ foreach ($comentariosEncuestaStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
     ];
 }
 
+// Modulos asignados por instructor: un modulo (curso_modulos) puede tener 0, 1 o
+// varios instructores propios via curso_modulo_instructores (co-ensenanza). Si un
+// modulo no tiene ninguna fila propia, hereda implicitamente al instructor
+// principal del curso (cursos.instructor_id) -- mismo criterio de fallback que ya
+// se usa en cengicursos/ver_cursos.php al listar los modulos de un curso.
+$modulosCursoStmt = $db->query("
+    SELECT
+        cm.id AS modulo_id,
+        cm.nombre AS modulo_nombre,
+        cm.horas AS modulo_horas,
+        cm.orden AS modulo_orden,
+        c.id AS curso_id,
+        c.nombre_cursos,
+        c.instructor_id AS curso_instructor_id,
+        c.inicio,
+        c.fin,
+        ing.nombre_ingenios AS ingenio,
+        cmi.instructor_id AS modulo_instructor_id
+    FROM curso_modulos cm
+    INNER JOIN cursos c ON c.id = cm.curso_id
+    INNER JOIN ingenios ing ON ing.id = c.ingenio_id
+    LEFT JOIN curso_modulo_instructores cmi ON cmi.curso_modulo_id = cm.id
+    LEFT JOIN instructores insm ON insm.id = cmi.instructor_id
+    ORDER BY c.nombre_cursos, c.inicio DESC, cm.orden, cm.id
+");
+
+$modulosPorModuloId = [];
+foreach ($modulosCursoStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+    $moduloId = (int) $fila['modulo_id'];
+    if (!isset($modulosPorModuloId[$moduloId])) {
+        $modulosPorModuloId[$moduloId] = [
+            'curso_id' => (int) $fila['curso_id'],
+            'nombre_cursos' => $fila['nombre_cursos'],
+            'curso_instructor_id' => $fila['curso_instructor_id'] !== null ? (int) $fila['curso_instructor_id'] : null,
+            'inicio' => $fila['inicio'],
+            'fin' => $fila['fin'],
+            'ingenio' => $fila['ingenio'],
+            'modulo_id' => $moduloId,
+            'modulo_nombre' => $fila['modulo_nombre'],
+            'modulo_horas' => $fila['modulo_horas'],
+            'modulo_orden' => $fila['modulo_orden'],
+            'instructores_propios' => [],
+        ];
+    }
+    if ($fila['modulo_instructor_id'] !== null) {
+        $modulosPorModuloId[$moduloId]['instructores_propios'][(int) $fila['modulo_instructor_id']] = true;
+    }
+}
+
+// Backfill: los cursos guardados antes de que existiera el enlace de evaluacion
+// por modulo todavia no tienen fila en enlaces_evaluacion_instructor para los
+// modulos con asignacion EXPLICITA de instructor(es) propios. Se asegura aqui,
+// de forma idempotente (no crea duplicados si ya existe).
+foreach ($modulosPorModuloId as $modulo) {
+    if (empty($modulo['instructores_propios'])) {
+        continue;
+    }
+    foreach (array_keys($modulo['instructores_propios']) as $instructorIdModulo) {
+        cengi_asegurar_enlace_evaluacion_instructor($db, $modulo['curso_id'], $instructorIdModulo, $modulo['modulo_id']);
+    }
+}
+
+$enlacesPorClave = [];
+$enlacesStmt = $db->query('SELECT curso_id, instructor_id, curso_modulo_id, token FROM enlaces_evaluacion_instructor');
+foreach ($enlacesStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+    $clave = $fila['curso_id'] . '-' . $fila['instructor_id'] . '-' . ((int) ($fila['curso_modulo_id'] ?? 0));
+    $enlacesPorClave[$clave] = $fila['token'];
+}
+
+$modulosAsignadosPorInstructor = [];
+foreach ($modulosPorModuloId as $modulo) {
+    $base = [
+        'curso_id' => $modulo['curso_id'],
+        'nombre_cursos' => $modulo['nombre_cursos'],
+        'ingenio' => $modulo['ingenio'],
+        'inicio' => $modulo['inicio'],
+        'fin' => $modulo['fin'],
+        'modulo_id' => $modulo['modulo_id'],
+        'modulo_nombre' => $modulo['modulo_nombre'],
+        'modulo_horas' => $modulo['modulo_horas'],
+        'modulo_orden' => $modulo['modulo_orden'],
+    ];
+    if (empty($modulo['instructores_propios'])) {
+        // Sin instructores propios: el modulo hereda al instructor principal del curso.
+        if ($modulo['curso_instructor_id'] !== null) {
+            $instructorIdDestino = $modulo['curso_instructor_id'];
+            $modulosAsignadosPorInstructor[$instructorIdDestino][] = $base + [
+                'rol' => 'principal',
+                'explicito' => false,
+                'evaluacion_token' => $enlacesPorClave["{$modulo['curso_id']}-{$instructorIdDestino}-0"] ?? null,
+            ];
+        }
+        continue;
+    }
+    foreach (array_keys($modulo['instructores_propios']) as $instructorIdModulo) {
+        $rol = ($instructorIdModulo === $modulo['curso_instructor_id']) ? 'principal' : 'co-instructor';
+        $modulosAsignadosPorInstructor[$instructorIdModulo][] = $base + [
+            'rol' => $rol,
+            'explicito' => true,
+            'evaluacion_token' => $enlacesPorClave["{$modulo['curso_id']}-{$instructorIdModulo}-{$modulo['modulo_id']}"] ?? null,
+        ];
+    }
+}
+
 // cv_path se guarda como ruta relativa (p. ej. "../uploads/instructores/xxx.pdf")
 // relativa al directorio de este script; is_file() la resuelve igual que
 // move_uploaded_file() la escribió, sin depender de la URL del navegador.
@@ -263,6 +368,7 @@ foreach ($instructores as &$instructorFila) {
         'recomendaria_contexto' => $stats ? $promedio($stats['avg_recomendaria_contexto']) : null,
         'comentarios' => $comentariosEncuestaPorInstructor[$idInstructor] ?? [],
     ];
+    $instructorFila['modulos_asignados'] = $modulosAsignadosPorInstructor[$idInstructor] ?? [];
 }
 unset($instructorFila);
 
@@ -293,7 +399,7 @@ $ediciones = $db->query("
     INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
     INNER JOIN ingenios ing ON ing.id = c.ingenio_id
     LEFT JOIN instructores i ON i.id = c.instructor_id
-    LEFT JOIN enlaces_evaluacion_instructor eei ON eei.curso_id = c.id AND eei.instructor_id = i.id
+    LEFT JOIN enlaces_evaluacion_instructor eei ON eei.curso_id = c.id AND eei.instructor_id = i.id AND eei.curso_modulo_id IS NULL
     ORDER BY c.nombre_cursos, c.inicio DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -873,14 +979,14 @@ body.inst-modal-open { overflow: hidden; }
                 </div>
                 <div class="inst-notice">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
-                    <span>No selecciones un solo instructor: un diplomado puede tener varios módulos con distintos instructores. El Excel debe incluir una columna <b>Instructor</b> para identificar a quién califica cada boleta.</span>
+                    <span>No selecciones un solo instructor: un diplomado puede tener varios módulos con distintos instructores. El Excel debe incluir una columna <b>Instructor</b> para identificar a quién califica cada boleta. La columna opcional <b>Modulo</b> permite evaluar un módulo específico del curso (déjala vacía para evaluar el curso completo).</span>
                 </div>
                 <div class="inst-field">
                     <label for="evaluacionesCsv">Sube el archivo Excel (.xlsx) con las respuestas</label>
                     <label class="inst-dropzone" for="evaluacionesCsv" style="padding:28px;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
                         <div style="color:var(--inst-ink);font-size:13px;font-weight:600;" id="evaluacionesCsvNombre">Arrastra tu archivo .xlsx aquí</div>
-                        <div style="margin-top:3px;">Columnas: <b>Instructor</b>, Ingenio, Cargo, Sección, las 5 preguntas sobre el instructor (1-4), Recomendaría al instructor (1-10), Relevancia del tema y Logística del evento (1-4), Recomendaría el lugar/plataforma (1-10), Capacitaciones necesarias y Áreas de mejora; además, si la edición es Virtual: manejo de la plataforma (1-4); si es Presencial: calidad de las instalaciones (1-4).</div>
+                        <div style="margin-top:3px;">Columnas: <b>Instructor</b>, Ingenio, Cargo, Sección, las 5 preguntas sobre el instructor (1-4), Recomendaría al instructor (1-10), Relevancia del tema y Logística del evento (1-4), Recomendaría el lugar/plataforma (1-10), Capacitaciones necesarias y Áreas de mejora; además, si la edición es Virtual: manejo de la plataforma (1-4); si es Presencial: calidad de las instalaciones (1-4), y opcionalmente Módulo (evaluación de ese módulo específico, vacío = curso completo).</div>
                     </label>
                     <input type="file" name="archivo" id="evaluacionesCsv" accept=".xlsx" hidden required>
                 </div>
@@ -935,9 +1041,11 @@ body.inst-modal-open { overflow: hidden; }
         </div>
         <div class="inst-detail-tabs">
             <button class="inst-detail-tab is-active" type="button" data-detail-tab="cursos">Cursos impartidos</button>
+            <button class="inst-detail-tab" type="button" data-detail-tab="modulos">Módulos asignados</button>
             <button class="inst-detail-tab" type="button" data-detail-tab="evaluaciones">Evaluaciones recibidas</button>
         </div>
         <div class="inst-detail-panel" data-detail-panel="cursos" id="instDetHistorial"></div>
+        <div class="inst-detail-panel" data-detail-panel="modulos" id="instDetModulos" hidden></div>
         <div class="inst-detail-panel" data-detail-panel="evaluaciones" id="instDetEvaluaciones" hidden></div>
         <div class="inst-modal-footer">
             <button class="inst-btn inst-btn-outline" type="button" id="imprimirInformeInstructor">Descargar informe PDF</button>
@@ -1055,6 +1163,14 @@ body.inst-modal-open { overflow: hidden; }
     }
     function courseReportButton(course) {
         return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" onclick="window.open(\'informe_instructor_curso_pdf.php?instructor_id=' + Number(course.instructor_id) + '&curso_id=' + Number(course.curso_id) + '\', \'_blank\')">' +
+            '<span class="glyphicon glyphicon-file" aria-hidden="true"></span> Reporte del curso</button>';
+    }
+    function moduloReportButton(modulo, instructorId) {
+        if (modulo.explicito) {
+            return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" onclick="window.open(\'informe_instructor_modulo_pdf.php?instructor_id=' + Number(instructorId) + '&curso_modulo_id=' + Number(modulo.modulo_id) + '\', \'_blank\')">' +
+                '<span class="glyphicon glyphicon-file" aria-hidden="true"></span> Reporte del módulo</button>';
+        }
+        return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" onclick="window.open(\'informe_instructor_curso_pdf.php?instructor_id=' + Number(instructorId) + '&curso_id=' + Number(modulo.curso_id) + '\', \'_blank\')">' +
             '<span class="glyphicon glyphicon-file" aria-hidden="true"></span> Reporte del curso</button>';
     }
     function copyEvaluationLink(token, button) {
@@ -1238,9 +1354,29 @@ body.inst-modal-open { overflow: hidden; }
                         '<td>' + evaluationLinkButton(course.evaluacion_token) + ' ' + courseReportButton(course) + '</td></tr>';
                 }).join('') + '</tbody></table></div>';
         }
+        renderModulosTab(instructor);
         renderSatisfactionTab(instructor, courses);
-        switchDetailTab(targetTab === 'evaluaciones' ? 'evaluaciones' : 'cursos');
+        switchDetailTab(targetTab === 'evaluaciones' ? 'evaluaciones' : (targetTab === 'modulos' ? 'modulos' : 'cursos'));
         openModal('modalInstructorDetalle');
+    }
+    function renderModulosTab(instructor) {
+        var panel = document.getElementById('instDetModulos');
+        if (!panel) return;
+        var modulos = Array.isArray(instructor.modulos_asignados) ? instructor.modulos_asignados : [];
+        if (!modulos.length) {
+            panel.innerHTML = '<div class="inst-detail-empty">Este instructor todavía no tiene módulos asignados.</div>';
+            return;
+        }
+        panel.innerHTML = '<div style="overflow-x:auto;"><table class="inst-table"><thead><tr><th>Curso</th><th>Módulo</th><th>Ingenio</th><th>Fechas</th><th>Horas</th><th>Rol</th><th>Evaluación</th></tr></thead><tbody>' +
+            modulos.map(function (modulo) {
+                var range = formatDate(modulo.inicio) + (modulo.fin && modulo.fin !== modulo.inicio ? ' – ' + formatDate(modulo.fin) : '');
+                var rolLabel = modulo.rol === 'principal' ? 'Principal' : 'Co-instructor';
+                return '<tr><td style="font-weight:600;">' + escapeHtml(modulo.nombre_cursos) + '</td><td>' + escapeHtml(modulo.modulo_nombre) + '</td>' +
+                    '<td>' + escapeHtml(modulo.ingenio || '—') + '</td><td>' + escapeHtml(range) + '</td>' +
+                    '<td>' + escapeHtml(modulo.modulo_horas != null ? modulo.modulo_horas : '—') + '</td>' +
+                    '<td>' + escapeHtml(rolLabel) + '</td>' +
+                    '<td>' + evaluationLinkButton(modulo.evaluacion_token) + ' ' + moduloReportButton(modulo, instructor.id) + '</td></tr>';
+            }).join('') + '</tbody></table></div>';
     }
     function destroyDetailChart(key) {
         if (instDetailCharts[key]) {
@@ -1530,8 +1666,8 @@ body.inst-modal-open { overflow: hidden; }
     var templateButton = document.getElementById('descargarPlantillaCsv');
     if (templateButton) templateButton.addEventListener('click', function () {
         if (typeof XLSX === 'undefined') return;
-        var columnas = ['Instructor', 'Ingenio', 'Cargo', 'Seccion', 'InstructorLenguajeClaro', 'InstructorMaterialAdecuado', 'InstructorConocimientoTema', 'InstructorRespetoParticipantes', 'InstructorPuntualidadObjetivos', 'RecomendariaInstructor', 'TemaRelevanciaUtilidad', 'LogisticaEvento', 'RecomendariaContexto', 'CapacitacionesNecesarias', 'AreasMejora', 'InstructorManejoPlataforma', 'CalidadInstalaciones'];
-        var anchoColumnas = [24, 18, 16, 14, 12, 12, 12, 12, 12, 12, 12, 12, 12, 32, 32, 14, 14];
+        var columnas = ['Instructor', 'Ingenio', 'Cargo', 'Seccion', 'InstructorLenguajeClaro', 'InstructorMaterialAdecuado', 'InstructorConocimientoTema', 'InstructorRespetoParticipantes', 'InstructorPuntualidadObjetivos', 'RecomendariaInstructor', 'TemaRelevanciaUtilidad', 'LogisticaEvento', 'RecomendariaContexto', 'CapacitacionesNecesarias', 'AreasMejora', 'InstructorManejoPlataforma', 'CalidadInstalaciones', 'Modulo'];
+        var anchoColumnas = [24, 18, 16, 14, 12, 12, 12, 12, 12, 12, 12, 12, 12, 32, 32, 14, 14, 20];
         var estiloEncabezado = {
             font: { bold: true, color: { rgb: 'FFFFFFFF' } },
             fill: { patternType: 'solid', fgColor: { rgb: 'FF3E7A12' } },
