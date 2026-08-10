@@ -80,8 +80,11 @@ a {
 .brand-logo {
     display: block;
     width: 150px;
+    max-width: 150px;
     height: auto;
+    max-height: 64px;
     object-fit: contain;
+    object-position: center;
 }
 
 .main-nav {
