@@ -67,8 +67,8 @@ try {
     ]);
 
     if (isset($_POST['modulos_present'])) {
-        cengi_curso_guardar_modulos($db, $cursoId, $datos['modulos'], true);
-        cengi_curso_asegurar_enlaces_evaluacion($db, $cursoId, $datos['instructor_id'], $datos['modulos']);
+        $moduloIds = cengi_curso_guardar_modulos($db, $cursoId, $datos['modulos'], true);
+        cengi_curso_asegurar_enlaces_evaluacion($db, $cursoId, $datos['instructor_id'], $datos['modulos'], $moduloIds);
     } else {
         cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $datos['instructor_id']);
     }

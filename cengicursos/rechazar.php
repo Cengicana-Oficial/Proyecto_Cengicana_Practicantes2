@@ -1,6 +1,7 @@
 <?php
 require_once "revisar_permisos.php";
 require_once "conexion.php";
+require_once "correo.php";
 
 cengi_require_rechazar_solicitudes('solicitudes.php');
 
@@ -14,9 +15,13 @@ if ($id > 0) {
         SELECT
             s.id_solicitud,
             s.estado,
-            i.nombre_ingenios
+            s.correo,
+            s.nombre_participante,
+            i.nombre_ingenios,
+            c.nombre_cursos
         FROM solicitudes_inscripcion s
         LEFT JOIN ingenios i ON i.id = s.ingenio_id
+        LEFT JOIN cursos c ON c.id = s.curso_id
         WHERE s.id_solicitud = ?
         LIMIT 1
     ");
@@ -41,6 +46,32 @@ if ($id > 0) {
         $stmt->execute([$id]);
         $resultado = 'rechazada';
         $mensaje = '';
+
+        try {
+
+            require __DIR__ . '/correos/plantilla_rechazado.php';
+
+            $correoEnviado = cengi_enviar_correo(
+                $solicitud['correo'],
+                $solicitud['nombre_participante'],
+                'Actualización de tu solicitud de inscripción',
+                $html
+            );
+
+            if (!$correoEnviado) {
+                error_log(
+                    "No se pudo enviar correo de rechazo " .
+                    "para solicitud {$id}"
+                );
+            }
+
+        } catch (Throwable $mailError) {
+
+            error_log(
+                "Error enviando correo de rechazo: " .
+                $mailError->getMessage()
+            );
+        }
     } elseif ($solicitud && strtolower(trim((string) ($solicitud['estado'] ?? ''))) !== 'pendiente') {
         $mensaje = 'La solicitud ya fue gestionada.';
     } elseif ($solicitud) {

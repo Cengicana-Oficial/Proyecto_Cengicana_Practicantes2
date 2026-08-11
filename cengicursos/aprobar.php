@@ -2,6 +2,7 @@
 
 require_once "revisar_permisos.php";
 require_once "conexion.php";
+require_once "correo.php";
 
 cengi_require_aprobar_solicitudes('solicitudes.php');
 
@@ -125,9 +126,13 @@ try {
     $sqlSolicitud = "
         SELECT
             s.*,
-            i.nombre_ingenios
+            i.nombre_ingenios,
+            c.nombre_cursos
         FROM solicitudes_inscripcion s
-        LEFT JOIN ingenios i ON i.id = s.ingenio_id
+        LEFT JOIN ingenios i
+            ON i.id = s.ingenio_id
+        LEFT JOIN cursos c
+            ON c.id = s.curso_id
         WHERE s.id_solicitud = ?
         LIMIT 1
     ";
@@ -300,6 +305,36 @@ try {
     $stmtUpdate->execute([$id]);
 
     $db->commit();
+
+    // ==========================================
+// ENVIAR CORREO DE APROBACIÓN
+// ==========================================
+
+try {
+
+    require __DIR__ . '/correos/plantilla_aprobado.php';
+
+    $correoEnviado = cengi_enviar_correo(
+        $solicitud['correo'],
+        $solicitud['nombre_participante'],
+        'Solicitud de inscripción aprobada',
+        $html
+    );
+
+    if (!$correoEnviado) {
+        error_log(
+            "No se pudo enviar correo de aprobación " .
+            "para solicitud {$id}"
+        );
+    }
+
+} catch (Throwable $mailError) {
+
+    error_log(
+        "Error enviando correo de aprobación: " .
+        $mailError->getMessage()
+    );
+}
 
 } catch (Throwable $e) {
 
