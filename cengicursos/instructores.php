@@ -10,6 +10,30 @@ $puedeGestionar = cengi_puede_gestionar_instructores();
 $mensaje = '';
 $mensajeTipo = 'success';
 
+// Scoping por ingenio para el rol "Administrador de ingenio": ve unicamente
+// instructores/cursos/modulos con al menos un participante de su propio
+// ingenio (via asignaciones -> participantes), y no tiene acceso a encuestas
+// de satisfaccion ni a los informes PDF de instructor. Admin/gestor/formador
+// no se ven afectados por estas banderas (siguen viendo todo).
+$esAdministradorIngenio = cengi_es_administrador_ingenio();
+$ingenioIdActualInstructores = cengi_ingenio_id_actual();
+$puedeVerEncuestasInstructor = !$esAdministradorIngenio;
+$puedeVerReportesInstructor = cengi_puede_generar_informe_instructor();
+// El "Administrador de ingenio" tampoco debe ver el CV del instructor (dato
+// personal del instructor, no del curso/participante de su ingenio) ni poder
+// generar/copiar el link de evaluacion (eso es potestad de quien gestiona el
+// envio de encuestas a nivel central). Son banderas independientes de
+// $puedeVerEncuestasInstructor porque conceptualmente cubren cosas distintas.
+$puedeVerCvInstructor = !$esAdministradorIngenio;
+$puedeVerLinkEvaluacion = !$esAdministradorIngenio;
+
+// Nota: el fragmento SQL "curso con participante del ingenio X" que antes
+// vivia aqui como funcion local (cengi_inst_frag_curso_participante_ingenio)
+// se movio a conexion.php como cengi_frag_curso_participante_ingenio(), para
+// poder reutilizarlo tambien en los 3 reportes PDF de instructor
+// (informe_instructor_pdf.php, informe_instructor_curso_pdf.php,
+// informe_instructor_modulo_pdf.php) sin duplicar la logica SQL.
+
 /**
  * Traduce los codigos de error de subida de PHP (UPLOAD_ERR_*) a un mensaje
  * legible para el usuario. Antes de este cambio, cualquier error distinto de
@@ -161,74 +185,233 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar) {
     }
 }
 
+// Scoping por ingenio (solo aplica al rol "Administrador de ingenio"): un
+// instructor solo debe listarse -- y sus contadores solo deben reflejar los
+// cursos -- si al menos uno de sus cursos (como instructor principal o como
+// co-instructor de modulo) tiene un participante inscrito del ingenio del
+// usuario actual. Admin/gestor/formador no llevan estas condiciones (quedan
+// como cadena vacia) y ven todo, igual que antes.
+$paramsInstructores = [];
+$filtroTotalCursosIngenio = '';
+$filtroEvaluacionPromedioIngenio = '';
+$whereInstructoresIngenio = '';
+if ($esAdministradorIngenio) {
+    if ($ingenioIdActualInstructores > 0) {
+        $filtroTotalCursosIngenio = ' AND ' . cengi_frag_curso_participante_ingenio('c', 'tc', $paramsInstructores, $ingenioIdActualInstructores);
+        $filtroEvaluacionPromedioIngenio = ' AND ' . cengi_frag_curso_participante_ingenio('c', 'ep', $paramsInstructores, $ingenioIdActualInstructores);
+        $fragInstructorPrincipalVisible = "EXISTS (
+            SELECT 1 FROM cursos c_vis
+            WHERE c_vis.instructor_id = i.id
+            AND " . cengi_frag_curso_participante_ingenio('c_vis', 'vp', $paramsInstructores, $ingenioIdActualInstructores) . "
+        )";
+        $fragInstructorCoModuloVisible = "EXISTS (
+            SELECT 1 FROM curso_modulo_instructores cmi_vis
+            INNER JOIN curso_modulos cm_vis ON cm_vis.id = cmi_vis.curso_modulo_id
+            INNER JOIN cursos c_vis2 ON c_vis2.id = cm_vis.curso_id
+            WHERE cmi_vis.instructor_id = i.id
+            AND " . cengi_frag_curso_participante_ingenio('c_vis2', 'vc', $paramsInstructores, $ingenioIdActualInstructores) . "
+        )";
+        $whereInstructoresIngenio = "WHERE ({$fragInstructorPrincipalVisible} OR {$fragInstructorCoModuloVisible})";
+    } else {
+        $whereInstructoresIngenio = 'WHERE 1 = 0';
+    }
+}
+
 $stmt = $db->prepare("
     SELECT
         i.*,
-        (SELECT COUNT(*) FROM cursos c WHERE c.instructor_id = i.id) AS total_cursos,
+        (SELECT COUNT(*) FROM cursos c WHERE c.instructor_id = i.id{$filtroTotalCursosIngenio}) AS total_cursos,
         (
             SELECT AVG(CAST(cc.posevaluacion AS DECIMAL(6,2)))
             FROM cursos c
             INNER JOIN asignaciones a ON a.cursos_id = c.id
             INNER JOIN control_cursos cc ON cc.asignacion_id = a.id
-            WHERE c.instructor_id = i.id AND cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?$'
+            WHERE c.instructor_id = i.id AND cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?$'{$filtroEvaluacionPromedioIngenio}
         ) AS evaluacion_promedio
     FROM instructores i
+    {$whereInstructoresIngenio}
     ORDER BY total_cursos DESC, i.nombre
 ");
-$stmt->execute();
+$stmt->execute($paramsInstructores);
 $instructores = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// El rol "Administrador de ingenio" no tiene acceso a las encuestas de
+// satisfaccion del instructor (promedios ni comentarios): se dejan los
+// arreglos vacios sin siquiera consultar la BD, para que
+// encuesta_satisfaccion salga en cero/null para cada instructor (ver uso mas
+// abajo) y no se filtren datos agregados de otros ingenios.
 $statsEncuestaPorInstructor = [];
-$statsEncuestaStmt = $db->query("
-    SELECT
-        eei.instructor_id,
-        COUNT(*) AS total,
-        AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
-        AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
-        AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
-        AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
-        AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
-        AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor,
-        AVG(ei.tema_relevancia_utilidad) AS avg_tema_relevancia_utilidad,
-        AVG(ei.logistica_evento) AS avg_logistica_evento,
-        AVG(ei.recomendaria_contexto) AS avg_recomendaria_contexto
-    FROM evaluaciones_instructor ei
-    INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-    GROUP BY eei.instructor_id
-");
-foreach ($statsEncuestaStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
-    $statsEncuestaPorInstructor[(int) $fila['instructor_id']] = $fila;
-}
-
 $comentariosEncuestaPorInstructor = [];
-$comentariosEncuestaStmt = $db->query("
-    SELECT instructor_id, areas_mejora, capacitaciones_necesarias, creado
-    FROM (
+if ($puedeVerEncuestasInstructor) {
+    $statsEncuestaStmt = $db->query("
         SELECT
-            eei.instructor_id AS instructor_id,
-            ei.areas_mejora AS areas_mejora,
-            ei.capacitaciones_necesarias AS capacitaciones_necesarias,
-            ei.creado AS creado,
-            ROW_NUMBER() OVER (PARTITION BY eei.instructor_id ORDER BY ei.creado DESC, ei.id DESC) AS rn
+            eei.instructor_id,
+            COUNT(*) AS total,
+            AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
+            AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
+            AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
+            AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
+            AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
+            AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor,
+            AVG(ei.tema_relevancia_utilidad) AS avg_tema_relevancia_utilidad,
+            AVG(ei.logistica_evento) AS avg_logistica_evento,
+            AVG(ei.recomendaria_contexto) AS avg_recomendaria_contexto
         FROM evaluaciones_instructor ei
         INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-        WHERE
-            (ei.areas_mejora IS NOT NULL AND TRIM(ei.areas_mejora) <> '')
-            OR (ei.capacitaciones_necesarias IS NOT NULL AND TRIM(ei.capacitaciones_necesarias) <> '')
-    ) comentarios_recientes
-    WHERE rn <= 5
-    ORDER BY instructor_id, creado DESC
-");
-foreach ($comentariosEncuestaStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
-    $idInstructor = (int) $fila['instructor_id'];
-    if (!isset($comentariosEncuestaPorInstructor[$idInstructor])) {
-        $comentariosEncuestaPorInstructor[$idInstructor] = [];
+        GROUP BY eei.instructor_id
+    ");
+    foreach ($statsEncuestaStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+        $statsEncuestaPorInstructor[(int) $fila['instructor_id']] = $fila;
     }
-    $comentariosEncuestaPorInstructor[$idInstructor][] = [
-        'areas_mejora' => $fila['areas_mejora'],
-        'capacitaciones_necesarias' => $fila['capacitaciones_necesarias'],
-        'creado' => $fila['creado'],
+
+    $comentariosEncuestaStmt = $db->query("
+        SELECT instructor_id, areas_mejora, capacitaciones_necesarias, creado
+        FROM (
+            SELECT
+                eei.instructor_id AS instructor_id,
+                ei.areas_mejora AS areas_mejora,
+                ei.capacitaciones_necesarias AS capacitaciones_necesarias,
+                ei.creado AS creado,
+                ROW_NUMBER() OVER (PARTITION BY eei.instructor_id ORDER BY ei.creado DESC, ei.id DESC) AS rn
+            FROM evaluaciones_instructor ei
+            INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
+            WHERE
+                (ei.areas_mejora IS NOT NULL AND TRIM(ei.areas_mejora) <> '')
+                OR (ei.capacitaciones_necesarias IS NOT NULL AND TRIM(ei.capacitaciones_necesarias) <> '')
+        ) comentarios_recientes
+        WHERE rn <= 5
+        ORDER BY instructor_id, creado DESC
+    ");
+    foreach ($comentariosEncuestaStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+        $idInstructor = (int) $fila['instructor_id'];
+        if (!isset($comentariosEncuestaPorInstructor[$idInstructor])) {
+            $comentariosEncuestaPorInstructor[$idInstructor] = [];
+        }
+        $comentariosEncuestaPorInstructor[$idInstructor][] = [
+            'areas_mejora' => $fila['areas_mejora'],
+            'capacitaciones_necesarias' => $fila['capacitaciones_necesarias'],
+            'creado' => $fila['creado'],
+        ];
+    }
+}
+
+// Modulos asignados por instructor: un modulo (curso_modulos) puede tener 0, 1 o
+// varios instructores propios via curso_modulo_instructores (co-ensenanza). Si un
+// modulo no tiene ninguna fila propia, hereda implicitamente al instructor
+// principal del curso (cursos.instructor_id) -- mismo criterio de fallback que ya
+// se usa en cengicursos/ver_cursos.php al listar los modulos de un curso.
+// Scoping por ingenio: para el Administrador de ingenio solo se incluyen los
+// modulos de cursos que tengan al menos un participante de su ingenio (no
+// hace falta filtrar por instructor aqui, basta con que el CURSO califique);
+// $modulosAsignadosPorInstructor y $edicionesModulo (mas abajo) heredan el
+// filtro en cascada a partir de este resultado.
+$paramsModulosCurso = [];
+$whereModulosCursoIngenio = '';
+if ($esAdministradorIngenio) {
+    $whereModulosCursoIngenio = $ingenioIdActualInstructores > 0
+        ? 'WHERE ' . cengi_frag_curso_participante_ingenio('c', 'mc', $paramsModulosCurso, $ingenioIdActualInstructores)
+        : 'WHERE 1 = 0';
+}
+
+$modulosCursoStmt = $db->prepare("
+    SELECT
+        cm.id AS modulo_id,
+        cm.nombre AS modulo_nombre,
+        cm.horas AS modulo_horas,
+        cm.orden AS modulo_orden,
+        c.id AS curso_id,
+        c.nombre_cursos,
+        c.instructor_id AS curso_instructor_id,
+        c.inicio,
+        c.fin,
+        ing.nombre_ingenios AS ingenio,
+        cmi.instructor_id AS modulo_instructor_id
+    FROM curso_modulos cm
+    INNER JOIN cursos c ON c.id = cm.curso_id
+    INNER JOIN ingenios ing ON ing.id = c.ingenio_id
+    LEFT JOIN curso_modulo_instructores cmi ON cmi.curso_modulo_id = cm.id
+    LEFT JOIN instructores insm ON insm.id = cmi.instructor_id
+    {$whereModulosCursoIngenio}
+    ORDER BY c.nombre_cursos, c.inicio DESC, cm.orden, cm.id
+");
+$modulosCursoStmt->execute($paramsModulosCurso);
+
+$modulosPorModuloId = [];
+foreach ($modulosCursoStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+    $moduloId = (int) $fila['modulo_id'];
+    if (!isset($modulosPorModuloId[$moduloId])) {
+        $modulosPorModuloId[$moduloId] = [
+            'curso_id' => (int) $fila['curso_id'],
+            'nombre_cursos' => $fila['nombre_cursos'],
+            'curso_instructor_id' => $fila['curso_instructor_id'] !== null ? (int) $fila['curso_instructor_id'] : null,
+            'inicio' => $fila['inicio'],
+            'fin' => $fila['fin'],
+            'ingenio' => $fila['ingenio'],
+            'modulo_id' => $moduloId,
+            'modulo_nombre' => $fila['modulo_nombre'],
+            'modulo_horas' => $fila['modulo_horas'],
+            'modulo_orden' => $fila['modulo_orden'],
+            'instructores_propios' => [],
+        ];
+    }
+    if ($fila['modulo_instructor_id'] !== null) {
+        $modulosPorModuloId[$moduloId]['instructores_propios'][(int) $fila['modulo_instructor_id']] = true;
+    }
+}
+
+// Backfill: los cursos guardados antes de que existiera el enlace de evaluacion
+// por modulo todavia no tienen fila en enlaces_evaluacion_instructor para los
+// modulos con asignacion EXPLICITA de instructor(es) propios. Se asegura aqui,
+// de forma idempotente (no crea duplicados si ya existe).
+foreach ($modulosPorModuloId as $modulo) {
+    if (empty($modulo['instructores_propios'])) {
+        continue;
+    }
+    foreach (array_keys($modulo['instructores_propios']) as $instructorIdModulo) {
+        cengi_asegurar_enlace_evaluacion_instructor($db, $modulo['curso_id'], $instructorIdModulo, $modulo['modulo_id']);
+    }
+}
+
+$enlacesPorClave = [];
+$enlacesStmt = $db->query('SELECT curso_id, instructor_id, curso_modulo_id, token FROM enlaces_evaluacion_instructor');
+foreach ($enlacesStmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+    $clave = $fila['curso_id'] . '-' . $fila['instructor_id'] . '-' . ((int) ($fila['curso_modulo_id'] ?? 0));
+    $enlacesPorClave[$clave] = $fila['token'];
+}
+
+$modulosAsignadosPorInstructor = [];
+foreach ($modulosPorModuloId as $modulo) {
+    $base = [
+        'curso_id' => $modulo['curso_id'],
+        'nombre_cursos' => $modulo['nombre_cursos'],
+        'ingenio' => $modulo['ingenio'],
+        'inicio' => $modulo['inicio'],
+        'fin' => $modulo['fin'],
+        'modulo_id' => $modulo['modulo_id'],
+        'modulo_nombre' => $modulo['modulo_nombre'],
+        'modulo_horas' => $modulo['modulo_horas'],
+        'modulo_orden' => $modulo['modulo_orden'],
     ];
+    if (empty($modulo['instructores_propios'])) {
+        // Sin instructores propios: el modulo hereda al instructor principal del curso.
+        if ($modulo['curso_instructor_id'] !== null) {
+            $instructorIdDestino = $modulo['curso_instructor_id'];
+            $modulosAsignadosPorInstructor[$instructorIdDestino][] = $base + [
+                'rol' => 'principal',
+                'explicito' => false,
+                'evaluacion_token' => $enlacesPorClave["{$modulo['curso_id']}-{$instructorIdDestino}-0"] ?? null,
+            ];
+        }
+        continue;
+    }
+    foreach (array_keys($modulo['instructores_propios']) as $instructorIdModulo) {
+        $rol = ($instructorIdModulo === $modulo['curso_instructor_id']) ? 'principal' : 'co-instructor';
+        $modulosAsignadosPorInstructor[$instructorIdModulo][] = $base + [
+            'rol' => $rol,
+            'explicito' => true,
+            'evaluacion_token' => $enlacesPorClave["{$modulo['curso_id']}-{$instructorIdModulo}-{$modulo['modulo_id']}"] ?? null,
+        ];
+    }
 }
 
 // Modulos asignados por instructor: un modulo (curso_modulos) puede tener 0, 1 o
@@ -372,7 +555,36 @@ foreach ($instructores as &$instructorFila) {
 }
 unset($instructorFila);
 
-$ediciones = $db->query("
+// Defensa en profundidad: el "Administrador de ingenio" no debe poder ver el
+// CV del instructor ni el token del link de evaluacion ni con "ver codigo
+// fuente" del HTML, asi que se limpian del arreglo ANTES del json_encode que
+// lo embebe en la pagina (ver mas abajo), en vez de confiar solo en que el JS
+// no los renderice.
+if ($esAdministradorIngenio) {
+    foreach ($instructores as &$instructorFila) {
+        unset($instructorFila['cv_path'], $instructorFila['cv_disponible']);
+        if (!empty($instructorFila['modulos_asignados'])) {
+            foreach ($instructorFila['modulos_asignados'] as &$moduloAsignado) {
+                $moduloAsignado['evaluacion_token'] = null;
+            }
+            unset($moduloAsignado);
+        }
+    }
+    unset($instructorFila);
+}
+
+// Fila base por curso, con el instructor PRINCIPAL del curso (c.instructor_id) -- este
+// es el comportamiento original, sin cambios, salvo el WHERE de scoping por
+// ingenio agregado abajo (mismo filtro que $modulosCursoStmt, sobre c.id).
+$paramsEdicionesPrincipales = [];
+$whereEdicionesPrincipalesIngenio = '';
+if ($esAdministradorIngenio) {
+    $whereEdicionesPrincipalesIngenio = $ingenioIdActualInstructores > 0
+        ? 'WHERE ' . cengi_frag_curso_participante_ingenio('c', 'ep2', $paramsEdicionesPrincipales, $ingenioIdActualInstructores)
+        : 'WHERE 1 = 0';
+}
+
+$edicionesPrincipalesStmt = $db->prepare("
     SELECT
         ca.descripcion_categorias_cursos AS categoria,
         c.id AS curso_id,
@@ -400,8 +612,82 @@ $ediciones = $db->query("
     INNER JOIN ingenios ing ON ing.id = c.ingenio_id
     LEFT JOIN instructores i ON i.id = c.instructor_id
     LEFT JOIN enlaces_evaluacion_instructor eei ON eei.curso_id = c.id AND eei.instructor_id = i.id AND eei.curso_modulo_id IS NULL
+    {$whereEdicionesPrincipalesIngenio}
     ORDER BY c.nombre_cursos, c.inicio DESC
-")->fetchAll(PDO::FETCH_ASSOC);
+");
+$edicionesPrincipalesStmt->execute($paramsEdicionesPrincipales);
+$edicionesPrincipales = $edicionesPrincipalesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Filas adicionales: un instructor que solo dio uno (o varios) de los modulos de un
+// curso, sin ser el instructor principal (cursos.instructor_id), tambien debe poder
+// aparecer al filtrar por ese curso/diplomado en el JS (instructorEditions() /
+// filteredEditions() filtran "ediciones" por instructor_id + nombre_cursos/anio, ver
+// mas abajo). Se reutiliza $modulosPorModuloId (ya calculado arriba para
+// $modulosAsignadosPorInstructor) para no repetir la consulta de
+// curso_modulo_instructores, y se deduplica por curso+instructor con un array
+// asociativo (un mismo instructor puede tener modulos propios en varios modulos del
+// mismo curso).
+$paresCursoInstructorModulo = [];
+foreach ($modulosPorModuloId as $modulo) {
+    if (empty($modulo['instructores_propios'])) {
+        continue;
+    }
+    foreach (array_keys($modulo['instructores_propios']) as $instructorIdModulo) {
+        if ($instructorIdModulo === $modulo['curso_instructor_id']) {
+            // Ya cubierto por la fila principal del curso.
+            continue;
+        }
+        $paresCursoInstructorModulo["{$modulo['curso_id']}-{$instructorIdModulo}"] = [
+            'curso_id' => $modulo['curso_id'],
+            'instructor_id' => $instructorIdModulo,
+        ];
+    }
+}
+
+$cursoBasePorId = [];
+foreach ($edicionesPrincipales as $filaBase) {
+    $cursoBasePorId[(int) $filaBase['curso_id']] = $filaBase;
+}
+
+$instructoresPorId = [];
+foreach ($instructores as $instructorRegistro) {
+    $instructoresPorId[(int) $instructorRegistro['id']] = $instructorRegistro;
+}
+
+$edicionesModulo = [];
+foreach ($paresCursoInstructorModulo as $par) {
+    $cursoId = $par['curso_id'];
+    $instructorId = $par['instructor_id'];
+    if (!isset($cursoBasePorId[$cursoId])) {
+        continue;
+    }
+    $baseCurso = $cursoBasePorId[$cursoId];
+    $instructorInfo = $instructoresPorId[$instructorId] ?? null;
+    // El enlace de evaluacion de CURSO COMPLETO para un instructor de modulo tambien se
+    // crea (ver cengi_curso_asegurar_enlaces_evaluacion()/cengi_asegurar_enlace_evaluacion_instructor()
+    // en curso_form_helpers.php), asi que se busca con la misma clave "curso-instructor-0"
+    // (curso_modulo_id NULL) que usa $enlacesPorClave para la fila principal.
+    $edicionesModulo[] = [
+        'categoria' => $baseCurso['categoria'],
+        'curso_id' => $cursoId,
+        'nombre_cursos' => $baseCurso['nombre_cursos'],
+        'modalidad' => $baseCurso['modalidad'],
+        'cupo' => $baseCurso['cupo'],
+        'inicio' => $baseCurso['inicio'],
+        'fin' => $baseCurso['fin'],
+        'anio' => $baseCurso['anio'],
+        'ingenio' => $baseCurso['ingenio'],
+        'instructor_id' => $instructorId,
+        'instructor_nombre' => $instructorInfo['nombre'] ?? null,
+        'instructor_especialidad' => $instructorInfo['especialidad'] ?? null,
+        'instructor_cv' => $instructorInfo['cv_path'] ?? null,
+        'evaluacion_token' => $enlacesPorClave["{$cursoId}-{$instructorId}-0"] ?? null,
+        'total_inscritos' => $baseCurso['total_inscritos'],
+        'evaluacion_promedio' => $baseCurso['evaluacion_promedio'],
+    ];
+}
+
+$ediciones = array_merge($edicionesPrincipales, $edicionesModulo);
 
 $anios = [];
 $nombresCursos = [];
@@ -413,6 +699,18 @@ foreach ($ediciones as &$edicionFila) {
     $edicionFila['instructor_cv_disponible'] = $instructorTieneCvDisponible[(int) $edicionFila['instructor_id']] ?? false;
 }
 unset($edicionFila);
+
+// Misma defensa en profundidad que arriba, aplicada a $ediciones: sin CV ni
+// token de evaluacion en el JSON embebido para el "Administrador de ingenio".
+if ($esAdministradorIngenio) {
+    foreach ($ediciones as &$edicionFila) {
+        $edicionFila['instructor_cv'] = null;
+        $edicionFila['instructor_cv_disponible'] = false;
+        $edicionFila['evaluacion_token'] = null;
+    }
+    unset($edicionFila);
+}
+
 $anios = array_keys($anios);
 rsort($anios, SORT_NUMERIC);
 $nombresCursos = array_keys($nombresCursos);
@@ -424,8 +722,12 @@ sort($nombresCursos, SORT_NATURAL | SORT_FLAG_CASE);
 // fila por fila. Es un listado global (no por instructor) porque una sola carga masiva
 // puede incluir boletas de varios instructores a la vez (ver
 // cengicursos/migrations/20260810_cargas_evaluaciones_instructor.sql).
+// El rol "Administrador de ingenio" no tiene acceso a las encuestas de
+// instructor, asi que tampoco a su historial de cargas -- se fuerza vacio sin
+// importar $puedeGestionar (defensivo, por si algun dia se le otorgara ese
+// permiso de gestion desde la UI de roles).
 $historialCargasEvaluaciones = [];
-if ($puedeGestionar) {
+if ($puedeGestionar && $puedeVerEncuestasInstructor) {
     $stmtHistorialMasivo = $db->query("
         SELECT
             cei.id AS carga_id,
@@ -804,7 +1106,9 @@ function cengi_inst_html($valor)
     <div class="inst-switch-row">
         <div class="inst-tabs" role="tablist">
             <button class="inst-tab is-active" type="button" data-inst-tab="directorio">Directorio de instructores</button>
+            <?php if ($puedeVerReportesInstructor): ?>
             <button class="inst-tab" type="button" data-inst-tab="informe">Informe general por curso y diplomado</button>
+            <?php endif; ?>
         </div>
         <div class="inst-view-toggle" id="instViewToggle">
             <button class="inst-btn inst-btn-ghost inst-btn-sm inst-view-btn is-active" type="button" data-inst-view="grid">▦ Tarjetas</button>
@@ -815,6 +1119,7 @@ function cengi_inst_html($valor)
     <section data-inst-panel="directorio">
         <div class="inst-grid" id="gridInstructores"></div>
     </section>
+    <?php if ($puedeVerReportesInstructor): ?>
     <section data-inst-panel="informe" hidden>
         <div class="inst-section">
             <div class="inst-report-head">
@@ -824,6 +1129,7 @@ function cengi_inst_html($valor)
             <div id="informeInstructores"></div>
         </div>
     </section>
+    <?php endif; ?>
 </main>
 
 <style>
@@ -1048,7 +1354,9 @@ body.inst-modal-open { overflow: hidden; }
         <div class="inst-detail-panel" data-detail-panel="modulos" id="instDetModulos" hidden></div>
         <div class="inst-detail-panel" data-detail-panel="evaluaciones" id="instDetEvaluaciones" hidden></div>
         <div class="inst-modal-footer">
+            <?php if ($puedeVerReportesInstructor): ?>
             <button class="inst-btn inst-btn-outline" type="button" id="imprimirInformeInstructor">Descargar informe PDF</button>
+            <?php endif; ?>
             <button class="inst-btn inst-btn-primary" type="button" data-inst-close>Cerrar</button>
         </div>
     </div>
@@ -1070,6 +1378,10 @@ body.inst-modal-open { overflow: hidden; }
     var ediciones = <?php echo json_encode($ediciones, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var historialCargas = <?php echo json_encode($historialCargasEvaluaciones, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var puedeGestionar = <?php echo $puedeGestionar ? 'true' : 'false'; ?>;
+    var puedeVerEncuestasInstructor = <?php echo $puedeVerEncuestasInstructor ? 'true' : 'false'; ?>;
+    var puedeVerReportesInstructor = <?php echo $puedeVerReportesInstructor ? 'true' : 'false'; ?>;
+    var puedeVerCvInstructor = <?php echo $puedeVerCvInstructor ? 'true' : 'false'; ?>;
+    var puedeVerLinkEvaluacion = <?php echo $puedeVerLinkEvaluacion ? 'true' : 'false'; ?>;
     var instDetailCharts = {};
     var instView = 'grid';
     var activeTab = 'directorio';
@@ -1154,18 +1466,24 @@ body.inst-modal-open { overflow: hidden; }
             '<button class="inst-icon-btn" type="submit" title="' + nextLabel + ' instructor"><span class="glyphicon ' + icon + '"></span></button></form></div>';
     }
     function cvChip(instructor, previewId) {
+        // El "Administrador de ingenio" no tiene acceso al CV del instructor.
+        if (!puedeVerCvInstructor) return '';
         return instructor.cv_disponible ? '<button class="inst-chip is-cv" type="button" data-cv-preview="' + previewId + '">📄 Ver CV</button>' : '<span class="inst-chip is-missing">⚠ Sin CV</span>';
     }
     function evaluationLinkButton(token) {
+        // El "Administrador de ingenio" no puede generar/copiar el link de evaluación.
+        if (!puedeVerLinkEvaluacion) return '';
         if (!token) return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" disabled title="Este curso todavía no tiene enlace de evaluación">Sin enlace</button>';
         return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-copy-eval-token="' + escapeHtml(token) + '">' +
             '<span class="glyphicon glyphicon-link" aria-hidden="true"></span> Copiar link de evaluación</button>';
     }
     function courseReportButton(course) {
+        if (!puedeVerReportesInstructor) return '';
         return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" onclick="window.open(\'informe_instructor_curso_pdf.php?instructor_id=' + Number(course.instructor_id) + '&curso_id=' + Number(course.curso_id) + '\', \'_blank\')">' +
             '<span class="glyphicon glyphicon-file" aria-hidden="true"></span> Reporte del curso</button>';
     }
     function moduloReportButton(modulo, instructorId) {
+        if (!puedeVerReportesInstructor) return '';
         if (modulo.explicito) {
             return '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" onclick="window.open(\'informe_instructor_modulo_pdf.php?instructor_id=' + Number(instructorId) + '&curso_modulo_id=' + Number(modulo.modulo_id) + '\', \'_blank\')">' +
                 '<span class="glyphicon glyphicon-file" aria-hidden="true"></span> Reporte del módulo</button>';
@@ -1189,7 +1507,7 @@ body.inst-modal-open { overflow: hidden; }
         }
     }
     function cvPreview(instructor, previewId, isList) {
-        if (!instructor.cv_disponible) return '';
+        if (!puedeVerCvInstructor || !instructor.cv_disponible) return '';
         var path = escapeHtml(instructor.cv_path);
         return '<div class="inst-cv-preview" id="' + previewId + '"' + (isList ? ' style="margin:0;padding-left:60px;"' : '') + '><div class="inst-cv-row"><div class="inst-cv-doc"></div>' +
             '<div style="flex:1;min-width:0;"><div style="margin-bottom:6px;font-size:11.5px;font-weight:600;overflow-wrap:anywhere;">' + escapeHtml(cvName(instructor.cv_path)) + '</div>' +
@@ -1269,14 +1587,21 @@ body.inst-modal-open { overflow: hidden; }
         container.innerHTML = names.map(function (name) {
             var rows = groups[name].slice().sort(function (a, b) { return Number(b.anio || 0) - Number(a.anio || 0); });
             var category = rows[0] ? rows[0].categoria : '';
+            // Columna "CV" oculta por completo (encabezado y celdas) para el
+            // "Administrador de ingenio", que no tiene acceso al CV del instructor.
+            var cvHeadCell = puedeVerCvInstructor ? '<th>CV</th>' : '';
             return '<div class="inst-report-group"><div class="inst-report-group-head"><span>' + escapeHtml(name) + '</span><small>' + escapeHtml(category) + ' · ' + rows.length + ' edición(es)</small></div>' +
-                '<div class="inst-table-scroll"><table class="inst-table"><thead><tr><th>Año</th><th>Instructor</th><th>Especialidad</th><th>Estado</th><th>Evaluación prom.</th><th>Cupo</th><th>CV</th></tr></thead><tbody>' +
+                '<div class="inst-table-scroll"><table class="inst-table"><thead><tr><th>Año</th><th>Instructor</th><th>Especialidad</th><th>Estado</th><th>Evaluación prom.</th><th>Cupo</th>' + cvHeadCell + '</tr></thead><tbody>' +
                 rows.map(function (course) {
                     var status = courseStatus(course);
-                    var cv = course.instructor_cv_disponible ? '<a class="inst-chip is-cv" href="' + escapeHtml(course.instructor_cv) + '" target="_blank" rel="noopener">📄 Ver CV</a>' : '<span class="inst-chip is-missing">⚠ Sin CV</span>';
+                    var cvCell = '';
+                    if (puedeVerCvInstructor) {
+                        var cv = course.instructor_cv_disponible ? '<a class="inst-chip is-cv" href="' + escapeHtml(course.instructor_cv) + '" target="_blank" rel="noopener">📄 Ver CV</a>' : '<span class="inst-chip is-missing">⚠ Sin CV</span>';
+                        cvCell = '<td>' + cv + '</td>';
+                    }
                     return '<tr><td style="font-family:JetBrains Mono,monospace;font-size:11px;">' + escapeHtml(course.anio || '—') + '</td><td style="font-weight:600;">' + escapeHtml(course.instructor_nombre || 'Sin asignar') + '</td>' +
                         '<td>' + escapeHtml(course.instructor_especialidad || '—') + '</td><td><span class="inst-badge ' + status.className + '">' + status.label + '</span></td>' +
-                        '<td>' + evaluationValue(course.evaluacion_promedio) + '</td><td>' + escapeHtml(course.cupo || course.total_inscritos || '—') + '</td><td>' + cv + '</td></tr>';
+                        '<td>' + evaluationValue(course.evaluacion_promedio) + '</td><td>' + escapeHtml(course.cupo || course.total_inscritos || '—') + '</td>' + cvCell + '</tr>';
                 }).join('') + '</tbody></table></div></div>';
         }).join('');
     }
@@ -1339,9 +1664,9 @@ body.inst-modal-open { overflow: hidden; }
         document.getElementById('instDetCursos').textContent = Number(instructor.total_cursos || 0);
         document.getElementById('instDetEval').textContent = evaluationValue(instructor.evaluacion_promedio);
         document.getElementById('instDetEstado').textContent = Number(instructor.estado) === 1 ? 'Activo' : 'Inactivo';
-        document.getElementById('instDetCv').innerHTML = instructor.cv_disponible ?
+        document.getElementById('instDetCv').innerHTML = !puedeVerCvInstructor ? '' : (instructor.cv_disponible ?
             '<a class="inst-chip is-cv" href="' + escapeHtml(instructor.cv_path) + '" target="_blank" rel="noopener">📄 ' + escapeHtml(cvName(instructor.cv_path)) + '</a>' :
-            '<span class="inst-chip is-missing">⚠ Sin CV cargado</span>';
+            '<span class="inst-chip is-missing">⚠ Sin CV cargado</span>');
         var history = document.getElementById('instDetHistorial');
         if (!courses.length) {
             history.innerHTML = '<div class="inst-detail-empty">Este instructor todavía no tiene cursos asociados.</div>';
@@ -1446,6 +1771,20 @@ body.inst-modal-open { overflow: hidden; }
             '<div class="inst-stat-value is-green" style="font-size:26px;margin-top:6px;">' + evaluationValue(instructor.evaluacion_promedio) + '</div><div class="inst-progress"><span style="width:' + academicoPct + '%"></span></div></div>' +
             '<div class="inst-eval-box"><div class="inst-stat-label">Cursos con datos de evaluación</div><div class="inst-stat-value" style="font-size:26px;margin-top:6px;">' +
             courses.filter(function (course) { return course.evaluacion_promedio !== null; }).length + '</div><div class="inst-stat-label" style="margin-top:10px;">Nota de examen posterior al curso de los participantes; no mide la satisfacción con el instructor.</div></div></div></div>';
+
+        if (!puedeVerEncuestasInstructor) {
+            // El rol "Administrador de ingenio" no tiene acceso a las encuestas de
+            // satisfaccion del instructor: no se pinta ni siquiera el bloque
+            // "sin datos todavia", solo el desempeño academico (que no es dato de
+            // encuesta). El servidor ya envia encuesta_satisfaccion en cero/null
+            // para este rol, pero esto evita ademas renderizar la seccion.
+            panel.innerHTML = academicoHtml;
+            destroyDetailChart('acercaInstructor');
+            destroyDetailChart('recomiendaInstructor');
+            destroyDetailChart('temaLogistica');
+            destroyDetailChart('recomiendaContexto');
+            return;
+        }
 
         if (!encuesta.total) {
             panel.innerHTML = '<div class="inst-satisfaction-block"><div class="inst-block-title"><h4>Satisfacción de los participantes (encuesta al instructor)</h4></div>' +
@@ -1562,11 +1901,22 @@ body.inst-modal-open { overflow: hidden; }
     function populateLoadEditionSelect() {
         var select = document.getElementById('cargaEdicion');
         if (!select) return;
-        if (!ediciones.length) {
+        // "ediciones" puede tener varias filas para el mismo curso_id cuando el curso
+        // tiene co-instructores a nivel de modulo (una fila por instructor, ver
+        // instructorEditions()/filteredEditions()); este selector es por CURSO, asi que
+        // se deduplica por curso_id para no repetir la misma edicion varias veces.
+        var seen = {};
+        var uniqueCourses = ediciones.filter(function (course) {
+            var id = Number(course.curso_id);
+            if (seen[id]) return false;
+            seen[id] = true;
+            return true;
+        });
+        if (!uniqueCourses.length) {
             select.innerHTML = '<option value="">No hay ediciones registradas</option>';
             return;
         }
-        select.innerHTML = ediciones.map(function (course) {
+        select.innerHTML = uniqueCourses.map(function (course) {
             return '<option value="' + Number(course.curso_id) + '">' + escapeHtml((course.anio || 'Sin año') + ' · ' + course.nombre_cursos + ' · ' + course.ingenio) + '</option>';
         }).join('');
     }

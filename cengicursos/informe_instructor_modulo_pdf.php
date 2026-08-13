@@ -12,7 +12,7 @@
 require_once "conexion.php";
 require_once "menu.php";
 
-cengi_require_ver_instructores();
+cengi_require_generar_informe_instructor();
 
 require_once __DIR__ . '/vendor/autoload.php';
 
@@ -101,61 +101,98 @@ if (!$modulo) {
     exit;
 }
 
-$statsStmt = $db->prepare("
-    SELECT
-        COUNT(*) AS total,
-        AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
-        AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
-        AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
-        AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
-        AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
-        AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor,
-        AVG(ei.tema_relevancia_utilidad) AS avg_tema_relevancia_utilidad,
-        AVG(ei.logistica_evento) AS avg_logistica_evento,
-        AVG(ei.recomendaria_contexto) AS avg_recomendaria_contexto
-    FROM evaluaciones_instructor ei
-    INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-    WHERE eei.instructor_id = ? AND eei.curso_modulo_id = ?
-");
-$statsStmt->execute([$instructorId, $cursoModuloId]);
-$stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+// Guard 403: un "Administrador de ingenio" solo puede ver el informe de un
+// modulo cuyo curso tenga al menos un participante inscrito de su propio
+// ingenio. Evita que enumere combinaciones instructor_id/curso_modulo_id
+// fuera de su alcance para leer datos agregados de otros ingenios.
+$esAdminIngenioReporte = cengi_es_administrador_ingenio();
+$ingenioIdReporte = cengi_ingenio_id_actual();
+
+if ($esAdminIngenioReporte && !cengi_curso_tiene_participante_ingenio($db, (int) $modulo['curso_id'], $ingenioIdReporte)) {
+    http_response_code(403);
+    echo 'No tiene permiso para ver el informe de este módulo.';
+    exit;
+}
 
 $promedio = static function ($valor) {
     return $valor !== null ? (float) $valor : null;
 };
 
-$totalEncuesta = $stats ? (int) $stats['total'] : 0;
+// El rol "Administrador de ingenio" no tiene acceso a las encuestas de
+// satisfaccion del instructor (ni agregadas ni de su propio ingenio, mismo
+// criterio que instructores.php e informe_instructor_curso_pdf.php): la
+// seccion queda vacia sin siquiera consultar la BD.
 $encuesta = [
-    'total' => $totalEncuesta,
+    'total' => 0,
     'instructor' => [
-        'lenguaje_claro' => $totalEncuesta ? $promedio($stats['avg_lenguaje_claro']) : null,
-        'material_adecuado' => $totalEncuesta ? $promedio($stats['avg_material_adecuado']) : null,
-        'conocimiento_tema' => $totalEncuesta ? $promedio($stats['avg_conocimiento_tema']) : null,
-        'respeto_participantes' => $totalEncuesta ? $promedio($stats['avg_respeto_participantes']) : null,
-        'puntualidad_objetivos' => $totalEncuesta ? $promedio($stats['avg_puntualidad_objetivos']) : null,
+        'lenguaje_claro' => null,
+        'material_adecuado' => null,
+        'conocimiento_tema' => null,
+        'respeto_participantes' => null,
+        'puntualidad_objetivos' => null,
     ],
-    'recomendaria_instructor' => $totalEncuesta ? $promedio($stats['avg_recomendaria_instructor']) : null,
+    'recomendaria_instructor' => null,
     'tema' => [
-        'relevancia_utilidad' => $totalEncuesta ? $promedio($stats['avg_tema_relevancia_utilidad']) : null,
-        'logistica_evento' => $totalEncuesta ? $promedio($stats['avg_logistica_evento']) : null,
+        'relevancia_utilidad' => null,
+        'logistica_evento' => null,
     ],
-    'recomendaria_contexto' => $totalEncuesta ? $promedio($stats['avg_recomendaria_contexto']) : null,
+    'recomendaria_contexto' => null,
 ];
+$comentarios = [];
 
-$comentariosStmt = $db->prepare("
-    SELECT ei.areas_mejora, ei.capacitaciones_necesarias, ei.creado
-    FROM evaluaciones_instructor ei
-    INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-    WHERE eei.instructor_id = ? AND eei.curso_modulo_id = ?
-        AND (
-            (ei.areas_mejora IS NOT NULL AND TRIM(ei.areas_mejora) <> '')
-            OR (ei.capacitaciones_necesarias IS NOT NULL AND TRIM(ei.capacitaciones_necesarias) <> '')
-        )
-    ORDER BY ei.creado DESC, ei.id DESC
-    LIMIT 5
-");
-$comentariosStmt->execute([$instructorId, $cursoModuloId]);
-$comentarios = $comentariosStmt->fetchAll(PDO::FETCH_ASSOC);
+if (!$esAdminIngenioReporte) {
+    $statsStmt = $db->prepare("
+        SELECT
+            COUNT(*) AS total,
+            AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
+            AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
+            AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
+            AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
+            AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
+            AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor,
+            AVG(ei.tema_relevancia_utilidad) AS avg_tema_relevancia_utilidad,
+            AVG(ei.logistica_evento) AS avg_logistica_evento,
+            AVG(ei.recomendaria_contexto) AS avg_recomendaria_contexto
+        FROM evaluaciones_instructor ei
+        INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
+        WHERE eei.instructor_id = ? AND eei.curso_modulo_id = ?
+    ");
+    $statsStmt->execute([$instructorId, $cursoModuloId]);
+    $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+
+    $totalEncuesta = $stats ? (int) $stats['total'] : 0;
+    $encuesta = [
+        'total' => $totalEncuesta,
+        'instructor' => [
+            'lenguaje_claro' => $totalEncuesta ? $promedio($stats['avg_lenguaje_claro']) : null,
+            'material_adecuado' => $totalEncuesta ? $promedio($stats['avg_material_adecuado']) : null,
+            'conocimiento_tema' => $totalEncuesta ? $promedio($stats['avg_conocimiento_tema']) : null,
+            'respeto_participantes' => $totalEncuesta ? $promedio($stats['avg_respeto_participantes']) : null,
+            'puntualidad_objetivos' => $totalEncuesta ? $promedio($stats['avg_puntualidad_objetivos']) : null,
+        ],
+        'recomendaria_instructor' => $totalEncuesta ? $promedio($stats['avg_recomendaria_instructor']) : null,
+        'tema' => [
+            'relevancia_utilidad' => $totalEncuesta ? $promedio($stats['avg_tema_relevancia_utilidad']) : null,
+            'logistica_evento' => $totalEncuesta ? $promedio($stats['avg_logistica_evento']) : null,
+        ],
+        'recomendaria_contexto' => $totalEncuesta ? $promedio($stats['avg_recomendaria_contexto']) : null,
+    ];
+
+    $comentariosStmt = $db->prepare("
+        SELECT ei.areas_mejora, ei.capacitaciones_necesarias, ei.creado
+        FROM evaluaciones_instructor ei
+        INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
+        WHERE eei.instructor_id = ? AND eei.curso_modulo_id = ?
+            AND (
+                (ei.areas_mejora IS NOT NULL AND TRIM(ei.areas_mejora) <> '')
+                OR (ei.capacitaciones_necesarias IS NOT NULL AND TRIM(ei.capacitaciones_necesarias) <> '')
+            )
+        ORDER BY ei.creado DESC, ei.id DESC
+        LIMIT 5
+    ");
+    $comentariosStmt->execute([$instructorId, $cursoModuloId]);
+    $comentarios = $comentariosStmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 $ingenioTexto = trim((string) ($modulo['ingenio'] ?? '')) !== '' ? (string) $modulo['ingenio'] : 'Sin institución asociada';
 $estadoTexto = ((int) $instructor['estado']) === 1 ? 'Activo' : 'Inactivo';

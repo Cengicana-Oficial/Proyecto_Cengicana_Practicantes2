@@ -4175,6 +4175,11 @@ body.cengi-nav-loading {
 .cengi-eventos-qr-page .cengi-mini-qr svg { display: block; width: 100%; height: 100%; }
 .cengi-eventos-qr-page .cengi-person-qr .mono { color: var(--cengi-muted); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; white-space: nowrap; }
 .cengi-eventos-qr-page .cengi-inline-entry-form { margin-top: 6px; }
+.cengi-eventos-qr-page .cengi-participant-check-col { width: 34px; }
+.cengi-eventos-qr-page .cengi-event-participants-table .cengi-participant-check,
+.cengi-eventos-qr-page #evpSeleccionarTodos { width: 15px; height: 15px; margin: 0; cursor: pointer; }
+.cengi-eventos-qr-page #evpGafetesFeedback { margin: 0 22px 16px; }
+.cengi-eventos-qr-page #evpGafetesFeedback .cengi-feedback { margin: 0; }
 
 .cengi-eventos-qr-page .cengi-qr-detail-dialog { width: 390px; max-width: calc(100vw - 40px); margin: 0 auto; }
 .cengi-eventos-qr-page .cengi-qr-detail-body { padding: 22px; text-align: center; }

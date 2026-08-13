@@ -80,11 +80,9 @@ if (!$resumenRango) {
     exit;
 }
 
-$formulariosRevision = obtenerFormulariosRevisionRango((int) $idRango);
+$formulariosRevision = labFormularioRevisionAgruparRango(obtenerFormulariosRevisionRango((int) $idRango));
 $puedeAprobarRevision = lab_can('laboratorio.consolidacion.aprobar');
-$puedeGuardarCorreccion = lab_can('laboratorio.formularios.guardar_corregidos');
 $puedeGuardarErrores = lab_can('laboratorio.formularios.guardar_errores');
-$puedeEditarRevision = $puedeAprobarRevision || $puedeGuardarCorreccion;
 
 require_once __DIR__ . '/../view/formulario_revision_view.php';
 

@@ -82,6 +82,7 @@ $stmtParticipantes = $db->prepare("
         a.estado_asignaciones,
         i.nombre_ingenios,
         cc.asistencia,
+        cc.sesiones_asistidas,
         cc.evaluacion,
         cc.posevaluacion,
         cc.diploma
@@ -103,7 +104,7 @@ if ($filas) {
     $marcadores = implode(',', array_fill(0, count($idsParticipantes), '?'));
     $stmtHistorial = $db->prepare("
         SELECT a.participantes_id, c.nombre_cursos, YEAR(COALESCE(c.inicio, c.creado)) AS anio,
-               cc.asistencia, cc.posevaluacion, a.estado_asignaciones
+               cc.asistencia, cc.sesiones_asistidas, cc.posevaluacion, a.estado_asignaciones
         FROM asignaciones a
         INNER JOIN cursos c ON c.id = a.cursos_id
         LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
@@ -272,6 +273,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                         <th>Área</th>
                         <th>Estado</th>
                         <th>Asistencia</th>
+                        <th>Sesiones asistidas</th>
                         <th>Pre-eval.</th>
                         <th>Post-eval.</th>
                         <th>Diploma</th>
@@ -280,7 +282,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                 </thead>
                 <tbody>
                 <?php if (!$filas): ?>
-                    <tr><td colspan="10" class="cengi-participants-empty"><span class="glyphicon glyphicon-user"></span><strong>No hay participantes para mostrar</strong><small>Selecciona otro curso o modifica los filtros.</small></td></tr>
+                    <tr><td colspan="11" class="cengi-participants-empty"><span class="glyphicon glyphicon-user"></span><strong>No hay participantes para mostrar</strong><small>Selecciona otro curso o modifica los filtros.</small></td></tr>
                 <?php endif; ?>
                 <?php foreach ($filas as $fila): ?>
                     <?php
@@ -302,17 +304,18 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                         <td>
                             <div class="cengi-participant-attendance"><div class="progress"><div class="progress-bar" style="width:<?php echo $asistencia; ?>%"></div></div><span><?php echo is_numeric($fila['asistencia']) ? cengi_part_nota($fila['asistencia']) . '%' : '—'; ?></span></div>
                         </td>
+                        <td><?php echo cengi_part_nota($fila['sesiones_asistidas']); ?></td>
                         <td><strong><?php echo cengi_part_nota($fila['evaluacion']); ?></strong></td>
                         <td><strong><?php echo cengi_part_nota($fila['posevaluacion']); ?></strong></td>
                         <td>
                             <?php if (!empty($fila['diploma'])): ?>
-                                <a class="cengi-participant-diploma" href="<?php echo cengi_part_href($fila['diploma']); ?>" target="_blank" rel="noopener"><span class="glyphicon glyphicon-file"></span> PDF</a>
+                                <a class="cengi-participant-diploma" href="descargar_diploma.php?asignacion_id=<?php echo (int) $fila['asignacion_id']; ?>" target="_blank" rel="noopener"><span class="glyphicon glyphicon-file"></span> PDF</a>
                             <?php else: ?><span class="text-muted">—</span><?php endif; ?>
                         </td>
                         <td>
                             <div class="cengi-row-actions">
                                 <?php if ($puedeCalificar): ?>
-                                    <button type="button" class="cengi-action-btn participant-grades-trigger" data-toggle="modal" data-target="#participant-grades-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-assignment="<?php echo (int) $fila['asignacion_id']; ?>" data-attendance="<?php echo cengi_part_html($fila['asistencia']); ?>" data-pre="<?php echo cengi_part_html($fila['evaluacion']); ?>" data-post="<?php echo cengi_part_html($fila['posevaluacion']); ?>" data-diploma="<?php echo cengi_part_href($fila['diploma']); ?>" aria-label="Calificaciones" data-tooltip="Calificaciones"><span class="glyphicon glyphicon-education"></span></button>
+                                    <button type="button" class="cengi-action-btn participant-grades-trigger" data-toggle="modal" data-target="#participant-grades-modal" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-assignment="<?php echo (int) $fila['asignacion_id']; ?>" data-attendance="<?php echo cengi_part_html($fila['asistencia']); ?>" data-attendance-sessions="<?php echo cengi_part_html($fila['sesiones_asistidas']); ?>" data-pre="<?php echo cengi_part_html($fila['evaluacion']); ?>" data-post="<?php echo cengi_part_html($fila['posevaluacion']); ?>" data-diploma="<?php echo cengi_part_href($fila['diploma']); ?>" aria-label="Calificaciones" data-tooltip="Calificaciones"><span class="glyphicon glyphicon-education"></span></button>
                                 <?php endif; ?>
                                 <?php if ($puedeEditar): ?>
                                     <button type="button" class="cengi-action-btn participant-edit-trigger" data-toggle="modal" data-target="#participant-edit-modal" data-id="<?php echo (int) $fila['participante_id']; ?>" data-ingenio="<?php echo (int) $fila['ingenio_id']; ?>" data-cui="<?php echo cengi_part_html($fila['cui_participantes']); ?>" data-name="<?php echo cengi_part_html($fila['nombre_participantes']); ?>" data-position="<?php echo cengi_part_html($fila['puesto_participantes']); ?>" data-area="<?php echo cengi_part_html($fila['area_participantes']); ?>" data-email="<?php echo cengi_part_html($fila['correo_participantes']); ?>" data-degree="<?php echo cengi_part_html($fila['grado_academico_participantes']); ?>" data-phone="<?php echo cengi_part_html($fila['telefono_participantes']); ?>" data-state="<?php echo (int) $fila['estado_participantes'] === 1 && (int) $fila['estado_asignaciones'] === 1 ? 1 : 0; ?>" aria-label="Editar" data-tooltip="Editar"><span class="glyphicon glyphicon-pencil"></span></button>
@@ -366,6 +369,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                 <input type="hidden" name="asignacion_id" id="participant-grades-assignment"><input type="hidden" name="return_to" value="participantes">
                 <div class="cengi-participant-modal-grid is-three">
                     <div class="form-group"><label for="participant-grades-attendance">Asistencia %</label><input type="number" min="0" max="100" step="0.01" class="form-control" id="participant-grades-attendance" name="asistencia"></div>
+                    <div class="form-group"><label for="participant-grades-attendance-sessions">Sesiones asistidas</label><input type="number" min="0" step="1" class="form-control" id="participant-grades-attendance-sessions" name="sesiones_asistidas"></div>
                     <div class="form-group"><label for="participant-grades-pre">Pre-evaluación</label><input type="number" min="0" max="100" step="0.01" class="form-control" id="participant-grades-pre" name="evaluacion"></div>
                     <div class="form-group"><label for="participant-grades-post">Post-evaluación</label><input type="number" min="0" max="100" step="0.01" class="form-control" id="participant-grades-post" name="posevaluacion"></div>
                 </div>
@@ -463,15 +467,19 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
         document.getElementById('participant-grades-name').textContent = trigger.getAttribute('data-name') || '';
         document.getElementById('participant-grades-assignment').value = trigger.getAttribute('data-assignment') || '';
         document.getElementById('participant-grades-attendance').value = trigger.getAttribute('data-attendance') || '';
+        document.getElementById('participant-grades-attendance-sessions').value = trigger.getAttribute('data-attendance-sessions') || '';
         document.getElementById('participant-grades-pre').value = trigger.getAttribute('data-pre') || '';
         document.getElementById('participant-grades-post').value = trigger.getAttribute('data-post') || '';
         var diploma = trigger.getAttribute('data-diploma') || '';
+        var assignmentId = trigger.getAttribute('data-assignment') || '';
         var $diplomaGroup = $('#participant-grades-diploma-group');
         var $diplomaExisting = $('#participant-grades-diploma-existing');
-        if (diploma && $diplomaGroup.length) {
+        if (diploma && assignmentId && $diplomaGroup.length) {
             $diplomaGroup.attr('hidden', true);
             $diplomaExisting.removeAttr('hidden');
-            document.getElementById('participant-grades-diploma-link').href = diploma;
+            // El link ya no apunta al PDF crudo: se arma hacia descargar_diploma.php,
+            // que sirve el archivo con el nombre formateado (curso_ano_participante.pdf).
+            document.getElementById('participant-grades-diploma-link').href = 'descargar_diploma.php?asignacion_id=' + encodeURIComponent(assignmentId);
         } else {
             $diplomaGroup.removeAttr('hidden');
             $diplomaExisting.attr('hidden', true);

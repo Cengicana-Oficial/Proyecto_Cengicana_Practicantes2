@@ -183,7 +183,7 @@
   padding: var(--space-6);
   border: 1px dashed var(--border-strong);
   border-radius: var(--status-empty-radius);
-  background: var(--white);
+  background: var(--lab-body-surface-strong);
   color: var(--text-mute);
   text-align: center;
   box-shadow: none;
@@ -248,31 +248,31 @@
 :where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).pill-off,
 :where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-default {
   --status-border-color: var(--border-strong);
-  --status-bg: linear-gradient(180deg, var(--white), #f7f8f7);
+  --status-bg: linear-gradient(180deg, var(--lab-body-surface-strong), var(--neutral-50));
   --status-color: var(--text-mute);
 }
 
 :where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-admin {
-  --status-border-color: #c4d6f4;
-  --status-bg: linear-gradient(180deg, #edf4ff, #e3ecff);
-  --status-color: #24548f;
+  --status-border-color: var(--teal-100);
+  --status-bg: linear-gradient(180deg, var(--teal-50), rgba(200, 211, 203, 0.72));
+  --status-color: var(--teal-700);
 }
 
 :where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-analyst {
-  --status-border-color: #dacaf2;
-  --status-bg: linear-gradient(180deg, #f4eeff, #ede2ff);
-  --status-color: #6d43a8;
+  --status-border-color: var(--tertiary-100);
+  --status-bg: linear-gradient(180deg, var(--tertiary-50), rgba(228, 194, 207, 0.76));
+  --status-color: var(--tertiary-700);
 }
 
 :where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-tech {
-  --status-border-color: #f3d2a7;
-  --status-bg: linear-gradient(180deg, #fff4e3, #ffe8c5);
-  --status-color: #9b5a05;
+  --status-border-color: var(--green-100);
+  --status-bg: linear-gradient(180deg, var(--green-50), rgba(198, 219, 201, 0.82));
+  --status-color: var(--green-700);
 }
 
 :where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-default {
   --status-border-color: var(--border-strong);
-  --status-bg: linear-gradient(180deg, var(--white), #f7f8f7);
+  --status-bg: linear-gradient(180deg, var(--lab-body-surface-strong), var(--neutral-50));
   --status-color: var(--text-mute);
 }
 

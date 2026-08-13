@@ -248,6 +248,7 @@ if ($moduloId > 0) {
             p.telefono_participantes,
             i.nombre_ingenios,
             ccm.asistencia,
+            ccm.sesiones_asistidas,
             ccm.evaluacion,
             ccm.posevaluacion,
             NULL AS diploma
@@ -270,6 +271,7 @@ if ($moduloId > 0) {
             p.telefono_participantes,
             i.nombre_ingenios,
             cc.asistencia,
+            cc.sesiones_asistidas,
             cc.evaluacion,
             cc.posevaluacion,
             cc.diploma
@@ -610,7 +612,7 @@ $error = trim((string) ($_GET['error'] ?? ''));
                         <th>Nombre</th>
                         <th>CUI</th>
                         <th>Ingenio</th>
-                        <?php if ($mostrarAsistencia): ?><th>Asistencia</th><?php endif; ?>
+                        <?php if ($mostrarAsistencia): ?><th>Asistencia</th><th>Sesiones asistidas</th><?php endif; ?>
                         <?php if ($mostrarPre): ?><th>Pre-Evaluacion</th><?php endif; ?>
                         <?php if ($mostrarPost): ?><th>Pos-Evaluacion</th><?php endif; ?>
                         <?php if ($moduloId === 0): ?><th>Diploma</th><?php endif; ?>
@@ -621,7 +623,7 @@ $error = trim((string) ($_GET['error'] ?? ''));
                     <?php if (empty($filas)) { ?>
                         <?php
                             $cengiColspan = 3
-                                + ($mostrarAsistencia ? 1 : 0)
+                                + ($mostrarAsistencia ? 2 : 0)
                                 + ($mostrarPre ? 1 : 0)
                                 + ($mostrarPost ? 1 : 0)
                                 + ($moduloId === 0 ? 1 : 0)
@@ -650,6 +652,16 @@ $error = trim((string) ($_GET['error'] ?? ''));
                                             max="100"
                                             step="0.01"
                                             value="<?= htmlspecialchars($fila['asistencia']) ?>"
+                                        >
+                                    </td>
+                                    <td>
+                                        <input
+                                            type="number"
+                                            name="registros[<?= (int) $fila['asignacion_id'] ?>][sesiones_asistidas]"
+                                            class="form-control"
+                                            min="0"
+                                            step="1"
+                                            value="<?= htmlspecialchars($fila['sesiones_asistidas']) ?>"
                                         >
                                     </td>
                                 <?php endif; ?>
@@ -689,7 +701,7 @@ $error = trim((string) ($_GET['error'] ?? ''));
                                         <br>
                                     <?php endif; ?>
                                     <?php if (!empty($fila['diploma'])) { ?>
-                                        <a href="<?= cengi_pc_href($fila['diploma']) ?>" target="_blank" class="btn btn-info btn-sm">
+                                        <a href="descargar_diploma.php?asignacion_id=<?= (int) $fila['asignacion_id'] ?>" target="_blank" class="btn btn-info btn-sm">
                                             Ver PDF
                                         </a>
                                         <?php if ($puedeSubirDiploma): ?>

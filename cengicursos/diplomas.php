@@ -241,7 +241,7 @@ if ($cursoSeleccionadoId > 0) {
         }
     }
     $stmt = $db->prepare("
-        SELECT p.nombre_participantes, d.pdf_path, d.codigo_unico, d.emitido_en
+        SELECT a.id AS asignacion_id, p.nombre_participantes, d.pdf_path, d.codigo_unico, d.emitido_en
         FROM asignaciones a
         INNER JOIN participantes p ON p.id = a.participantes_id
         LEFT JOIN diplomas d ON d.tipo = 'curso' AND d.asignacion_id = a.id
@@ -394,7 +394,7 @@ if ($eventoSeleccionadoId > 0) {
                                         <td class="mono cengi-cert-code"><?php echo cengi_dip_html($d['codigo_unico']); ?></td>
                                         <td class="cengi-cert-action-cell">
                                             <?php if ($d['pdf_path']): ?>
-                                                <a href="<?php echo cengi_dip_href($d['pdf_path']); ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
+                                                <a href="descargar_diploma.php?asignacion_id=<?php echo (int) $d['asignacion_id']; ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
                                             <?php else: ?>
                                                 <span class="text-muted">Sin PDF</span>
                                             <?php endif; ?>
@@ -466,7 +466,7 @@ if ($eventoSeleccionadoId > 0) {
                                     <td><?php echo cengi_dip_html($d['nombre_participantes']); ?></td>
                                     <td>
                                         <?php if ($d['pdf_path']): ?>
-                                            <a href="<?php echo cengi_dip_href($d['pdf_path']); ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
+                                            <a href="descargar_diploma.php?asignacion_id=<?php echo (int) $d['asignacion_id']; ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
                                         <?php else: ?>
                                             <span class="text-muted">Pendiente</span>
                                         <?php endif; ?>
@@ -545,7 +545,7 @@ if ($eventoSeleccionadoId > 0) {
                                     <td><?php echo cengi_dip_html($ep['nombre_invitado']); ?></td>
                                     <td>
                                         <?php if ($ep['pdf_path']): ?>
-                                            <a href="<?php echo cengi_dip_href($ep['pdf_path']); ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
+                                            <a href="descargar_diploma.php?evento_participante_id=<?php echo (int) $ep['id']; ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
                                         <?php else: ?>
                                             <span class="text-muted">Pendiente</span>
                                         <?php endif; ?>

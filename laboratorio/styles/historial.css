@@ -2,12 +2,10 @@
 
 body {
     font-family: 'Hanken Grotesk', sans-serif;
-    background-color: var(--surface);
-    background-image:
-      linear-gradient(to right, #ddecc8 1px, transparent 1px),
-      linear-gradient(to bottom, #ddecc8 1px, transparent 1px);
-    background-size: 20px 20px;
-    color: var(--green-400);
+    background: var(--lab-body-background);
+    background-size: var(--lab-body-background-size);
+    background-position: var(--lab-body-background-position);
+    color: var(--text-main);
     min-height: 100vh;
     padding-bottom: 80px;
 }
@@ -26,9 +24,9 @@ body {
 .back-link:hover { color: var(--green-800); }
 
 h2 {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
-    color: var(--green-600);
+    color: var(--green-800);
     letter-spacing: -0.01em;
     margin-bottom: 1.5rem;
 }

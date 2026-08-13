@@ -2,11 +2,9 @@
 
 body {
     font-family: 'Hanken Grotesk', sans-serif;
-    background-color: var(--surface);
-    background-image:
-      linear-gradient(to right, #ddecc8 1px, transparent 1px),
-      linear-gradient(to bottom, #ddecc8 1px, transparent 1px);
-    background-size: 20px 20px;
+    background: var(--lab-body-background);
+    background-size: var(--lab-body-background-size);
+    background-position: var(--lab-body-background-position);
     color: var(--text-main);
     min-height: 100vh;
     margin: 0;
@@ -44,10 +42,11 @@ h2 {
     position: relative;
     width: 100%;
     min-height: 320px;
-    padding: 1rem;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--surface);
+    padding: var(--space-4);
+    border: var(--surface-border-soft);
+    border-radius: var(--radius-lg);
+    background: var(--surface-3);
+    box-shadow: var(--surface-shadow-card);
     margin-bottom: 1.5rem;
 }
 
@@ -59,10 +58,11 @@ h2 {
 
 #estadisticas {
     margin-top: 20px;
-    padding: 20px;
-    background-color: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 12px;
+    padding: var(--space-5);
+    background-color: var(--surface-3);
+    border: var(--surface-border-soft);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--surface-shadow-card);
     color: var(--text-main);
     font-family: inherit;
 }

@@ -258,6 +258,7 @@ function cengi_recalcular_resumen_curso(PDO $db, $asignacionId, $cursoId, $puede
     $stmtPromedioModulos = $db->prepare("
         SELECT
             AVG(CAST(ccm.asistencia AS DECIMAL(10,2))) AS asistencia_prom,
+            AVG(CAST(ccm.sesiones_asistidas AS DECIMAL(10,2))) AS sesiones_asistidas_prom,
             AVG(CAST(ccm.evaluacion AS DECIMAL(10,2))) AS evaluacion_prom,
             AVG(CAST(ccm.posevaluacion AS DECIMAL(10,2))) AS posevaluacion_prom
         FROM control_curso_modulos ccm
@@ -268,6 +269,8 @@ function cengi_recalcular_resumen_curso(PDO $db, $asignacionId, $cursoId, $puede
     $promediosModulos = $stmtPromedioModulos->fetch(PDO::FETCH_ASSOC) ?: [];
 
     $asistenciaProm = $promediosModulos['asistencia_prom'] ?? null;
+    $sesionesAsistidasProm = $promediosModulos['sesiones_asistidas_prom'] ?? null;
+    $sesionesAsistidasProm = ($sesionesAsistidasProm === null) ? null : (int) round((float) $sesionesAsistidasProm);
     $evaluacionProm = $promediosModulos['evaluacion_prom'] ?? null;
     $posevaluacionProm = $promediosModulos['posevaluacion_prom'] ?? null;
 
@@ -280,14 +283,14 @@ function cengi_recalcular_resumen_curso(PDO $db, $asignacionId, $cursoId, $puede
     $existeControlCurso = (bool) $stmtVerificarLote->fetch(PDO::FETCH_ASSOC);
 
     if ($existeControlCurso && $puedeGestionar) {
-        $stmt = $db->prepare("UPDATE control_cursos SET asistencia = ?, evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ?");
-        $stmt->execute([$asistenciaProm, $evaluacionProm, $posevaluacionProm, $asignacionId]);
+        $stmt = $db->prepare("UPDATE control_cursos SET asistencia = ?, sesiones_asistidas = ?, evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ?");
+        $stmt->execute([$asistenciaProm, $sesionesAsistidasProm, $evaluacionProm, $posevaluacionProm, $asignacionId]);
     } elseif ($existeControlCurso) {
         $stmt = $db->prepare("UPDATE control_cursos SET evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ?");
         $stmt->execute([$evaluacionProm, $posevaluacionProm, $asignacionId]);
     } elseif ($puedeGestionar) {
-        $stmt = $db->prepare("INSERT INTO control_cursos (asignacion_id, asistencia, evaluacion, posevaluacion, diploma) VALUES (?, ?, ?, ?, '')");
-        $stmt->execute([$asignacionId, $asistenciaProm, $evaluacionProm, $posevaluacionProm]);
+        $stmt = $db->prepare("INSERT INTO control_cursos (asignacion_id, asistencia, sesiones_asistidas, evaluacion, posevaluacion, diploma) VALUES (?, ?, ?, ?, ?, '')");
+        $stmt->execute([$asignacionId, $asistenciaProm, $sesionesAsistidasProm, $evaluacionProm, $posevaluacionProm]);
     } else {
         $stmt = $db->prepare("INSERT INTO control_cursos (asignacion_id, evaluacion, posevaluacion, diploma) VALUES (?, ?, ?, '')");
         $stmt->execute([$asignacionId, $evaluacionProm, $posevaluacionProm]);

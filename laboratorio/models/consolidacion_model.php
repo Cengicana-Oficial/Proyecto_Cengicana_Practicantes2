@@ -40,19 +40,76 @@ function obtenerAnalisisConsolidacion($idTipo)
     global $connConsolidacion;
 
     $stmt = $connConsolidacion->prepare(
-        "SELECT id_tipo, nombre
-           FROM tipo_analisis
-          WHERE id_tipo_muestra = ?
-          ORDER BY nombre"
+        "SELECT
+                ta.id_tipo,
+                ta.nombre,
+                COALESCE(ta.activo, 1) AS activo
+           FROM tipo_analisis ta
+          WHERE ta.id_tipo_muestra = ?
+            AND COALESCE(ta.activo, 1) = 1
+          ORDER BY ta.nombre ASC, ta.id_tipo ASC"
     );
     $stmt->execute([$idTipo]);
-    $analisis = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    if (!empty($analisis)) {
-        return $analisis;
+    $analisis = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $analisis[] = [
+            'id_tipo' => (int) $row['id_tipo'],
+            'nombre' => (string) $row['nombre'],
+            'activo' => (int) ($row['activo'] ?? 1),
+        ];
     }
 
-    return obtenerAnalisisBaseConsolidacion((int) $idTipo);
+    return $analisis;
+}
+
+function obtenerAnalistasConsolidacion($idTipo)
+{
+    global $connConsolidacion;
+
+    $stmt = $connConsolidacion->prepare(
+        "SELECT
+                f.id_tipo_analisis,
+                lr.id_rango,
+                l.codigo_lote,
+                TRIM(f.analista) AS analista
+           FROM formulario f
+           INNER JOIN lote_rango lr
+                   ON lr.id_rango = f.id_rango
+           INNER JOIN lote l
+                   ON l.id_lote = lr.id_lote
+           INNER JOIN solicitud s
+                   ON s.id_lote = l.id_lote
+          WHERE s.id_tipo = ?
+            AND TRIM(COALESCE(f.analista, '')) <> ''
+          ORDER BY f.id_tipo_analisis ASC, l.codigo_lote ASC, analista ASC"
+    );
+    $stmt->execute([$idTipo]);
+
+    $analistas = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $idAnalisis = (string) ($row['id_tipo_analisis'] ?? '');
+        $idRango = normalizarRangoConsolidacion($row['id_rango'] ?? null);
+        $analista = trim((string) ($row['analista'] ?? ''));
+
+        if ($idAnalisis === '' || $analista === '') {
+            continue;
+        }
+
+        if (!isset($analistas[$idAnalisis])) {
+            $analistas[$idAnalisis] = [];
+        }
+
+        if (!isset($analistas[$idAnalisis][$idRango])) {
+            $analistas[$idAnalisis][$idRango] = [];
+        }
+
+        if (!in_array($analista, $analistas[$idAnalisis][$idRango], true)) {
+            $analistas[$idAnalisis][$idRango][] = $analista;
+        }
+    }
+
+    return $analistas;
 }
 
 function obtenerFilasConsolidacion($idTipo, $codigoLote = '')

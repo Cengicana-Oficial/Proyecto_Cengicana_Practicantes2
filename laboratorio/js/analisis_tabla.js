@@ -322,7 +322,7 @@
 
     const empty = document.createElement('option');
     empty.value = '';
-    empty.textContent = values.length || specialOptions.length ? 'Seleccione' : 'Sin nÃºmero';
+    empty.textContent = values.length || specialOptions.length ? 'Seleccione' : 'Sin número';
     select.appendChild(empty);
 
     const usedValues = new Set(['']);
@@ -406,7 +406,7 @@
       });
 
       labSelect.setCustomValidity(hasDuplicate
-        ? 'Este nÃºmero de laboratorio ya fue seleccionado para este lote.'
+        ? 'Este número de laboratorio ya fue seleccionado para este lote.'
         : '');
     });
   }
@@ -947,7 +947,7 @@
     wrapper.className = 'lab-table-panel';
     wrapper.innerHTML = `
       <div class="lab-table-toolbar">
-        <div class="section-title">Datos de anÃ¡lisis por muestra</div>
+        <div class="section-title">Datos de análisis por muestra</div>
         <div class="lab-table-actions">
           <button type="button" class="lab-table-button" data-add-row>+ Agregar fila</button>
           <button type="button" class="lab-table-button" data-add-lote>+ Agregar lote</button>

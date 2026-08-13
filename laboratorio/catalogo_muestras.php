@@ -309,6 +309,316 @@ $sampleVisuals = [
             .hero-card, .panel, .stats-card { border-radius: 16px; }
             tbody td, thead th { padding-left: 14px; padding-right: 14px; }
         }
+
+        body {
+            --bg: #f8f9f7;
+            --panel: rgba(255, 255, 255, 0.96);
+            --text: #232628;
+            --muted: #667077;
+            --primary: #73BC25;
+            --primary-2: #A3D300;
+            --border: rgba(206, 210, 213, 0.92);
+            --shadow: 0 18px 40px rgba(35, 37, 35, 0.08);
+
+            --color-primary-50: rgba(115, 188, 37, 0.12);
+            --color-primary-100: rgba(115, 188, 37, 0.18);
+            --color-primary-200: rgba(115, 188, 37, 0.28);
+            --color-primary-300: rgba(115, 188, 37, 0.38);
+            --color-primary-400: rgba(115, 188, 37, 0.50);
+            --color-primary-500: #73BC25;
+            --color-primary-600: #73BC25;
+            --color-primary-700: #5E991E;
+            --color-primary-800: #477617;
+            --color-primary-900: #315010;
+
+            --color-secondary-50: rgba(163, 211, 0, 0.12);
+            --color-secondary-100: rgba(163, 211, 0, 0.18);
+            --color-secondary-200: rgba(163, 211, 0, 0.28);
+            --color-secondary-300: rgba(163, 211, 0, 0.38);
+            --color-secondary-400: rgba(163, 211, 0, 0.50);
+            --color-secondary-500: #A3D300;
+            --color-secondary-600: #A3D300;
+            --color-secondary-700: #7F9E00;
+            --color-secondary-800: #607800;
+
+            --color-tertiary-50: rgba(255, 107, 0, 0.12);
+            --color-tertiary-100: rgba(255, 107, 0, 0.18);
+            --color-tertiary-200: rgba(255, 107, 0, 0.28);
+            --color-tertiary-300: rgba(255, 107, 0, 0.38);
+            --color-tertiary-400: rgba(255, 107, 0, 0.50);
+            --color-tertiary-500: #FF6B00;
+            --color-tertiary-600: #FF6B00;
+            --color-tertiary-700: #D85A00;
+            --color-tertiary-800: #A94400;
+
+            --color-neutral-50: #F8F9F7;
+            --color-neutral-100: #EEF0F1;
+            --color-neutral-200: #CED2D5;
+            --color-neutral-300: #B8BDC1;
+            --color-neutral-400: #9CA2A6;
+            --color-neutral-500: #808589;
+            --color-neutral-600: #666B6E;
+            --color-neutral-700: #4E5356;
+            --color-neutral-800: #35393B;
+            --color-neutral-900: #232628;
+
+            --color-warning-50: rgba(255, 204, 0, 0.16);
+            --color-warning-100: rgba(255, 204, 0, 0.22);
+            --color-warning-200: rgba(255, 204, 0, 0.30);
+            --color-warning-300: rgba(255, 204, 0, 0.40);
+            --color-warning-400: rgba(255, 204, 0, 0.52);
+            --color-warning-500: #FFCC00;
+            --color-warning-600: #FFCC00;
+            --color-warning-700: #9A7300;
+
+            --green-50: rgba(115, 188, 37, 0.12);
+            --green-100: rgba(115, 188, 37, 0.18);
+            --green-200: rgba(115, 188, 37, 0.28);
+            --green-300: rgba(115, 188, 37, 0.38);
+            --green-400: rgba(115, 188, 37, 0.50);
+            --green-500: #73BC25;
+            --green-600: #73BC25;
+            --green-700: #5E991E;
+            --green-800: #477617;
+            --green-900: #315010;
+
+            --teal-50: rgba(163, 211, 0, 0.12);
+            --teal-100: rgba(163, 211, 0, 0.18);
+            --teal-200: rgba(163, 211, 0, 0.28);
+            --teal-300: rgba(163, 211, 0, 0.38);
+            --teal-400: rgba(163, 211, 0, 0.50);
+            --teal-500: #A3D300;
+            --teal-600: #A3D300;
+            --teal-700: #7F9E00;
+            --teal-800: #607800;
+
+            --tertiary-50: rgba(255, 107, 0, 0.12);
+            --tertiary-100: rgba(255, 107, 0, 0.18);
+            --tertiary-200: rgba(255, 107, 0, 0.28);
+            --tertiary-300: rgba(255, 107, 0, 0.38);
+            --tertiary-400: rgba(255, 107, 0, 0.50);
+            --tertiary-500: #FF6B00;
+            --tertiary-600: #FF6B00;
+            --tertiary-700: #D85A00;
+            --tertiary-800: #A94400;
+
+            --neutral-50: #F8F9F7;
+            --neutral-100: #EEF0F1;
+            --neutral-200: #CED2D5;
+            --neutral-300: #B8BDC1;
+            --neutral-400: #9CA2A6;
+            --neutral-500: #808589;
+            --neutral-600: #666B6E;
+            --neutral-700: #4E5356;
+            --neutral-800: #35393B;
+            --neutral-900: #232628;
+
+            --state-success-bg: rgba(115, 188, 37, 0.10);
+            --state-success-text: #477617;
+            --state-success-border: rgba(115, 188, 37, 0.24);
+            --state-info-bg: rgba(163, 211, 0, 0.10);
+            --state-info-text: #607800;
+            --state-info-border: rgba(163, 211, 0, 0.24);
+            --state-warning-bg: rgba(255, 204, 0, 0.14);
+            --state-warning-text: #9A7300;
+            --state-warning-border: rgba(255, 204, 0, 0.30);
+            --state-danger-bg: rgba(255, 107, 0, 0.12);
+            --state-danger-text: #D85A00;
+            --state-danger-border: rgba(255, 107, 0, 0.28);
+
+            --lab-body-surface: rgba(255, 255, 255, 0.94);
+            --lab-body-surface-strong: #ffffff;
+            --lab-body-border-soft: rgba(206, 210, 213, 0.68);
+            --lab-body-border-strong: rgba(184, 189, 193, 0.84);
+
+            --table-border: 1px solid rgba(206, 210, 213, 0.88);
+            --table-head-bg: linear-gradient(180deg, rgba(115, 188, 37, 0.10), rgba(255, 255, 255, 0.98));
+            --table-row-alt-bg: rgba(206, 210, 213, 0.18);
+            --table-row-hover-bg: rgba(163, 211, 0, 0.08);
+            --table-row-selected-bg: rgba(115, 188, 37, 0.09);
+            --table-shadow: 0 14px 30px rgba(35, 37, 35, 0.08);
+            --table-empty-color: var(--muted);
+
+            background:
+                radial-gradient(circle at top right, rgba(163, 211, 0, 0.16), transparent 30%),
+                radial-gradient(circle at top left, rgba(115, 188, 37, 0.10), transparent 28%),
+                linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+        }
+
+        body {
+            color: var(--text);
+        }
+
+        .hero-card,
+        .panel,
+        .stats-card {
+            background: var(--panel);
+            border-color: rgba(206, 210, 213, 0.92);
+        }
+
+        .eyebrow {
+            background: rgba(115, 188, 37, 0.12);
+            color: var(--primary);
+        }
+
+        .eyebrow i {
+            color: var(--primary);
+        }
+
+        .hero h1,
+        .panel-header h2,
+        .stats-card strong,
+        .action:hover,
+        .action:focus,
+        .action:active {
+            color: var(--text);
+        }
+
+        .hero p,
+        .panel-header small,
+        .meta-item,
+        .search input,
+        .stats-card span {
+            color: var(--muted);
+        }
+
+        .hero-actions .btn-primary {
+            --btn-bg: linear-gradient(180deg, var(--green-600), var(--green-800));
+            --btn-border: var(--green-600);
+            --btn-fg: var(--white);
+            --btn-shadow: 0 12px 24px rgba(115, 188, 37, 0.18);
+        }
+
+        .hero-actions .btn-secondary,
+        .hero-actions .btn-muted,
+        .toolbar .btn-secondary {
+            --btn-bg: rgba(255, 255, 255, 0.94);
+            --btn-border: var(--green-200);
+            --btn-fg: var(--green-800);
+        }
+
+        .search {
+            border-color: var(--border);
+            background: var(--panel);
+        }
+
+        .search:focus-within {
+            border-color: rgba(115, 188, 37, 0.60);
+            box-shadow: 0 0 0 4px rgba(115, 188, 37, 0.10);
+        }
+
+        .search:hover {
+            border-color: rgba(115, 188, 37, 0.28);
+        }
+
+        .search i {
+            color: var(--muted);
+        }
+
+        .search:focus-within i {
+            color: var(--primary);
+        }
+
+        .panel-header {
+            border-bottom-color: var(--border);
+        }
+
+        .action {
+            border-color: var(--border);
+            background: var(--panel);
+            color: var(--text);
+        }
+
+        .action:hover {
+            border-color: var(--primary);
+            background: rgba(115, 188, 37, 0.06);
+            color: var(--text);
+        }
+
+        .pill {
+            border-color: var(--green-200);
+            background: linear-gradient(180deg, var(--white), var(--green-50));
+            color: var(--green-800);
+        }
+
+        .pill-on {
+            border-color: rgba(115, 188, 37, 0.24);
+            background: rgba(115, 188, 37, 0.08);
+            color: var(--green-800);
+        }
+
+        .pill-off {
+            border-color: var(--border);
+            background: linear-gradient(180deg, var(--white), rgba(206, 210, 213, 0.18));
+            color: var(--muted);
+        }
+
+        .notice {
+            border-color: var(--border);
+            background: var(--panel);
+            color: var(--text);
+        }
+
+        .notice.error {
+            border-color: rgba(255, 107, 0, 0.28);
+            background: rgba(255, 107, 0, 0.12);
+            color: #D85A00;
+        }
+
+        .meta-item {
+            background: rgba(206, 210, 213, 0.16);
+        }
+
+        .meta-item strong {
+            color: var(--primary);
+        }
+
+        table {
+            color: var(--text);
+        }
+
+        thead th {
+            background: linear-gradient(180deg, rgba(115, 188, 37, 0.10), rgba(255, 255, 255, 0.98));
+            color: var(--primary);
+        }
+
+        tbody tr:nth-child(even) td {
+            background: rgba(206, 210, 213, 0.18);
+        }
+
+        tbody tr:hover td {
+            background: rgba(163, 211, 0, 0.08);
+        }
+
+        .table-wrap {
+            border-color: rgba(206, 210, 213, 0.88);
+            box-shadow: 0 14px 30px rgba(35, 37, 35, 0.08);
+        }
+
+        .stats-card strong {
+            color: var(--primary);
+        }
+
+        .hero-card,
+        .panel,
+        .stats-card,
+        .table-wrap {
+            box-shadow: 0 18px 40px rgba(35, 37, 35, 0.08);
+        }
+
+        .hero-card,
+        .panel,
+        .stats-card {
+            border-color: rgba(206, 210, 213, 0.92);
+        }
+
+        .hero-card {
+            color: var(--text);
+        }
+
+        small[style*="#6b7c68"] {
+            color: var(--muted) !important;
+        }
     </style>
     <link rel="stylesheet" href="styles/tables.css">
 </head>
