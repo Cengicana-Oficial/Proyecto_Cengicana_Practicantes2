@@ -251,6 +251,30 @@ if ($esAdminIngenioReporte) {
 // fragmento EXISTS de $filtroEdicionesIngenio (al final del WHERE).
 $paramsEdiciones = array_merge($evaluacionPromedioIngenioParam, [$id], $paramsFragEdiciones);
 
+$evaluacionesModuloStmt = $db->prepare("
+    SELECT
+        cm.id AS modulo_id,
+        cm.nombre AS modulo_nombre,
+        cm.orden AS modulo_orden,
+        c.nombre_cursos,
+        COUNT(*) AS total,
+        AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
+        AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
+        AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
+        AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
+        AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
+        AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor
+    FROM evaluaciones_instructor ei
+    INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
+    INNER JOIN curso_modulos cm ON cm.id = eei.curso_modulo_id
+    INNER JOIN cursos c ON c.id = eei.curso_id
+    WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NOT NULL
+    GROUP BY cm.id, cm.nombre, c.nombre_cursos, cm.orden
+    ORDER BY c.nombre_cursos, cm.orden
+");
+$evaluacionesModuloStmt->execute([$id]);
+$evaluacionesModulo = $evaluacionesModuloStmt->fetchAll(PDO::FETCH_ASSOC);
+
 $edicionesStmt = $db->prepare("
     SELECT
         c.nombre_cursos,
