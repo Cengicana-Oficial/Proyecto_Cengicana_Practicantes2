@@ -113,7 +113,7 @@ function labNuevoAnalisisUrl(string $tipo): string
 
         <?php if ($canLabc || $canAnalisis || $canBlancoControl || $canConsolidacion || $canCatalogoAnalisis || $canCatalogoMuestras): ?>
             <li>
-                <a href="view/labc_index.php">
+                <a href="view/labc_index.php" class="active" aria-current="page">
                     <i class="fas fa-flask-vial"></i>
                     <span>LABC</span>
                 </a>
@@ -169,7 +169,7 @@ function labNuevoAnalisisUrl(string $tipo): string
 
     <!-- LOGO -->
     <div class="background-logo">
-        <img src="img/logo.png" alt="">
+        <img src="assets/cengica%C3%B1a_sin_fondo.png" alt="CENGICAÑA">
     </div>
   
     <!-- TITULO -->
@@ -200,3 +200,4 @@ function labNuevoAnalisisUrl(string $tipo): string
 
 </body>
 </html>
+

@@ -551,6 +551,283 @@ foreach ($grupos as $clave => $grupo) {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
+
+        body {
+            --page-bg: #f8f9f7;
+            --surface: rgba(255, 255, 255, 0.96);
+            --surface-strong: #ffffff;
+            --border: rgba(206, 210, 213, 0.92);
+            --border-strong: rgba(184, 189, 193, 0.96);
+            --text-main: #232628;
+            --text-soft: #667077;
+            --brand: #73BC25;
+            --brand-soft: rgba(115, 188, 37, 0.12);
+            --brand-2: #A3D300;
+            --danger: #FF6B00;
+            --danger-soft: rgba(255, 107, 0, 0.12);
+            --muted-soft: rgba(163, 211, 0, 0.10);
+            --shadow: 0 18px 40px rgba(35, 37, 35, 0.08);
+            --focus-ring: 0 0 0 4px rgba(115, 188, 37, 0.16);
+            --focus-ring-secondary: 0 0 0 4px rgba(163, 211, 0, 0.16);
+
+            --color-primary-50: rgba(115, 188, 37, 0.12);
+            --color-primary-100: rgba(115, 188, 37, 0.18);
+            --color-primary-200: rgba(115, 188, 37, 0.28);
+            --color-primary-300: rgba(115, 188, 37, 0.38);
+            --color-primary-400: rgba(115, 188, 37, 0.50);
+            --color-primary-500: #73BC25;
+            --color-primary-600: #73BC25;
+            --color-primary-700: #5E991E;
+            --color-primary-800: #477617;
+            --color-primary-900: #315010;
+
+            --color-secondary-50: rgba(163, 211, 0, 0.12);
+            --color-secondary-100: rgba(163, 211, 0, 0.18);
+            --color-secondary-200: rgba(163, 211, 0, 0.28);
+            --color-secondary-300: rgba(163, 211, 0, 0.38);
+            --color-secondary-400: rgba(163, 211, 0, 0.50);
+            --color-secondary-500: #A3D300;
+            --color-secondary-600: #A3D300;
+            --color-secondary-700: #7F9E00;
+            --color-secondary-800: #607800;
+
+            --color-tertiary-50: rgba(255, 107, 0, 0.12);
+            --color-tertiary-100: rgba(255, 107, 0, 0.18);
+            --color-tertiary-200: rgba(255, 107, 0, 0.28);
+            --color-tertiary-300: rgba(255, 107, 0, 0.38);
+            --color-tertiary-400: rgba(255, 107, 0, 0.50);
+            --color-tertiary-500: #FF6B00;
+            --color-tertiary-600: #FF6B00;
+            --color-tertiary-700: #D85A00;
+            --color-tertiary-800: #A94400;
+
+            --color-neutral-50: #F8F9F7;
+            --color-neutral-100: #EEF0F1;
+            --color-neutral-200: #CED2D5;
+            --color-neutral-300: #B8BDC1;
+            --color-neutral-400: #9CA2A6;
+            --color-neutral-500: #808589;
+            --color-neutral-600: #666B6E;
+            --color-neutral-700: #4E5356;
+            --color-neutral-800: #35393B;
+            --color-neutral-900: #232628;
+
+            --color-warning-50: rgba(255, 204, 0, 0.16);
+            --color-warning-100: rgba(255, 204, 0, 0.22);
+            --color-warning-200: rgba(255, 204, 0, 0.30);
+            --color-warning-300: rgba(255, 204, 0, 0.40);
+            --color-warning-400: rgba(255, 204, 0, 0.52);
+            --color-warning-500: #FFCC00;
+            --color-warning-600: #FFCC00;
+            --color-warning-700: #9A7300;
+
+            --color-info-50: rgba(163, 211, 0, 0.12);
+            --color-info-100: rgba(163, 211, 0, 0.18);
+            --color-info-200: rgba(163, 211, 0, 0.28);
+            --color-info-300: rgba(163, 211, 0, 0.38);
+            --color-info-400: rgba(163, 211, 0, 0.50);
+            --color-info-500: #A3D300;
+            --color-info-600: #A3D300;
+            --color-info-700: #7F9E00;
+
+            --green-50: rgba(115, 188, 37, 0.12);
+            --green-100: rgba(115, 188, 37, 0.18);
+            --green-200: rgba(115, 188, 37, 0.28);
+            --green-300: rgba(115, 188, 37, 0.38);
+            --green-400: rgba(115, 188, 37, 0.50);
+            --green-500: #73BC25;
+            --green-600: #73BC25;
+            --green-700: #5E991E;
+            --green-800: #477617;
+            --green-900: #315010;
+
+            --teal-50: rgba(163, 211, 0, 0.12);
+            --teal-100: rgba(163, 211, 0, 0.18);
+            --teal-200: rgba(163, 211, 0, 0.28);
+            --teal-300: rgba(163, 211, 0, 0.38);
+            --teal-400: rgba(163, 211, 0, 0.50);
+            --teal-500: #A3D300;
+            --teal-600: #A3D300;
+            --teal-700: #7F9E00;
+            --teal-800: #607800;
+
+            --tertiary-50: rgba(255, 107, 0, 0.12);
+            --tertiary-100: rgba(255, 107, 0, 0.18);
+            --tertiary-200: rgba(255, 107, 0, 0.28);
+            --tertiary-300: rgba(255, 107, 0, 0.38);
+            --tertiary-400: rgba(255, 107, 0, 0.50);
+            --tertiary-500: #FF6B00;
+            --tertiary-600: #FF6B00;
+            --tertiary-700: #D85A00;
+            --tertiary-800: #A94400;
+
+            --neutral-50: #F8F9F7;
+            --neutral-100: #EEF0F1;
+            --neutral-200: #CED2D5;
+            --neutral-300: #B8BDC1;
+            --neutral-400: #9CA2A6;
+            --neutral-500: #808589;
+            --neutral-600: #666B6E;
+            --neutral-700: #4E5356;
+            --neutral-800: #35393B;
+            --neutral-900: #232628;
+
+            --state-success-bg: rgba(115, 188, 37, 0.10);
+            --state-success-text: #477617;
+            --state-success-border: rgba(115, 188, 37, 0.24);
+            --state-info-bg: rgba(163, 211, 0, 0.10);
+            --state-info-text: #607800;
+            --state-info-border: rgba(163, 211, 0, 0.24);
+            --state-warning-bg: rgba(255, 204, 0, 0.14);
+            --state-warning-text: #9A7300;
+            --state-warning-border: rgba(255, 204, 0, 0.30);
+            --state-danger-bg: rgba(255, 107, 0, 0.12);
+            --state-danger-text: #D85A00;
+            --state-danger-border: rgba(255, 107, 0, 0.28);
+
+            --lab-body-surface: rgba(255, 255, 255, 0.94);
+            --lab-body-surface-strong: #ffffff;
+            --lab-body-border-soft: rgba(206, 210, 213, 0.68);
+            --lab-body-border-strong: rgba(184, 189, 193, 0.84);
+
+            --table-border: 1px solid rgba(206, 210, 213, 0.88);
+            --table-head-bg: linear-gradient(180deg, rgba(115, 188, 37, 0.10), rgba(255, 255, 255, 0.98));
+            --table-row-alt-bg: rgba(206, 210, 213, 0.18);
+            --table-row-hover-bg: rgba(163, 211, 0, 0.08);
+            --table-row-selected-bg: rgba(115, 188, 37, 0.09);
+            --table-shadow: 0 14px 30px rgba(35, 37, 35, 0.08);
+            --table-empty-color: var(--text-soft);
+
+            background:
+                radial-gradient(circle at top right, rgba(163, 211, 0, 0.16), transparent 30%),
+                radial-gradient(circle at top left, rgba(115, 188, 37, 0.10), transparent 28%),
+                linear-gradient(180deg, #ffffff 0%, var(--page-bg) 100%);
+            color: var(--text-main);
+        }
+
+        .back-link {
+            border-color: var(--border);
+            background: var(--surface-strong);
+            color: var(--brand);
+            box-shadow: 0 10px 24px rgba(35, 37, 35, 0.05);
+        }
+
+        .back-link i {
+            color: var(--brand);
+        }
+
+        .back-link:hover {
+            border-color: rgba(115, 188, 37, 0.28);
+            background: rgba(115, 188, 37, 0.05);
+        }
+
+        .hero-card,
+        .editor-card,
+        .module-section,
+        .summary-card {
+            border-color: rgba(206, 210, 213, 0.92);
+            box-shadow: 0 18px 40px rgba(35, 37, 35, 0.08);
+        }
+
+        .eyebrow {
+            background: var(--brand-soft);
+            color: var(--brand);
+        }
+
+        .eyebrow i,
+        .module-badge i {
+            color: var(--brand);
+        }
+
+        .action-pill {
+            border-color: var(--border);
+            background: var(--surface-strong);
+            color: var(--text-main);
+            box-shadow: 0 12px 24px rgba(35, 37, 35, 0.05);
+        }
+
+        .action-pill.primary {
+            background: var(--brand);
+            color: #ffffff;
+            border-color: var(--brand);
+            box-shadow: 0 12px 24px rgba(115, 188, 37, 0.18);
+        }
+
+        .summary-card strong {
+            color: var(--brand);
+        }
+
+        .field input,
+        .field select,
+        .search-shell {
+            border-color: var(--border-strong);
+            background: var(--surface-strong);
+        }
+
+        .field input:focus,
+        .field select:focus,
+        .search-input:focus {
+            border-color: rgba(115, 188, 37, 0.62);
+            box-shadow: 0 0 0 4px rgba(115, 188, 37, 0.10);
+        }
+
+        .search-shell:focus-within {
+            border-color: rgba(115, 188, 37, 0.60);
+            box-shadow: 0 0 0 4px rgba(115, 188, 37, 0.10);
+        }
+
+        .search-shell:hover {
+            border-color: rgba(115, 188, 37, 0.28);
+        }
+
+        .search-shell:focus-within i {
+            color: var(--brand);
+        }
+
+        .check-row input[type="checkbox"],
+        input[type="checkbox"] {
+            accent-color: var(--brand);
+        }
+
+        .module-badge {
+            background: var(--muted-soft);
+            color: var(--brand);
+        }
+
+        .module-meta .mini-chip strong {
+            color: var(--brand);
+        }
+
+        .module-table thead th {
+            background: linear-gradient(180deg, rgba(115, 188, 37, 0.10), rgba(255, 255, 255, 0.98));
+            color: var(--brand);
+        }
+
+        .table-row.is-editing td {
+            background: rgba(115, 188, 37, 0.08);
+        }
+
+        .status-pill {
+            --status-border-color: rgba(115, 188, 37, 0.24);
+            --status-bg: rgba(115, 188, 37, 0.08);
+            --status-color: var(--brand);
+        }
+
+        .status-pill.is-off {
+            --status-border-color: var(--border-strong);
+            --status-bg: linear-gradient(180deg, var(--surface-strong), rgba(206, 210, 213, 0.18));
+            --status-color: var(--text-soft);
+        }
+
+        .notice-card {
+            background: var(--surface-strong) !important;
+            border-color: var(--border) !important;
+            box-shadow: 0 10px 24px rgba(35, 37, 35, 0.05) !important;
+        }
+
+        .footer-note {
+            color: var(--text-soft);
+        }
     </style>
     <link rel="stylesheet" href="styles/tables.css">
 </head>

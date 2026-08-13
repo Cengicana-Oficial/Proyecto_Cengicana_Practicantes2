@@ -1,98 +1,5 @@
-<?php
 
-require_once __DIR__ . '/includes/user_module_helper.php';
-
-lab_require_permission('laboratorio.usuarios.gestionar');
-
-function lab_users_initials(string $name): string
-{
-    $name = trim($name);
-    if ($name === '') {
-        return 'US';
-    }
-
-    $parts = preg_split('/\s+/', $name) ?: [];
-    $letters = '';
-
-    foreach ($parts as $part) {
-        if ($part === '') {
-            continue;
-        }
-
-        $letters .= strtoupper(substr($part, 0, 1));
-        if (strlen($letters) >= 2) {
-            break;
-        }
-    }
-
-    return $letters !== '' ? $letters : strtoupper(substr($name, 0, 2));
-}
-
-function lab_users_avatar_style(string $seed): string
-{
-    $palettes = [
-        ['rgba(115, 188, 37, 0.14)', '#335512'],
-        ['rgba(163, 211, 0, 0.16)', '#4a7d19'],
-        ['rgba(206, 210, 213, 0.42)', '#4a4d49'],
-        ['rgba(115, 188, 37, 0.10)', '#5f9d1f'],
-        ['rgba(163, 211, 0, 0.12)', '#335512'],
-        ['rgba(206, 210, 213, 0.30)', '#6f7579'],
-    ];
-
-    $hash = abs(crc32($seed));
-    $palette = $palettes[$hash % count($palettes)];
-
-    return sprintf('background:%s;color:%s;', $palette[0], $palette[1]);
-}
-
-function lab_users_role_class(string $role): string
-{
-    $normalized = strtolower(trim($role));
-
-    if (strpos($normalized, 'admin') !== false) {
-        return 'role-admin';
-    }
-
-    if (strpos($normalized, 'analista') !== false) {
-        return 'role-analyst';
-    }
-
-    if (strpos($normalized, 'tecnico') !== false) {
-        return 'role-tech';
-    }
-
-    return 'role-default';
-}
-
-$conn = lab_users_connection();
-$module = lab_laboratory_module($conn);
-$usuarios = lab_fetch_laboratory_users($conn, (int) $module['id']);
-
-$ingenios = [];
-$roles = [];
-$usuariosActivos = 0;
-
-foreach ($usuarios as $usuario) {
-    $ingenio = trim((string) ($usuario['ingenio'] ?? ''));
-    $rol = trim((string) ($usuario['nombre_rol'] ?? ''));
-    $estado = (int) ($usuario['estado'] ?? 1);
-
-    if ($ingenio !== '') {
-        $ingenios[$ingenio] = $ingenio;
-    }
-
-    if ($rol !== '') {
-        $roles[$rol] = $rol;
-    }
-
-    if ($estado === 1) {
-        $usuariosActivos++;
-    }
-}
-
-ksort($ingenios, SORT_NATURAL | SORT_FLAG_CASE);
-ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
-?>
+Warning: session_start(): Session cannot be started after headers have already been sent in C:\xampp\htdocs\login\Proyecto_Cengicana_Practicantes2\laboratorio\includes\auth.php on line 6
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -106,85 +13,20 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         :root {
-            --page-bg: #ffffff;
+            --page-bg: #f3f7f2;
             --surface: #ffffff;
-            --surface-soft: #f7f8f8;
-            --border: #ced2d5;
-            --border-strong: #ced2d5;
-            --text-main: #232523;
-            --text-soft: #4a4d49;
-            --brand: #73bc25;
-            --brand-soft: rgba(115, 188, 37, 0.12);
-            --brand-accent: #73bc25;
-            --brand-secondary: #a3d300;
-            --chip-bg: rgba(163, 211, 0, 0.14);
+            --surface-soft: #f8fbf7;
+            --border: #d9e4d8;
+            --border-strong: #c8d7c8;
+            --text-main: #123126;
+            --text-soft: #597265;
+            --brand: #053b2a;
+            --brand-soft: #e0f1e7;
+            --brand-accent: #0d6b47;
+            --chip-bg: #edf4ed;
             --shadow: 0 16px 40px rgba(12, 39, 27, 0.08);
-            --danger: #ff6b00;
-            --danger-soft: rgba(255, 107, 0, 0.08);
-            --warning: #ffcc00;
-            --warning-soft: rgba(255, 204, 0, 0.14);
-            --green-50: #eef7e2;
-            --green-100: #dceebf;
-            --green-200: #c8e58d;
-            --green-300: #b3da5a;
-            --green-400: #9ed129;
-            --green-500: #88c818;
-            --green-600: #73bc25;
-            --green-700: #5f9d1f;
-            --green-800: #4a7d19;
-            --green-900: #335512;
-            --teal-50: #f4fbe3;
-            --teal-100: #e5f3b7;
-            --teal-200: #d7eb86;
-            --teal-300: #c8e356;
-            --teal-400: #b7da2f;
-            --teal-500: #a3d300;
-            --teal-600: #8db600;
-            --teal-700: #789700;
-            --teal-800: #627800;
-            --tertiary-50: #fff1e3;
-            --tertiary-100: #ffd9b8;
-            --tertiary-200: #ffbf86;
-            --tertiary-300: #ffa255;
-            --tertiary-400: #ff8a33;
-            --tertiary-500: #ff6b00;
-            --tertiary-600: #d95800;
-            --tertiary-700: #b34700;
-            --tertiary-800: #8c3600;
-            --neutral-50: #f7f8f8;
-            --neutral-100: #eceeed;
-            --neutral-200: #dde1e3;
-            --neutral-300: #ced2d5;
-            --neutral-400: #b9bec2;
-            --neutral-500: #a4aaaf;
-            --neutral-600: #8d9398;
-            --neutral-700: #6f7579;
-            --neutral-800: #555b5f;
-            --neutral-900: #232523;
-            --color-info-50: #f4fbe3;
-            --color-info-100: #e5f3b7;
-            --color-info-200: #d7eb86;
-            --color-info-300: #c8e356;
-            --color-info-400: #b7da2f;
-            --color-info-500: #a3d300;
-            --color-info-600: #8db600;
-            --color-info-700: #789700;
-            --color-warning-50: #fff8db;
-            --color-warning-100: #ffef9f;
-            --color-warning-200: #ffe866;
-            --color-warning-300: #ffdb33;
-            --color-warning-400: #ffcf0f;
-            --color-warning-500: #ffcc00;
-            --color-warning-600: #d9ad00;
-            --color-warning-700: #b38f00;
-            --color-danger-50: #fff0e3;
-            --color-danger-100: #ffd5b8;
-            --color-danger-200: #ffb486;
-            --color-danger-300: #ff9155;
-            --color-danger-400: #ff7833;
-            --color-danger-500: #ff6b00;
-            --color-danger-600: #d95a00;
-            --color-danger-700: #b34a00;
+            --danger: #b63d2d;
+            --danger-soft: #fff1ef;
         }
 
         * {
@@ -196,8 +38,8 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             min-height: 100vh;
             padding: 32px 18px 40px;
             background:
-                radial-gradient(circle at top right, rgba(163, 211, 0, 0.10), transparent 30%),
-                linear-gradient(180deg, #ffffff 0%, rgba(206, 210, 213, 0.12) 100%);
+                radial-gradient(circle at top right, rgba(120, 185, 122, 0.15), transparent 30%),
+                linear-gradient(180deg, #f9fcf8 0%, var(--page-bg) 100%);
             color: var(--text-main);
             font-family: 'Inter', sans-serif;
         }
@@ -230,9 +72,9 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             gap: 10px;
             margin-bottom: 0;
             padding: 10px 14px;
-            border: 1px solid var(--border);
+            border: 1px solid rgba(201, 217, 201, 0.84);
             border-radius: 999px;
-            background: rgba(255, 255, 255, 0.90);
+            background: rgba(255, 255, 255, 0.78);
             color: var(--brand);
             font-weight: 700;
             box-shadow: 0 10px 22px rgba(12, 39, 27, 0.05);
@@ -241,8 +83,8 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         }
 
         .panel {
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 255, 255, 0.96));
-            border: 1px solid var(--border);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 247, 0.94));
+            border: 1px solid rgba(201, 217, 201, 0.74);
             border-radius: 28px;
             box-shadow: 0 18px 48px rgba(12, 39, 27, 0.08);
             backdrop-filter: blur(12px);
@@ -276,8 +118,8 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             margin-bottom: 12px;
             padding: 7px 12px;
             border-radius: 999px;
-            background: linear-gradient(180deg, var(--brand-soft), rgba(255, 255, 255, 0.96));
-            color: var(--brand);
+            background: linear-gradient(180deg, var(--brand-soft), #f5faf4);
+            color: var(--brand-accent);
             font-size: 11px;
             font-weight: 800;
             letter-spacing: 0.12em;
@@ -332,9 +174,9 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             gap: 14px;
             min-width: 0;
             padding: 18px 18px 16px;
-            border: 1px solid var(--border);
+            border: 1px solid rgba(201, 217, 201, 0.68);
             border-radius: 22px;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 255, 255, 0.96));
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 248, 0.96));
             box-shadow: 0 10px 26px rgba(12, 39, 27, 0.06);
             transition:
                 transform 200ms ease,
@@ -344,7 +186,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
 
         .stat-card:hover {
             transform: translateY(-2px);
-            border-color: rgba(115, 188, 37, 0.18);
+            border-color: rgba(13, 107, 71, 0.18);
             box-shadow: 0 14px 30px rgba(12, 39, 27, 0.09);
         }
 
@@ -354,8 +196,8 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             width: 42px;
             height: 42px;
             border-radius: 999px;
-            background: var(--brand-soft);
-            color: var(--brand);
+            background: rgba(13, 107, 71, 0.08);
+            color: var(--brand-accent);
             font-size: 16px;
             flex-shrink: 0;
         }
@@ -390,7 +232,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             gap: 8px;
             padding: 8px 12px;
             border-radius: 999px;
-            background: var(--chip-bg);
+            background: #f2f8f1;
             color: var(--text-main);
             font-size: 13px;
             font-weight: 600;
@@ -402,18 +244,18 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             align-items: center;
             gap: 10px;
             padding: 16px 30px 18px;
-            border-top: 1px solid var(--border);
-            border-bottom: 1px solid var(--border);
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.96));
+            border-top: 1px solid rgba(217, 228, 216, 0.72);
+            border-bottom: 1px solid rgba(217, 228, 216, 0.72);
+            background: linear-gradient(180deg, rgba(248, 251, 247, 0.96), rgba(242, 247, 241, 0.94));
         }
 
         .search-box,
         .filter-select,
         .filter-reset {
             height: 50px;
-            border: 1px solid var(--border);
+            border: 1px solid rgba(201, 217, 201, 0.92);
             border-radius: 16px;
-            background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.98));
+            background: linear-gradient(180deg, #ffffff, #fafcf9);
             box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
             transition:
                 border-color 0.18s ease,
@@ -431,7 +273,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         }
 
         .search-box i {
-            color: var(--brand);
+            color: var(--brand-accent);
             font-size: 14px;
         }
 
@@ -472,8 +314,8 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         .search-box:hover,
         .filter-select:hover,
         .filter-reset:hover {
-            border-color: rgba(115, 188, 37, 0.22);
-            background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.98));
+            border-color: rgba(13, 107, 71, 0.22);
+            background: linear-gradient(180deg, #ffffff, #f6fbf6);
             box-shadow: 0 8px 20px rgba(12, 39, 27, 0.06);
             transform: translateY(-1px);
         }
@@ -482,9 +324,9 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         .filter-select:focus,
         .filter-reset:focus-visible {
             outline: none;
-            border-color: rgba(115, 188, 37, 0.34);
+            border-color: rgba(13, 107, 71, 0.34);
             box-shadow:
-                0 0 0 4px rgba(115, 188, 37, 0.12),
+                0 0 0 4px rgba(13, 107, 71, 0.12),
                 0 8px 20px rgba(12, 39, 27, 0.06);
         }
 
@@ -497,7 +339,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         }
 
         .table-shell {
-            border: 1px solid var(--border);
+            border: 1px solid rgba(201, 217, 201, 0.7);
             border-radius: 24px;
             background: rgba(255, 255, 255, 0.95);
             box-shadow: 0 14px 34px rgba(12, 39, 27, 0.06);
@@ -512,21 +354,21 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
 
         .table-shell > table thead th {
             padding: 16px 16px 14px;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(238, 247, 226, 0.96));
+            background: linear-gradient(180deg, rgba(247, 249, 245, 0.99), rgba(237, 243, 235, 0.98));
             color: var(--brand);
             font-size: 11px;
             font-weight: 800;
             line-height: 1.25;
             letter-spacing: 0.08em;
             vertical-align: middle;
-            box-shadow: inset 0 -1px 0 rgba(206, 210, 213, 0.72);
+            box-shadow: inset 0 -1px 0 rgba(201, 217, 201, 0.72);
         }
 
         .table-shell > table tbody td {
             padding: 16px 16px;
             line-height: 1.42;
             vertical-align: middle;
-            border-bottom: 1px solid rgba(206, 210, 213, 0.68);
+            border-bottom: 1px solid rgba(217, 228, 216, 0.68);
         }
 
         .table-shell > table tbody tr {
@@ -534,15 +376,15 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         }
 
         .table-shell > table tbody tr:nth-child(even) td {
-            background: rgba(248, 250, 248, 0.88);
+            background: rgba(246, 249, 245, 0.88);
         }
 
         .table-shell > table tbody tr:hover td {
-            background: rgba(238, 247, 226, 0.94);
+            background: rgba(233, 242, 232, 0.94);
         }
 
         .table-shell > table tbody tr:focus-within td {
-            background: rgba(238, 247, 226, 0.96);
+            background: rgba(233, 242, 232, 0.96);
         }
 
         .table-shell > table tbody tr:last-child td {
@@ -601,7 +443,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             font-weight: 800;
             letter-spacing: 0.04em;
             flex-shrink: 0;
-            border: 1px solid rgba(115, 188, 37, 0.14);
+            border: 1px solid rgba(13, 107, 71, 0.14);
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
         }
 
@@ -616,7 +458,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         .user-email {
             margin: 3px 0 0;
             font-size: 12px;
-            color: var(--text-soft);
+            color: #2f66a7;
             line-height: 1.3;
         }
 
@@ -643,7 +485,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.98));
+            background: linear-gradient(180deg, #ffffff, #fafcf9);
             color: var(--text-main);
             box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
             transition:
@@ -656,8 +498,8 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         .action-btn:hover,
         .action-btn:focus-visible {
             transform: translateY(-1px);
-            border-color: rgba(115, 188, 37, 0.2);
-            background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.98));
+            border-color: rgba(13, 107, 71, 0.2);
+            background: linear-gradient(180deg, #ffffff, #f3faf4);
             box-shadow: 0 8px 18px rgba(12, 39, 27, 0.08);
             outline: none;
         }
@@ -665,13 +507,13 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         .action-btn.delete {
             color: var(--danger);
             background: var(--danger-soft);
-            border-color: rgba(255, 107, 0, 0.18);
+            border-color: #f0c5bf;
         }
 
         .action-btn.delete:hover,
         .action-btn.delete:focus-visible {
-            border-color: rgba(255, 107, 0, 0.28);
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 107, 0, 0.06));
+            border-color: #e6b2a8;
+            background: linear-gradient(180deg, #fff8f6, #ffecea);
         }
 
         .table-footer {
@@ -726,7 +568,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             align-items: center;
             justify-content: center;
             padding: 20px;
-            background: rgba(35, 37, 35, 0.45);
+            background: rgba(10, 22, 16, 0.45);
             backdrop-filter: blur(4px);
             z-index: 9999;
         }
@@ -811,25 +653,6 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         }
     </style>
     <link rel="stylesheet" href="styles/tables.css">
-    <style>
-        .table-shell .role-badge.role-admin {
-            --status-border-color: rgba(115, 188, 37, 0.22);
-            --status-bg: linear-gradient(180deg, rgba(115, 188, 37, 0.12), rgba(255, 255, 255, 0.98));
-            --status-color: var(--green-800);
-        }
-
-        .table-shell .role-badge.role-tech {
-            --status-border-color: rgba(163, 211, 0, 0.22);
-            --status-bg: linear-gradient(180deg, rgba(163, 211, 0, 0.14), rgba(255, 255, 255, 0.98));
-            --status-color: var(--teal-700);
-        }
-
-        .table-shell .role-badge.role-analyst {
-            --status-border-color: var(--border);
-            --status-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 248, 248, 0.98));
-            --status-color: var(--text-soft);
-        }
-    </style>
 </head>
 <body>
     <div class="page-shell">
@@ -837,7 +660,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             <section class="panel">
                 <div class="panel-header">
                     <div class="hero-copy">
-                        <a href="<?= lab_users_e(lab_user_module_back_url()) ?>" class="back-link">
+                        <a href="index.php" class="back-link">
                             <i class="fa-solid fa-arrow-left"></i>
                             <span>Volver al panel</span>
                         </a>
@@ -846,7 +669,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
                             <span>Gestion de usuarios del modulo</span>
                         </span>
                         <h1>Usuarios del Laboratorio</h1>
-                        <p>Gestion de accesos y roles institucionales del modulo <?= lab_users_e($module['nombre']) ?>.</p>
+                        <p>Gestion de accesos y roles institucionales del modulo Laboratorio.</p>
                     </div>
 
                     <a href="usuarios_crear.php" class="primary-action">
@@ -859,7 +682,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
                     <article class="stat-card">
                         <span class="stat-card-icon"><i class="fa-solid fa-users"></i></span>
                         <div>
-                            <p class="stat-card-value"><?= count($usuarios) ?></p>
+                            <p class="stat-card-value">7</p>
                             <p class="stat-card-label">Usuarios del módulo</p>
                             <p class="stat-card-meta">Usuarios registrados</p>
                         </div>
@@ -868,7 +691,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
                     <article class="stat-card">
                         <span class="stat-card-icon"><i class="fa-solid fa-circle-check"></i></span>
                         <div>
-                            <p class="stat-card-value"><?= (int) $usuariosActivos ?></p>
+                            <p class="stat-card-value">7</p>
                             <p class="stat-card-label">Estado activo</p>
                             <p class="stat-card-meta">Usuarios activos</p>
                         </div>
@@ -877,7 +700,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
                     <article class="stat-card">
                         <span class="stat-card-icon"><i class="fa-solid fa-building"></i></span>
                         <div>
-                            <p class="stat-card-value"><?= count($ingenios) ?></p>
+                            <p class="stat-card-value">1</p>
                             <p class="stat-card-label">Empresas registradas</p>
                             <p class="stat-card-meta">Empresas / ingenios</p>
                         </div>
@@ -886,7 +709,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
                     <article class="stat-card">
                         <span class="stat-card-icon"><i class="fa-solid fa-shield-halved"></i></span>
                         <div>
-                            <p class="stat-card-value"><?= count($roles) ?></p>
+                            <p class="stat-card-value">6</p>
                             <p class="stat-card-label">Roles disponibles</p>
                             <p class="stat-card-meta">Roles distintos</p>
                         </div>
@@ -894,20 +717,13 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
                 </div>
 
                 <div class="header-meta">
-
-
+                    
+                    
                 </div>
             </section>
         </section>
 
-            <?php if (empty($usuarios)): ?>
-                <div class="table-area">
-                    <div class="empty-state">
-                        No hay usuarios asignados al modulo Laboratorio todavia.
-                    </div>
-                </div>
-            <?php else: ?>
-                <div class="toolbar">
+                            <div class="toolbar">
                     <label class="search-box" for="searchUsers">
                         <i class="fa-solid fa-magnifying-glass"></i>
                         <input type="search" id="searchUsers" placeholder="Buscar por nombre o correo...">
@@ -915,17 +731,18 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
 
                     <select id="filterIngenio" class="filter-select" aria-label="Filtrar por ingenio">
                         <option value="">Todos los Ingenios</option>
-                        <?php foreach ($ingenios as $ingenio): ?>
-                            <option value="<?= lab_users_e($ingenio) ?>"><?= lab_users_e($ingenio) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                                                    <option value="CENGICAÑA">CENGICAÑA</option>
+                                            </select>
 
                     <select id="filterRol" class="filter-select" aria-label="Filtrar por rol">
                         <option value="">Todos los Roles</option>
-                        <?php foreach ($roles as $rol): ?>
-                            <option value="<?= lab_users_e($rol) ?>"><?= lab_users_e($rol) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                                                    <option value="Administrador">Administrador</option>
+                                                    <option value="Analista">Analista</option>
+                                                    <option value="Jefe">Jefe</option>
+                                                    <option value="Recepcionista">Recepcionista</option>
+                                                    <option value="Técnico">Técnico</option>
+                                                    <option value="usuario">usuario</option>
+                                            </select>
 
                     <button type="button" id="resetFilters" class="filter-reset" aria-label="Limpiar filtros">
                         <i class="fa-solid fa-filter-circle-xmark"></i>
@@ -945,62 +762,264 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
                                 </tr>
                             </thead>
                             <tbody id="usersTableBody">
-                                <?php foreach ($usuarios as $usuario): ?>
-                                    <?php
-                                    $name = (string) $usuario['nombre'];
-                                    $email = (string) $usuario['correo'];
-                                    $ingenio = (string) $usuario['ingenio'];
-                                    $rol = (string) $usuario['nombre_rol'];
-                                    $estado = (int) ($usuario['estado'] ?? 1);
-                                    $estadoLabel = $estado === 1 ? 'Activo' : 'Inactivo';
-                                    $estadoClass = $estado === 1 ? 'status-active' : 'status-inactive';
-                                    ?>
-                                    <tr
-                                        data-search="<?= lab_users_e(strtolower($name . ' ' . $email)) ?>"
-                                        data-ingenio="<?= lab_users_e($ingenio) ?>"
-                                        data-rol="<?= lab_users_e($rol) ?>"
-                                        data-estado="<?= $estado ?>"
+                                                                                                        <tr
+                                        data-search="admin laboratorio admin.lab@prueba.com"
+                                        data-ingenio="CENGICAÑA"
+                                        data-rol="Administrador"
+                                        data-estado="1"
                                     >
                                         <td>
                                             <div class="user-cell">
-                                                <span class="user-avatar" style="<?= lab_users_e(lab_users_avatar_style($name)) ?>">
-                                                    <?= lab_users_e(lab_users_initials($name)) ?>
-                                                </span>
+                                                <span class="user-avatar" style="background:#d8e9ff;color:#1f4f91;">
+                                                    AL                                                </span>
                                                 <div>
-                                                    <p class="user-name"><?= lab_users_e($name) ?></p>
-                                                    <p class="user-email"><?= lab_users_e($email) ?></p>
+                                                    <p class="user-name">Admin Laboratorio</p>
+                                                    <p class="user-email">admin.lab@prueba.com</p>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td class="company-cell"><?= lab_users_e($ingenio) ?></td>
+                                        <td class="company-cell">CENGICAÑA</td>
                                         <td>
-                                            <span class="role-badge <?= lab_users_e(lab_users_role_class($rol)) ?>">
-                                                <?= lab_users_e($rol) ?>
-                                            </span>
+                                            <span class="role-badge role-admin">
+                                                Administrador                                            </span>
                                         </td>
                                         <td>
-                                            <span class="status-badge <?= lab_users_e($estadoClass) ?>">
-                                                <?= lab_users_e($estadoLabel) ?>
-                                            </span>
+                                            <span class="status-badge status-active">
+                                                Activo                                            </span>
                                         </td>
                                         <td>
                                             <div class="action-links">
-                                                <a href="usuarios_editar.php?id=<?= (int) $usuario['id'] ?>" class="action-btn" aria-label="Editar usuario">
+                                                <a href="usuarios_editar.php?id=4" class="action-btn" aria-label="Editar usuario">
                                                     <i class="fa-solid fa-pen"></i>
                                                 </a>
-                                                <a href="#" class="action-btn delete btn-delete" data-id="<?= (int) $usuario['id'] ?>" aria-label="Eliminar usuario">
+                                                <a href="#" class="action-btn delete btn-delete" data-id="4" aria-label="Eliminar usuario">
                                                     <i class="fa-regular fa-trash-can"></i>
                                                 </a>
                                             </div>
                                         </td>
                                     </tr>
-                                <?php endforeach; ?>
-                            </tbody>
+                                                                                                        <tr
+                                        data-search="analista analista@gmail.com"
+                                        data-ingenio="CENGICAÑA"
+                                        data-rol="Analista"
+                                        data-estado="1"
+                                    >
+                                        <td>
+                                            <div class="user-cell">
+                                                <span class="user-avatar" style="background:#e8dcff;color:#5f2e99;">
+                                                    A                                                </span>
+                                                <div>
+                                                    <p class="user-name">Analista</p>
+                                                    <p class="user-email">analista@gmail.com</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="company-cell">CENGICAÑA</td>
+                                        <td>
+                                            <span class="role-badge role-analyst">
+                                                Analista                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="status-badge status-active">
+                                                Activo                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="action-links">
+                                                <a href="usuarios_editar.php?id=36" class="action-btn" aria-label="Editar usuario">
+                                                    <i class="fa-solid fa-pen"></i>
+                                                </a>
+                                                <a href="#" class="action-btn delete btn-delete" data-id="36" aria-label="Eliminar usuario">
+                                                    <i class="fa-regular fa-trash-can"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                                                                                        <tr
+                                        data-search="diego medina diego1c@gmail.com"
+                                        data-ingenio="CENGICAÑA"
+                                        data-rol="Técnico"
+                                        data-estado="1"
+                                    >
+                                        <td>
+                                            <div class="user-cell">
+                                                <span class="user-avatar" style="background:#ffe7b8;color:#935e00;">
+                                                    DM                                                </span>
+                                                <div>
+                                                    <p class="user-name">Diego Medina</p>
+                                                    <p class="user-email">diego1c@gmail.com</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="company-cell">CENGICAÑA</td>
+                                        <td>
+                                            <span class="role-badge role-default">
+                                                Técnico                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="status-badge status-active">
+                                                Activo                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="action-links">
+                                                <a href="usuarios_editar.php?id=41" class="action-btn" aria-label="Editar usuario">
+                                                    <i class="fa-solid fa-pen"></i>
+                                                </a>
+                                                <a href="#" class="action-btn delete btn-delete" data-id="41" aria-label="Eliminar usuario">
+                                                    <i class="fa-regular fa-trash-can"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                                                                                        <tr
+                                        data-search="diego medina ghhg@gmail.com"
+                                        data-ingenio="CENGICAÑA"
+                                        data-rol="usuario"
+                                        data-estado="1"
+                                    >
+                                        <td>
+                                            <div class="user-cell">
+                                                <span class="user-avatar" style="background:#ffe7b8;color:#935e00;">
+                                                    DM                                                </span>
+                                                <div>
+                                                    <p class="user-name">Diego Medina</p>
+                                                    <p class="user-email">ghhg@gmail.com</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="company-cell">CENGICAÑA</td>
+                                        <td>
+                                            <span class="role-badge role-default">
+                                                usuario                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="status-badge status-active">
+                                                Activo                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="action-links">
+                                                <a href="usuarios_editar.php?id=56" class="action-btn" aria-label="Editar usuario">
+                                                    <i class="fa-solid fa-pen"></i>
+                                                </a>
+                                                <a href="#" class="action-btn delete btn-delete" data-id="56" aria-label="Eliminar usuario">
+                                                    <i class="fa-regular fa-trash-can"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                                                                                        <tr
+                                        data-search="jefe jefe@gmail.com"
+                                        data-ingenio="CENGICAÑA"
+                                        data-rol="Jefe"
+                                        data-estado="1"
+                                    >
+                                        <td>
+                                            <div class="user-cell">
+                                                <span class="user-avatar" style="background:#ffe7b8;color:#935e00;">
+                                                    J                                                </span>
+                                                <div>
+                                                    <p class="user-name">Jefe</p>
+                                                    <p class="user-email">jefe@gmail.com</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="company-cell">CENGICAÑA</td>
+                                        <td>
+                                            <span class="role-badge role-default">
+                                                Jefe                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="status-badge status-active">
+                                                Activo                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="action-links">
+                                                <a href="usuarios_editar.php?id=42" class="action-btn" aria-label="Editar usuario">
+                                                    <i class="fa-solid fa-pen"></i>
+                                                </a>
+                                                <a href="#" class="action-btn delete btn-delete" data-id="42" aria-label="Eliminar usuario">
+                                                    <i class="fa-regular fa-trash-can"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                                                                                        <tr
+                                        data-search="recepcionista recepcionista@gmail.com"
+                                        data-ingenio="CENGICAÑA"
+                                        data-rol="Recepcionista"
+                                        data-estado="1"
+                                    >
+                                        <td>
+                                            <div class="user-cell">
+                                                <span class="user-avatar" style="background:#d7f0ef;color:#0f6b66;">
+                                                    R                                                </span>
+                                                <div>
+                                                    <p class="user-name">Recepcionista</p>
+                                                    <p class="user-email">recepcionista@gmail.com</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="company-cell">CENGICAÑA</td>
+                                        <td>
+                                            <span class="role-badge role-default">
+                                                Recepcionista                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="status-badge status-active">
+                                                Activo                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="action-links">
+                                                <a href="usuarios_editar.php?id=37" class="action-btn" aria-label="Editar usuario">
+                                                    <i class="fa-solid fa-pen"></i>
+                                                </a>
+                                                <a href="#" class="action-btn delete btn-delete" data-id="37" aria-label="Eliminar usuario">
+                                                    <i class="fa-regular fa-trash-can"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                                                                                        <tr
+                                        data-search="tecnico tecnico@gmail.com"
+                                        data-ingenio="CENGICAÑA"
+                                        data-rol="Técnico"
+                                        data-estado="1"
+                                    >
+                                        <td>
+                                            <div class="user-cell">
+                                                <span class="user-avatar" style="background:#fce4d6;color:#9a4b13;">
+                                                    T                                                </span>
+                                                <div>
+                                                    <p class="user-name">Tecnico</p>
+                                                    <p class="user-email">tecnico@gmail.com</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="company-cell">CENGICAÑA</td>
+                                        <td>
+                                            <span class="role-badge role-default">
+                                                Técnico                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="status-badge status-active">
+                                                Activo                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="action-links">
+                                                <a href="usuarios_editar.php?id=35" class="action-btn" aria-label="Editar usuario">
+                                                    <i class="fa-solid fa-pen"></i>
+                                                </a>
+                                                <a href="#" class="action-btn delete btn-delete" data-id="35" aria-label="Eliminar usuario">
+                                                    <i class="fa-regular fa-trash-can"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                                            </tbody>
                         </table>
                     </div>
 
                     <div class="table-footer">
-                        <span id="resultsSummary">Mostrando <?= count($usuarios) ?> de <?= count($usuarios) ?> resultados</span>
+                        <span id="resultsSummary">Mostrando 7 de 7 resultados</span>
 
                         <div class="pagination">
                             <button type="button" class="page-btn" id="prevPage" aria-label="Pagina anterior">
@@ -1013,8 +1032,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
                         </div>
                     </div>
                 </div>
-            <?php endif; ?>
-    </div>
+                </div>
 
     <div id="deleteModal" class="modal">
         <div class="modal-content">

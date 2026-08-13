@@ -132,13 +132,14 @@ function renderAnalisis(tipo) {
   if (!items.length) {
     body.innerHTML = `
       <tr>
-        <td colspan="3" class="center" style="padding:24px;color:#5b6f5e">
+        <td colspan="3" class="center" style="padding:24px;color:#4a4d49">
           No hay análisis activos para este tipo de muestra.
         </td>
       </tr>
     `;
     document.getElementById("tipo-label-header").textContent = data.label || tipo;
     updateNumeroLaboratorio();
+    syncSelectAllAnalisis();
     return;
   }
 
@@ -153,6 +154,48 @@ function renderAnalisis(tipo) {
   `).join("");
   document.getElementById("tipo-label-header").textContent = data.label || tipo;
   updateNumeroLaboratorio();
+  syncSelectAllAnalisis();
+}
+
+function getAnalisisCheckboxes() {
+  return Array.from(document.querySelectorAll('#analisis-body input[name="analisis[]"]'));
+}
+
+function syncSelectAllAnalisis() {
+  const selectAll = document.getElementById('select-all-analisis');
+  if (!selectAll) return;
+
+  const checks = getAnalisisCheckboxes();
+  const total = checks.length;
+  const checked = checks.filter(input => input.checked).length;
+
+  selectAll.disabled = total === 0;
+  selectAll.checked = total > 0 && checked === total;
+  selectAll.indeterminate = checked > 0 && checked < total;
+}
+
+function toggleSelectAllAnalisis(checked) {
+  getAnalisisCheckboxes().forEach(input => {
+    input.checked = checked;
+  });
+  syncSelectAllAnalisis();
+}
+
+function initSeleccionAnalisis() {
+  const selectAll = document.getElementById('select-all-analisis');
+  const body = document.getElementById('analisis-body');
+
+  if (selectAll) {
+    selectAll.addEventListener('change', () => toggleSelectAllAnalisis(selectAll.checked));
+  }
+
+  if (body) {
+    body.addEventListener('change', event => {
+      if (event.target.matches('input[name="analisis[]"]')) {
+        syncSelectAllAnalisis();
+      }
+    });
+  }
 }
 
 function getInicialTipo(tipo) {
@@ -485,7 +528,7 @@ function makeDrawable(canvasId) {
 
     const ctx = canvas.getContext("2d");
     ctx.scale(ratio, ratio);
-    ctx.strokeStyle = "#27500A";
+    ctx.strokeStyle = "#73BC25";
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -1106,11 +1149,72 @@ function initPdfButton() {
   if (boton) boton.addEventListener("click", generarPdfSolicitud);
 }
 
+function closeFabMenu() {
+  const dropdown = document.getElementById('fab-actions');
+  const toggle = document.getElementById('fab-actions-toggle');
+  const menu = document.getElementById('fab-actions-menu');
+
+  if (!dropdown || !toggle || !menu) return;
+
+  dropdown.classList.remove('open');
+  toggle.setAttribute('aria-expanded', 'false');
+  menu.hidden = true;
+}
+
+function openFabMenu() {
+  const dropdown = document.getElementById('fab-actions');
+  const toggle = document.getElementById('fab-actions-toggle');
+  const menu = document.getElementById('fab-actions-menu');
+
+  if (!dropdown || !toggle || !menu) return;
+
+  dropdown.classList.add('open');
+  toggle.setAttribute('aria-expanded', 'true');
+  menu.hidden = false;
+}
+
+function initFabMenu() {
+  const dropdown = document.getElementById('fab-actions');
+  const toggle = document.getElementById('fab-actions-toggle');
+  const menu = document.getElementById('fab-actions-menu');
+
+  if (!dropdown || !toggle || !menu) return;
+
+  toggle.addEventListener('click', event => {
+    event.stopPropagation();
+    if (menu.hidden) {
+      openFabMenu();
+    } else {
+      closeFabMenu();
+    }
+  });
+
+  menu.addEventListener('click', event => {
+    if (event.target.closest('.fab-menu-item')) {
+      closeFabMenu();
+    }
+  });
+
+  document.addEventListener('click', event => {
+    if (!dropdown.contains(event.target)) {
+      closeFabMenu();
+    }
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      closeFabMenu();
+    }
+  });
+}
+
 function initFirmaSubmitSync() {
   const form = document.getElementById("solicitud-form");
   if (form) form.addEventListener("submit", syncFirmaInputs);
 }
 
+initSeleccionAnalisis();
+initFabMenu();
 initTipoButtons();
 initLaboratorioInputs();
 const solicitudSelect = initSolicitudSelect();

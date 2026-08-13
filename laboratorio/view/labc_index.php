@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../conexion.php';
+require_once __DIR__ . '/../models/labc_bandeja_model.php';
+
 $conexion = Conexion::conectar();
 
 lab_require_module_access();
@@ -17,6 +19,10 @@ if (!lab_can_any([
     lab_forbidden('No tiene permisos para acceder al LABC.');
 }
 
+$canCreateSolicitud = lab_can('laboratorio.solicitudes.crear');
+$canConsolidacion = lab_can('laboratorio.consolidacion.ver');
+$canBlancoControl = lab_can('laboratorio.blanco_control.ver');
+
 function labc_e($value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
@@ -32,79 +38,14 @@ function labc_visible_analysis(array $items): array
 function labc_card_icon(string $key): string
 {
     static $icons = [
-        'usuarios' => 'fa-users-gear',
         'suelos' => 'fa-mountain',
         'aguas' => 'fa-droplet',
         'foliares' => 'fa-leaf',
         'cana' => 'fa-tractor',
         'mieles' => 'fa-mug-hot',
-        'suelos.textura' => 'fa-mountain',
-        'suelos.humedad' => 'fa-droplet',
-        'suelos.humedad_residual' => 'fa-water',
-        'suelos.humedad_gravimetrica' => 'fa-water',
-        'suelos.dap' => 'fa-layer-group',
-        'suelos.cc' => 'fa-seedling',
-        'suelos.pmp' => 'fa-leaf',
-        'suelos.ph' => 'fa-flask',
-        'suelos.cic' => 'fa-vials',
-        'suelos.mo' => 'fa-microscope',
-        'suelos.macroscic' => 'fa-flask-vial',
-        'suelos.micros' => 'fa-vials',
-        'suelos.nitrogeno' => 'fa-leaf',
-        'suelos.boro' => 'fa-flask',
-        'suelos.azufre' => 'fa-fire-flame-curved',
-        'suelos.fosforo' => 'fa-atom',
-        'aguas.macros' => 'fa-flask-vial',
-        'aguas.ras' => 'fa-water',
-        'aguas.boro' => 'fa-flask',
-        'aguas.ph' => 'fa-droplet',
-        'aguas.salinidad' => 'fa-wind',
-        'aguas.dureza' => 'fa-gem',
-        'aguas.carbonatos' => 'fa-vial',
-        'aguas.micros' => 'fa-flask',
-        'aguas.fosforo' => 'fa-atom',
-        'aguas.conductividad' => 'fa-bolt',
-        'aguas.tds' => 'fa-cubes',
-        'aguas.resistividad' => 'fa-wave-square',
-        'aguas.cloruros' => 'fa-flask',
-        'aguas.alcanilidad' => 'fa-scale-balanced',
-        'aguas.bicarbonato' => 'fa-vials',
-        'foliares.macros' => 'fa-leaf',
-        'foliares.nitrogeno' => 'fa-seedling',
-        'foliares.boro' => 'fa-flask',
-        'foliares.micros' => 'fa-vials',
-        'foliares.fosforo' => 'fa-atom',
-        'cana.peso_seco' => 'fa-scale-balanced',
-        'cana.fibra' => 'fa-wheat-awn',
-        'cana.humedad' => 'fa-droplet',
-        'cana.brixpol' => 'fa-chart-line',
-        'mieles.brix' => 'fa-chart-column',
-        'gestion' => 'fa-gears',
-        'blancos.control' => 'fa-vial',
-        'consolidacion' => 'fa-layer-group',
     ];
 
     return $icons[$key] ?? 'fa-flask';
-}
-
-function labc_prepare_cards(array $items, ?string $highlightKey = null): array
-{
-    $cards = [];
-    foreach ($items as $index => $item) {
-        $key = (string) ($item['key'] ?? '');
-        $label = (string) ($item['label'] ?? '');
-        $cards[] = [
-            'key' => $key,
-            'label' => $label,
-            'href' => (string) ($item['href'] ?? '#'),
-            'icon' => (string) ($item['icon'] ?? labc_card_icon($key)),
-            'active' => !empty($item['active']) || ($highlightKey !== null && $key === $highlightKey) || ($highlightKey === null && $index === 0),
-            'ghost' => !empty($item['ghost']),
-            'search' => trim($label . ' ' . ($item['search'] ?? '')),
-        ];
-    }
-
-    return $cards;
 }
 
 function labc_section_href(string $area): string
@@ -125,64 +66,22 @@ function labc_history_href(string $area): ?string
     }
 }
 
-$sampleTypeKeys = ['suelos', 'aguas', 'foliares', 'cana', 'mieles', 'gestion'];
-$sampleTypesByKey = [
-    'suelos' => ['id_tipo' => 1],
-    'aguas' => ['id_tipo' => 2],
-    'foliares' => ['id_tipo' => 3],
-    'cana' => ['id_tipo' => 4],
-    'mieles' => ['id_tipo' => 5],
-];
+$sampleTypeKeys = ['suelos', 'aguas', 'foliares', 'cana', 'mieles'];
+$sampleTypesByKey = [];
+foreach ($sampleTypeKeys as $sampleTypeKey) {
+    $sampleTypesByKey[$sampleTypeKey] = labCatalogoMuestrasObtenerPorClave($conexion, $sampleTypeKey, true) ?: [
+        'id_tipo' => 0,
+        'nombre' => $sampleTypeKey,
+        'prefijo' => strtoupper(substr($sampleTypeKey, 0, 1)),
+        'clave' => $sampleTypeKey,
+        'label' => ucfirst($sampleTypeKey),
+        'label_plural' => ucfirst($sampleTypeKey),
+    ];
+}
 
 $activeArea = trim((string) ($_GET['area'] ?? 'aguas'));
 if (!in_array($activeArea, $sampleTypeKeys, true)) {
-  
     $activeArea = 'aguas';
-  
-    $activeArea = in_array('aguas', $sampleTypeKeys, true) ? 'aguas' : ($sampleTypeKeys[0] ?? 'aguas');
-}
-
-// Fetch Analyses from database
-$stmtAnalisis = $conexion->query("SELECT id_tipo, id_tipo_muestra, nombre FROM tipo_analisis ORDER BY id_tipo");
-$dbAnalisis = $stmtAnalisis->fetchAll(PDO::FETCH_ASSOC);
-
-
-$canCreateSolicitud = lab_can('laboratorio.solicitudes.crear');
-$canAnalisis = lab_can('laboratorio.analisis.ver');
-$canCatalogoAnalisis = lab_can('laboratorio.catalogo_analisis.ver');
-$canCatalogoMuestras = lab_can('laboratorio.catalogo_muestras.ver');
-$canBlancoControl = lab_can('laboratorio.blanco_control.ver');
-$canConsolidacion = lab_can('laboratorio.consolidacion.ver');
-$canManageUsers = lab_can('laboratorio.usuarios.gestionar');
-
-$analysesBySampleTypeId = [];
-foreach ($dbAnalisis as $analisis) {
-    $idMuestra = $analisis['id_tipo_muestra'];
-    if (!isset($analysesBySampleTypeId[$idMuestra])) {
-        $analysesBySampleTypeId[$idMuestra] = [];
-    }
-    $analysesBySampleTypeId[$idMuestra][] = $analisis;
-}
-
-$analysesBySampleTypeKey = [];
-
-// Suelos group division
-$suelosFisicos = [];
-$suelosQuimicos = [];
-$suelosAnalyses = $analysesBySampleTypeKey['suelos'] ?? [];
-foreach ($suelosAnalyses as $analisis) {
-    if (in_array($analisis['key'], [
-        'suelos.textura',
-        'suelos.humedad',
-        'suelos.humedad_residual',
-        'suelos.dap',
-        'suelos.cc',
-        'suelos.pmp'
-    ], true)) {
-        $suelosFisicos[] = $analisis;
-    } else {
-        $suelosQuimicos[] = $analisis;
-    }
 }
 
 $suelosFisicos = labc_visible_analysis([
@@ -206,10 +105,6 @@ $suelosQuimicos = labc_visible_analysis([
     ['key' => 'suelos.conductividad_electrica', 'href' => '../controllers/Suelos/conductividad_electrica_controller.php', 'label' => 'Conductividad Eléctrica'],
 ]);
 
-
-$suelosCardsFisicos = labc_prepare_cards($suelosFisicos, 'suelos.textura');
-$suelosCardsQuimicos = labc_prepare_cards($suelosQuimicos, 'suelos.ph');
-
 $aguasAnalyses = labc_visible_analysis([
     ['key' => 'aguas.macros', 'href' => '../controllers/Aguas/macros_controller.php', 'label' => 'Macronutrientes'],
     ['key' => 'aguas.ras', 'href' => '../controllers/Aguas/ras_controller.php', 'label' => 'RAS'],
@@ -227,7 +122,6 @@ $aguasAnalyses = labc_visible_analysis([
     ['key' => 'aguas.alcanilidad', 'href' => '../controllers/Aguas/alcanilidad_controller.php', 'label' => 'Alcalinidad'],
     ['key' => 'aguas.bicarbonato', 'href' => '../controllers/Aguas/bicarbonato_controller.php', 'label' => 'Bicarbonatos'],
 ]);
-$aguasCards = labc_prepare_cards($aguasAnalyses, 'aguas.ph');
 
 $foliaresAnalyses = labc_visible_analysis([
     ['key' => 'foliares.macros', 'href' => '../controllers/Foliares/macros_controller.php', 'label' => 'Macronutrientes'],
@@ -236,7 +130,6 @@ $foliaresAnalyses = labc_visible_analysis([
     ['key' => 'foliares.micros', 'href' => '../controllers/Foliares/micros_controller.php', 'label' => 'Micro Nutrientes (Cu, Zn, Fe, Mn, K)'],
     ['key' => 'foliares.fosforo', 'href' => '../controllers/Foliares/fosforo_controller.php', 'label' => 'Fósforo'],
 ]);
-$foliaresCards = labc_prepare_cards($foliaresAnalyses, 'foliares.micros');
 
 $canaAnalyses = labc_visible_analysis([
     ['key' => 'cana.peso_seco', 'href' => '../controllers/Cana/peso_seco_controller.php', 'label' => 'Peso seco'],
@@ -244,127 +137,65 @@ $canaAnalyses = labc_visible_analysis([
     ['key' => 'cana.humedad', 'href' => '../controllers/Cana/humedad_controller.php', 'label' => '% de Humedad'],
     ['key' => 'cana.brixpol', 'href' => '../controllers/Cana/brixpol_controller.php', 'label' => 'Determinación de Brix y Pol'],
 ]);
-$canaCards = labc_prepare_cards($canaAnalyses, 'cana.humedad');
 
 $mielesAnalyses = labc_visible_analysis([
     ['key' => 'mieles.brix', 'href' => '../controllers/Mieles/brix_controller.php', 'label' => 'Brix'],
 ]);
-$mielesCards = labc_prepare_cards($mielesAnalyses, 'mieles.brix');
 
-$canCreateSolicitud = lab_can('laboratorio.solicitudes.crear');
-$canBlancoControl = lab_can('laboratorio.blanco_control.ver');
-$canConsolidacion = lab_can('laboratorio.consolidacion.ver');
-$canManageUsers = lab_can('laboratorio.usuarios.gestionar');
-
-$utilityCards = [];
-if ($canManageUsers) {
-    $utilityCards[] = [
-        'key' => 'usuarios',
-        'href' => '../usuarios.php',
-        'label' => 'Usuarios del laboratorio',
-        'icon' => 'fa-users-gear',
-    ];
-}
-if ($canBlancoControl) {
-    $utilityCards[] = [
-        'key' => 'blancos.control',
-        'href' => '../controllers/blanco_control_controller.php',
-        'label' => 'Blancos y Control Generales',
-        'icon' => 'fa-vial',
-    ];
-}
-if ($canConsolidacion) {
-    $utilityCards[] = [
-        'key' => 'consolidacion',
-        'href' => '../controllers/consolidacion_controller.php',
-        'label' => 'Hoja de consolidación',
-        'icon' => 'fa-layer-group',
-    ];
-}
-if ($canCatalogoAnalisis) {
-    $utilityCards[] = [
-        'key' => 'analisis.catalogo',
-        'href' => '../catalogo_analisis.php',
-        'label' => 'Catálogo de análisis',
-        'icon' => 'fa-table-list',
-    ];
-}
-if ($canCatalogoMuestras) {
-    $utilityCards[] = [
-        'key' => 'muestras.catalogo',
-        'href' => '../catalogo_muestras.php',
-        'label' => 'Catálogo de muestras',
-        'icon' => 'fa-vials',
-    ];
-}
-$utilityCards = labc_prepare_cards($utilityCards, 'consolidacion');
-
-$gestionCards = $utilityCards;
+$analysisRegistryByArea = [
+    'suelos' => array_merge($suelosFisicos, $suelosQuimicos),
+    'aguas' => $aguasAnalyses,
+    'foliares' => $foliaresAnalyses,
+    'cana' => $canaAnalyses,
+    'mieles' => $mielesAnalyses,
+];
 
 $sampleTypeConfigs = [
     'suelos' => [
         'id' => 'suelos',
         'nav_label' => 'Suelos',
-        'title' => 'Formularios de Suelos',
-        'subtitle' => 'Consulta los análisis físicos y químicos disponibles.',
+        'title' => 'Bandeja de Suelos',
+        'subtitle' => 'Revisa los análisis pendientes para el tipo de muestra seleccionado.',
         'theme' => 'suelos',
         'history_url' => labc_history_href('suelos'),
-        'groups' => [
-            ['title' => 'Físicos', 'cards' => $suelosCardsFisicos],
-            ['title' => 'Químicos', 'cards' => $suelosCardsQuimicos],
-        ],
-        'count' => count($suelosCardsFisicos) + count($suelosCardsQuimicos),
+        'analyses' => $analysisRegistryByArea['suelos'],
     ],
     'aguas' => [
         'id' => 'aguas',
         'nav_label' => 'Aguas',
-        'title' => 'Formularios de Aguas',
-        'subtitle' => 'Selecciona el tipo de análisis para tus muestras recibidas.',
+        'title' => 'Bandeja de Aguas',
+        'subtitle' => 'Revisa los análisis pendientes para el tipo de muestra seleccionado.',
         'theme' => 'aguas',
         'history_url' => labc_history_href('aguas'),
-        'cards' => $aguasCards,
-        'count' => count($aguasCards),
+        'analyses' => $analysisRegistryByArea['aguas'],
     ],
     'foliares' => [
         'id' => 'foliares',
         'nav_label' => 'Foliares',
-        'title' => 'Formularios de Foliares',
-        'subtitle' => 'Análisis de tejido y diagnóstico foliar.',
+        'title' => 'Bandeja de Foliares',
+        'subtitle' => 'Revisa los análisis pendientes para el tipo de muestra seleccionado.',
         'theme' => 'foliares',
         'history_url' => labc_history_href('foliares'),
-        'cards' => $foliaresCards,
-        'count' => count($foliaresCards),
+        'analyses' => $analysisRegistryByArea['foliares'],
     ],
     'cana' => [
         'id' => 'cana',
         'nav_label' => 'Caña',
-        'title' => 'Formularios de Caña',
-        'subtitle' => 'Registros de proceso y calidad industrial.',
+        'title' => 'Bandeja de Caña',
+        'subtitle' => 'Revisa los análisis pendientes para el tipo de muestra seleccionado.',
         'theme' => 'cana',
         'history_url' => labc_history_href('cana'),
-        'cards' => $canaCards,
-        'count' => count($canaCards),
+        'analyses' => $analysisRegistryByArea['cana'],
     ],
     'mieles' => [
         'id' => 'mieles',
         'nav_label' => 'Mieles',
-        'title' => 'Formularios de Mieles',
-        'subtitle' => 'Análisis disponibles y próximos formularios.',
+        'title' => 'Bandeja de Mieles',
+        'subtitle' => 'Revisa los análisis pendientes para el tipo de muestra seleccionado.',
         'theme' => 'mieles',
         'history_url' => null,
-        'cards' => $mielesCards,
-        'count' => count($mielesCards),
+        'analyses' => $analysisRegistryByArea['mieles'],
     ],
-    'gestion' => !empty($gestionCards) ? [
-        'id' => 'gestion',
-        'nav_label' => 'Gestión adicional',
-        'title' => 'Gestión adicional',
-        'subtitle' => 'Accesos rápidos para consolidación y controles generales.',
-        'theme' => 'utility',
-        'history_url' => labc_history_href('gestion'),
-        'cards' => $gestionCards,
-        'count' => count($gestionCards),
-    ] : null,
 ];
 
 $sections = [];
@@ -378,25 +209,27 @@ foreach ($sampleTypeKeys as $key) {
 }
 
 $activeSection = $sectionsById[$activeArea] ?? ($sections[0] ?? null);
+$activeSampleTypeId = (int) ($sampleTypesByKey[$activeArea]['id_tipo'] ?? 0);
+$activeAnalysisRegistry = $sampleTypeConfigs[$activeArea]['analyses'] ?? [];
 
-$displayOrder = array_merge(
-    [$activeArea],
-    array_values(array_diff($sampleTypeKeys, [$activeArea]))
-);
-
-$displaySections = [];
-foreach ($displayOrder as $sectionId) {
-    if (isset($sectionsById[$sectionId])) {
-        $displaySections[] = $sectionsById[$sectionId];
-    }
-}
+$tray = $activeSampleTypeId > 0
+    ? labcBandejaConsultarAnalisisPendientes($conexion, $activeSampleTypeId, $activeAnalysisRegistry)
+    : [
+        'tipo_muestra' => null,
+        'analisis' => [],
+        'resumen' => [
+            'analisis_pendientes' => 0,
+            'lotes_pendientes' => 0,
+            'muestras_pendientes' => 0,
+        ],
+    ];
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Formularios de Análisis</title>
+    <title>Bandeja del analista</title>
     <link rel="stylesheet" href="../styles/base.css">
     <link rel="stylesheet" href="../css/formularios_dashboard.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -407,13 +240,13 @@ foreach ($displayOrder as $sectionId) {
             <div class="lab-brand">
                 <div class="lab-brand-mark">LAB</div>
                 <div class="lab-brand-copy">
-                    <span class="lab-brand-kicker">Gestión LAB</span>
-                    <strong>Panel de Control</strong>
+                    <span class="lab-brand-kicker">Gestion LAB</span>
+                    <strong>Bandeja Operativa</strong>
                 </div>
             </div>
 
-            <nav class="lab-nav" aria-label="Secciones de formularios">
-                <?php foreach ($displaySections as $section): ?>
+            <nav class="lab-nav" aria-label="Tipos de muestra">
+                <?php foreach ($sections as $section): ?>
                     <a
                         class="lab-nav-item <?= $activeArea === $section['id'] ? 'active' : '' ?>"
                         href="<?= labc_e(labc_section_href($section['id'])) ?>"
@@ -453,9 +286,9 @@ foreach ($displayOrder as $sectionId) {
                     <input
                         type="search"
                         id="formSearch"
-                        placeholder="Buscar formularios..."
+                        placeholder="Buscar análisis o lotes..."
                         autocomplete="off"
-                        aria-label="Buscar formularios">
+                        aria-label="Buscar análisis o lotes">
                 </div>
 
                 <div class="top-actions">
@@ -483,40 +316,46 @@ foreach ($displayOrder as $sectionId) {
             <section class="hero-card">
                 <div class="hero-headline">
                     <div class="hero-labels">
-                        <span class="hero-chip">Panel de formularios</span>
-                        <span class="hero-chip alt"><?= labc_e($activeSection['nav_label']) ?> destacado</span>
+                        <span class="hero-chip">Bandeja operativa</span>
+                        <span class="hero-chip alt"><?= labc_e($activeSection['nav_label']) ?> seleccionado</span>
                     </div>
 
-                    <h1>Formularios de Laboratorio</h1>
-                    <p>Seleccione el tipo de análisis a realizar para las muestras recibidas.</p>
+                    <h1>Bandeja del analista</h1>
+                    <p>Selecciona un tipo de muestra para revisar únicamente los análisis que tienen trabajo pendiente.</p>
                 </div>
 
                 <div class="hero-stats">
-                    <?php foreach ($sections as $section): ?>
-                        <span class="hero-stat">
-                            <strong><?= (int) ($section['count'] ?? 0) ?></strong>
-                            <small><?= labc_e($section['nav_label']) ?></small>
-                        </span>
-                    <?php endforeach; ?>
+                    <span class="hero-stat">
+                        <strong><?= (int) ($tray['resumen']['analisis_pendientes'] ?? 0) ?></strong>
+                        <small>Análisis</small>
+                    </span>
+                    <span class="hero-stat">
+                        <strong><?= (int) ($tray['resumen']['lotes_pendientes'] ?? 0) ?></strong>
+                        <small>Lotes</small>
+                    </span>
+                    <span class="hero-stat">
+                        <strong><?= (int) ($tray['resumen']['muestras_pendientes'] ?? 0) ?></strong>
+                        <small>Muestras</small>
+                    </span>
                 </div>
             </section>
 
             <div class="content-stack">
-                <?php foreach ($displaySections as $section): ?>
-                    <section
-                        class="form-section <?= $activeArea === $section['id'] ? 'is-active' : '' ?>"
-                        id="section-<?= labc_e($section['id']) ?>"
-                        data-section="<?= labc_e($section['id']) ?>"
-                        data-label="<?= labc_e($section['nav_label']) ?>">
-                        <div class="section-head">
-                            <div>
-                                <p class="section-kicker">Formularios de <?= labc_e($section['nav_label']) ?></p>
-                                <h2><?= labc_e($section['title']) ?></h2>
-                                <p class="section-copy"><?= labc_e($section['subtitle']) ?></p>
-                            </div>
+                <section
+                    class="form-section tray-section is-active"
+                    id="section-<?= labc_e($activeSection['id']) ?>"
+                    data-section="<?= labc_e($activeSection['id']) ?>"
+                    data-label="<?= labc_e($activeSection['nav_label']) ?>">
+                    <div class="section-head tray-head">
+                        <div>
+                            <p class="section-kicker">Tipo de muestra</p>
+                            <h2><?= labc_e($activeSection['title']) ?></h2>
+                            <p class="section-copy"><?= labc_e($activeSection['subtitle']) ?></p>
+                        </div>
 
-                            <?php if ($section['history_url'] !== null): ?>
-                                <a class="history-btn" href="<?= labc_e($section['history_url']) ?>">
+                        <div class="section-actions">
+                            <?php if ($activeSection['history_url'] !== null): ?>
+                                <a class="history-btn" href="<?= labc_e($activeSection['history_url']) ?>">
                                     <i class="fa-regular fa-clock"></i>
                                     <span>Ver historial</span>
                                 </a>
@@ -527,123 +366,96 @@ foreach ($displayOrder as $sectionId) {
                                 </span>
                             <?php endif; ?>
                         </div>
+                    </div>
 
-                        <?php if (!empty($section['groups'])): ?>
-                            <?php foreach ($section['groups'] as $group): ?>
-                                <div class="group-block">
-                                    <div class="group-title"><?= labc_e($group['title']) ?></div>
-                                    <div class="card-grid">
-                                        <?php foreach ($group['cards'] as $card): ?>
-                                            <?php
-                                                $cardClasses = ['module-card', 'theme-' . $section['theme']];
-                                                if (!empty($card['active'])) {
-                                                    $cardClasses[] = 'active';
-                                                }
-                                                if (!empty($card['ghost'])) {
-                                                    $cardClasses[] = 'ghost';
-                                                }
-                                                $cardClassAttr = implode(' ', $cardClasses);
-                                                $search = labc_e($card['search']);
-                                            ?>
-                                            <?php if (!empty($card['ghost'])): ?>
-                                                <div
-                                                    class="<?= labc_e($cardClassAttr) ?>"
-                                                    data-search="<?= $search ?>">
-                                                    <span class="module-card-icon">
-                                                        <i class="fa-solid <?= labc_e($card['icon']) ?>"></i>
-                                                    </span>
-                                                    <span class="module-card-label"><?= labc_e($card['label']) ?></span>
-                                                </div>
-                                            <?php else: ?>
-                                                <a
-                                                    class="<?= labc_e($cardClassAttr) ?>"
-                                                    href="<?= labc_e($card['href']) ?>"
-                                                    data-search="<?= $search ?>"
-                                                    aria-current="<?= !empty($card['active']) ? 'page' : 'false' ?>">
-                                                    <span class="module-card-icon">
-                                                        <i class="fa-solid <?= labc_e($card['icon']) ?>"></i>
-                                                    </span>
-                                                    <span class="module-card-label"><?= labc_e($card['label']) ?></span>
-                                                </a>
-                                            <?php endif; ?>
+                    <?php if (empty($tray['analisis'])): ?>
+                        <div class="empty-worktray">
+                            <div class="empty-worktray-icon">
+                                <i class="fa-solid fa-flask-vial"></i>
+                            </div>
+                            <h3>No hay análisis pendientes</h3>
+                            <p>El tipo de muestra seleccionado no tiene trabajo pendiente en este momento.</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="analysis-tray" id="analysisTray">
+                            <?php foreach ($tray['analisis'] as $analysis): ?>
+                                <?php
+                                    $estadoCodigo = (string) ($analysis['estado']['codigo'] ?? 'pendiente');
+                                    $analysisClasses = ['analysis-row', 'analysis-theme-' . $activeSection['theme'], 'state-' . $estadoCodigo];
+                                    $searchText = trim(
+                                        ($analysis['nombre'] ?? '') . ' ' .
+                                        ($analysis['progreso']['texto'] ?? '') . ' ' .
+                                        implode(' ', array_map(static function (array $chip): string {
+                                            return trim((string) ($chip['codigo_lote'] ?? '') . ' ' . (string) ($chip['rango_inicio'] ?? '') . ' ' . (string) ($chip['rango_fin'] ?? ''));
+                                        }, $analysis['lotes_pendientes'] ?? []))
+                                    );
+                                ?>
+                                <article
+                                    class="<?= labc_e(implode(' ', $analysisClasses)) ?>"
+                                    data-search="<?= labc_e($searchText) ?>">
+                                    <div class="analysis-main">
+                                        <div class="analysis-title-row">
+                                            <div>
+                                                <p class="analysis-kicker">Análisis</p>
+                                                <h3><?= labc_e($analysis['nombre'] ?? '') ?></h3>
+                                            </div>
+
+
+                                        </div>
+
+                                        <div class="analysis-meta">
+                                            <span class="analysis-meta-pill">
+                                                <strong><?= (int) ($analysis['lotes_distintos'] ?? 0) ?></strong>
+                                                <small>Lotes pendientes</small>
+                                            </span>
+
+                                            <span class="analysis-meta-pill">
+                                                <strong><?= (int) ($analysis['muestras_pendientes'] ?? 0) ?></strong>
+                                                <small>Muestras</small>
+                                            </span>
+
+
+                                        </div>
+                                    </div>
+
+                                    <div class="analysis-lots">
+                                        <?php foreach (($analysis['lotes_pendientes'] ?? []) as $chip): ?>
+                                            <span class="analysis-lot-chip">
+                                                <strong><?= labc_e('Lote ' . ($chip['codigo_lote'] ?: 'Sin código')) ?></strong>
+                                                <small><?= labc_e(labcBandejaEtiquetaRango($chip['rango_inicio'] ?? null, $chip['rango_fin'] ?? null)) ?></small>
+                                            </span>
                                         <?php endforeach; ?>
                                     </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="card-grid">
-                                <?php foreach ($section['cards'] as $card): ?>
-                                    <?php
-                                        $cardClasses = ['module-card', 'theme-' . $section['theme']];
-                                        if (!empty($card['active'])) {
-                                            $cardClasses[] = 'active';
-                                        }
-                                        if (!empty($card['ghost'])) {
-                                            $cardClasses[] = 'ghost';
-                                        }
-                                        $cardClassAttr = implode(' ', $cardClasses);
-                                        $search = labc_e($card['search']);
-                                    ?>
-                                    <?php if (!empty($card['ghost'])): ?>
-                                        <div
-                                            class="<?= labc_e($cardClassAttr) ?>"
-                                            data-search="<?= $search ?>">
-                                            <span class="module-card-icon">
-                                                <i class="fa-solid <?= labc_e($card['icon']) ?>"></i>
-                                            </span>
-                                            <span class="module-card-label"><?= labc_e($card['label']) ?></span>
+
+                                    <div class="analysis-progress">
+                                        <div class="analysis-progress-head">
+                                            <span>Avance</span>
+                                            <strong><?= labc_e($analysis['progreso']['texto'] ?? '0 / 0') ?></strong>
                                         </div>
-                                    <?php else: ?>
-                                        <a
-                                            class="<?= labc_e($cardClassAttr) ?>"
-                                            href="<?= labc_e($card['href']) ?>"
-                                            data-search="<?= $search ?>"
-                                            aria-current="<?= !empty($card['active']) ? 'page' : 'false' ?>">
-                                            <span class="module-card-icon">
-                                                <i class="fa-solid <?= labc_e($card['icon']) ?>"></i>
-                                            </span>
-                                            <span class="module-card-label"><?= labc_e($card['label']) ?></span>
+                                        <div class="progress-track" aria-hidden="true">
+                                            <span style="width: <?= (int) ($analysis['progreso']['porcentaje'] ?? 0) ?>%"></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="analysis-action">
+                                        <a class="primary-action analysis-button" href="<?= labc_e($analysis['href'] ?? '#') ?>">
+                                            <span><?= labc_e($analysis['accion'] ?? 'Capturar') ?></span>
+                                            <i class="fa-solid fa-arrow-right"></i>
                                         </a>
-                                    <?php endif; ?>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </section>
-                <?php endforeach; ?>
-
-                <?php if (false && !empty($utilityCards)): ?>
-                    <section class="form-section utility-section">
-                        <div class="section-head">
-                            <div>
-                                <p class="section-kicker">Herramientas internas</p>
-                                <h2>Gestión adicional</h2>
-                                <p class="section-copy">Accesos rápidos para consolidación y controles generales.</p>
-                            </div>
-                        </div>
-
-                        <div class="card-grid compact">
-                            <?php foreach ($utilityCards as $card): ?>
-                                <a
-                                    class="module-card theme-utility"
-                                    href="<?= labc_e($card['href']) ?>"
-                                    data-search="<?= labc_e($card['search']) ?>">
-                                    <span class="module-card-icon">
-                                        <i class="fa-solid <?= labc_e($card['icon']) ?>"></i>
-                                    </span>
-                                    <span class="module-card-label"><?= labc_e($card['label']) ?></span>
-                                </a>
+                                    </div>
+                                </article>
                             <?php endforeach; ?>
                         </div>
-                    </section>
-                <?php endif; ?>
+                    <?php endif; ?>
+                </section>
 
                 <section class="no-results" id="noResults" hidden>
                     <div class="no-results-card">
                         <div class="no-results-icon">
                             <i class="fa-solid fa-magnifying-glass"></i>
                         </div>
-                        <h3>No se encontraron formularios</h3>
-                        <p>Prueba con otro nombre o limpia la búsqueda para volver a ver todas las opciones.</p>
+                        <h3>No se encontraron análisis</h3>
+                        <p>Prueba con otro término para filtrar la bandeja o limpia la búsqueda para volver a ver todos los análisis pendientes.</p>
                     </div>
                 </section>
             </div>
@@ -660,33 +472,38 @@ foreach ($displayOrder as $sectionId) {
         const sections = Array.from(document.querySelectorAll('.form-section'));
         const noResults = document.getElementById('noResults');
 
-        function filterCards() {
+        function filterRows() {
             const query = (searchInput.value || '').trim().toLowerCase();
-            let visibleCards = 0;
+            let visibleRows = 0;
 
             sections.forEach((section) => {
-                const cards = Array.from(section.querySelectorAll('.module-card'));
+                const rows = Array.from(section.querySelectorAll('.analysis-row'));
+                if (rows.length === 0) {
+                    section.hidden = false;
+                    return;
+                }
+
                 let sectionVisible = false;
 
-                cards.forEach((card) => {
-                    const text = (card.dataset.search || card.textContent || '').toLowerCase();
+                rows.forEach((row) => {
+                    const text = (row.dataset.search || row.textContent || '').toLowerCase();
                     const match = !query || text.includes(query);
-                    card.hidden = !match;
+                    row.hidden = !match;
                     if (match) {
                         sectionVisible = true;
-                        visibleCards += 1;
+                        visibleRows += 1;
                     }
                 });
 
                 section.hidden = !sectionVisible;
             });
 
-            noResults.hidden = visibleCards !== 0;
+            noResults.hidden = visibleRows !== 0;
         }
 
         if (searchInput) {
-            searchInput.addEventListener('input', filterCards);
-            filterCards();
+            searchInput.addEventListener('input', filterRows);
+            filterRows();
         }
     })();
     </script>

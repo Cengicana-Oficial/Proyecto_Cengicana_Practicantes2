@@ -10,10 +10,10 @@
   --table-cell-padding-x-dense: var(--space-3);
   --table-head-font-size: var(--font-size-2xs);
   --table-border: 1px solid var(--panel-border);
-  --table-head-bg: linear-gradient(180deg, var(--green-50), #eef6e1);
-  --table-row-alt-bg: #fafdf6;
-  --table-row-hover-bg: var(--green-50);
-  --table-row-selected-bg: #eef7df;
+  --table-head-bg: linear-gradient(180deg, var(--neutral-50), var(--green-50));
+  --table-row-alt-bg: rgba(242, 243, 242, 0.72);
+  --table-row-hover-bg: var(--teal-50);
+  --table-row-selected-bg: rgba(237, 245, 238, 0.92);
   --table-radius: var(--surface-radius-panel);
   --table-shadow: var(--surface-shadow-panel);
   --table-empty-color: var(--text-mute);
@@ -21,6 +21,12 @@
   --table-min-width-history: 35rem;
   --table-min-width-administrative: 47.5rem;
   --table-min-width-technical: 61rem;
+  --table-technical-width: max-content;
+  --table-technical-min-width: max(100%, var(--table-min-width-technical));
+  --table-technical-index-col: 3.5rem;
+  --table-technical-identity-col: 11rem;
+  --table-technical-data-col: 8.75rem;
+  --table-technical-action-col: 4rem;
 }
 
 :where(
@@ -37,7 +43,10 @@
 ) {
   box-sizing: border-box;
   overflow-x: auto;
-  background: var(--white);
+  overflow-y: hidden;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  background: var(--lab-body-surface-strong);
   border: var(--table-border);
   border-radius: var(--table-radius);
   box-shadow: var(--table-shadow);
@@ -59,8 +68,9 @@
   .analisis-table,
   .review-table
 ) {
-  width: 100%;
+  width: var(--table-width, 100%);
   min-width: var(--table-min-width, 0);
+  max-width: var(--table-max-width, none);
   border-collapse: collapse;
   table-layout: var(--table-layout, auto);
   font-size: var(--table-font-size);
@@ -108,7 +118,7 @@
   .review-table
 ) thead th {
   background: var(--table-head-bg);
-  color: var(--green-800);
+  color: var(--teal-700);
   font-size: var(--table-head-font-size);
   font-weight: var(--font-weight-extrabold);
   letter-spacing: 0.06em;
@@ -205,7 +215,7 @@
   .analisis-table,
   .review-table
 ) tfoot td {
-  background: var(--green-50);
+  background: var(--neutral-50);
   color: var(--green-800);
   font-weight: var(--font-weight-semibold);
 }
@@ -274,9 +284,9 @@
   gap: var(--space-2);
   min-height: 34px;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--green-200);
+  border: 1px solid var(--lab-body-border-soft);
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--lab-body-surface-strong);
   color: var(--green-800);
   font: inherit;
   font-size: var(--font-size-sm);
@@ -295,8 +305,8 @@
 
 :where(.row-link, .estado-link, .bc-row-actions a, .action-links a, .actions a, .historial-table a):hover {
   transform: translateY(-1px);
-  border-color: var(--green-300);
-  background: var(--green-50);
+  border-color: var(--green-100);
+  background: var(--table-row-hover-bg);
   color: var(--green-900);
 }
 
@@ -329,11 +339,11 @@
   --table-min-width: var(--table-min-width-history);
 }
 
-:where(.table--technical, .table--dense, .lab-entry-table, .revision-entry-table, .analisis-table, .review-table) {
+:where(.table--technical, .table--dense, .analisis-table) {
   --table-font-size: var(--table-font-size-dense);
   --table-cell-padding-y: var(--table-cell-padding-y-dense);
   --table-cell-padding-x: var(--table-cell-padding-x-dense);
-  --table-layout: fixed;
+  --table-layout: auto;
   --table-min-width: var(--table-min-width-technical);
 }
 
@@ -366,6 +376,58 @@
 
 :where(.analisis-table) {
   --table-min-width: 100%;
+}
+
+/* Official variant for LABC capture matrices */
+:is(.table--technical-capture, .lab-entry-table, .revision-entry-table, .review-table) {
+  --table-font-size: var(--table-font-size-dense);
+  --table-cell-padding-y: var(--table-cell-padding-y-dense);
+  --table-cell-padding-x: var(--table-cell-padding-x-dense);
+  --table-layout: fixed;
+  --table-width: var(--table-technical-width);
+  --table-min-width: var(--table-technical-min-width);
+}
+
+:is(.table--technical-capture, .lab-entry-table, .revision-entry-table, .review-table) thead th {
+  white-space: normal;
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+:is(.table--technical-capture, .lab-entry-table, .revision-entry-table, .review-table) tbody td {
+  white-space: nowrap;
+}
+
+:is(.table--technical-capture, .lab-entry-table, .revision-entry-table, .review-table) :is(th:first-child, td:first-child) {
+  width: var(--table-technical-index-col);
+  min-width: var(--table-technical-index-col);
+  text-align: center;
+}
+
+:is(.table--technical-capture, .lab-entry-table, .revision-entry-table, .review-table) :is(th:nth-child(2), td:nth-child(2), th:nth-child(3), td:nth-child(3)) {
+  width: var(--table-technical-identity-col);
+  min-width: var(--table-technical-identity-col);
+}
+
+:is(.table--technical-capture, .review-table) :is(th:nth-child(n + 4), td:nth-child(n + 4)) {
+  width: var(--table-technical-data-col);
+  min-width: var(--table-technical-data-col);
+}
+
+:is(.table--technical-capture, .lab-entry-table, .revision-entry-table) :is(th:nth-child(n + 4):not(:last-child), td:nth-child(n + 4):not(:last-child)) {
+  width: var(--table-technical-data-col);
+  min-width: var(--table-technical-data-col);
+}
+
+:is(.table--technical-capture, .lab-entry-table, .revision-entry-table) :is(th:last-child, td:last-child) {
+  width: var(--table-technical-action-col);
+  min-width: var(--table-technical-action-col);
+  text-align: center;
+}
+
+:is(.table--technical-capture, .lab-entry-table, .revision-entry-table, .review-table) :is(input, select, textarea) {
+  width: 100%;
+  min-width: 0;
 }
 
 @media (max-width: 1024px) {

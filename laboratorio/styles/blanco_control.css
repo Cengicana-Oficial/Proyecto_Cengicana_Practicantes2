@@ -1,8 +1,8 @@
 @import url('base.css');
 
 body {
-    padding: 32px 16px 64px;
-    color: #20321a;
+    padding: var(--space-8) var(--space-4) var(--space-16);
+    color: var(--text-main);
 }
 
 .bc-shell {
@@ -67,10 +67,10 @@ body {
     gap: 6px;
     min-height: 34px;
     padding: 0 12px;
-    border: 1px solid #b7d7cd;
-    border-radius: 8px;
-    background: #f7fbf9;
-    color: #36564b;
+    border: 1px solid var(--state-info-border);
+    border-radius: var(--radius-pill);
+    background: var(--state-info-bg);
+    color: var(--state-info-text);
     font-size: 13px;
     font-weight: 700;
 }
@@ -89,14 +89,14 @@ body {
 
 .bc-panel,
 .bc-table-panel {
-    border: 1px solid #cbdcb7;
-    border-radius: 8px;
-    background: var(--white);
-    box-shadow: 0 12px 28px rgba(39, 80, 10, .08);
+    border: var(--surface-border-soft);
+    border-radius: var(--radius-lg);
+    background: var(--surface-3);
+    box-shadow: var(--surface-shadow-panel);
 }
 
 .bc-panel {
-    padding: 20px;
+    padding: var(--space-5);
 }
 
 .bc-panel.is-active {
@@ -123,14 +123,14 @@ body {
 .bc-form {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
+    gap: 16px 18px;
     margin-top: 18px;
 }
 
 .bc-field {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
 }
 
 .bc-field.full {
@@ -141,30 +141,30 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 9px;
-    min-height: 40px;
+    min-height: 44px;
 }
 
 .bc-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 10px;
+    gap: 12px;
     grid-column: 1 / -1;
-    margin-top: 2px;
+    margin-top: 6px;
 }
 
 .bc-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 40px;
-    padding: 9px 16px;
+    min-height: 44px;
+    padding: 11px 18px;
     border: 1px solid transparent;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     font: inherit;
     font-size: 14px;
     font-weight: 800;
-    line-height: 1;
+    line-height: 1.15;
     text-decoration: none;
     cursor: pointer;
 }
@@ -189,8 +189,8 @@ body {
 }
 
 .bc-button-quiet {
-    border-color: #cbdcb7;
-    background: #fbfdf7;
+    border-color: var(--border);
+    background: var(--white);
     color: var(--green-800);
 }
 
@@ -204,9 +204,9 @@ body {
 }
 
 .bc-table-head {
-    padding: 16px 18px;
-    border-bottom: 1px solid #d6e4c7;
-    background: #fbfdf7;
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-3);
 }
 
 .bc-row-actions {
@@ -217,7 +217,7 @@ body {
 }
 
 .bc-row-actions a {
-    color: var(--teal-700, #0f6e56);
+    color: var(--teal-700);
     font-weight: 800;
     text-decoration: none;
 }
@@ -227,7 +227,7 @@ body {
 }
 
 .bc-row-actions .danger {
-    color: #b54708;
+    color: var(--tertiary-600);
 }
 
 @media (max-width: 900px) {
@@ -251,7 +251,7 @@ body {
 
 @media (max-width: 560px) {
     body {
-        padding: 16px 10px 42px;
+        padding: var(--space-4) var(--space-3) var(--space-10);
     }
 
     .bc-header h1 {
@@ -259,7 +259,7 @@ body {
     }
 
     .bc-panel {
-        padding: 16px;
+        padding: var(--space-4);
     }
 
     .bc-form {

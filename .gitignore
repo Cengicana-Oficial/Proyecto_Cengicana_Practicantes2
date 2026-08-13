@@ -3,6 +3,7 @@ deploy/env/*.env
 vendor/
 node_modules/
 laboratorio/.env
+laboratorio/database/usuarios_menu.sql
 AUDITORIA_PROYECTO_CENGICANA.md
 .claude/
 CLAUDE.md
