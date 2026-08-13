@@ -372,14 +372,13 @@ header('Pragma: no-cache');
         return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : value;
     }
 
-    function diplomaHref(path) {
-        if (!path) return '';
-        try {
-            var url = new URL(path, window.location.href);
-            return /^(https?:)$/.test(url.protocol) ? url.href : '';
-        } catch (error) {
-            return '';
-        }
+    // El href ya no apunta al PDF crudo: se arma hacia descargar_diploma.php,
+    // que sirve el archivo con el nombre formateado (curso_ano_participante.pdf).
+    // course.diploma (la URL normalizada) solo se usa aqui para decidir SI el
+    // curso tiene diploma disponible, igual que antes.
+    function diplomaHref(course) {
+        if (!course || !course.diploma || !course.asignacion_id) return '';
+        return 'descargar_diploma.php?asignacion_id=' + encodeURIComponent(Number(course.asignacion_id));
     }
 
     function metric(label, value) {
@@ -404,7 +403,7 @@ header('Pragma: no-cache');
             .append(metric('Post-evaluación', valueOrDash(course.posevaluacion, ' pts')));
         $card.append($head).append($('<p>', {class: 'cengi-directory-course-meta'}).text(meta)).append($metrics);
 
-        var href = diplomaHref(course.diploma);
+        var href = diplomaHref(course);
         if (href) {
             var label = course.diploma_codigo ? 'Ver diploma · ' + course.diploma_codigo : 'Ver diploma';
             $card.append($('<a>', {class: 'cengi-directory-diploma-link', href: href, target: '_blank', rel: 'noopener'})

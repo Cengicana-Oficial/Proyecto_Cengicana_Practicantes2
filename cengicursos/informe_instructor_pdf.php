@@ -10,7 +10,7 @@
 require_once "conexion.php";
 require_once "menu.php";
 
-cengi_require_ver_instructores();
+cengi_require_generar_informe_instructor();
 
 require_once __DIR__ . '/vendor/autoload.php';
 
@@ -59,21 +59,45 @@ if (!$id) {
 
 $db = conectar();
 
+// Scoping por ingenio para el rol "Administrador de ingenio": este reporte
+// agrega TODOS los cursos de un instructor, asi que si el usuario actual es
+// administrador de ingenio, tanto los contadores del encabezado como el
+// listado de cursos mas abajo deben limitarse a cursos con al menos un
+// participante de su propio ingenio (mismo criterio que instructores.php,
+// via cengi_frag_curso_participante_ingenio() en conexion.php). Admin/
+// gestor/formador no llevan estas condiciones y ven el informe completo.
+$esAdminIngenioReporte = cengi_es_administrador_ingenio();
+$ingenioIdReporte = cengi_ingenio_id_actual();
+
+$paramsInstructorStmt = [];
+$filtroTotalCursosIngenioReporte = '';
+$filtroEvaluacionPromedioIngenioReporte = '';
+if ($esAdminIngenioReporte) {
+    if ($ingenioIdReporte > 0) {
+        $filtroTotalCursosIngenioReporte = ' AND ' . cengi_frag_curso_participante_ingenio('c', 'tc', $paramsInstructorStmt, $ingenioIdReporte);
+        $filtroEvaluacionPromedioIngenioReporte = ' AND ' . cengi_frag_curso_participante_ingenio('c', 'ep', $paramsInstructorStmt, $ingenioIdReporte);
+    } else {
+        // Sin ingenio asignado: no puede haber curso que califique, se fuerza vacio.
+        $filtroTotalCursosIngenioReporte = ' AND 1 = 0';
+        $filtroEvaluacionPromedioIngenioReporte = ' AND 1 = 0';
+    }
+}
+
 $stmt = $db->prepare("
     SELECT
         i.*,
-        (SELECT COUNT(*) FROM cursos c WHERE c.instructor_id = i.id) AS total_cursos,
+        (SELECT COUNT(*) FROM cursos c WHERE c.instructor_id = i.id{$filtroTotalCursosIngenioReporte}) AS total_cursos,
         (
             SELECT AVG(CAST(cc.posevaluacion AS DECIMAL(6,2)))
             FROM cursos c
             INNER JOIN asignaciones a ON a.cursos_id = c.id
             INNER JOIN control_cursos cc ON cc.asignacion_id = a.id
-            WHERE c.instructor_id = i.id AND cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?$'
+            WHERE c.instructor_id = i.id AND cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?$'{$filtroEvaluacionPromedioIngenioReporte}
         ) AS evaluacion_promedio
     FROM instructores i
     WHERE i.id = ?
 ");
-$stmt->execute([$id]);
+$stmt->execute(array_merge($paramsInstructorStmt, [$id]));
 $instructor = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$instructor) {
@@ -82,85 +106,150 @@ if (!$instructor) {
     exit;
 }
 
-$statsStmt = $db->prepare("
-    SELECT
-        COUNT(*) AS total,
-        AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
-        AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
-        AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
-        AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
-        AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
-        AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor,
-        AVG(ei.tema_relevancia_utilidad) AS avg_tema_relevancia_utilidad,
-        AVG(ei.logistica_evento) AS avg_logistica_evento,
-        AVG(ei.recomendaria_contexto) AS avg_recomendaria_contexto
-    FROM evaluaciones_instructor ei
-    INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-    WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NULL
-");
-$statsStmt->execute([$id]);
-$stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+// Guard 403: un "Administrador de ingenio" solo puede ver el informe de un
+// instructor que tenga al menos un curso (principal o co-instructor de
+// modulo) con un participante de su propio ingenio. Evita que enumere
+// ?id= de instructores fuera de su alcance para leer datos agregados de
+// otros ingenios.
+if ($esAdminIngenioReporte && !cengi_instructor_tiene_curso_relevante_ingenio($db, $id, $ingenioIdReporte)) {
+    http_response_code(403);
+    echo 'No tiene permiso para ver el informe de este instructor.';
+    exit;
+}
 
 $promedio = static function ($valor) {
     return $valor !== null ? (float) $valor : null;
 };
 
-$totalEncuesta = $stats ? (int) $stats['total'] : 0;
+// El rol "Administrador de ingenio" no tiene acceso a las encuestas de
+// satisfaccion del instructor (ni agregadas ni de su propio ingenio, ver
+// tarea de instructores.php): las secciones quedan vacias sin siquiera
+// consultar la BD, en vez de filtrarlas por ingenio.
 $encuesta = [
-    'total' => $totalEncuesta,
+    'total' => 0,
     'instructor' => [
-        'lenguaje_claro' => $totalEncuesta ? $promedio($stats['avg_lenguaje_claro']) : null,
-        'material_adecuado' => $totalEncuesta ? $promedio($stats['avg_material_adecuado']) : null,
-        'conocimiento_tema' => $totalEncuesta ? $promedio($stats['avg_conocimiento_tema']) : null,
-        'respeto_participantes' => $totalEncuesta ? $promedio($stats['avg_respeto_participantes']) : null,
-        'puntualidad_objetivos' => $totalEncuesta ? $promedio($stats['avg_puntualidad_objetivos']) : null,
+        'lenguaje_claro' => null,
+        'material_adecuado' => null,
+        'conocimiento_tema' => null,
+        'respeto_participantes' => null,
+        'puntualidad_objetivos' => null,
     ],
-    'recomendaria_instructor' => $totalEncuesta ? $promedio($stats['avg_recomendaria_instructor']) : null,
+    'recomendaria_instructor' => null,
     'tema' => [
-        'relevancia_utilidad' => $totalEncuesta ? $promedio($stats['avg_tema_relevancia_utilidad']) : null,
-        'logistica_evento' => $totalEncuesta ? $promedio($stats['avg_logistica_evento']) : null,
+        'relevancia_utilidad' => null,
+        'logistica_evento' => null,
     ],
-    'recomendaria_contexto' => $totalEncuesta ? $promedio($stats['avg_recomendaria_contexto']) : null,
+    'recomendaria_contexto' => null,
 ];
+$comentarios = [];
+$evaluacionesModulo = [];
 
-$comentariosStmt = $db->prepare("
-    SELECT ei.areas_mejora, ei.capacitaciones_necesarias, ei.creado
-    FROM evaluaciones_instructor ei
-    INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-    WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NULL
-        AND (
-            (ei.areas_mejora IS NOT NULL AND TRIM(ei.areas_mejora) <> '')
-            OR (ei.capacitaciones_necesarias IS NOT NULL AND TRIM(ei.capacitaciones_necesarias) <> '')
-        )
-    ORDER BY ei.creado DESC, ei.id DESC
-    LIMIT 5
-");
-$comentariosStmt->execute([$id]);
-$comentarios = $comentariosStmt->fetchAll(PDO::FETCH_ASSOC);
+if (!$esAdminIngenioReporte) {
+    $statsStmt = $db->prepare("
+        SELECT
+            COUNT(*) AS total,
+            AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
+            AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
+            AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
+            AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
+            AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
+            AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor,
+            AVG(ei.tema_relevancia_utilidad) AS avg_tema_relevancia_utilidad,
+            AVG(ei.logistica_evento) AS avg_logistica_evento,
+            AVG(ei.recomendaria_contexto) AS avg_recomendaria_contexto
+        FROM evaluaciones_instructor ei
+        INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
+        WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NULL
+    ");
+    $statsStmt->execute([$id]);
+    $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
 
-$evaluacionesModuloStmt = $db->prepare("
-    SELECT
-        cm.id AS modulo_id,
-        cm.nombre AS modulo_nombre,
-        cm.orden AS modulo_orden,
-        c.nombre_cursos,
-        COUNT(*) AS total,
-        AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
-        AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
-        AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
-        AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
-        AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
-        AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor
-    FROM evaluaciones_instructor ei
-    INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-    INNER JOIN curso_modulos cm ON cm.id = eei.curso_modulo_id
-    INNER JOIN cursos c ON c.id = eei.curso_id
-    WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NOT NULL
-    GROUP BY cm.id, cm.nombre, c.nombre_cursos, cm.orden
-    ORDER BY c.nombre_cursos, cm.orden
-");
-$evaluacionesModuloStmt->execute([$id]);
-$evaluacionesModulo = $evaluacionesModuloStmt->fetchAll(PDO::FETCH_ASSOC);
+    $totalEncuesta = $stats ? (int) $stats['total'] : 0;
+    $encuesta = [
+        'total' => $totalEncuesta,
+        'instructor' => [
+            'lenguaje_claro' => $totalEncuesta ? $promedio($stats['avg_lenguaje_claro']) : null,
+            'material_adecuado' => $totalEncuesta ? $promedio($stats['avg_material_adecuado']) : null,
+            'conocimiento_tema' => $totalEncuesta ? $promedio($stats['avg_conocimiento_tema']) : null,
+            'respeto_participantes' => $totalEncuesta ? $promedio($stats['avg_respeto_participantes']) : null,
+            'puntualidad_objetivos' => $totalEncuesta ? $promedio($stats['avg_puntualidad_objetivos']) : null,
+        ],
+        'recomendaria_instructor' => $totalEncuesta ? $promedio($stats['avg_recomendaria_instructor']) : null,
+        'tema' => [
+            'relevancia_utilidad' => $totalEncuesta ? $promedio($stats['avg_tema_relevancia_utilidad']) : null,
+            'logistica_evento' => $totalEncuesta ? $promedio($stats['avg_logistica_evento']) : null,
+        ],
+        'recomendaria_contexto' => $totalEncuesta ? $promedio($stats['avg_recomendaria_contexto']) : null,
+    ];
+
+    $comentariosStmt = $db->prepare("
+        SELECT ei.areas_mejora, ei.capacitaciones_necesarias, ei.creado
+        FROM evaluaciones_instructor ei
+        INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
+        WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NULL
+            AND (
+                (ei.areas_mejora IS NOT NULL AND TRIM(ei.areas_mejora) <> '')
+                OR (ei.capacitaciones_necesarias IS NOT NULL AND TRIM(ei.capacitaciones_necesarias) <> '')
+            )
+        ORDER BY ei.creado DESC, ei.id DESC
+        LIMIT 5
+    ");
+    $comentariosStmt->execute([$id]);
+    $comentarios = $comentariosStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $evaluacionesModuloStmt = $db->prepare("
+        SELECT
+            cm.id AS modulo_id,
+            cm.nombre AS modulo_nombre,
+            cm.orden AS modulo_orden,
+            c.nombre_cursos,
+            COUNT(*) AS total,
+            AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
+            AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
+            AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
+            AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
+            AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
+            AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor
+        FROM evaluaciones_instructor ei
+        INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
+        INNER JOIN curso_modulos cm ON cm.id = eei.curso_modulo_id
+        INNER JOIN cursos c ON c.id = eei.curso_id
+        WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NOT NULL
+        GROUP BY cm.id, cm.nombre, c.nombre_cursos, cm.orden
+        ORDER BY c.nombre_cursos, cm.orden
+    ");
+    $evaluacionesModuloStmt->execute([$id]);
+    $evaluacionesModulo = $evaluacionesModuloStmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Scoping por ingenio (Administrador de ingenio): el listado de cursos del
+// instructor solo debe incluir cursos con un participante de su ingenio, y
+// el promedio de evaluacion de cada curso debe calcularse solo sobre esos
+// participantes (no sobre todos los inscritos del curso, que puede tener
+// participantes de varios ingenios). El join a "participantes" dentro del
+// subquery de evaluacion_promedio solo se agrega cuando aplica el scoping,
+// para no alterar la consulta original en el resto de roles.
+$joinEvaluacionPromedioIngenio = '';
+$filtroEvaluacionPromedioIngenio = '';
+$evaluacionPromedioIngenioParam = [];
+$filtroEdicionesIngenio = '';
+$paramsFragEdiciones = [];
+if ($esAdminIngenioReporte) {
+    if ($ingenioIdReporte > 0) {
+        $joinEvaluacionPromedioIngenio = 'INNER JOIN participantes p ON p.id = a.participantes_id';
+        $filtroEvaluacionPromedioIngenio = ' AND p.ingenio_id = ?';
+        $evaluacionPromedioIngenioParam = [$ingenioIdReporte];
+        $filtroEdicionesIngenio = ' AND ' . cengi_frag_curso_participante_ingenio('c', 'ed', $paramsFragEdiciones, $ingenioIdReporte);
+    } else {
+        $filtroEdicionesIngenio = ' AND 1 = 0';
+    }
+}
+
+// Orden de los "?" tal como aparecen en el SQL resultante: primero el del
+// subquery de evaluacion_promedio (esta en la lista SELECT, antes del
+// WHERE), luego $id (WHERE c.instructor_id = ?), y por ultimo el del
+// fragmento EXISTS de $filtroEdicionesIngenio (al final del WHERE).
+$paramsEdiciones = array_merge($evaluacionPromedioIngenioParam, [$id], $paramsFragEdiciones);
 
 $edicionesStmt = $db->prepare("
     SELECT
@@ -174,15 +263,16 @@ $edicionesStmt = $db->prepare("
             SELECT AVG(CAST(cc.posevaluacion AS DECIMAL(6,2)))
             FROM asignaciones a
             INNER JOIN control_cursos cc ON cc.asignacion_id = a.id
-            WHERE a.cursos_id = c.id AND cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?$'
+            {$joinEvaluacionPromedioIngenio}
+            WHERE a.cursos_id = c.id AND cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?$'{$filtroEvaluacionPromedioIngenio}
         ) AS evaluacion_promedio
     FROM cursos c
     INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
     INNER JOIN ingenios ing ON ing.id = c.ingenio_id
-    WHERE c.instructor_id = ?
+    WHERE c.instructor_id = ?{$filtroEdicionesIngenio}
     ORDER BY c.nombre_cursos, c.inicio DESC
 ");
-$edicionesStmt->execute([$id]);
+$edicionesStmt->execute($paramsEdiciones);
 $ediciones = $edicionesStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $ingeniosInstructor = [];

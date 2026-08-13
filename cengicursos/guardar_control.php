@@ -9,6 +9,22 @@ $db = conectar();
 $puedeGestionar = cengi_puede_gestionar();
 $puedeSubirDiploma = cengi_puede_subir_diploma();
 
+// "Sesiones asistidas": numero entero editable manualmente en paralelo a "asistencia"
+// (porcentaje), sin relacion automatica entre ambos ni concepto de "total de sesiones".
+function cengi_normalizar_sesiones_asistidas($valor)
+{
+    if ($valor === null || trim((string) $valor) === '') {
+        return null;
+    }
+
+    if (!is_numeric($valor)) {
+        return null;
+    }
+
+    $numero = (int) round((float) $valor);
+    return ($numero >= 0) ? $numero : null;
+}
+
 if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
     $cursoId = (int) ($_POST['curso_id'] ?? 0);
     $registros = $_POST['registros'] ?? [];
@@ -94,6 +110,7 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
             }
 
             $asistencia = $normalizarNota($valores['asistencia'] ?? null);
+            $sesionesAsistidas = cengi_normalizar_sesiones_asistidas($valores['sesiones_asistidas'] ?? null);
             $evaluacion = $normalizarNota($valores['evaluacion'] ?? null);
             $posevaluacion = $normalizarNota($valores['posevaluacion'] ?? null);
 
@@ -106,10 +123,10 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
                 if ($existeModulo && $puedeGuardarAsistencia) {
                     $stmt = $db->prepare("
                         UPDATE control_curso_modulos
-                        SET asistencia = ?, evaluacion = ?, posevaluacion = ?
+                        SET asistencia = ?, sesiones_asistidas = ?, evaluacion = ?, posevaluacion = ?
                         WHERE asignacion_id = ? AND curso_modulo_id = ?
                     ");
-                    $stmt->execute([$asistencia, $evaluacion, $posevaluacion, $asignacionId, $moduloId]);
+                    $stmt->execute([$asistencia, $sesionesAsistidas, $evaluacion, $posevaluacion, $asignacionId, $moduloId]);
                 } elseif ($existeModulo) {
                     $stmt = $db->prepare("
                         UPDATE control_curso_modulos
@@ -120,10 +137,10 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
                 } elseif ($puedeGuardarAsistencia) {
                     $stmt = $db->prepare("
                         INSERT INTO control_curso_modulos
-                            (asignacion_id, curso_modulo_id, asistencia, evaluacion, posevaluacion)
-                        VALUES (?, ?, ?, ?, ?)
+                            (asignacion_id, curso_modulo_id, asistencia, sesiones_asistidas, evaluacion, posevaluacion)
+                        VALUES (?, ?, ?, ?, ?, ?)
                     ");
-                    $stmt->execute([$asignacionId, $moduloId, $asistencia, $evaluacion, $posevaluacion]);
+                    $stmt->execute([$asignacionId, $moduloId, $asistencia, $sesionesAsistidas, $evaluacion, $posevaluacion]);
                 } else {
                     $stmt = $db->prepare("
                         INSERT INTO control_curso_modulos
@@ -174,17 +191,17 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
             if ($existe && $puedeGuardarAsistencia && $diploma !== '') {
                 $stmt = $db->prepare("
                     UPDATE control_cursos
-                    SET asistencia = ?, evaluacion = ?, posevaluacion = ?, diploma = ?
+                    SET asistencia = ?, sesiones_asistidas = ?, evaluacion = ?, posevaluacion = ?, diploma = ?
                     WHERE asignacion_id = ?
                 ");
-                $stmt->execute([$asistencia, $evaluacion, $posevaluacion, $diploma, $asignacionId]);
+                $stmt->execute([$asistencia, $sesionesAsistidas, $evaluacion, $posevaluacion, $diploma, $asignacionId]);
             } elseif ($existe && $puedeGuardarAsistencia) {
                 $stmt = $db->prepare("
                     UPDATE control_cursos
-                    SET asistencia = ?, evaluacion = ?, posevaluacion = ?
+                    SET asistencia = ?, sesiones_asistidas = ?, evaluacion = ?, posevaluacion = ?
                     WHERE asignacion_id = ?
                 ");
-                $stmt->execute([$asistencia, $evaluacion, $posevaluacion, $asignacionId]);
+                $stmt->execute([$asistencia, $sesionesAsistidas, $evaluacion, $posevaluacion, $asignacionId]);
             } elseif ($existe && $diploma !== '') {
                 $stmt = $db->prepare("
                     UPDATE control_cursos
@@ -202,10 +219,10 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
             } elseif ($puedeGuardarAsistencia) {
                 $stmt = $db->prepare("
                     INSERT INTO control_cursos
-                        (asignacion_id, asistencia, evaluacion, posevaluacion, diploma)
-                    VALUES (?, ?, ?, ?, ?)
+                        (asignacion_id, asistencia, sesiones_asistidas, evaluacion, posevaluacion, diploma)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ");
-                $stmt->execute([$asignacionId, $asistencia, $evaluacion, $posevaluacion, $diploma]);
+                $stmt->execute([$asignacionId, $asistencia, $sesionesAsistidas, $evaluacion, $posevaluacion, $diploma]);
             } else {
                 $stmt = $db->prepare("
                     INSERT INTO control_cursos
@@ -230,6 +247,7 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
 
 $asignacion_id = (int) ($_POST['asignacion_id'] ?? 0);
 $asistencia = $_POST['asistencia'] ?? null;
+$sesiones_asistidas = cengi_normalizar_sesiones_asistidas($_POST['sesiones_asistidas'] ?? null);
 $evaluacion = $_POST['evaluacion'] ?? null;
 $posevaluacion = $_POST['posevaluacion'] ?? null;
 $diploma = "";
@@ -292,6 +310,7 @@ if ($registro) {
             UPDATE control_cursos
             SET
                 asistencia = ?,
+                sesiones_asistidas = ?,
                 evaluacion = ?,
                 posevaluacion = ?,
                 diploma = ?
@@ -299,6 +318,7 @@ if ($registro) {
         ");
         $stmt->execute([
             $asistencia,
+            $sesiones_asistidas,
             $evaluacion,
             $posevaluacion,
             $diploma,
@@ -309,12 +329,14 @@ if ($registro) {
             UPDATE control_cursos
             SET
                 asistencia = ?,
+                sesiones_asistidas = ?,
                 evaluacion = ?,
                 posevaluacion = ?
             WHERE asignacion_id = ?
         ");
         $stmt->execute([
             $asistencia,
+            $sesiones_asistidas,
             $evaluacion,
             $posevaluacion,
             $asignacion_id,
@@ -340,15 +362,17 @@ if ($registro) {
             (
                 asignacion_id,
                 asistencia,
+                sesiones_asistidas,
                 evaluacion,
                 posevaluacion,
                 diploma
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $asignacion_id,
             $asistencia,
+            $sesiones_asistidas,
             $evaluacion,
             $posevaluacion,
             $diploma,
