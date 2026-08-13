@@ -174,6 +174,19 @@ function cengi_es_ingenio()
     return strpos(cengi_rol_actual(), 'ingenio') !== false;
 }
 
+/**
+ * Rol "Administrador de ingenio" (nivel 3 en cengi_clasificar_rol_nivel()):
+ * cualquier rol cuyo nombre contenga "ingenio" y que NO sea admin/superadmin.
+ * Se usa para aplicar scoping/ocultamientos adicionales en instructores.php
+ * (visibilidad de instructores por participantes de su ingenio, encuestas de
+ * satisfaccion e informes PDF de instructor), sin tocar el acceso base ya
+ * otorgado via ver_instructores_cengi/gestionar_instructores_cengi.
+ */
+function cengi_es_administrador_ingenio()
+{
+    return !cengi_es_admin() && cengi_es_ingenio();
+}
+
 function cengi_puede_gestionar()
 {
     return cengi_es_admin() || cengi_tiene_permiso('gestionar_cursos_cengi');
@@ -334,6 +347,22 @@ function cengi_puede_ver_instructores()
 function cengi_puede_gestionar_instructores()
 {
     return cengi_es_admin() || cengi_tiene_permiso('gestionar_instructores_cengi');
+}
+
+/**
+ * Genera informes/reportes PDF de instructor (informe_instructor_pdf.php,
+ * informe_instructor_curso_pdf.php, informe_instructor_modulo_pdf.php).
+ * El rol "Administrador de ingenio" SI puede generar estos informes, pero
+ * cada reporte se limita a su propio ingenio dentro del archivo (courses/
+ * modulos sin participantes de su ingenio devuelven 403, y las secciones de
+ * encuesta de satisfaccion quedan vacias): el scoping real vive dentro de
+ * cada uno de los 3 archivos de reporte, no en este gate generico de acceso.
+ * Ver cengi_es_administrador_ingenio() y los helpers de scoping en
+ * conexion.php (cengi_frag_curso_participante_ingenio() y companeros).
+ */
+function cengi_puede_generar_informe_instructor()
+{
+    return cengi_puede_ver_instructores();
 }
 
 function cengi_puede_ver_eventos()
@@ -613,6 +642,14 @@ function cengi_require_ver_instructores($redirect = 'index.php')
 function cengi_require_gestionar_instructores($redirect = 'instructores.php')
 {
     if (!cengi_puede_gestionar_instructores()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_generar_informe_instructor($redirect = 'instructores.php')
+{
+    if (!cengi_puede_generar_informe_instructor()) {
         header("Location: {$redirect}");
         exit();
     }

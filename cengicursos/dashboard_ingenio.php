@@ -113,7 +113,8 @@ if ($fichaId > 0) {
 
     $stmtHistorial = $db->prepare("SELECT a.id AS asignacion_id, c.nombre_cursos,
             ca.descripcion_categorias_cursos AS categoria, c.tipo AS modalidad,
-            c.inicio, c.fin, a.estado_asignaciones, cc.asistencia, cc.evaluacion,
+            c.inicio, c.fin, a.estado_asignaciones, cc.asistencia, cc.sesiones_asistidas,
+            cc.evaluacion,
             cc.posevaluacion,
             COALESCE(NULLIF(d.pdf_path, ''), NULLIF(cc.diploma, '')) AS diploma,
             d.codigo_unico AS diploma_codigo, d.emitido_en AS diploma_fecha,
@@ -188,8 +189,8 @@ if ($cursoDetalleId > 0) {
         exit;
     }
 
-    $stmtParticipantesCurso = $db->prepare("SELECT p.id, p.nombre_participantes, p.cui_participantes, p.puesto_participantes,
-            a.estado_asignaciones, cc.asistencia, cc.evaluacion, cc.posevaluacion,
+    $stmtParticipantesCurso = $db->prepare("SELECT p.id, a.id AS asignacion_id, p.nombre_participantes, p.cui_participantes, p.puesto_participantes,
+            a.estado_asignaciones, cc.asistencia, cc.sesiones_asistidas, cc.evaluacion, cc.posevaluacion,
             COALESCE(NULLIF(d.pdf_path, ''), NULLIF(cc.diploma, '')) AS diploma,
             d.codigo_unico AS diploma_codigo
         FROM asignaciones a
@@ -313,6 +314,7 @@ if ($ingenioId > 0) {
             c.tipo AS modalidad, c.inicio, c.fin,
             COUNT(DISTINCT a.id) AS inscritos,
             AVG(CASE WHEN cc.asistencia REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.asistencia AS DECIMAL(6,2)) END) AS asistencia_prom,
+            AVG(cc.sesiones_asistidas) AS sesiones_asistidas_prom,
             AVG(CASE WHEN cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.posevaluacion AS DECIMAL(6,2)) END) AS eval_prom
         FROM cursos c
         INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
@@ -444,11 +446,11 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
         <div class="cengi-table-wrap">
             <table class="table table-striped table-bordered table-hover">
                 <thead>
-                    <tr><th>Código</th><th>Curso</th><th>Categoría</th><th>Modalidad</th><th>Inicio</th><th>Fin</th><th>Inscritos</th><th>Asistencia</th><th>Evaluación final</th><th>Estado</th><th>Acciones</th></tr>
+                    <tr><th>Código</th><th>Curso</th><th>Categoría</th><th>Modalidad</th><th>Inicio</th><th>Fin</th><th>Inscritos</th><th>Asistencia</th><th>Sesiones asistidas</th><th>Evaluación final</th><th>Estado</th><th>Acciones</th></tr>
                 </thead>
                 <tbody>
                     <?php if (!$cursosIngenio): ?>
-                        <tr><td colspan="11" class="text-center">Tu ingenio todavía no tiene cursos con participantes inscritos.</td></tr>
+                        <tr><td colspan="12" class="text-center">Tu ingenio todavía no tiene cursos con participantes inscritos.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($cursosIngenio as $c):
                         [$estadoLabel, $estadoClase] = cengi_dbi_estado_curso($c['inicio'], $c['fin']);
@@ -462,6 +464,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                             <td><?php echo cengi_dbi_html(cengi_dbi_fecha($c['fin'])); ?></td>
                             <td><?php echo (int) $c['inscritos']; ?></td>
                             <td><?php echo $c['asistencia_prom'] !== null ? number_format((float) $c['asistencia_prom'], 0) . '%' : '—'; ?></td>
+                            <td><?php echo $c['sesiones_asistidas_prom'] !== null ? number_format((float) $c['sesiones_asistidas_prom'], 0) : '—'; ?></td>
                             <td><?php echo $c['eval_prom'] !== null ? number_format((float) $c['eval_prom'], 0) . ' pts' : '—'; ?></td>
                             <td><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo $estadoLabel; ?></span></td>
                             <td><button type="button" class="cengi-directory-profile-button" data-toggle="modal" data-target="#dashboard-ingenio-course-modal" data-curso-id="<?php echo (int) $c['id']; ?>">Ver participantes</button></td>
@@ -564,7 +567,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                 <div class="cengi-table-wrap">
                     <table class="table table-striped table-bordered cengi-directory-table">
                         <thead>
-                            <tr><th>Participante</th><th>CUI</th><th>Estado</th><th>Asistencia</th><th>Evaluación</th><th>Diploma</th></tr>
+                            <tr><th>Participante</th><th>CUI</th><th>Estado</th><th>Asistencia</th><th>Sesiones asistidas</th><th>Evaluación</th><th>Diploma</th></tr>
                         </thead>
                         <tbody id="dashboard-ingenio-course-participants"></tbody>
                     </table>
@@ -572,7 +575,21 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
             </div>
             <div class="cengi-directory-modal-error" id="dashboard-ingenio-course-error" hidden></div>
         </div>
-        <footer class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button></footer>
+        <footer class="modal-footer">
+            <div class="btn-group" id="dashboard-ingenio-course-export-group" hidden style="float:left;">
+                <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> Descargar listado <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a href="#" id="dashboard-ingenio-course-export-pdf"><span class="glyphicon glyphicon-file" aria-hidden="true"></span> Descargar PDF</a></li>
+                    <li><a href="#" id="dashboard-ingenio-course-export-excel"><span class="glyphicon glyphicon-list-alt" aria-hidden="true"></span> Descargar Excel</a></li>
+                </ul>
+            </div>
+            <a href="#" id="dashboard-ingenio-course-zip" class="btn btn-success" target="_blank" rel="noopener" hidden>
+                <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> Descargar diplomas (ZIP)
+            </a>
+            <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+        </footer>
     </div></div>
 </div>
 
@@ -632,14 +649,13 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
         return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : value;
     }
 
-    function diplomaHref(path) {
-        if (!path) return '';
-        try {
-            var url = new URL(path, window.location.href);
-            return /^(https?:)$/.test(url.protocol) ? url.href : '';
-        } catch (error) {
-            return '';
-        }
+    // El href ya no apunta al PDF crudo: se arma hacia descargar_diploma.php,
+    // que sirve el archivo con el nombre formateado (curso_ano_participante.pdf).
+    // El campo "diploma" (URL normalizada) solo se usa aqui para decidir SI hay
+    // un diploma disponible, igual que antes.
+    function diplomaHref(record) {
+        if (!record || !record.diploma || !record.asignacion_id) return '';
+        return 'descargar_diploma.php?asignacion_id=' + encodeURIComponent(Number(record.asignacion_id));
     }
 
     function metric(label, value) {
@@ -660,11 +676,12 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
         var meta = [course.categoria, course.modalidad, dateText].filter(Boolean).join(' · ');
         var $metrics = $('<div>', {class: 'cengi-directory-course-metrics'})
             .append(metric('Asistencia', valueOrDash(course.asistencia, '%')))
+            .append(metric('Sesiones asistidas', valueOrDash(course.sesiones_asistidas, '')))
             .append(metric('Pre-evaluación', valueOrDash(course.evaluacion, ' pts')))
             .append(metric('Post-evaluación', valueOrDash(course.posevaluacion, ' pts')));
         $card.append($head).append($('<p>', {class: 'cengi-directory-course-meta'}).text(meta)).append($metrics);
 
-        var href = diplomaHref(course.diploma);
+        var href = diplomaHref(course);
         if (href) {
             var label = course.diploma_codigo ? 'Ver diploma · ' + course.diploma_codigo : 'Ver diploma';
             $card.append($('<a>', {class: 'cengi-directory-diploma-link', href: href, target: '_blank', rel: 'noopener'})
@@ -732,6 +749,10 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
     var $courseContent = $('#dashboard-ingenio-course-content');
     var $courseError = $('#dashboard-ingenio-course-error');
     var $courseParticipants = $('#dashboard-ingenio-course-participants');
+    var $courseZipButton = $('#dashboard-ingenio-course-zip');
+    var $courseExportGroup = $('#dashboard-ingenio-course-export-group');
+    var $courseExportPdf = $('#dashboard-ingenio-course-export-pdf');
+    var $courseExportExcel = $('#dashboard-ingenio-course-export-excel');
 
     function renderCourseParticipantRow(participant) {
         var estadoLabel = Number(participant.estado_asignaciones) === 1 ? 'Activo' : 'Inactivo';
@@ -744,9 +765,10 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
         $row.append($('<td>').text(participant.cui_participantes || '—'));
         $row.append($('<td>').text(estadoLabel));
         $row.append($('<td>').text(valueOrDash(participant.asistencia, '%')));
+        $row.append($('<td>').text(valueOrDash(participant.sesiones_asistidas, '')));
         $row.append($('<td>').text(valueOrDash(participant.evaluacion, ' pts')));
 
-        var href = diplomaHref(participant.diploma);
+        var href = diplomaHref(participant);
         var $diplomaCell = $('<td>');
         if (href) {
             var label = participant.diploma_codigo ? 'Ver diploma · ' + participant.diploma_codigo : 'Ver diploma';
@@ -771,10 +793,37 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
         $('#dashboard-ingenio-course-subtitle').text((course.codigo_curso ? course.codigo_curso + ' · ' : '') + meta);
         $courseParticipants.empty();
         if (!participants.length) {
-            $courseParticipants.append($('<tr>').append($('<td>', {colspan: 6, class: 'text-center'}).text('Tu ingenio no tiene participantes inscritos en este curso.')));
+            $courseParticipants.append($('<tr>').append($('<td>', {colspan: 7, class: 'text-center'}).text('Tu ingenio no tiene participantes inscritos en este curso.')));
         } else {
             participants.forEach(function (participant) { $courseParticipants.append(renderCourseParticipantRow(participant)); });
         }
+
+        // El boton de ZIP solo se muestra si al menos un participante de este
+        // ingenio tiene diploma disponible en este curso (los participantes ya
+        // vienen acotados a currentIngenioId desde el AJAX, asi que cualquier
+        // "diploma" presente en la lista ya pertenece al ingenio del usuario).
+        var tieneDiplomas = participants.some(function (participant) { return !!participant.diploma; });
+        if (tieneDiplomas && course.id) {
+            $courseZipButton.attr('href', 'descargar_diplomas_curso_zip.php?curso_id=' + encodeURIComponent(Number(course.id)) + '&ingenio_id=' + encodeURIComponent(currentIngenioId)).removeAttr('hidden');
+        } else {
+            $courseZipButton.attr('hidden', true).attr('href', '#');
+        }
+
+        // Boton "Descargar listado" (PDF/Excel) de los participantes de este
+        // curso: coexiste con el boton de ZIP de diplomas de arriba, igual que
+        // el resto del dashboard ya ofrece "Descargar listado" junto a otras
+        // acciones. Visible siempre que haya al menos un participante que listar.
+        if (participants.length && course.id) {
+            var exportBase = 'exportardashboardingenio.php?' + $.param({ingenio_id: currentIngenioId, vista: 'curso_participantes', curso_id: Number(course.id)});
+            $courseExportPdf.attr('href', exportBase + '&format=pdf');
+            $courseExportExcel.attr('href', exportBase + '&format=excel');
+            $courseExportGroup.removeAttr('hidden');
+        } else {
+            $courseExportGroup.attr('hidden', true);
+            $courseExportPdf.attr('href', '#');
+            $courseExportExcel.attr('href', '#');
+        }
+
         $courseLoading.attr('hidden', true);
         $courseError.attr('hidden', true);
         $courseContent.removeAttr('hidden');
@@ -788,6 +837,10 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
         $('#dashboard-ingenio-course-subtitle').text('');
         $courseContent.attr('hidden', true);
         $courseError.attr('hidden', true).text('');
+        $courseZipButton.attr('hidden', true).attr('href', '#');
+        $courseExportGroup.attr('hidden', true);
+        $courseExportPdf.attr('href', '#');
+        $courseExportExcel.attr('href', '#');
         $courseLoading.removeAttr('hidden');
         courseRequest = $.ajax({url: 'dashboard_ingenio.php', data: {curso_detalle_id: cursoId, ingenio_id: currentIngenioId}, dataType: 'json', cache: false})
             .done(renderCourseDetail).fail(function (xhr, status) {

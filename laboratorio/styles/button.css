@@ -378,10 +378,10 @@
 }
 
 .fab.secondary {
-  --btn-bg: linear-gradient(180deg, #ffffff, #f5faf0);
-  --btn-border: var(--border-strong);
+  --btn-bg: linear-gradient(180deg, var(--lab-body-surface-strong), var(--neutral-50));
+  --btn-border: var(--lab-body-border-soft);
   --btn-fg: var(--green-700);
-  --btn-shadow: 0 12px 24px rgba(59, 109, 17, 0.22);
+  --btn-shadow: 0 12px 24px rgba(35, 37, 35, 0.12);
 }
 
 .fab.primary {
@@ -392,13 +392,13 @@
 }
 
 .logout-btn {
-  --btn-bg: #fff3f0;
-  --btn-border: #f0c5bd;
-  --btn-fg: #8f251d;
+  --btn-bg: var(--tertiary-50);
+  --btn-border: var(--tertiary-100);
+  --btn-fg: var(--tertiary-700);
 }
 
 .logout-btn:hover:not(:disabled):not([aria-disabled="true"]) {
-  --btn-bg: #ffe7e2;
+  --btn-bg: var(--tertiary-100);
 }
 
 .toggle-btn {
@@ -473,25 +473,25 @@
 }
 
 .btn-delete {
-  --btn-fg: #8f251d;
-  --btn-border: #f0c5bd;
-  --btn-bg: #fff3f0;
+  --btn-fg: var(--tertiary-700);
+  --btn-border: var(--tertiary-100);
+  --btn-bg: var(--tertiary-50);
 }
 
 .btn-delete:hover:not(:disabled):not([aria-disabled="true"]) {
-  --btn-bg: #ffe7e2;
+  --btn-bg: var(--tertiary-100);
 }
 
 .row-button.danger {
-  --btn-bg: #fff7f5;
-  --btn-border: #efc1b8;
-  --btn-fg: #c13b2b;
+  --btn-bg: var(--tertiary-50);
+  --btn-border: var(--tertiary-100);
+  --btn-fg: var(--tertiary-600);
 }
 
 .row-button.success {
-  --btn-bg: #f0faf2;
-  --btn-border: #bedcc2;
-  --btn-fg: #236038;
+  --btn-bg: var(--teal-50);
+  --btn-border: var(--teal-100);
+  --btn-fg: var(--teal-700);
 }
 
 @media (max-width: 1024px) {

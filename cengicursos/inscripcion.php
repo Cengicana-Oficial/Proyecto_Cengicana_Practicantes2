@@ -311,24 +311,40 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
                         Curso
                     </label>
 
-                    <select
-                        name="curso_id"
-                        class="input-form"
-                        required
-                        <?php echo !$cursos ? 'disabled' : ''; ?>
-                    >
+                    <?php if ($cursoBloqueado !== null): ?>
 
-                        <option value="">
-                            <?php echo $cursos ? 'Seleccione' : 'No hay cursos disponibles por el momento'; ?>
-                        </option>
+                        <input
+                            type="text"
+                            class="input-form"
+                            value="<?php echo htmlspecialchars(cengi_curso_etiqueta($cursoBloqueado)); ?>"
+                            readonly
+                            disabled
+                        >
 
-                        <?php foreach ($cursos as $curso): ?>
-                            <option value="<?php echo (int) $curso['id']; ?>">
-                                <?php echo htmlspecialchars(cengi_curso_etiqueta($curso)); ?>
+                        <input type="hidden" name="curso_id" value="<?php echo (int) $cursoBloqueado['id']; ?>">
+
+                    <?php else: ?>
+
+                        <select
+                            name="curso_id"
+                            class="input-form"
+                            required
+                            <?php echo !$cursos ? 'disabled' : ''; ?>
+                        >
+
+                            <option value="">
+                                <?php echo $cursos ? 'Seleccione' : 'No hay cursos disponibles por el momento'; ?>
                             </option>
-                        <?php endforeach; ?>
 
-                    </select>
+                            <?php foreach ($cursos as $curso): ?>
+                                <option value="<?php echo (int) $curso['id']; ?>">
+                                    <?php echo htmlspecialchars(cengi_curso_etiqueta($curso)); ?>
+                                </option>
+                            <?php endforeach; ?>
+
+                        </select>
+
+                    <?php endif; ?>
 
                 </div>
 

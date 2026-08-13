@@ -9,11 +9,9 @@
 
 body {
   font-family: var(--font-family-base);
-  background-color: var(--surface);
-  background-image:
-    linear-gradient(to right, #ddecc8 1px, transparent 1px),
-    linear-gradient(to bottom, #ddecc8 1px, transparent 1px);
-  background-size: 20px 20px;
+  background: var(--lab-body-background);
+  background-size: var(--lab-body-background-size);
+  background-position: var(--lab-body-background-position);
   color: var(--text-main);
   min-height: 100vh;
 }

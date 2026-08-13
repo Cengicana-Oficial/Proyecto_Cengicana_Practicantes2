@@ -23,6 +23,11 @@ if (!$esAdmin) {
 $vista = strtolower(trim((string) ($_GET['vista'] ?? '')));
 $formato = strtolower(trim((string) ($_GET['format'] ?? '')));
 $busqueda = trim((string) ($_GET['q'] ?? ''));
+// Solo aplica a vista=curso_participantes: listado de participantes de UNA
+// edicion de curso especifica (el mismo curso que el usuario ya tiene abierto
+// en el modal "Ver participantes" de dashboard_ingenio.php), en vez del
+// listado general de todos los participantes del ingenio.
+$cursoIdFiltro = (int) ($_GET['curso_id'] ?? 0);
 
 // "csv" se acepta como alias legado del boton "Descargar Excel" (antes
 // generaba un CSV crudo vía fputcsv); ahora ambos generan el mismo archivo
@@ -32,13 +37,17 @@ if ($formato === 'csv') {
     $formato = 'excel';
 }
 
-if (!in_array($vista, ['participantes', 'cursos'], true)) {
+if (!in_array($vista, ['participantes', 'cursos', 'curso_participantes'], true)) {
     http_response_code(400);
     exit('Vista de exportación no válida.');
 }
 if (!in_array($formato, ['pdf', 'excel'], true)) {
     http_response_code(400);
     exit('Formato de exportación no válido.');
+}
+if ($vista === 'curso_participantes' && $cursoIdFiltro <= 0) {
+    http_response_code(400);
+    exit('Falta el curso a exportar.');
 }
 if ($ingenioId <= 0) {
     http_response_code(404);
@@ -51,6 +60,17 @@ $ingenio = $stmtIngenio->fetch(PDO::FETCH_ASSOC);
 if (!$ingenio) {
     http_response_code(404);
     exit('El ingenio no existe o no está disponible.');
+}
+
+$cursoFiltro = null;
+if ($vista === 'curso_participantes') {
+    $stmtCursoFiltro = $db->prepare('SELECT id, nombre_cursos FROM cursos WHERE id = ? LIMIT 1');
+    $stmtCursoFiltro->execute([$cursoIdFiltro]);
+    $cursoFiltro = $stmtCursoFiltro->fetch(PDO::FETCH_ASSOC);
+    if (!$cursoFiltro) {
+        http_response_code(404);
+        exit('El curso no existe.');
+    }
 }
 
 function cengi_dbi_export_numero($valor, $sufijo = '')
@@ -144,6 +164,47 @@ if ($vista === 'participantes') {
             cengi_dbi_export_fecha($r['ultima_capacitacion']),
         ];
     }
+} elseif ($vista === 'curso_participantes') {
+    // Listado de los participantes de ESTE ingenio inscritos en la edicion de
+    // curso $cursoIdFiltro: mismo alcance/COALESCE que la consulta AJAX
+    // "curso_detalle_id" del modal "Ver participantes" de dashboard_ingenio.php,
+    // para que el PDF/Excel coincida con lo que el usuario ve en el modal.
+    $titulo = 'Participantes de ' . $cursoFiltro['nombre_cursos'] . ' — ' . $ingenio['nombre_ingenios'];
+    $nombreArchivoBase = 'participantes_curso_' . $cursoIdFiltro . '_ingenio_' . $ingenioId;
+
+    $stmt = $db->prepare("
+        SELECT p.nombre_participantes, p.cui_participantes, p.puesto_participantes,
+            a.estado_asignaciones, cc.asistencia, cc.sesiones_asistidas, cc.evaluacion, cc.posevaluacion,
+            COALESCE(NULLIF(d.pdf_path, ''), NULLIF(cc.diploma, '')) AS diploma
+        FROM asignaciones a
+        INNER JOIN participantes p ON p.id = a.participantes_id
+        LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
+        LEFT JOIN (
+            SELECT asignacion_id, MAX(pdf_path) AS pdf_path
+            FROM diplomas WHERE tipo = 'curso' GROUP BY asignacion_id
+        ) d ON d.asignacion_id = a.id
+        WHERE a.cursos_id = ? AND p.ingenio_id = ?
+        ORDER BY p.nombre_participantes
+    ");
+    $stmt->execute([$cursoIdFiltro, $ingenioId]);
+    $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $encabezadoExcel = ['Participante', 'CUI', 'Puesto', 'Estado', 'Asistencia', 'Sesiones asistidas', 'Pre-evaluación', 'Post-evaluación', 'Diploma'];
+    $anchosExcel = [30, 16, 22, 12, 12, 16, 16, 16, 10];
+    $columnasPdf = [
+        ['Participante', 130, 28], ['CUI', 75, 16], ['Puesto', 90, 18], ['Estado', 55, 10],
+        ['Asist.', 45, 8], ['Sesiones', 50, 9], ['Pre-eval.', 50, 9], ['Post-eval.', 50, 9], ['Diploma', 45, 9],
+    ];
+
+    foreach ($registros as $r) {
+        $filas[] = [
+            $r['nombre_participantes'], $r['cui_participantes'], $r['puesto_participantes'],
+            (int) $r['estado_asignaciones'] === 1 ? 'Activo' : 'Inactivo',
+            cengi_dbi_export_numero($r['asistencia'], '%'), cengi_dbi_export_numero($r['sesiones_asistidas']),
+            cengi_dbi_export_numero($r['evaluacion'], ' pts'),
+            cengi_dbi_export_numero($r['posevaluacion'], ' pts'), $r['diploma'] ? 'Sí' : 'No',
+        ];
+    }
 } else {
     $titulo = 'Cursos de ' . $ingenio['nombre_ingenios'];
     $nombreArchivoBase = 'cursos_ingenio_' . $ingenioId;
@@ -154,6 +215,7 @@ if ($vista === 'participantes') {
             c.tipo AS modalidad, c.inicio, c.fin,
             COUNT(DISTINCT a.id) AS inscritos,
             AVG(CASE WHEN cc.asistencia REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.asistencia AS DECIMAL(6,2)) END) AS asistencia_prom,
+            AVG(cc.sesiones_asistidas) AS sesiones_asistidas_prom,
             AVG(CASE WHEN cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.posevaluacion AS DECIMAL(6,2)) END) AS eval_prom
         FROM cursos c
         INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
@@ -166,11 +228,12 @@ if ($vista === 'participantes') {
     $stmt->execute([$ingenioId]);
     $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $encabezadoExcel = ['Código', 'Curso', 'Categoría', 'Modalidad', 'Inicio', 'Fin', 'Inscritos', 'Asistencia', 'Evaluación final', 'Estado'];
-    $anchosExcel = [14, 32, 20, 16, 12, 12, 10, 12, 16, 14];
+    $encabezadoExcel = ['Código', 'Curso', 'Categoría', 'Modalidad', 'Inicio', 'Fin', 'Inscritos', 'Asistencia', 'Sesiones asistidas', 'Evaluación final', 'Estado'];
+    $anchosExcel = [14, 32, 20, 16, 12, 12, 10, 12, 16, 16, 14];
     $columnasPdf = [
-        ['Código', 55, 10], ['Curso', 150, 32], ['Categoría', 90, 18], ['Modalidad', 70, 14],
-        ['Inicio', 55, 10], ['Fin', 55, 10], ['Inscritos', 50, 8], ['Asist.', 45, 8], ['Eval.', 45, 8], ['Estado', 60, 12],
+        ['Código', 50, 10], ['Curso', 135, 30], ['Categoría', 85, 17], ['Modalidad', 65, 13],
+        ['Inicio', 50, 10], ['Fin', 50, 10], ['Inscritos', 45, 8], ['Asist.', 42, 8], ['Sesiones', 48, 9],
+        ['Eval.', 42, 8], ['Estado', 55, 11],
     ];
 
     foreach ($registros as $r) {
@@ -178,7 +241,8 @@ if ($vista === 'participantes') {
         $filas[] = [
             $codigo, $r['nombre_cursos'], $r['categoria'], $r['modalidad'] ?: 'Sin definir',
             cengi_dbi_export_fecha($r['inicio']), cengi_dbi_export_fecha($r['fin']), (string) (int) $r['inscritos'],
-            cengi_dbi_export_numero($r['asistencia_prom'], '%'), cengi_dbi_export_numero($r['eval_prom'], ' pts'),
+            cengi_dbi_export_numero($r['asistencia_prom'], '%'), cengi_dbi_export_numero($r['sesiones_asistidas_prom']),
+            cengi_dbi_export_numero($r['eval_prom'], ' pts'),
             cengi_dbi_estado_curso_export($r['inicio'], $r['fin']),
         ];
     }
@@ -240,7 +304,13 @@ function cengi_dbi_pdf_pagina(array $filas, array $columnas, $titulo, $subtitulo
     return $c;
 }
 
-$subtitulo = $vista === 'participantes' && $busqueda !== '' ? 'Búsqueda: ' . $busqueda : 'Ingenio: ' . $ingenio['nombre_ingenios'];
+if ($vista === 'participantes' && $busqueda !== '') {
+    $subtitulo = 'Búsqueda: ' . $busqueda;
+} elseif ($vista === 'curso_participantes') {
+    $subtitulo = 'Curso: ' . $cursoFiltro['nombre_cursos'] . ' · Ingenio: ' . $ingenio['nombre_ingenios'];
+} else {
+    $subtitulo = 'Ingenio: ' . $ingenio['nombre_ingenios'];
+}
 $grupos = $filas ? array_chunk($filas, 24) : [[]];
 $paginas = [];
 foreach ($grupos as $indice => $grupo) {

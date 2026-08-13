@@ -251,128 +251,131 @@ function eLotes($value)
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Listado de Lotes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="../css/listar_lotes.css">
 <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
 </head>
 
 <body>
-<nav>
-    <div class="nav-brand">
-        Laboratorio
-    </div>
-
-    <div class="nav-links">
-        <a href="../index.php" class="nav-link back">
-            &larr; Regresar
-        </a>
+<nav class="institution-header">
+    <div class="nav-brand">Laboratorio</div>
+    <div class="branding-zone" aria-label="Branding institucional">
+        <img
+            class="nav-logo"
+            src="../assets/cengicaña_sin_fondo.png"
+            alt="CENGICAÑA"
+        >
     </div>
 </nav>
 
 <main>
-    <div class="doc-header">
-        <div class="doc-header-left">
-            <div>
-                <div class="doc-title">
-                    Listado de Lotes
+    <div class="page-shell">
+        <section class="hero-admin">
+            <section class="panel">
+                <div class="panel-header">
+                    <div class="hero-copy">
+                        <a href="../index.php" class="back-link">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            <span>Regresar</span>
+                        </a>
+                        <span class="eyebrow">
+                            <i class="fa-solid fa-flask-vial"></i>
+                            <span>Gestión de lotes del módulo</span>
+                        </span>
+                        <h1>Listado de Lotes</h1>
+                        <p>Consulta de lotes registrados.</p>
+                    </div>
+
+                    <div class="stats-grid" aria-label="Resumen de lotes">
+                        <article class="stat-card total-lotes">
+                            <span class="stat-card-icon"><i class="fa-solid fa-boxes-stacked"></i></span>
+                            <div>
+                                <p class="stat-card-value"><?= count($lotes) ?></p>
+                                <p class="stat-card-label">Lotes visibles</p>
+                                <p class="stat-card-meta"><?= $limitarLotes ? 'Mostrando primeros' : 'Resultados' ?></p>
+                            </div>
+                        </article>
+                    </div>
                 </div>
-                <div class="doc-subtitle">
-                    Consulta de lotes registrados
-                </div>
-            </div>
-        </div>
-    </div>
+            </section>
+        </section>
 
-    <a href="../index.php" class="btn-regresar">
-        &larr; Regresar
-    </a>
+        <form class="toolbar" method="GET">
+            <label class="search-box" for="buscar">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="search" id="buscar" name="buscar" value="<?= eLotes($busquedaLote) ?>" placeholder="Ej. 20 o LT-2026-001">
+            </label>
 
-    <div class="total-lotes">
-        <?= $limitarLotes ? 'Mostrando primeros' : 'Resultados' ?>: <?= count($lotes) ?> lotes
-    </div>
-
-    <form class="lotes-filters" method="GET">
-        <div class="filters-heading">
-            <span>Filtros</span>
-            <p>Busca un lote exacto o filtra por estado.</p>
-        </div>
-
-        <div class="filter-field search-field">
-            <label for="buscar">Buscar lote exacto</label>
-            <input
-                id="buscar"
-                type="search"
-                name="buscar"
-                value="<?= eLotes($busquedaLote) ?>"
-                placeholder="Ej. 20 o LT-2026-001">
-        </div>
-
-        <div class="filter-field">
-            <label for="estado">Estado</label>
-            <select id="estado" name="estado" onchange="this.form.submit()">
-                <option value="" <?= $estadoFiltro === '' ? 'selected' : '' ?>>Todos</option>
+            <select id="estado" name="estado" class="filter-select" onchange="this.form.submit()">
+                <option value="" <?= $estadoFiltro === '' ? 'selected' : '' ?>>Todos los estados</option>
                 <option value="pendiente" <?= $estadoFiltro === 'pendiente' ? 'selected' : '' ?>>Pendiente</option>
                 <option value="en_proceso" <?= $estadoFiltro === 'en_proceso' ? 'selected' : '' ?>>En proceso</option>
                 <option value="revision" <?= $estadoFiltro === 'revision' ? 'selected' : '' ?>>En revisión</option>
                 <option value="aprobado" <?= $estadoFiltro === 'aprobado' ? 'selected' : '' ?>>Aprobado</option>
             </select>
+
+            <div class="toolbar-actions">
+                <button type="submit" class="search-button">Buscar</button>
+
+                <?php if ($busquedaLote !== '' || $estadoFiltro !== ''): ?>
+                    <a href="listar_lotes.php" class="btn-clear">Limpiar</a>
+                <?php endif; ?>
+            </div>
+        </form>
+
+        <div class="table-area">
+            <div class="table-shell">
+                <table class="lotes-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Número de Laboratorio</th>
+                            <th>Código de Lote</th>
+                            <th>Estado</th>
+                            <th>PDF</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($lotes)): ?>
+                        <tr>
+                            <td colspan="5" class="empty-cell">No se encontraron lotes con los filtros seleccionados.</td>
+                        </tr>
+                    <?php endif; ?>
+                    <?php foreach ($lotes as $lote): ?>
+                        <?php
+                            $pdfData = [
+                                'id' => (int) $lote['id_lote'],
+                                'codigo_lote' => $lote['codigo_lote'],
+                                'numeros_laboratorio' => $lote['numeros_laboratorio'],
+                                'solicitudes' => $lote['solicitudes'],
+                            ];
+                        ?>
+                        <tr>
+                            <td><?= (int) $lote['id_lote'] ?></td>
+                            <td><?= eLotes($pdfData['numeros_laboratorio']) ?></td>
+                            <td><?= eLotes($pdfData['codigo_lote']) ?></td>
+                            <td>
+                                <span class="estado-badge <?= eLotes($lote['estado_lote']['clase']) ?>">
+                                    <?= eLotes($lote['estado_lote']['texto']) ?>
+                                </span>
+                            </td>
+                            <td>
+                                <button
+                                    class="btn-pdf"
+                                    type="button"
+                                    data-lote='<?= eLotes(json_encode($pdfData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?>'>
+                                    Descargar PDF
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
-
-        <div class="filter-actions">
-            <button type="submit">Buscar</button>
-
-            <?php if ($busquedaLote !== '' || $estadoFiltro !== ''): ?>
-                <a href="listar_lotes.php">Limpiar</a>
-            <?php endif; ?>
-        </div>
-    </form>
-
-    <div class="table-container">
-        <table class="lotes-table">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Número de Laboratorio</th>
-                    <th>Código de Lote</th>
-                    <th>Estado</th>
-                    <th>PDF</th>
-                </tr>
-            </thead>
-            <tbody>
-            <?php if (empty($lotes)): ?>
-                <tr>
-                    <td colspan="5" class="empty-cell">No se encontraron lotes con los filtros seleccionados.</td>
-                </tr>
-            <?php endif; ?>
-            <?php foreach ($lotes as $lote): ?>
-                <?php
-                    $pdfData = [
-                        'id' => (int) $lote['id_lote'],
-                        'codigo_lote' => $lote['codigo_lote'],
-                        'numeros_laboratorio' => $lote['numeros_laboratorio'],
-                        'solicitudes' => $lote['solicitudes'],
-                    ];
-                ?>
-                <tr>
-                    <td><?= (int) $lote['id_lote'] ?></td>
-                    <td><?= eLotes($pdfData['numeros_laboratorio']) ?></td>
-                    <td><?= eLotes($pdfData['codigo_lote']) ?></td>
-                    <td>
-                        <span class="estado-badge <?= eLotes($lote['estado_lote']['clase']) ?>">
-                            <?= eLotes($lote['estado_lote']['texto']) ?>
-                        </span>
-                    </td>
-                    <td>
-                        <button
-                            class="btn-pdf"
-                            type="button"
-                            data-lote='<?= eLotes(json_encode($pdfData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?>'>
-                            Descargar PDF
-                        </button>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
     </div>
 </main>
 

@@ -276,6 +276,74 @@ function cengi_normalizar_url_archivo($valor)
 }
 
 /**
+ * Sanitiza un segmento individual (curso, año, nombre de participante/evento)
+ * para usarlo dentro de un nombre de archivo descargable: quita acentos via
+ * iconv('UTF-8', 'ASCII//TRANSLIT', ...) (con fallback silencioso si iconv no
+ * transliteró nada, p. ej. por locale faltante en el contenedor), reemplaza
+ * cualquier caracter que no sea alfanumerico por "_" (colapsando corridas de
+ * caracteres no alfanumericos en un solo "_"), y recorta "_" en los extremos.
+ * Devuelve '' si, tras sanitizar, no queda ningun caracter util.
+ */
+function cengi_diploma_sanitizar_segmento($valor)
+{
+    $valor = trim((string) ($valor ?? ''));
+    if ($valor === '') {
+        return '';
+    }
+
+    if (function_exists('iconv')) {
+        $transliterado = @iconv('UTF-8', 'ASCII//TRANSLIT', $valor);
+        if ($transliterado !== false && trim($transliterado) !== '') {
+            $valor = $transliterado;
+        }
+    }
+
+    $valor = preg_replace('/[^A-Za-z0-9]+/', '_', $valor);
+    $valor = trim((string) $valor, '_');
+
+    return $valor;
+}
+
+/**
+ * Nombre de archivo formateado para la descarga de un diploma/constancia:
+ * "NombreCurso_Anio_NombreParticipante.pdf" (o el equivalente con nombre de
+ * evento/invitado). Es la unica fuente de verdad del formato de nombre de
+ * archivo de diplomas en toda la plataforma -- tanto la descarga individual
+ * (descargar_diploma.php) como el ZIP por curso
+ * (descargar_diplomas_curso_zip.php) pasan por aqui, para no duplicar la
+ * logica de sanitizacion/armado del nombre en dos sitios.
+ *
+ * Si $anio viene vacio o 0 (curso/evento sin fecha registrada), ese segmento
+ * se omite en vez de dejar un "_" doble en el nombre resultante.
+ */
+function cengi_diploma_nombre_archivo($nombreCurso, $anio, $nombreParticipante, $extension = 'pdf')
+{
+    $segmentos = [];
+
+    $curso = cengi_diploma_sanitizar_segmento($nombreCurso);
+    if ($curso !== '') {
+        $segmentos[] = $curso;
+    }
+
+    $anio = (int) $anio;
+    if ($anio > 0) {
+        $segmentos[] = (string) $anio;
+    }
+
+    $participante = cengi_diploma_sanitizar_segmento($nombreParticipante);
+    if ($participante !== '') {
+        $segmentos[] = $participante;
+    }
+
+    $nombreBase = $segmentos ? implode('_', $segmentos) : 'diploma';
+
+    $extension = preg_replace('/[^a-zA-Z0-9]/', '', (string) $extension);
+    $extension = $extension !== '' ? strtolower($extension) : 'pdf';
+
+    return $nombreBase . '.' . $extension;
+}
+
+/**
  * Conexion PDO hacia usuarios_menu, usada unicamente por las pantallas de
  * Cengicursos que necesitan reutilizar los helpers de PDO de
  * login/config/permisos_roles.php (roles.php). El resto del modulo sigue
@@ -314,4 +382,103 @@ function conectar_usuarios_menu_pdo()
         error_log("Error MySQL (usuarios_menu/PDO) hacia {$host}:{$port}/{$dbname}. Detalle: " . $e->getMessage());
         die('No fue posible conectar a la base de datos. Intente mas tarde.');
     }
+}
+
+/**
+ * Fragmento SQL reutilizable: "el curso con alias $aliasCurso tiene al menos
+ * un participante inscrito (via asignaciones) cuyo ingenio_id coincide con
+ * $ingenioId". Se usa para aplicar el scoping por ingenio del rol
+ * "Administrador de ingenio" (ver cengi_es_administrador_ingenio() en
+ * revisar_permisos.php) tanto en instructores.php (listado/contadores) como
+ * en los 3 reportes PDF de instructor (informe_instructor_pdf.php,
+ * informe_instructor_curso_pdf.php, informe_instructor_modulo_pdf.php), sin
+ * duplicar la logica SQL en cada archivo.
+ *
+ * Usa un sufijo unico para los alias internos (asignaciones/participantes)
+ * para poder repetirse varias veces dentro de la misma consulta sin
+ * colisionar. Empuja el parametro del ingenio_id a $params en el mismo orden
+ * en que aparece en el SQL resultante, para que coincida con
+ * execute($params) mas adelante.
+ */
+function cengi_frag_curso_participante_ingenio($aliasCurso, $sufijo, array &$params, $ingenioId)
+{
+    $params[] = $ingenioId;
+    $aliasCurso = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $aliasCurso);
+    $sufijo = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $sufijo);
+
+    return "EXISTS (
+        SELECT 1 FROM asignaciones a_{$sufijo}
+        INNER JOIN participantes p_{$sufijo} ON p_{$sufijo}.id = a_{$sufijo}.participantes_id
+        WHERE a_{$sufijo}.cursos_id = {$aliasCurso}.id AND p_{$sufijo}.ingenio_id = ?
+    )";
+}
+
+/**
+ * Version standalone de cengi_frag_curso_participante_ingenio(): true si el
+ * curso $cursoId tiene al menos un participante inscrito del ingenio
+ * $ingenioId. Se usa en los reportes PDF de curso/modulo para el guard 403
+ * del "Administrador de ingenio" cuando el curso_id ya se conoce como
+ * escalar (no hace falta el alias de una consulta mas grande).
+ */
+function cengi_curso_tiene_participante_ingenio(PDO $db, $cursoId, $ingenioId)
+{
+    $ingenioId = (int) $ingenioId;
+    if ($ingenioId <= 0) {
+        return false;
+    }
+
+    $stmt = $db->prepare("
+        SELECT EXISTS (
+            SELECT 1 FROM asignaciones a
+            INNER JOIN participantes p ON p.id = a.participantes_id
+            WHERE a.cursos_id = ? AND p.ingenio_id = ?
+        ) AS tiene_participante
+    ");
+    $stmt->execute([(int) $cursoId, $ingenioId]);
+    $fila = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $fila && (int) $fila['tiene_participante'] === 1;
+}
+
+/**
+ * True si el instructor $instructorId tiene al menos un curso -- como
+ * instructor principal (cursos.instructor_id) o como co-instructor de un
+ * modulo (curso_modulo_instructores) -- con un participante inscrito del
+ * ingenio $ingenioId. Usado por informe_instructor_pdf.php (el unico de los
+ * 3 reportes PDF que recibe solo un instructor_id, sin curso/modulo
+ * especifico) para decidir si el "Administrador de ingenio" puede ver ese
+ * informe, evitando que enumere ?id= de instructores fuera de su alcance.
+ */
+function cengi_instructor_tiene_curso_relevante_ingenio(PDO $db, $instructorId, $ingenioId)
+{
+    $ingenioId = (int) $ingenioId;
+    if ($ingenioId <= 0) {
+        return false;
+    }
+
+    $paramsPrincipal = [];
+    $fragPrincipal = cengi_frag_curso_participante_ingenio('c_rel', 'relp', $paramsPrincipal, $ingenioId);
+    $paramsCoModulo = [];
+    $fragCoModulo = cengi_frag_curso_participante_ingenio('c_rel2', 'relc', $paramsCoModulo, $ingenioId);
+
+    $stmt = $db->prepare("
+        SELECT (
+            EXISTS (
+                SELECT 1 FROM cursos c_rel
+                WHERE c_rel.instructor_id = ?
+                AND {$fragPrincipal}
+            )
+            OR EXISTS (
+                SELECT 1 FROM curso_modulo_instructores cmi_rel
+                INNER JOIN curso_modulos cm_rel ON cm_rel.id = cmi_rel.curso_modulo_id
+                INNER JOIN cursos c_rel2 ON c_rel2.id = cm_rel.curso_id
+                WHERE cmi_rel.instructor_id = ?
+                AND {$fragCoModulo}
+            )
+        ) AS es_relevante
+    ");
+    $stmt->execute(array_merge([(int) $instructorId], $paramsPrincipal, [(int) $instructorId], $paramsCoModulo));
+    $fila = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $fila && (int) $fila['es_relevante'] === 1;
 }

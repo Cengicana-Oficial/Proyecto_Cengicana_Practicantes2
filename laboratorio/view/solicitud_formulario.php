@@ -297,7 +297,7 @@ try {
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 </head>
 <body>
-   <link rel="stylesheet" href="../css/solicitud_formulario.css?v=5">
+   <link rel="stylesheet" href="../css/solicitud_formulario.css?v=7">
 
 <!-- NAV -->
 <nav>
@@ -306,11 +306,6 @@ try {
     <a class="nav-link back" href="../index.php" title="Volver al inicio">Inicio</a>
     <a class="nav-link back" href="../index.php" title="Volver al menu principal">Cambiar de Formulario</a>
     <a class="nav-link active" href="#">Análisis Nuevos</a>
-  </div>
-  <div class="nav-icons">
-    <span class="material-symbols-outlined" title="Notificaciones">notifications</span>
-    <span class="material-symbols-outlined" title="Configuración">settings</span>
-    <span class="material-symbols-outlined" title="Cuenta">account_circle</span>
   </div>
 </nav>
 
@@ -478,7 +473,13 @@ try {
         <input id="n_laboratorio" name="numero_laboratorio" type="hidden"/>
     </div>
 </div>  <!-- ANÁLISIS SOLICITADOS -->
-  <div class="section-title">Análisis solicitados</div>
+  <div class="section-head">
+    <div class="section-title">Análisis solicitados</div>
+    <label class="select-all-analisis" for="select-all-analisis">
+      <input type="checkbox" id="select-all-analisis" />
+      <span>Seleccionar todos los análisis</span>
+    </label>
+  </div>
   <div class="analisis-wrap">
     <table class="analisis-table">
       <thead>
@@ -547,26 +548,32 @@ try {
   </form>
 </main>
 <!-- FAB -->
-  <div class="fab-group">
-    <button type="button" class="fab secondary" id="btn-generar-pdf" title="Generar PDF">
-      <span class="fab-icon material-symbols-outlined">picture_as_pdf</span>
-      <span class="fab-text">
-        <span class="fab-label">Generar PDF</span>
-        <span class="fab-description">Descarga y envía el PDF</span>
-      </span>
-    </button>
-    <button type="button" class="fab primary" id="btn-finalizar-solicitud" title="Finalizar solicitud">
-      <span class="fab-icon material-symbols-outlined">send</span>
-      <span class="fab-text">
-        <span class="fab-label">Finalizar solicitud</span>
-        <span class="fab-description">Genera y envía antes de guardar</span>
-      </span>
-    </button>
-  </div>
+  <aside class="actions-panel" aria-label="Acciones de solicitud">
+    <div class="actions-rail">
+      <span class="fab-icon material-symbols-outlined">add</span>
+      <span class="actions-label">Acciones</span>
+    </div>
+    <div class="actions-stack">
+      <button type="button" class="fab secondary" id="btn-generar-pdf">
+        <span class="fab-icon material-symbols-outlined">picture_as_pdf</span>
+        <span class="fab-text">
+          <span class="fab-label">Generar PDF</span>
+          <span class="fab-description">Descarga y envía el PDF</span>
+        </span>
+      </button>
+      <button type="button" class="fab primary" id="btn-finalizar-solicitud">
+        <span class="fab-icon material-symbols-outlined">send</span>
+        <span class="fab-text">
+          <span class="fab-label">Finalizar solicitud</span>
+          <span class="fab-description">Genera y envía antes de guardar</span>
+        </span>
+      </button>
+    </div>
+  </aside>
 <script type="application/json" id="solicitudes-db"><?php echo json_encode($solicitudesDb, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script type="application/json" id="correlativos-db"><?php echo json_encode($correlativosDb, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script type="application/json" id="analisis-catalogo"><?php echo json_encode($catalogoAnalisis, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-<script src="../js/solicitud_formulario.js?v=6"></script>
+<script src="../js/solicitud_formulario.js?v=7"></script>
 </body>
 </html>
