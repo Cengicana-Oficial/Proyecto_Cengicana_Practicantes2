@@ -2,11 +2,7 @@
 require_once __DIR__ . '/../../includes/auth.php';
 lab_require_analysis_access('suelos.humedad_residual');
 
-<<<<<<< HEAD
-$doc_elemento = 'Humedad residual';
-=======
 $doc_elemento = 'Humedad Residual';
->>>>>>> ca7cd2cf78e3923d85607d59567ef9e47c102fb5
 $doc_tipo = 'Suelos';
 $doc_codigo = 'LAB-FS-042';
 $doc_fecha_doc = '2024-03-01';
@@ -28,11 +24,7 @@ $resultado = $resultado ?? [];
 <body>
 <div class="page-wrap">
     <a class="back-link" href="../../view/labc_index.php">Volver</a>
-<<<<<<< HEAD
-    <h2>Humedad residual</h2>
-=======
     <h2>Humedad Residual</h2>
->>>>>>> ca7cd2cf78e3923d85607d59567ef9e47c102fb5
 
     <?php if (!empty($resultado)): ?>
         <div class="alerta <?= !empty($resultado['exito']) ? 'exito' : 'error' ?>">

@@ -19,6 +19,11 @@ $puedeDiploma = cengi_puede_subir_diploma();
 $busqueda = trim((string) ($_GET['q'] ?? ''));
 $estado = trim((string) ($_GET['estado'] ?? 'activo'));
 $cursoId = (int) ($_GET['curso_id'] ?? 0);
+
+// Un usuario no admin nunca debe poder ver inactivos, aunque manipule la URL.
+if (!cengi_ve_todo_por_rol_o_ingenio() && !in_array($estado, ['activo', 'aprobado'], true)) {
+    $estado = 'activo';
+}
 $mensaje = trim((string) ($_GET['mensaje'] ?? ''));
 $error = trim((string) ($_GET['error'] ?? ''));
 
@@ -234,10 +239,14 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
             <div class="cengi-participants-state-select">
                 <label for="estado">Estado</label>
                 <select class="form-control" name="estado" id="estado">
-                    <option value="todos" <?php echo $estado === 'todos' ? 'selected' : ''; ?>>Todos</option>
+                    <?php if (cengi_ve_todo_por_rol_o_ingenio()): ?>
+                        <option value="todos" <?php echo $estado === 'todos' ? 'selected' : ''; ?>>Todos</option>
+                    <?php endif; ?>
                     <option value="activo" <?php echo $estado === 'activo' ? 'selected' : ''; ?>>Activos</option>
                     <option value="aprobado" <?php echo $estado === 'aprobado' ? 'selected' : ''; ?>>Aprobados</option>
-                    <option value="inactivo" <?php echo $estado === 'inactivo' ? 'selected' : ''; ?>>Inactivos</option>
+                    <?php if (cengi_ve_todo_por_rol_o_ingenio()): ?>
+                        <option value="inactivo" <?php echo $estado === 'inactivo' ? 'selected' : ''; ?>>Inactivos</option>
+                    <?php endif; ?>
                 </select>
             </div>
             <button type="submit" class="btn btn-default"><span class="glyphicon glyphicon-filter"></span> Filtrar</button>
