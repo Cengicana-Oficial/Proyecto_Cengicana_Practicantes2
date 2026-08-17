@@ -42,7 +42,7 @@ if ($ingenioId > 0) {
         SELECT COUNT(DISTINCT p.id) AS total
         FROM participantes p
         INNER JOIN asignaciones a ON a.participantes_id = p.id AND a.estado_asignaciones = 1
-        WHERE p.ingenio_id = ?
+        WHERE p.ingenio_id = ? AND p.estado_participantes = 1
     ");
     $stmt->execute([$ingenioId]);
     $kpi['colaboradores'] = (int) $stmt->fetchColumn();
@@ -51,7 +51,7 @@ if ($ingenioId > 0) {
         SELECT COUNT(DISTINCT c.id) AS total
         FROM cursos c
         INNER JOIN asignaciones a ON a.cursos_id = c.id AND a.estado_asignaciones = 1
-        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ?
+        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ? AND p.estado_participantes = 1
         WHERE c.ingenio_id = ? OR p.ingenio_id = ?
     ");
     $stmt->execute([$ingenioId, $ingenioId, $ingenioId]);
@@ -65,7 +65,7 @@ if ($ingenioId > 0) {
         FROM asignaciones a
         INNER JOIN participantes p ON p.id = a.participantes_id
         LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
-        WHERE p.ingenio_id = ?
+        WHERE p.ingenio_id = ? AND p.estado_participantes = 1 AND a.estado_asignaciones = 1
     ");
     $stmt->execute([$ingenioId]);
     $fila = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -81,8 +81,8 @@ if ($ingenioId > 0) {
             AVG(CASE WHEN cc.asistencia REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.asistencia AS DECIMAL(6,2)) END) AS asistencia_prom,
             AVG(CASE WHEN cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.posevaluacion AS DECIMAL(6,2)) END) AS eval_prom
         FROM cursos c
-        INNER JOIN asignaciones a ON a.cursos_id = c.id
-        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ?
+        INNER JOIN asignaciones a ON a.cursos_id = c.id AND a.estado_asignaciones = 1
+        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ? AND p.estado_participantes = 1
         LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
         GROUP BY c.id, c.nombre_cursos, c.inicio, c.fin
         ORDER BY c.inicio DESC
@@ -94,7 +94,7 @@ if ($ingenioId > 0) {
         SELECT YEAR(a.creado) AS anio, COUNT(DISTINCT a.participantes_id) AS total
         FROM asignaciones a
         INNER JOIN participantes p ON p.id = a.participantes_id
-        WHERE p.ingenio_id = ? AND a.creado IS NOT NULL
+        WHERE p.ingenio_id = ? AND a.creado IS NOT NULL AND p.estado_participantes = 1 AND a.estado_asignaciones = 1
         GROUP BY YEAR(a.creado)
         ORDER BY anio
     ");
@@ -108,8 +108,8 @@ if ($ingenioId > 0) {
         SELECT ca.descripcion_categorias_cursos AS categoria, COUNT(DISTINCT c.id) AS total
         FROM cursos c
         INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
-        INNER JOIN asignaciones a ON a.cursos_id = c.id
-        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ?
+        INNER JOIN asignaciones a ON a.cursos_id = c.id AND a.estado_asignaciones = 1
+        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ? AND p.estado_participantes = 1
         GROUP BY ca.descripcion_categorias_cursos
         ORDER BY total DESC
     ");

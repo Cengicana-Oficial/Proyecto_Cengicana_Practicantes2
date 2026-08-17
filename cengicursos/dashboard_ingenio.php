@@ -200,7 +200,7 @@ if ($cursoDetalleId > 0) {
             SELECT asignacion_id, MAX(pdf_path) AS pdf_path, MAX(codigo_unico) AS codigo_unico
             FROM diplomas WHERE tipo = 'curso' GROUP BY asignacion_id
         ) d ON d.asignacion_id = a.id
-        WHERE a.cursos_id = ? AND p.ingenio_id = ?
+        WHERE a.cursos_id = ? AND p.ingenio_id = ? AND p.estado_participantes = 1 AND a.estado_asignaciones = 1
         ORDER BY p.nombre_participantes");
     $stmtParticipantesCurso->execute([$cursoDetalleId, $ingenioId]);
     $participantesCurso = $stmtParticipantesCurso->fetchAll(PDO::FETCH_ASSOC);
@@ -242,7 +242,7 @@ if ($ingenioId > 0) {
         SELECT COUNT(DISTINCT c.id)
         FROM cursos c
         INNER JOIN asignaciones a ON a.cursos_id = c.id AND a.estado_asignaciones = 1
-        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ?
+        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ? AND p.estado_participantes = 1
         WHERE (c.inicio IS NULL OR c.inicio <= CURDATE()) AND (c.fin IS NULL OR c.fin >= CURDATE())
     ");
     $stmt->execute([$ingenioId]);
@@ -252,7 +252,7 @@ if ($ingenioId > 0) {
         SELECT COUNT(DISTINCT c.id)
         FROM cursos c
         INNER JOIN asignaciones a ON a.cursos_id = c.id AND a.estado_asignaciones = 1
-        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ?
+        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ? AND p.estado_participantes = 1
         WHERE c.fin IS NOT NULL AND c.fin < CURDATE()
     ");
     $stmt->execute([$ingenioId]);
@@ -263,7 +263,7 @@ if ($ingenioId > 0) {
         FROM asignaciones a
         INNER JOIN participantes p ON p.id = a.participantes_id
         LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
-        WHERE p.ingenio_id = ?
+        WHERE p.ingenio_id = ? AND p.estado_participantes = 1 AND a.estado_asignaciones = 1
     ");
     $stmt->execute([$ingenioId]);
     $asistenciaFila = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -272,9 +272,10 @@ if ($ingenioId > 0) {
     $stmt = $db->prepare("
         SELECT COUNT(DISTINCT CASE WHEN COALESCE(NULLIF(d.pdf_path, ''), NULLIF(cc.diploma, '')) IS NOT NULL THEN a.id END)
         FROM asignaciones a
-        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ?
+        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ? AND p.estado_participantes = 1
         LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
         LEFT JOIN diplomas d ON d.tipo = 'curso' AND d.asignacion_id = a.id
+        WHERE a.estado_asignaciones = 1
     ");
     $stmt->execute([$ingenioId]);
     $kpi['diplomas'] = (int) $stmt->fetchColumn();
@@ -283,7 +284,7 @@ if ($ingenioId > 0) {
         SELECT YEAR(a.creado) AS anio, COUNT(DISTINCT a.participantes_id) AS total
         FROM asignaciones a
         INNER JOIN participantes p ON p.id = a.participantes_id
-        WHERE p.ingenio_id = ? AND a.creado IS NOT NULL
+        WHERE p.ingenio_id = ? AND a.creado IS NOT NULL AND p.estado_participantes = 1 AND a.estado_asignaciones = 1
         GROUP BY YEAR(a.creado)
         ORDER BY anio
     ");
@@ -297,8 +298,8 @@ if ($ingenioId > 0) {
         SELECT ca.descripcion_categorias_cursos AS categoria, COUNT(DISTINCT c.id) AS total
         FROM cursos c
         INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
-        INNER JOIN asignaciones a ON a.cursos_id = c.id
-        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ?
+        INNER JOIN asignaciones a ON a.cursos_id = c.id AND a.estado_asignaciones = 1
+        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ? AND p.estado_participantes = 1
         GROUP BY ca.descripcion_categorias_cursos
         ORDER BY total DESC
     ");
@@ -318,8 +319,8 @@ if ($ingenioId > 0) {
             AVG(CASE WHEN cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.posevaluacion AS DECIMAL(6,2)) END) AS eval_prom
         FROM cursos c
         INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
-        INNER JOIN asignaciones a ON a.cursos_id = c.id
-        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ?
+        INNER JOIN asignaciones a ON a.cursos_id = c.id AND a.estado_asignaciones = 1
+        INNER JOIN participantes p ON p.id = a.participantes_id AND p.ingenio_id = ? AND p.estado_participantes = 1
         LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
         GROUP BY c.id, c.codigo_curso, c.nombre_cursos, ca.descripcion_categorias_cursos, c.tipo, c.inicio, c.fin
         ORDER BY c.inicio DESC, c.nombre_cursos
@@ -327,7 +328,7 @@ if ($ingenioId > 0) {
     $stmtCursos->execute([$ingenioId]);
     $cursosIngenio = $stmtCursos->fetchAll(PDO::FETCH_ASSOC);
 
-    $condicionesPart = ['p.ingenio_id = ?'];
+    $condicionesPart = ['p.ingenio_id = ?', 'p.estado_participantes = 1'];
     $paramsPart = [$ingenioId];
     if ($busqueda !== '') {
         $condicionesPart[] = '(p.nombre_participantes LIKE ? OR p.cui_participantes LIKE ? OR p.area_participantes LIKE ? OR p.correo_participantes LIKE ? OR p.grado_academico_participantes LIKE ? OR p.telefono_participantes LIKE ?)';
