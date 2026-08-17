@@ -1,4 +1,17 @@
 <?php
+// Bufferiza toda la salida desde el inicio del script (antes de cualquier
+// require/consulta) para que un warning/notice/deprecated accidental de PHP
+// (p. ej. algo que dispare error de PHP 8.2, con display_errors=On, que es
+// el default de esta imagen de Docker por no traer un php.ini explicito) no
+// se imprima como texto plano ANTES de los header() de
+// cengi_export_enviar_pdf()/cengi_export_enviar_excel(). Sin este buffer, ese
+// texto rompe el Content-Type (el header() falla con "headers already sent")
+// y el navegador termina mostrando el PDF/Excel como texto plano en vez de
+// descargarlo -- el mismo bug ya documentado y mitigado para el caso de Excel
+// en cengi_export_enviar_excel() (classes/export_helpers.php), aplicado aqui
+// a todo el script para cubrir tambien la ruta de PDF armado a mano.
+ob_start();
+
 require_once __DIR__ . '/revisar_permisos.php';
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/classes/export_helpers.php';
