@@ -102,6 +102,21 @@ function sembrar_permisos_base(PDO $conn)
         'laboratorio.documentos.gestionar' => 'Permite gestionar los documentos (boletas/informes) de Laboratorio',
         'laboratorio.firma.gestionar' => 'Permite gestionar la firma electronica de documentos de Laboratorio',
         'laboratorio.informes.ver' => 'Permite ver el buscador de informes por lote y los informes generados de Laboratorio',
+        // Permisos faltantes que ya usaba el motor propio de laboratorio
+        // (lab_all_permissions()) pero que no estaban sembrados en la tabla
+        // central de permisos; se agregan aqui para que rol_permiso sea la
+        // unica fuente de verdad del modulo Laboratorio.
+        'laboratorio.acceder' => 'Permite acceder al modulo de Laboratorio',
+        'laboratorio.solicitudes.ver' => 'Permite ver las solicitudes de analisis de Laboratorio',
+        'laboratorio.solicitudes.editar' => 'Permite editar solicitudes de analisis de Laboratorio',
+        'laboratorio.analisis.ver' => 'Permite ver los analisis registrados en Laboratorio',
+        'laboratorio.analisis.crear' => 'Permite crear nuevos analisis en Laboratorio',
+        'laboratorio.analisis.editar' => 'Permite editar analisis en Laboratorio',
+        'laboratorio.analisis.editar_finalizado' => 'Permite editar analisis ya finalizados en Laboratorio',
+        'laboratorio.blanco_control.gestionar' => 'Permite gestionar blancos y controles dentro del LABC',
+        'laboratorio.usuarios.gestionar' => 'Permite gestionar los usuarios del modulo Laboratorio',
+        'laboratorio.roles.gestionar' => 'Permite gestionar roles y permisos de Laboratorio',
+        'laboratorio.configuracion.gestionar' => 'Permite gestionar la configuracion general de Laboratorio',
     ];
 
     $stmt = $conn->prepare("
@@ -192,12 +207,12 @@ function titulo_corto_grupo_permiso($grupo)
 {
     $mapa = [
         'Permisos de visitas' => 'Visitas',
-        'Permisos de cursos' => 'Cursos',
+        'Permisos de cursos' => 'Cengicursos',
         'Permisos de solicitudes internas' => 'Solicitudes internas',
-        'Permisos de laboratorio' => 'Laboratorio',
+        'Permisos de laboratorio' => 'Cengilabs',
         'Permisos de pagos' => 'Pagos',
-        'Permisos de usuarios y accesos' => 'Usuarios y accesos',
-        'Permisos generales' => 'Generales',
+        'Permisos de usuarios y accesos' => 'General',
+        'Permisos generales' => 'General',
     ];
 
     return $mapa[$grupo] ?? $grupo;
@@ -291,6 +306,17 @@ function etiqueta_permiso($nombrePermiso)
         'laboratorio.documentos.gestionar' => 'Gestionar documentos (PDF)',
         'laboratorio.firma.gestionar' => 'Gestionar firma electronica',
         'laboratorio.informes.ver' => 'Ver informes',
+        'laboratorio.acceder' => 'Acceder al modulo',
+        'laboratorio.solicitudes.ver' => 'Ver solicitudes',
+        'laboratorio.solicitudes.editar' => 'Editar solicitudes',
+        'laboratorio.analisis.ver' => 'Ver analisis',
+        'laboratorio.analisis.crear' => 'Crear analisis',
+        'laboratorio.analisis.editar' => 'Editar analisis',
+        'laboratorio.analisis.editar_finalizado' => 'Editar analisis finalizados',
+        'laboratorio.blanco_control.gestionar' => 'Gestionar blancos y controles',
+        'laboratorio.usuarios.gestionar' => 'Gestionar usuarios',
+        'laboratorio.roles.gestionar' => 'Gestionar roles y permisos',
+        'laboratorio.configuracion.gestionar' => 'Gestionar configuracion',
     ];
 
     if (isset($mapa[$nombrePermiso])) {

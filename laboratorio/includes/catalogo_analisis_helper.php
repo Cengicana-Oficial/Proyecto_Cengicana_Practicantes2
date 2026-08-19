@@ -158,11 +158,37 @@ if (!function_exists('labCatalogoAnalisisColumnExists')) {
 if (!function_exists('labCatalogoAnalisisAsegurarEsquema')) {
     function labCatalogoAnalisisAsegurarEsquema(PDO $conexion): void
     {
-        if (!labCatalogoAnalisisColumnExists($conexion, 'tipo_analisis', 'activo')) {
-            $conexion->exec("ALTER TABLE tipo_analisis ADD COLUMN activo TINYINT(1) NOT NULL DEFAULT 1 AFTER nombre");
+        static $esquemaAsegurado = false;
+        if ($esquemaAsegurado) {
+            return;
+        }
+
+        $columnas = [
+            'activo' => 'TINYINT(1) NOT NULL DEFAULT 1 AFTER nombre',
+            'metodo' => 'VARCHAR(255) NULL AFTER activo',
+            'norma' => 'VARCHAR(255) NULL AFTER metodo',
+            'equipo_default' => 'VARCHAR(255) NULL AFTER norma',
+            'unidad' => 'VARCHAR(80) NULL AFTER equipo_default',
+            'limite_min' => 'DECIMAL(18,6) NULL AFTER unidad',
+            'limite_max' => 'DECIMAL(18,6) NULL AFTER limite_min',
+            'tiempo_estimado_min' => 'INT NULL AFTER limite_max',
+        ];
+
+        foreach ($columnas as $columna => $definicion) {
+            if (!labCatalogoAnalisisColumnExists($conexion, 'tipo_analisis', $columna)) {
+                try {
+                    $conexion->exec("ALTER TABLE tipo_analisis ADD COLUMN {$columna} {$definicion}");
+                } catch (PDOException $e) {
+                    $codigoMysql = (int) ($e->errorInfo[1] ?? 0);
+                    if ($codigoMysql !== 1060) {
+                        throw $e;
+                    }
+                }
+            }
         }
 
         $conexion->exec("UPDATE tipo_analisis SET activo = 1 WHERE activo IS NULL");
+        $esquemaAsegurado = true;
     }
 }
 
@@ -210,6 +236,13 @@ if (!function_exists('labCatalogoAnalisisFilas')) {
                 ta.id_tipo_muestra,
                 ta.nombre,
                 COALESCE(ta.activo, 1) AS activo,
+                ta.metodo,
+                ta.norma,
+                ta.equipo_default,
+                ta.unidad,
+                ta.limite_min,
+                ta.limite_max,
+                ta.tiempo_estimado_min,
                 tm.nombre AS nombre_muestra,
                 tm.prefijo AS prefijo_muestra
             FROM tipo_analisis ta
@@ -301,6 +334,13 @@ if (!function_exists('labCatalogoAnalisisAgrupar')) {
                 'id_tipo_muestra' => (int) ($fila['id_tipo_muestra'] ?? 0),
                 'nombre' => $nombre,
                 'activo' => $activo,
+                'metodo' => (string) ($fila['metodo'] ?? ''),
+                'norma' => (string) ($fila['norma'] ?? ''),
+                'equipo_default' => (string) ($fila['equipo_default'] ?? ''),
+                'unidad' => (string) ($fila['unidad'] ?? ''),
+                'limite_min' => $fila['limite_min'] !== null ? (float) $fila['limite_min'] : null,
+                'limite_max' => $fila['limite_max'] !== null ? (float) $fila['limite_max'] : null,
+                'tiempo_estimado_min' => $fila['tiempo_estimado_min'] !== null ? (int) $fila['tiempo_estimado_min'] : null,
                 'tipo' => labCatalogoAnalisisEtiquetaModulo($clave),
                 'tipo_plural' => labCatalogoAnalisisEtiquetaModuloPlural($clave),
             ];
@@ -365,6 +405,13 @@ if (!function_exists('labCatalogoAnalisisObtenerPorId')) {
                 ta.id_tipo_muestra,
                 ta.nombre,
                 COALESCE(ta.activo, 1) AS activo,
+                ta.metodo,
+                ta.norma,
+                ta.equipo_default,
+                ta.unidad,
+                ta.limite_min,
+                ta.limite_max,
+                ta.tiempo_estimado_min,
                 tm.nombre AS nombre_muestra,
                 tm.prefijo AS prefijo_muestra
             FROM tipo_analisis ta
@@ -380,7 +427,14 @@ if (!function_exists('labCatalogoAnalisisObtenerPorId')) {
 }
 
 if (!function_exists('labCatalogoAnalisisGuardar')) {
-    function labCatalogoAnalisisGuardar(PDO $conexion, ?int $idTipo, int $idTipoMuestra, string $nombre, int $activo): int
+    function labCatalogoAnalisisGuardar(
+        PDO $conexion,
+        ?int $idTipo,
+        int $idTipoMuestra,
+        string $nombre,
+        int $activo,
+        array $metadatos = []
+    ): int
     {
         labCatalogoAnalisisAsegurarEsquema($conexion);
 
@@ -395,10 +449,24 @@ if (!function_exists('labCatalogoAnalisisGuardar')) {
 
         $stmt = $conexion->prepare("
             UPDATE tipo_analisis
-               SET id_tipo_muestra = ?, nombre = ?, activo = ?
+               SET id_tipo_muestra = ?, nombre = ?, activo = ?,
+                   metodo = ?, norma = ?, equipo_default = ?, unidad = ?,
+                   limite_min = ?, limite_max = ?, tiempo_estimado_min = ?
              WHERE id_tipo = ?
         ");
-        $stmt->execute([$idTipoMuestra, $nombre, $activo, $idTipo]);
+        $stmt->execute([
+            $idTipoMuestra,
+            $nombre,
+            $activo,
+            trim((string) ($metadatos['metodo'] ?? '')) ?: null,
+            trim((string) ($metadatos['norma'] ?? '')) ?: null,
+            trim((string) ($metadatos['equipo_default'] ?? '')) ?: null,
+            trim((string) ($metadatos['unidad'] ?? '')) ?: null,
+            $metadatos['limite_min'] ?? null,
+            $metadatos['limite_max'] ?? null,
+            $metadatos['tiempo_estimado_min'] ?? null,
+            $idTipo,
+        ]);
 
         return $idTipo;
     }

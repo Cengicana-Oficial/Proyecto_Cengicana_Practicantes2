@@ -352,6 +352,147 @@ function estadoCompletadoConsolidacion($estado, $vacioEsCompletado = false)
 
 // Esta función proporciona un conjunto de análisis base para cada tipo de muestra,
 // en caso de que no se encuentren análisis específicos en la base de datos.
+function obtenerIndicadoresControlCalidad(): array
+{
+    global $connConsolidacion;
+
+    $resumen = [
+        'tasa_rechazo' => 0.0,
+        'variacion_rechazo' => 0.0,
+        'reanalisis_abiertos' => 0,
+        'equipos_por_calibrar' => null,
+        'equipos_disponibles' => false,
+        'no_conformidades_mes' => 0,
+        'variacion_no_conformidades' => 0,
+        'motivos_rechazo' => [],
+        'rechazos_ultimos_30' => 0,
+        'revisiones_ultimos_30' => 0,
+    ];
+
+    $tablaExiste = static function (string $tabla) use ($connConsolidacion): bool {
+        $stmt = $connConsolidacion->prepare(
+            'SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?'
+        );
+        $stmt->execute([$tabla]);
+        return (int) $stmt->fetchColumn() > 0;
+    };
+
+    if (!$tablaExiste('historial_formulario') || !$tablaExiste('formulario_error')) {
+        return $resumen;
+    }
+
+    $contarRevisiones = static function (int $desdeDias, int $hastaDias) use ($connConsolidacion): int {
+        $stmt = $connConsolidacion->prepare("
+            SELECT COUNT(DISTINCT id_formulario)
+              FROM historial_formulario
+             WHERE fecha >= DATE_SUB(NOW(), INTERVAL ? DAY)
+               AND fecha < DATE_SUB(NOW(), INTERVAL ? DAY)
+               AND (
+                    LOWER(COALESCE(accion, '')) REGEXP 'aprob|error|rechaz|correg'
+                    OR LOWER(COALESCE(estado_nuevo, '')) REGEXP 'aprob|error|rechaz'
+               )
+        ");
+        $stmt->execute([$desdeDias, $hastaDias]);
+        return (int) $stmt->fetchColumn();
+    };
+
+    $contarRechazos = static function (int $desdeDias, int $hastaDias) use ($connConsolidacion): int {
+        $stmt = $connConsolidacion->prepare("
+            SELECT COUNT(DISTINCT id_formulario)
+              FROM historial_formulario
+             WHERE fecha >= DATE_SUB(NOW(), INTERVAL ? DAY)
+               AND fecha < DATE_SUB(NOW(), INTERVAL ? DAY)
+               AND LOWER(CONCAT_WS(' ', accion, estado_nuevo, comentario)) REGEXP 'error|rechaz'
+        ");
+        $stmt->execute([$desdeDias, $hastaDias]);
+        return (int) $stmt->fetchColumn();
+    };
+
+    $revisionesActuales = $contarRevisiones(30, 0);
+    $rechazosActuales = $contarRechazos(30, 0);
+    $revisionesAnteriores = $contarRevisiones(60, 30);
+    $rechazosAnteriores = $contarRechazos(60, 30);
+
+    $tasaActual = $revisionesActuales > 0 ? ($rechazosActuales / $revisionesActuales) * 100 : 0.0;
+    $tasaAnterior = $revisionesAnteriores > 0 ? ($rechazosAnteriores / $revisionesAnteriores) * 100 : 0.0;
+    $resumen['tasa_rechazo'] = round($tasaActual, 1);
+    $resumen['variacion_rechazo'] = round($tasaActual - $tasaAnterior, 1);
+    $resumen['rechazos_ultimos_30'] = $rechazosActuales;
+    $resumen['revisiones_ultimos_30'] = $revisionesActuales;
+
+    $stmt = $connConsolidacion->query("
+        SELECT COUNT(DISTINCT id_formulario)
+          FROM formulario_error
+         WHERE COALESCE(activo, 1) = 1
+    ");
+    $resumen['reanalisis_abiertos'] = $stmt ? (int) $stmt->fetchColumn() : 0;
+
+    $stmt = $connConsolidacion->query("
+        SELECT COUNT(*)
+          FROM formulario_error
+         WHERE fecha >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
+           AND fecha < DATE_ADD(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), INTERVAL 1 MONTH)
+    ");
+    $noConformidadesActuales = $stmt ? (int) $stmt->fetchColumn() : 0;
+    $stmt = $connConsolidacion->query("
+        SELECT COUNT(*)
+          FROM formulario_error
+         WHERE fecha >= DATE_SUB(DATE_FORMAT(CURRENT_DATE, '%Y-%m-01'), INTERVAL 1 MONTH)
+           AND fecha < DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
+    ");
+    $noConformidadesAnteriores = $stmt ? (int) $stmt->fetchColumn() : 0;
+    $resumen['no_conformidades_mes'] = $noConformidadesActuales;
+    $resumen['variacion_no_conformidades'] = $noConformidadesActuales - $noConformidadesAnteriores;
+
+    if ($tablaExiste('tipo_error')) {
+        $stmt = $connConsolidacion->query("
+            SELECT COALESCE(NULLIF(TRIM(te.nombre), ''), 'Sin clasificar') AS motivo, COUNT(*) AS total
+              FROM formulario_error fe
+              LEFT JOIN tipo_error te ON te.id_error = fe.id_error
+             WHERE fe.fecha >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+             GROUP BY COALESCE(NULLIF(TRIM(te.nombre), ''), 'Sin clasificar')
+             ORDER BY total DESC, motivo ASC
+        ");
+        $motivos = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+        $maximo = 0;
+        foreach ($motivos as $motivo) {
+            $maximo = max($maximo, (int) ($motivo['total'] ?? 0));
+        }
+        foreach ($motivos as $motivo) {
+            $total = (int) ($motivo['total'] ?? 0);
+            $resumen['motivos_rechazo'][] = [
+                'motivo' => (string) ($motivo['motivo'] ?? 'Sin clasificar'),
+                'total' => $total,
+                'porcentaje' => $maximo > 0 ? (int) round(($total / $maximo) * 100) : 0,
+            ];
+        }
+    }
+
+    foreach (['equipo', 'equipos'] as $tablaEquipo) {
+        if (!$tablaExiste($tablaEquipo)) {
+            continue;
+        }
+        $columnas = $connConsolidacion->query('SHOW COLUMNS FROM `' . $tablaEquipo . '`')->fetchAll(PDO::FETCH_COLUMN);
+        $columnaFecha = null;
+        foreach (['proxima_calibracion', 'fecha_proxima_calibracion', 'fecha_calibracion'] as $candidata) {
+            if (in_array($candidata, $columnas, true)) {
+                $columnaFecha = $candidata;
+                break;
+            }
+        }
+        if ($columnaFecha !== null) {
+            $stmt = $connConsolidacion->query(
+                'SELECT COUNT(*) FROM `' . $tablaEquipo . '` WHERE `' . $columnaFecha . '` <= DATE_ADD(CURRENT_DATE, INTERVAL 5 DAY)'
+            );
+            $resumen['equipos_por_calibrar'] = $stmt ? (int) $stmt->fetchColumn() : 0;
+            $resumen['equipos_disponibles'] = true;
+        }
+        break;
+    }
+
+    return $resumen;
+}
+
 function obtenerAnalisisBaseConsolidacion($idTipo)
 {
     $base = [

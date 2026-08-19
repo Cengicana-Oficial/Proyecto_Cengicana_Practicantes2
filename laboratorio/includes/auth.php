@@ -191,6 +191,13 @@ function lab_has_module_access(string $module = 'Laboratorio'): bool
     return lab_role_is_laboratory_related();
 }
 
+/**
+ * Catalogo de referencia de todos los permisos "laboratorio.*" existentes.
+ * NO es la fuente de verdad en tiempo de ejecucion: la fuente de verdad es
+ * la tabla central rol_permiso (login/usuarios_menu), reflejada en sesion
+ * como $_SESSION['user_permissions']. Este arreglo se conserva solo como
+ * catalogo/documentacion (ej. para scripts de backfill o auditoria).
+ */
 function lab_all_permissions(): array
 {
     return [
@@ -231,100 +238,20 @@ function lab_all_permissions(): array
     ];
 }
 
-function lab_default_permissions_for_role(): array
-{
-    if (!lab_has_module_access()) {
-        return [];
-    }
-
-    $user = lab_current_user();
-    $roleId = (int) ($user['rol_id'] ?? 0);
-    $role = lab_normalized_role();
-
-    if (
-        $user['es_superadmin']
-        || $roleId === 1
-        || strpos($role, 'superadmin') !== false
-        || strpos($role, 'jefa') !== false
-        || $roleId === 2
-        || strpos($role, 'administrador') !== false
-        || $role === 'admin'
-    ) {
-        return lab_all_permissions();
-    }
-
-    if ($roleId === 3 || strpos($role, 'tecnico') !== false) {
-        return [
-            'laboratorio.acceder',
-            'laboratorio.labc.ver',
-            'laboratorio.formularios_labc.ver',
-            'laboratorio.analisis.ver',
-            'laboratorio.analisis.crear',
-            'laboratorio.analisis.editar',
-            'laboratorio.formularios_pendientes.ver',
-            'laboratorio.kanban.ver',
-            'laboratorio.validacion_tecnica.ver',
-            'laboratorio.validacion_tecnica.aprobar',
-            'laboratorio.trazabilidad.ver',
-            'laboratorio.documentos.ver',
-            'laboratorio.firma.gestionar',
-            'laboratorio.informes.ver',
-        ];
-    }
-
-    if ($roleId === 4 || strpos($role, 'analista') !== false || strpos($role, 'laboratorista') !== false) {
-        return [
-            'laboratorio.acceder',
-            'laboratorio.labc.ver',
-            'laboratorio.formularios_labc.ver',
-            'laboratorio.analisis.ver',
-            'laboratorio.analisis.crear',
-            'laboratorio.analisis.editar',
-            'laboratorio.kanban.ver',
-            'laboratorio.trazabilidad.ver',
-        ];
-    }
-
-    if (strpos($role, 'recepcion') !== false) {
-        return [
-            'laboratorio.acceder',
-            'laboratorio.solicitudes.ver',
-            'laboratorio.solicitudes.crear',
-            'laboratorio.solicitudes.editar',
-            'laboratorio.lotes.ver',
-            'laboratorio.labc.ver',
-            'laboratorio.formularios_labc.ver',
-            'laboratorio.analisis.ver',
-            'laboratorio.consolidacion.ver',
-            'laboratorio.consolidacion.aprobar',
-            'laboratorio.formularios_erroneos.ver',
-            'laboratorio.formularios.guardar_corregidos',
-            'laboratorio.formularios.guardar_errores',
-            'laboratorio.trazabilidad.ver',
-            'laboratorio.documentos.ver',
-            'laboratorio.documentos.gestionar',
-            'laboratorio.informes.ver',
-        ];
-    }
-
-    return ['laboratorio.acceder'];
-}
-
+/**
+ * Permisos efectivos del usuario actual para el modulo Laboratorio.
+ *
+ * Fuente de verdad unica: $_SESSION['user_permissions'], que login/login.php
+ * llena desde la tabla central rol_permiso (usuarios_menu) para todos los
+ * modulos, sin prefijo. Ya no existe fallback hardcodeado por rol_id/nombre
+ * de rol: si un rol necesita acceso a algo de Laboratorio, ese permiso debe
+ * estar asignado en rol_permiso (ver login/usuarios/... > Roles, o el script
+ * de backfill en login/config/migrar_permisos_laboratorio.php la primera vez
+ * que se despliega este cambio).
+ */
 function lab_user_permissions(): array
 {
-    $permissions = lab_session_permissions();
-
-    if ($permissions !== null && !empty($permissions)) {
-        foreach ($permissions as $permission) {
-            if (strpos((string) $permission, 'laboratorio.') === 0) {
-                return $permissions;
-            }
-        }
-
-        return array_values(array_unique(array_merge($permissions, lab_default_permissions_for_role())));
-    }
-
-    return lab_default_permissions_for_role();
+    return lab_session_permissions() ?? [];
 }
 
 function lab_can(string $permission): bool
