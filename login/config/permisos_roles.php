@@ -93,6 +93,15 @@ function sembrar_permisos_base(PDO $conn)
         'laboratorio.consolidacion.aprobar' => 'Permite aprobar formularios de Laboratorio',
         'laboratorio.formularios.guardar_corregidos' => 'Permite guardar formularios corregidos de Laboratorio',
         'laboratorio.formularios.guardar_errores' => 'Permite guardar formularios con errores de Laboratorio',
+        'laboratorio.kanban.ver' => 'Permite ver el tablero de planificacion (Kanban) de Laboratorio',
+        'laboratorio.kanban.gestionar' => 'Permite mover tarjetas en el tablero de planificacion de Laboratorio',
+        'laboratorio.validacion_tecnica.ver' => 'Permite ver la matriz de validacion tecnica de Laboratorio',
+        'laboratorio.validacion_tecnica.aprobar' => 'Permite aprobar o rechazar analisis en validacion tecnica',
+        'laboratorio.trazabilidad.ver' => 'Permite ver el historial de versiones/trazabilidad por lote de Laboratorio',
+        'laboratorio.documentos.ver' => 'Permite ver los documentos (boletas/informes) de Laboratorio',
+        'laboratorio.documentos.gestionar' => 'Permite gestionar los documentos (boletas/informes) de Laboratorio',
+        'laboratorio.firma.gestionar' => 'Permite gestionar la firma electronica de documentos de Laboratorio',
+        'laboratorio.informes.ver' => 'Permite ver el buscador de informes por lote y los informes generados de Laboratorio',
     ];
 
     $stmt = $conn->prepare("
@@ -273,6 +282,15 @@ function etiqueta_permiso($nombrePermiso)
         'laboratorio.consolidacion.aprobar' => 'Aprobar formularios',
         'laboratorio.formularios.guardar_corregidos' => 'Guardar formularios corregidos',
         'laboratorio.formularios.guardar_errores' => 'Guardar formulario con errores',
+        'laboratorio.kanban.ver' => 'Ver planificacion (Kanban)',
+        'laboratorio.kanban.gestionar' => 'Mover tarjetas en planificacion',
+        'laboratorio.validacion_tecnica.ver' => 'Ver validacion tecnica',
+        'laboratorio.validacion_tecnica.aprobar' => 'Aprobar/rechazar en validacion tecnica',
+        'laboratorio.trazabilidad.ver' => 'Ver historial de versiones',
+        'laboratorio.documentos.ver' => 'Ver documentos (PDF)',
+        'laboratorio.documentos.gestionar' => 'Gestionar documentos (PDF)',
+        'laboratorio.firma.gestionar' => 'Gestionar firma electronica',
+        'laboratorio.informes.ver' => 'Ver informes',
     ];
 
     if (isset($mapa[$nombrePermiso])) {

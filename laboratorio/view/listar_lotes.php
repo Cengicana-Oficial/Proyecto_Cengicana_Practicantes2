@@ -6,6 +6,7 @@ lab_require_permission('laboratorio.lotes.ver');
 require_once __DIR__ . '/../conexion.php';
 require_once __DIR__ . '/../includes/solicitud_formulario_helpers.php';
 require_once __DIR__ . '/../includes/estado_lote_helper.php';
+require_once __DIR__ . '/../includes/shell_sidebar.php';
 
 asegurarColumnasFirmasSolicitud($conexion);
 
@@ -256,22 +257,12 @@ function eLotes($value)
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="../css/listar_lotes.css">
+<link rel="stylesheet" href="../css/lab_shell.css?v=1">
 <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
 </head>
 
-<body>
-<nav class="institution-header">
-    <div class="nav-brand">Laboratorio</div>
-    <div class="branding-zone" aria-label="Branding institucional">
-        <img
-            class="nav-logo"
-            src="../assets/cengicaña_sin_fondo.png"
-            alt="CENGICAÑA"
-        >
-    </div>
-</nav>
-
-<main>
+<body class="cengi-canvas">
+<?php lab_shell_open('listar_lotes.php', 'Listado de lotes', 'Consulta de lotes registrados y su estado de avance'); ?>
     <div class="page-shell">
         <section class="hero-admin">
             <section class="panel">
@@ -289,18 +280,67 @@ function eLotes($value)
                         <p>Consulta de lotes registrados.</p>
                     </div>
 
-                    <div class="stats-grid" aria-label="Resumen de lotes">
-                        <article class="stat-card total-lotes">
-                            <span class="stat-card-icon"><i class="fa-solid fa-boxes-stacked"></i></span>
-                            <div>
-                                <p class="stat-card-value"><?= count($lotes) ?></p>
-                                <p class="stat-card-label">Lotes visibles</p>
-                                <p class="stat-card-meta"><?= $limitarLotes ? 'Mostrando primeros' : 'Resultados' ?></p>
-                            </div>
+                    <div class="cengi-kpi-grid cengi-kpi-grid--single" aria-label="Resumen de lotes">
+                        <article class="cengi-kpi">
+                            <span class="cengi-kpi-icon"><i class="fa-solid fa-boxes-stacked"></i></span>
+                            <div class="cengi-kpi-val"><?= count($lotes) ?></div>
+                            <div class="cengi-kpi-label">Lotes visibles</div>
+                            <div class="cengi-kpi-trend is-flat"><?= $limitarLotes ? 'Mostrando primeros' : 'Resultados' ?></div>
+                            <span class="cengi-kpi-bar"></span>
                         </article>
                     </div>
                 </div>
             </section>
+        </section>
+
+        <section class="cengi-card ident-card" aria-labelledby="identTitulo">
+            <h3 id="identTitulo"><i class="fa-solid fa-magnifying-glass-location"></i> Identificar lote o muestra</h3>
+            <p class="cengi-card-sub">Busca un lote por su código exacto para revisar su estado de avance. Ambos caminos guardan la misma búsqueda.</p>
+
+            <div class="cengi-seg" id="identSeg" role="tablist" aria-label="Modo de identificación">
+                <button type="button" class="active" data-seg-target="identModoManual" aria-selected="true" role="tab">
+                    <i class="fa-solid fa-keyboard"></i> Ingreso manual
+                </button>
+                <button type="button" data-seg-target="identModoEscaneo" aria-selected="false" role="tab">
+                    <i class="fa-solid fa-qrcode"></i> Escanear QR / código de barras
+                </button>
+            </div>
+
+            <div id="identModoManual" class="ident-mode">
+                <form method="GET" class="ident-row">
+                    <?php if ($estadoFiltro !== ''): ?>
+                        <input type="hidden" name="estado" value="<?= eLotes($estadoFiltro) ?>">
+                    <?php endif; ?>
+                    <label class="search-box ident-field" for="identCodigo">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="identCodigo" name="buscar" value="<?= eLotes($busquedaLote) ?>" placeholder="Ej. LT-2026-001">
+                    </label>
+                    <button type="submit" class="search-button">Buscar</button>
+                </form>
+                <p class="ident-hint">Tabula el código exacto impreso en la boleta del lote y presiona "Buscar" — la tabla de abajo se filtra automáticamente.</p>
+            </div>
+
+            <div id="identModoEscaneo" class="ident-mode" hidden>
+                <div class="ident-row">
+                    <button type="button" class="btn-clear" disabled aria-disabled="true">
+                        <i class="fa-solid fa-camera"></i> Escanear con cámara
+                    </button>
+                    <button type="button" class="btn-clear" disabled aria-disabled="true">
+                        <i class="fa-solid fa-barcode"></i> Leer código de barras
+                    </button>
+                </div>
+                <p class="ident-hint">Requiere lector de QR o código de barras conectado — mientras tanto usa el ingreso manual, se guarda igual.</p>
+            </div>
+
+            <?php if ($busquedaLote !== ''): ?>
+                <div class="notice <?= empty($lotes) ? 'warning' : 'success' ?> ident-alert">
+                    <?php if (empty($lotes)): ?>
+                        No se encontró ningún lote con el código <strong>"<?= eLotes($busquedaLote) ?>"</strong>. Verifica el código o intenta con otro.
+                    <?php else: ?>
+                        Se <?= count($lotes) === 1 ? 'encontró' : 'encontraron' ?> <strong><?= count($lotes) ?></strong> lote<?= count($lotes) === 1 ? '' : 's' ?> con el código <strong>"<?= eLotes($busquedaLote) ?>"</strong>.
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
         </section>
 
         <form class="toolbar" method="GET">
@@ -327,7 +367,7 @@ function eLotes($value)
         </form>
 
         <div class="table-area">
-            <div class="table-shell">
+            <div class="cengi-table-wrap">
                 <table class="lotes-table">
                     <thead>
                         <tr>
@@ -377,7 +417,6 @@ function eLotes($value)
             </div>
         </div>
     </div>
-</main>
 
 <script src="../js/pdf_tablas.js"></script>
 <script>
@@ -392,6 +431,22 @@ document.querySelectorAll(".btn-pdf").forEach((button) => {
         });
     });
 });
+
+document.querySelectorAll("#identSeg [data-seg-target]").forEach((boton) => {
+    boton.addEventListener("click", () => {
+        document.querySelectorAll("#identSeg [data-seg-target]").forEach((otro) => {
+            otro.classList.remove("active");
+            otro.setAttribute("aria-selected", "false");
+        });
+        boton.classList.add("active");
+        boton.setAttribute("aria-selected", "true");
+
+        document.querySelectorAll(".ident-mode").forEach((panel) => {
+            panel.hidden = panel.id !== boton.dataset.segTarget;
+        });
+    });
+});
 </script>
+<?php lab_shell_content_close(); ?>
 </body>
 </html>

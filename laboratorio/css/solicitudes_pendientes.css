@@ -40,70 +40,21 @@ body {
   background-attachment: fixed;
 }
 
-nav {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 32px;
-  background: var(--lab-surface-strong);
-  border-bottom: 1px solid var(--lab-border-soft);
-  box-shadow: 0 8px 22px rgba(35, 37, 35, 0.06);
-  backdrop-filter: blur(8px);
-}
+/*
+ * NOTA: los selectores `nav {...}` / `.nav-*` y el `main {...}` de layout que
+ * existian aqui pertenecian al header institucional propio de esta vista
+ * (antes de migrar a includes/shell_sidebar.php). Se eliminaron porque
+ * `nav` y `main` ahora son elementos REALES del shell compartido
+ * (.cengi-sidebar-nav es un <nav>, y lab_shell_open() abre
+ * <main class="cengi-lab-content">), asi que estos selectores sin
+ * espacio de nombres pisaban el sidebar/topbar en vez de quedar sin efecto.
+ * El contenedor de ancho maximo ahora vive en `.solpend-content` (ver mas abajo),
+ * aplicado a un wrapper explicito dentro de view/solicitudes_pendientes_tecnico.php.
+ */
 
-.nav-brand {
-  color: var(--lab-brand-primary);
-  font-size: 20px;
-  font-weight: 800;
-}
-
-.nav-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
-  color: var(--lab-brand-primary);
-  font-size: 14px;
-  font-weight: 800;
-  text-decoration: none;
-  border-radius: 8px;
-  transition: transform .18s ease, background-color .18s ease, box-shadow .18s ease, border-color .18s ease;
-}
-
-.nav-link.back {
-  gap: 10px;
-  padding: 10px 14px;
-  border: 1px solid var(--lab-border-soft);
-  border-radius: 999px;
-  background: var(--lab-surface-soft);
-  box-shadow: 0 10px 22px rgba(35, 37, 35, 0.05);
-  backdrop-filter: blur(10px);
-}
-
-.nav-link:hover,
-.nav-link:focus-visible {
-  transform: translateY(-1px);
-  background: var(--lab-primary-soft);
-  outline: none;
-}
-
-.nav-link.back:hover,
-.nav-link.back:focus-visible {
-  border-color: var(--lab-border-strong);
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 14px 26px rgba(35, 37, 35, 0.07);
-}
-
-.nav-link:active {
-  transform: translateY(0);
-}
-
-main {
-  width: min(1180px, calc(100% - 24px));
-  margin: 24px auto 0;
+.solpend-content {
+  max-width: 1180px;
+  margin: 0 auto;
 }
 
 .page-header {

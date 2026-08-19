@@ -3,6 +3,7 @@
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/includes/catalogo_muestras_helper.php';
+require_once __DIR__ . '/includes/shell_sidebar.php';
 
 lab_require_module_access();
 lab_require_permission('laboratorio.catalogo_muestras.ver');
@@ -174,24 +175,11 @@ $sampleVisuals = [
             gap: 10px;
             margin-top: 18px;
         }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 14px;
-        }
-        .stats-card {
-            padding: 18px;
-        }
-        .stats-card strong {
-            display: block;
-            font-size: 1.9rem;
-            line-height: 1.1;
-            color: var(--text);
-        }
-        .stats-card span {
-            color: var(--muted);
-            font-size: .95rem;
-        }
+        /*
+         * El resumen numerico ahora usa el componente compartido
+         * .cengi-kpi-grid / .cengi-kpi de css/lab_shell.css (mismo
+         * "recuadro" que el resto del modulo) en vez de .stats/.stats-card.
+         */
         .toolbar {
             display: flex;
             flex-wrap: wrap;
@@ -621,8 +609,10 @@ $sampleVisuals = [
         }
     </style>
     <link rel="stylesheet" href="styles/tables.css">
+    <link rel="stylesheet" href="css/lab_shell.css?v=1">
 </head>
-<body>
+<body class="cengi-canvas">
+<?php lab_shell_open('catalogo_muestras.php', 'Catalogo de tipos de muestra', 'Tipos de muestra y prefijos usados al generar codigos de laboratorio'); ?>
     <div class="page">
         <section class="hero">
             <div class="hero-card">
@@ -651,23 +641,31 @@ $sampleVisuals = [
                 </div>
             </div>
 
-            <div class="stats">
-                <div class="stats-card">
-                    <strong><?= (int) $total ?></strong>
-                    <span>Tipos registrados</span>
-                </div>
-                <div class="stats-card">
-                    <strong><?= (int) $activos ?></strong>
-                    <span>Tipos activos</span>
-                </div>
-                <div class="stats-card">
-                    <strong><?= (int) $inactivos ?></strong>
-                    <span>Tipos inactivos</span>
-                </div>
-                <div class="stats-card">
-                    <strong><?= (int) $analisisVinculados ?></strong>
-                    <span>Análisis activos vinculados</span>
-                </div>
+            <div class="cengi-kpi-grid">
+                <article class="cengi-kpi">
+                    <span class="cengi-kpi-icon"><i class="fa-solid fa-vial"></i></span>
+                    <div class="cengi-kpi-val"><?= (int) $total ?></div>
+                    <div class="cengi-kpi-label">Tipos registrados</div>
+                    <span class="cengi-kpi-bar"></span>
+                </article>
+                <article class="cengi-kpi">
+                    <span class="cengi-kpi-icon"><i class="fa-solid fa-circle-check"></i></span>
+                    <div class="cengi-kpi-val"><?= (int) $activos ?></div>
+                    <div class="cengi-kpi-label">Tipos activos</div>
+                    <span class="cengi-kpi-bar"></span>
+                </article>
+                <article class="cengi-kpi">
+                    <span class="cengi-kpi-icon"><i class="fa-solid fa-circle-xmark"></i></span>
+                    <div class="cengi-kpi-val"><?= (int) $inactivos ?></div>
+                    <div class="cengi-kpi-label">Tipos inactivos</div>
+                    <span class="cengi-kpi-bar"></span>
+                </article>
+                <article class="cengi-kpi">
+                    <span class="cengi-kpi-icon"><i class="fa-solid fa-diagram-project"></i></span>
+                    <div class="cengi-kpi-val"><?= (int) $analisisVinculados ?></div>
+                    <div class="cengi-kpi-label">Análisis activos vinculados</div>
+                    <span class="cengi-kpi-bar"></span>
+                </article>
             </div>
         </section>
 
@@ -697,7 +695,7 @@ $sampleVisuals = [
                     </div>
                     <small>Actualizar nombre, no crear duplicados</small>
                 </div>
-                <div class="table-wrap">
+                <div class="table-wrap cengi-table-wrap">
                     <table>
                         <thead>
                             <tr>
@@ -843,5 +841,6 @@ $sampleVisuals = [
             </aside>
         </section>
     </div>
+<?php lab_shell_content_close(); ?>
 </body>
 </html>

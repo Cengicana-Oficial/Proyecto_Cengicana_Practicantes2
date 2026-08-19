@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/includes/user_module_helper.php';
+require_once __DIR__ . '/includes/shell_sidebar.php';
 
 lab_require_permission('laboratorio.usuarios.gestionar');
 
@@ -191,13 +192,19 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             box-sizing: border-box;
         }
 
+        /*
+         * NOTA: este bloque de estilos es previo a la migracion al shell
+         * compartido (includes/shell_sidebar.php). El `body { padding: ... }`
+         * que tenia antes quedo sin efecto util a proposito: con el sidebar
+         * fijo de .cengi-sidebar y .cengi-lab-content con su propio padding,
+         * un padding en <body> desalinea el topbar/contenido respecto al
+         * borde del sidebar (deja una franja vacia entre ambos). El area de
+         * contenido real ya se limita con `.page-shell { max-width: ...; }`
+         * mas abajo, asi que el body no necesita padding propio.
+         */
         body {
             margin: 0;
             min-height: 100vh;
-            padding: 32px 18px 40px;
-            background:
-                radial-gradient(circle at top right, rgba(163, 211, 0, 0.10), transparent 30%),
-                linear-gradient(180deg, #ffffff 0%, rgba(206, 210, 213, 0.12) 100%);
             color: var(--text-main);
             font-family: 'Inter', sans-serif;
         }
@@ -319,69 +326,15 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             padding: 0 30px 24px;
         }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 12px;
+        /*
+         * El resumen estadistico ahora usa los componentes compartidos
+         * .cengi-kpi-grid / .cengi-kpi de css/lab_shell.css (mismo
+         * "recuadro" que el resto del modulo: borde + sombra + radio de
+         * los tokens --cengi-*). Aqui solo se ajusta el padding lateral
+         * para que respete el ritmo de 30px del panel que lo contiene.
+         */
+        .cengi-kpi-grid {
             padding: 0 30px 22px;
-        }
-
-        .stat-card {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            min-width: 0;
-            padding: 18px 18px 16px;
-            border: 1px solid var(--border);
-            border-radius: 22px;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 255, 255, 0.96));
-            box-shadow: 0 10px 26px rgba(12, 39, 27, 0.06);
-            transition:
-                transform 200ms ease,
-                box-shadow 200ms ease,
-                border-color 200ms ease;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-2px);
-            border-color: rgba(115, 188, 37, 0.18);
-            box-shadow: 0 14px 30px rgba(12, 39, 27, 0.09);
-        }
-
-        .stat-card-icon {
-            display: inline-grid;
-            place-items: center;
-            width: 42px;
-            height: 42px;
-            border-radius: 999px;
-            background: var(--brand-soft);
-            color: var(--brand);
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-
-        .stat-card-value {
-            margin: 0;
-            color: var(--text-main);
-            font-size: clamp(28px, 3vw, 32px);
-            font-weight: 800;
-            line-height: 1;
-            letter-spacing: -0.04em;
-        }
-
-        .stat-card-label {
-            margin: 4px 0 0;
-            color: var(--text-soft);
-            font-size: 13px;
-            font-weight: 600;
-            line-height: 1.35;
-        }
-
-        .stat-card-meta {
-            margin: 0;
-            color: var(--text-soft);
-            font-size: 12px;
-            line-height: 1.35;
         }
 
         .meta-pill {
@@ -496,21 +449,19 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             padding: 14px 18px 18px;
         }
 
-        .table-shell {
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            background: rgba(255, 255, 255, 0.95);
-            box-shadow: 0 14px 34px rgba(12, 39, 27, 0.06);
-            overflow: hidden;
-        }
-
-        .table-shell > table {
+        /*
+         * El borde/radio/sombra del contenedor ahora los da el componente
+         * compartido .cengi-table-wrap (css/lab_shell.css); aqui solo se
+         * afinan el rayado de filas, estados hover/focus y la alineacion
+         * por columna propios de esta tabla.
+         */
+        .cengi-table-wrap > table {
             width: 100%;
             border-collapse: separate;
             border-spacing: 0;
         }
 
-        .table-shell > table thead th {
+        .cengi-table-wrap > table thead th {
             padding: 16px 16px 14px;
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(238, 247, 226, 0.96));
             color: var(--brand);
@@ -522,61 +473,61 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
             box-shadow: inset 0 -1px 0 rgba(206, 210, 213, 0.72);
         }
 
-        .table-shell > table tbody td {
+        .cengi-table-wrap > table tbody td {
             padding: 16px 16px;
             line-height: 1.42;
             vertical-align: middle;
             border-bottom: 1px solid rgba(206, 210, 213, 0.68);
         }
 
-        .table-shell > table tbody tr {
+        .cengi-table-wrap > table tbody tr {
             transition: background 200ms ease, box-shadow 200ms ease;
         }
 
-        .table-shell > table tbody tr:nth-child(even) td {
+        .cengi-table-wrap > table tbody tr:nth-child(even) td {
             background: rgba(248, 250, 248, 0.88);
         }
 
-        .table-shell > table tbody tr:hover td {
+        .cengi-table-wrap > table tbody tr:hover td {
             background: rgba(238, 247, 226, 0.94);
         }
 
-        .table-shell > table tbody tr:focus-within td {
+        .cengi-table-wrap > table tbody tr:focus-within td {
             background: rgba(238, 247, 226, 0.96);
         }
 
-        .table-shell > table tbody tr:last-child td {
+        .cengi-table-wrap > table tbody tr:last-child td {
             border-bottom: none;
         }
 
-        .table-shell > table th:first-child,
-        .table-shell > table td:first-child {
+        .cengi-table-wrap > table th:first-child,
+        .cengi-table-wrap > table td:first-child {
             padding-left: 18px;
         }
 
-        .table-shell > table th:last-child,
-        .table-shell > table td:last-child {
+        .cengi-table-wrap > table th:last-child,
+        .cengi-table-wrap > table td:last-child {
             padding-right: 18px;
             text-align: center;
         }
 
-        .table-shell > table th:nth-child(3),
-        .table-shell > table th:nth-child(4),
-        .table-shell > table th:last-child,
-        .table-shell > table td:nth-child(3),
-        .table-shell > table td:nth-child(4),
-        .table-shell > table td:last-child {
+        .cengi-table-wrap > table th:nth-child(3),
+        .cengi-table-wrap > table th:nth-child(4),
+        .cengi-table-wrap > table th:last-child,
+        .cengi-table-wrap > table td:nth-child(3),
+        .cengi-table-wrap > table td:nth-child(4),
+        .cengi-table-wrap > table td:last-child {
             text-align: center;
         }
 
-        .table-shell > table td:nth-child(3) .role-badge,
-        .table-shell > table td:nth-child(4) .status-badge,
-        .table-shell > table td:last-child .action-links {
+        .cengi-table-wrap > table td:nth-child(3) .role-badge,
+        .cengi-table-wrap > table td:nth-child(4) .status-badge,
+        .cengi-table-wrap > table td:last-child .action-links {
             margin-inline: auto;
         }
 
-        .table-shell .role-badge,
-        .table-shell .status-badge {
+        .cengi-table-wrap .role-badge,
+        .cengi-table-wrap .status-badge {
             min-height: 30px;
             padding: 0.45rem 0.8rem;
             font-size: 12px;
@@ -780,10 +731,6 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         }
 
         @media (max-width: 760px) {
-            body {
-                padding: 20px 12px 28px;
-            }
-
             .panel-header,
             .header-meta,
             .toolbar,
@@ -812,26 +759,28 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
     </style>
     <link rel="stylesheet" href="styles/tables.css">
     <style>
-        .table-shell .role-badge.role-admin {
+        .cengi-table-wrap .role-badge.role-admin {
             --status-border-color: rgba(115, 188, 37, 0.22);
             --status-bg: linear-gradient(180deg, rgba(115, 188, 37, 0.12), rgba(255, 255, 255, 0.98));
             --status-color: var(--green-800);
         }
 
-        .table-shell .role-badge.role-tech {
+        .cengi-table-wrap .role-badge.role-tech {
             --status-border-color: rgba(163, 211, 0, 0.22);
             --status-bg: linear-gradient(180deg, rgba(163, 211, 0, 0.14), rgba(255, 255, 255, 0.98));
             --status-color: var(--teal-700);
         }
 
-        .table-shell .role-badge.role-analyst {
+        .cengi-table-wrap .role-badge.role-analyst {
             --status-border-color: var(--border);
             --status-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 248, 248, 0.98));
             --status-color: var(--text-soft);
         }
     </style>
+    <link rel="stylesheet" href="css/lab_shell.css?v=1">
 </head>
-<body>
+<body class="cengi-canvas">
+<?php lab_shell_open('usuarios.php', 'Usuarios de Laboratorio', 'Cuentas con acceso al modulo de laboratorio'); ?>
     <div class="page-shell">
         <section class="hero-admin">
             <section class="panel">
@@ -855,41 +804,37 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
                     </a>
                 </div>
 
-                <div class="stats-grid" aria-label="Resumen estadístico de usuarios">
-                    <article class="stat-card">
-                        <span class="stat-card-icon"><i class="fa-solid fa-users"></i></span>
-                        <div>
-                            <p class="stat-card-value"><?= count($usuarios) ?></p>
-                            <p class="stat-card-label">Usuarios del módulo</p>
-                            <p class="stat-card-meta">Usuarios registrados</p>
-                        </div>
+                <div class="cengi-kpi-grid" aria-label="Resumen estadístico de usuarios">
+                    <article class="cengi-kpi">
+                        <span class="cengi-kpi-icon"><i class="fa-solid fa-users"></i></span>
+                        <div class="cengi-kpi-val"><?= count($usuarios) ?></div>
+                        <div class="cengi-kpi-label">Usuarios del módulo</div>
+                        <div class="cengi-kpi-trend is-flat">Usuarios registrados</div>
+                        <span class="cengi-kpi-bar"></span>
                     </article>
 
-                    <article class="stat-card">
-                        <span class="stat-card-icon"><i class="fa-solid fa-circle-check"></i></span>
-                        <div>
-                            <p class="stat-card-value"><?= (int) $usuariosActivos ?></p>
-                            <p class="stat-card-label">Estado activo</p>
-                            <p class="stat-card-meta">Usuarios activos</p>
-                        </div>
+                    <article class="cengi-kpi">
+                        <span class="cengi-kpi-icon"><i class="fa-solid fa-circle-check"></i></span>
+                        <div class="cengi-kpi-val"><?= (int) $usuariosActivos ?></div>
+                        <div class="cengi-kpi-label">Estado activo</div>
+                        <div class="cengi-kpi-trend is-up">Usuarios activos</div>
+                        <span class="cengi-kpi-bar"></span>
                     </article>
 
-                    <article class="stat-card">
-                        <span class="stat-card-icon"><i class="fa-solid fa-building"></i></span>
-                        <div>
-                            <p class="stat-card-value"><?= count($ingenios) ?></p>
-                            <p class="stat-card-label">Empresas registradas</p>
-                            <p class="stat-card-meta">Empresas / ingenios</p>
-                        </div>
+                    <article class="cengi-kpi">
+                        <span class="cengi-kpi-icon"><i class="fa-solid fa-building"></i></span>
+                        <div class="cengi-kpi-val"><?= count($ingenios) ?></div>
+                        <div class="cengi-kpi-label">Empresas registradas</div>
+                        <div class="cengi-kpi-trend is-flat">Empresas / ingenios</div>
+                        <span class="cengi-kpi-bar"></span>
                     </article>
 
-                    <article class="stat-card">
-                        <span class="stat-card-icon"><i class="fa-solid fa-shield-halved"></i></span>
-                        <div>
-                            <p class="stat-card-value"><?= count($roles) ?></p>
-                            <p class="stat-card-label">Roles disponibles</p>
-                            <p class="stat-card-meta">Roles distintos</p>
-                        </div>
+                    <article class="cengi-kpi">
+                        <span class="cengi-kpi-icon"><i class="fa-solid fa-shield-halved"></i></span>
+                        <div class="cengi-kpi-val"><?= count($roles) ?></div>
+                        <div class="cengi-kpi-label">Roles disponibles</div>
+                        <div class="cengi-kpi-trend is-flat">Roles distintos</div>
+                        <span class="cengi-kpi-bar"></span>
                     </article>
                 </div>
 
@@ -933,7 +878,7 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
                 </div>
 
                 <div class="table-area">
-                    <div class="table-shell">
+                    <div class="cengi-table-wrap">
                         <table>
                             <thead>
                                 <tr>
@@ -1176,5 +1121,6 @@ ksort($roles, SORT_NATURAL | SORT_FLAG_CASE);
         renderTable();
     })();
     </script>
+<?php lab_shell_content_close(); ?>
 </body>
 </html>
