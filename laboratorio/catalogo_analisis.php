@@ -3,6 +3,7 @@
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/includes/catalogo_analisis_helper.php';
+require_once __DIR__ . '/includes/shell_sidebar.php';
 
 lab_require_permission('laboratorio.catalogo_analisis.ver');
 
@@ -16,6 +17,7 @@ $errorMensaje = '';
 $schemaMensaje = '';
 $canEdit = lab_can('laboratorio.analisis.editar');
 $canCreateSolicitud = lab_can('laboratorio.solicitudes.crear');
+$canCatalogoMuestras = lab_can('laboratorio.catalogo_muestras.ver') && is_file(__DIR__ . '/catalogo_muestras.php');
 $action = $_POST['action'] ?? '';
 $editingId = isset($_GET['edit_id']) ? (int) $_GET['edit_id'] : 0;
 $msg = trim((string) ($_GET['msg'] ?? ''));
@@ -162,10 +164,16 @@ foreach ($grupos as $clave => $grupo) {
             box-sizing: border-box;
         }
 
+        /*
+         * NOTA: previo a la migracion al shell compartido este `body` traia
+         * padding propio. Con .cengi-sidebar fijo + .cengi-lab-content ya
+         * paddeado, un padding en <body> desalinea el topbar/contenido
+         * respecto al sidebar (deja una franja vacia). El ancho del
+         * contenido ya se limita mas abajo con `.page-shell`.
+         */
         body {
             margin: 0;
             min-height: 100vh;
-            padding: 28px 18px 40px;
             background:
                 radial-gradient(circle at top right, rgba(116, 186, 118, 0.18), transparent 30%),
                 radial-gradient(circle at top left, rgba(13, 92, 57, 0.09), transparent 28%),
@@ -281,38 +289,13 @@ foreach ($grupos as $clave => $grupo) {
             border-color: transparent;
         }
 
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 14px;
-        }
-
-        .summary-card {
-            padding: 18px;
-        }
-
-        .summary-card .kicker {
-            display: block;
-            color: var(--text-soft);
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .summary-card strong {
-            display: block;
-            margin-top: 8px;
-            font-size: 28px;
-            line-height: 1;
-        }
-
-        .summary-card span:last-child {
-            display: block;
-            margin-top: 4px;
-            color: var(--text-soft);
-            font-size: 13px;
-        }
+        /*
+         * El resumen numerico (Registros/Activos/Inactivos/Modulos) ahora
+         * usa el componente compartido .cengi-kpi-grid / .cengi-kpi de
+         * css/lab_shell.css, con el mismo "recuadro" que el resto del
+         * modulo. Las reglas .summary-grid/.summary-card especificas de
+         * esta vista ya no aplican a ningun elemento.
+         */
 
         .main-grid {
             display: grid;
@@ -536,10 +519,6 @@ foreach ($grupos as $clave => $grupo) {
         }
 
         @media (max-width: 760px) {
-            body {
-                padding: 18px 14px 28px;
-            }
-
             .hero-card,
             .editor-card,
             .module-section {
@@ -547,9 +526,6 @@ foreach ($grupos as $clave => $grupo) {
                 border-radius: 20px;
             }
 
-            .summary-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
         }
 
         body {
@@ -830,8 +806,10 @@ foreach ($grupos as $clave => $grupo) {
         }
     </style>
     <link rel="stylesheet" href="styles/tables.css">
+    <link rel="stylesheet" href="css/lab_shell.css?v=1">
 </head>
-<body>
+<body class="cengi-canvas">
+<?php lab_shell_open('catalogo_analisis.php', 'Catalogo de analisis', 'Analisis, equipos y metodos configurados en el laboratorio'); ?>
     <div class="page-shell">
         <a class="back-link" href="index.php">
             <i class="fa-solid fa-arrow-left"></i>
@@ -860,30 +838,44 @@ foreach ($grupos as $clave => $grupo) {
                             <span>Menú de solicitud</span>
                         </a>
                     <?php endif; ?>
+                    <?php if ($canCatalogoMuestras): ?>
+                        <a class="action-pill" href="catalogo_muestras.php">
+                            <i class="fa-solid fa-vial"></i>
+                            <span>Catálogo de tipos de muestra</span>
+                        </a>
+                    <?php endif; ?>
                 </div>
             </div>
 
-            <div class="summary-grid">
-                <div class="summary-card">
-                    <span class="kicker">Registros</span>
-                    <strong><?= (int) $totalRegistros ?></strong>
-                    <span>Tipos cargados en la base de datos</span>
-                </div>
-                <div class="summary-card">
-                    <span class="kicker">Activos</span>
-                    <strong><?= (int) $totalActivos ?></strong>
-                    <span>Visibles en el formulario de solicitud</span>
-                </div>
-                <div class="summary-card">
-                    <span class="kicker">Inactivos</span>
-                    <strong><?= (int) $totalInactivos ?></strong>
-                    <span>Ocultos del formulario, pero conservados</span>
-                </div>
-                <div class="summary-card">
-                    <span class="kicker">Módulos</span>
-                    <strong><?= count($sections) ?></strong>
-                    <span>Suelos, aguas, foliares, caña y mieles</span>
-                </div>
+            <div class="cengi-kpi-grid">
+                <article class="cengi-kpi">
+                    <span class="cengi-kpi-icon"><i class="fa-solid fa-database"></i></span>
+                    <div class="cengi-kpi-val"><?= (int) $totalRegistros ?></div>
+                    <div class="cengi-kpi-label">Registros</div>
+                    <div class="cengi-kpi-trend is-flat">Tipos cargados en la base de datos</div>
+                    <span class="cengi-kpi-bar"></span>
+                </article>
+                <article class="cengi-kpi">
+                    <span class="cengi-kpi-icon"><i class="fa-solid fa-circle-check"></i></span>
+                    <div class="cengi-kpi-val"><?= (int) $totalActivos ?></div>
+                    <div class="cengi-kpi-label">Activos</div>
+                    <div class="cengi-kpi-trend is-up">Visibles en el formulario de solicitud</div>
+                    <span class="cengi-kpi-bar"></span>
+                </article>
+                <article class="cengi-kpi">
+                    <span class="cengi-kpi-icon"><i class="fa-solid fa-circle-minus"></i></span>
+                    <div class="cengi-kpi-val"><?= (int) $totalInactivos ?></div>
+                    <div class="cengi-kpi-label">Inactivos</div>
+                    <div class="cengi-kpi-trend is-down">Ocultos del formulario, pero conservados</div>
+                    <span class="cengi-kpi-bar"></span>
+                </article>
+                <article class="cengi-kpi">
+                    <span class="cengi-kpi-icon"><i class="fa-solid fa-layer-group"></i></span>
+                    <div class="cengi-kpi-val"><?= count($sections) ?></div>
+                    <div class="cengi-kpi-label">Módulos</div>
+                    <div class="cengi-kpi-trend is-flat">Suelos, aguas, foliares, caña y mieles</div>
+                    <span class="cengi-kpi-bar"></span>
+                </article>
             </div>
         </section>
 
@@ -1034,7 +1026,7 @@ foreach ($grupos as $clave => $grupo) {
                             </div>
                         </div>
 
-                        <div class="module-table-wrap">
+                        <div class="module-table-wrap cengi-table-wrap">
                             <table class="module-table">
                                 <thead>
                                     <tr>
@@ -1136,5 +1128,6 @@ foreach ($grupos as $clave => $grupo) {
         }
     })();
     </script>
+<?php lab_shell_content_close(); ?>
 </body>
 </html>

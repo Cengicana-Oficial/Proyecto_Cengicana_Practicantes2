@@ -60,7 +60,7 @@ function labc_history_href(string $area): ?string
         case 'aguas':
         case 'foliares':
         case 'cana':
-            return 'dashboard.php?tipo_reporte=' . rawurlencode($area);
+            return 'informes_view.php?tipo_reporte=' . rawurlencode($area);
         default:
             return null;
     }
@@ -261,7 +261,7 @@ $tray = $activeSampleTypeId > 0
 
             <div class="sidebar-footer">
                 <?php if ($canConsolidacion || $canBlancoControl): ?>
-                    <a class="sidebar-download" href="dashboard.php">
+                    <a class="sidebar-download" href="informes_view.php">
                         <i class="fa-solid fa-download"></i>
                         <span>Descargar Reportes</span>
                     </a>
@@ -299,7 +299,7 @@ $tray = $activeSampleTypeId > 0
                         </a>
                     <?php endif; ?>
 
-                    <a class="text-action" href="dashboard.php">Informes</a>
+                    <a class="text-action" href="informes_view.php">Informes</a>
 
                     <button type="button" class="icon-action" aria-label="Notificaciones">
                         <i class="fa-regular fa-bell"></i>

@@ -95,7 +95,7 @@ foreach ($catalogoMuestras as $clave => $muestra) {
                 <span>Nueva solicitud</span>
             </a>
 
-            <a class="action-button subtle" href="dashboard.php">Historial</a>
+            <a class="action-button subtle" href="informes_view.php">Historial</a>
 
             <button type="button" class="icon-button" aria-label="Notificaciones">
                 <i class="fa-regular fa-bell"></i>

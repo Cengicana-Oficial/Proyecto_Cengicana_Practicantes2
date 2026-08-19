@@ -76,9 +76,15 @@
    BASE
 ========================================================= */
 
+/*
+ * NOTA: `padding` en <body> quedaba de cuando esta vista tenia su propio
+ * .institution-header fijo. Con el shell compartido (.cengi-sidebar fijo +
+ * .cengi-lab-content ya paddeado) un padding en <body> desalinea el
+ * topbar/contenido respecto al borde del sidebar. El ancho del contenido se
+ * limita mas abajo con `.page-shell`.
+ */
 body {
   min-height: 100vh;
-  padding: 32px 18px 40px;
   font-family: "Inter", sans-serif;
   color: var(--text-main);
   background: var(--lab-body-background);
@@ -96,58 +102,16 @@ select {
   font: inherit;
 }
 
-/* =========================================================
-   HEADER INSTITUCIONAL
-========================================================= */
-
-.institution-header {
-  position: fixed;
-  inset: 0 0 auto 0;
-  z-index: 100;
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-
-  padding: 12px 32px;
-  background: rgba(255, 255, 255, 0.88);
-  border-bottom: 1px solid rgba(206, 210, 213, 0.8);
-  box-shadow: 0 8px 24px rgba(12, 39, 27, 0.04);
-  backdrop-filter: blur(10px);
-}
-
-.nav-brand {
-  color: var(--brand);
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.branding-zone {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-height: 44px;
-  padding: 6px 0 6px 18px;
-  flex: 0 0 auto;
-}
-
-.nav-logo {
-  display: block;
-  width: clamp(56px, 5vw, 72px);
-  height: auto;
-  object-fit: contain;
-  object-position: center;
-}
+/*
+ * NOTA: el header institucional fijo (.institution-header/.nav-brand/
+ * .branding-zone/.nav-logo) se elimino porque ya no existe en el markup de
+ * esta vista: fue reemplazado por el topbar del shell compartido
+ * (.cengi-topbar en includes/shell_sidebar.php).
+ */
 
 /* =========================================================
    LAYOUT
 ========================================================= */
-
-main {
-  margin-top: 82px;
-}
 
 .page-shell {
   max-width: 1180px;
@@ -250,74 +214,91 @@ main {
   line-height: 1.6;
 }
 
-.stats-grid {
-  display: grid;
+/*
+ * El resumen de lotes ahora usa el componente compartido .cengi-kpi-grid /
+ * .cengi-kpi de css/lab_shell.css (mismo "recuadro" que el resto del
+ * modulo). Aqui solo se ajusta su encaje dentro del grid de
+ * .panel-header (una sola tarjeta, alineada a la derecha).
+ */
+.cengi-kpi-grid--single {
   grid-template-columns: minmax(0, 250px);
-  gap: 12px;
   justify-self: end;
   align-self: start;
   width: 100%;
   max-width: 250px;
+  margin-bottom: 0;
 }
 
-.stat-card,
-.total-lotes {
+/* =========================================================
+   TARJETA "IDENTIFICAR LOTE O MUESTRA" (buscador estilo
+   mockup, arriba de la tabla). Reutiliza .cengi-card y
+   .cengi-seg de css/lab_shell.css como base; aqui solo se
+   ajusta radio/sombra/spacing para que combine con el resto
+   de tarjetas "panel" de esta vista (28px, sombra suave) en
+   vez del .cengi-card generico (14px).
+========================================================= */
+
+.ident-card {
+  margin-bottom: 18px;
+  padding: 22px 24px;
+  border-radius: 24px;
+  border-color: rgba(206, 210, 213, 0.74);
+  box-shadow: 0 14px 34px rgba(12, 39, 27, 0.07);
+}
+
+.ident-card h3 {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-  padding: 18px 18px 16px;
-  border: 1px solid rgba(206, 210, 213, 0.68);
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.96));
-  box-shadow: 0 10px 26px rgba(12, 39, 27, 0.06);
-  transition:
-    transform 200ms ease,
-    box-shadow 200ms ease,
-    border-color 200ms ease;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
 }
 
-.stat-card:hover,
-.total-lotes:hover {
-  transform: translateY(-2px);
-  border-color: rgba(163, 211, 0, 0.28);
-  box-shadow: 0 14px 30px rgba(12, 39, 27, 0.09);
-}
-
-.stat-card-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  background: rgba(115, 188, 37, 0.12);
+.ident-card h3 i {
   color: var(--brand);
-  font-size: 16px;
-  flex-shrink: 0;
+  font-size: 14px;
 }
 
-.stat-card-value {
-  margin: 0;
-  color: var(--brand);
-  font-size: clamp(28px, 3vw, 32px);
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.04em;
+.ident-card .cengi-card-sub {
+  margin-bottom: 16px;
 }
 
-.stat-card-label {
-  margin: 4px 0 0;
-  color: var(--text-soft);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
+.ident-mode {
+  margin-top: 14px;
 }
 
-.stat-card-meta {
-  margin: 0;
+.ident-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.ident-field {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+
+.ident-hint {
+  margin-top: 8px;
   color: var(--text-soft);
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.5;
+}
+
+.ident-alert {
+  margin-top: 14px;
+}
+
+@media (max-width: 600px) {
+  .ident-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ident-row button,
+  .ident-row .ident-field {
+    width: 100%;
+  }
 }
 
 /* =========================================================
@@ -447,23 +428,24 @@ main {
   padding: 14px 18px 18px;
 }
 
-.table-shell {
+/*
+ * Borde/radio/sombra/fondo del contenedor ahora los da el componente
+ * compartido .cengi-table-wrap (css/lab_shell.css); aqui solo se agrega el
+ * scroll horizontal que necesita esta tabla en pantallas angostas.
+ */
+.cengi-table-wrap {
   overflow-x: auto;
   overflow-y: hidden;
-  border: 1px solid rgba(206, 210, 213, 0.7);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 14px 34px rgba(12, 39, 27, 0.06);
 }
 
-.table-shell > table {
+.cengi-table-wrap > table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: auto;
 }
 
-.table-shell > table thead th {
+.cengi-table-wrap > table thead th {
   padding: 16px 16px 14px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 255, 255, 0.98));
   color: var(--brand);
@@ -476,58 +458,58 @@ main {
   box-shadow: inset 0 -1px 0 rgba(206, 210, 213, 0.72);
 }
 
-.table-shell > table tbody td {
+.cengi-table-wrap > table tbody td {
   padding: 16px 16px;
   line-height: 1.42;
   vertical-align: middle;
   border-bottom: 1px solid rgba(206, 210, 213, 0.68);
 }
 
-.table-shell > table tbody tr {
+.cengi-table-wrap > table tbody tr {
   transition: background 200ms ease, box-shadow 200ms ease;
 }
 
-.table-shell > table tbody tr:nth-child(even) td {
+.cengi-table-wrap > table tbody tr:nth-child(even) td {
   background: rgba(255, 255, 255, 0.88);
 }
 
-.table-shell > table tbody tr:hover td {
+.cengi-table-wrap > table tbody tr:hover td {
   background: rgba(163, 211, 0, 0.08);
 }
 
-.table-shell > table tbody tr:focus-within td {
+.cengi-table-wrap > table tbody tr:focus-within td {
   background: rgba(163, 211, 0, 0.10);
 }
 
-.table-shell > table tbody tr:last-child td {
+.cengi-table-wrap > table tbody tr:last-child td {
   border-bottom: none;
 }
 
-.table-shell > table th:first-child,
-.table-shell > table td:first-child {
+.cengi-table-wrap > table th:first-child,
+.cengi-table-wrap > table td:first-child {
   padding-left: 18px;
   text-align: center;
 }
 
-.table-shell > table th:last-child,
-.table-shell > table td:last-child {
+.cengi-table-wrap > table th:last-child,
+.cengi-table-wrap > table td:last-child {
   padding-right: 18px;
   text-align: center;
 }
 
-.table-shell > table th:nth-child(4),
-.table-shell > table td:nth-child(4),
-.table-shell > table th:nth-child(5),
-.table-shell > table td:nth-child(5) {
+.cengi-table-wrap > table th:nth-child(4),
+.cengi-table-wrap > table td:nth-child(4),
+.cengi-table-wrap > table th:nth-child(5),
+.cengi-table-wrap > table td:nth-child(5) {
   text-align: center;
 }
 
-.table-shell > table td:nth-child(4) .estado-badge,
-.table-shell > table td:nth-child(5) .btn-pdf {
+.cengi-table-wrap > table td:nth-child(4) .estado-badge,
+.cengi-table-wrap > table td:nth-child(5) .btn-pdf {
   margin-inline: auto;
 }
 
-.table-shell .estado-badge {
+.cengi-table-wrap .estado-badge {
   min-height: 30px;
   padding: 0.45rem 0.8rem;
   font-size: 12px;
@@ -535,31 +517,31 @@ main {
   letter-spacing: 0.02em;
 }
 
-.table-shell .estado-badge.estado-pendiente {
+.cengi-table-wrap .estado-badge.estado-pendiente {
   --status-border-color: rgba(255, 204, 0, 0.32);
   --status-bg: rgba(255, 204, 0, 0.16);
   --status-color: #8c3600;
 }
 
-.table-shell .estado-badge.estado-en-proceso {
+.cengi-table-wrap .estado-badge.estado-en-proceso {
   --status-border-color: rgba(163, 211, 0, 0.26);
   --status-bg: rgba(163, 211, 0, 0.12);
   --status-color: #73bc25;
 }
 
-.table-shell .estado-badge.estado-revision {
+.cengi-table-wrap .estado-badge.estado-revision {
   --status-border-color: rgba(255, 204, 0, 0.28);
   --status-bg: rgba(255, 204, 0, 0.14);
   --status-color: #8c3600;
 }
 
-.table-shell .estado-badge.estado-aprobado {
+.cengi-table-wrap .estado-badge.estado-aprobado {
   --status-border-color: rgba(115, 188, 37, 0.24);
   --status-bg: rgba(115, 188, 37, 0.10);
   --status-color: #73bc25;
 }
 
-.table-shell .btn-pdf {
+.cengi-table-wrap .btn-pdf {
   --btn-min-height: 34px;
   --btn-padding-y: 8px;
   --btn-padding-x: 12px;
@@ -570,13 +552,13 @@ main {
   --btn-fg: var(--brand);
 }
 
-.table-shell .btn-pdf:hover:not(:disabled):not([aria-disabled="true"]) {
+.cengi-table-wrap .btn-pdf:hover:not(:disabled):not([aria-disabled="true"]) {
   --btn-bg: rgba(255, 255, 255, 0.96);
   --btn-border: rgba(115, 188, 37, 0.24);
   --btn-shadow: 0 8px 20px rgba(12, 39, 27, 0.06);
 }
 
-.table-shell .empty-cell {
+.cengi-table-wrap .empty-cell {
   padding: 28px 18px;
   color: var(--text-soft);
   font-size: 14px;
@@ -593,7 +575,7 @@ main {
     grid-template-columns: 1fr;
   }
 
-  .stats-grid {
+  .cengi-kpi-grid--single {
     grid-template-columns: 1fr;
     justify-self: start;
     max-width: 320px;
@@ -614,18 +596,6 @@ main {
 }
 
 @media (max-width: 760px) {
-  body {
-    padding: 20px 12px 28px;
-  }
-
-  .institution-header {
-    padding: 12px 18px;
-  }
-
-  main {
-    margin-top: 74px;
-  }
-
   .panel-header,
   .toolbar,
   .table-area {
@@ -646,11 +616,7 @@ main {
     width: 100%;
   }
 
-  .stats-grid {
+  .cengi-kpi-grid--single {
     max-width: 100%;
-  }
-
-  .nav-logo {
-    width: 68px;
   }
 }
