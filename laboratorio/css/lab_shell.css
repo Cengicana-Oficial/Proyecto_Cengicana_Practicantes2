@@ -1,0 +1,979 @@
+/*
+ * lab_shell.css
+ * Shell de navegacion (sidebar + topbar) para el modulo Laboratorio.
+ * Adaptado 1:1 de la convencion visual de cengicursos (cengicursos/css/proyecto.css:
+ * tokens --cengi-* y clases .cengi-sidebar / .cengi-topbar / .cengi-nav-item / .cengi-*)
+ * y de login/assets/Menu.css, para que Laboratorio comparta el mismo lenguaje visual
+ * que el resto de la suite CENGICANA. No se copia la paleta/tipografia del mockup
+ * "laboratorio-workflow-v2" (Roboto + verdes propios); esa referencia solo se usa
+ * para la estructura/comportamiento de cada pantalla.
+ *
+ * Este archivo es aditivo: no modifica ni reemplaza los CSS existentes por vista
+ * (dashboard.css, listar_lotes.css, etc.), que siguen su propio look particular en
+ * el area de contenido. Solo estandariza sidebar + topbar + el contenedor comun
+ * ".cengi-lab-content" que reemplaza al antiguo ".main-content" hover-expand.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+/*
+ * Base de Material Symbols. El link de Google Fonts trae el @font-face, pero
+ * lab_shell_open() se usa en paginas que NO pasan por lab_shell_head() (cada
+ * una trae su propio <head>), asi que este @import garantiza que la fuente
+ * quede disponible en cualquier pagina que enlace lab_shell.css, sin
+ * depender de que cada <head> la agregue por su cuenta. overflow:hidden es
+ * una red de seguridad: si la fuente no carga (sin internet, bloqueada,
+ * etc.), el texto literal del ligature ("home", "inventory_2"...) queda
+ * contenido en la caja del icono en vez de desbordarse sobre la etiqueta
+ * del lado.
+ */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+:root {
+  --cengi-primary: #73BC25;
+  --cengi-primary-strong: #5e9b1d;
+  --cengi-primary-deep: #1f5632;
+  --cengi-primary-deep-2: #163d24;
+  --cengi-secondary: #A3D300;
+  --cengi-amarillo: #FFCC00;
+  --cengi-naranja: #FF6B00;
+  --cengi-accent-soft: #eef8df;
+  --cengi-border: #dbe8dc;
+  --cengi-ink: #294033;
+  --cengi-muted: #55705f;
+  --cengi-surface: #ffffff;
+  --cengi-danger: #c94f4f;
+  --cengi-danger-strong: #a63f3f;
+  --cengi-sidebar-width: 248px;
+  --cengi-topbar-height: 64px;
+  --cengi-radius: 12px;
+  --cengi-shadow: 0 1px 2px rgba(30, 42, 26, 0.06), 0 4px 16px rgba(30, 42, 26, 0.05);
+}
+
+/*
+ * padding: 0 aqui es a proposito (y no solo un reset "por si acaso"):
+ * varias vistas migradas todavia cargan su CSS propio de antes del shell
+ * (con reglas `body { padding: ...; }`, algunas solo dentro de sus propios
+ * @media). Como este selector usa una clase (.cengi-canvas), su
+ * especificidad (0,1,1) le gana siempre a un `body { padding: ... }` sin
+ * clase (0,0,1) sin importar el orden de los <link>, así que actua como
+ * red de seguridad para que ningun padding heredado desalinee el topbar/
+ * contenido respecto al borde de .cengi-sidebar.
+ */
+body.cengi-canvas {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: #F6F7F3;
+  color: var(--cengi-ink);
+  font-family: 'Inter', Arial, sans-serif;
+}
+
+/* ===== Sidebar (identico en estructura a cengicursos/menu.php) ===== */
+
+.cengi-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--cengi-sidebar-width);
+  z-index: 1060;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #26401A 0%, #1E3315 100%);
+  color: #EAF2DE;
+  overflow-y: auto;
+}
+
+.cengi-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 3px solid var(--cengi-naranja);
+  background: #ffffff;
+  text-decoration: none;
+  flex: 0 0 auto;
+}
+
+.cengi-brand:hover,
+.cengi-brand:focus {
+  background: #f6faf3;
+  text-decoration: none;
+}
+
+.cengi-brand-logo {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 64px;
+  object-fit: contain;
+}
+
+.cengi-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--cengi-secondary), var(--cengi-primary));
+}
+
+.cengi-brand-mark .material-symbols-outlined,
+.cengi-brand-mark i {
+  font-size: 18px;
+  color: #1E3315;
+}
+
+.cengi-brand-copy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.cengi-brand-copy strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1E3315;
+  letter-spacing: 0.02em;
+}
+
+.cengi-brand-copy small {
+  margin-top: 2px;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cengi-muted);
+}
+
+.cengi-sidebar-nav {
+  flex: 1 1 auto;
+  padding: 8px 12px 16px;
+}
+
+.cengi-nav-group {
+  padding: 10px 0;
+}
+
+.cengi-nav-label {
+  padding: 8px 10px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #8AA271;
+}
+
+.cengi-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  margin-bottom: 2px;
+  border-radius: 8px;
+  border-left: 2.5px solid transparent;
+  color: #D9E6C8;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.cengi-nav-item .material-symbols-outlined {
+  font-size: 18px;
+  width: 18px;
+  text-align: center;
+  opacity: 0.9;
+}
+
+.cengi-nav-item:hover,
+.cengi-nav-item:focus {
+  background: rgba(255, 255, 255, 0.06);
+  color: #D9E6C8;
+  text-decoration: none;
+}
+
+.cengi-nav-item.is-active {
+  background: rgba(163, 211, 0, 0.16);
+  border-left-color: var(--cengi-secondary);
+  color: #ffffff;
+}
+
+.cengi-nav-badge {
+  margin-left: auto;
+  background: var(--cengi-amarillo);
+  color: #5C4400;
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 20px;
+}
+
+.cengi-sidebar-foot {
+  flex: 0 0 auto;
+  padding: 12px 12px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cengi-menu-link {
+  color: #D9E6C8;
+}
+
+.cengi-menu-link:hover,
+.cengi-menu-link:focus {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.cengi-logout-link {
+  color: #f3b3ab;
+}
+
+.cengi-logout-link:hover,
+.cengi-logout-link:focus {
+  background: rgba(230, 90, 74, 0.18);
+  color: #ffd7d1;
+}
+
+.cengi-sidebar-version {
+  margin-top: 10px;
+  padding: 0 10px;
+  font-size: 10.5px;
+  color: #8AA271;
+}
+
+/* ===== Topbar ===== */
+
+.cengi-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1050;
+  min-height: var(--cengi-topbar-height);
+  margin-left: var(--cengi-sidebar-width);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 28px;
+  background: var(--cengi-surface);
+  border-bottom: 1px solid var(--cengi-border);
+}
+
+.cengi-topbar-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cengi-topbar-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--cengi-ink);
+  letter-spacing: -0.01em;
+}
+
+.cengi-topbar-sub {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--cengi-muted);
+}
+
+.cengi-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+
+.cengi-pill {
+  padding: 5px 11px;
+  border-radius: 100px;
+  background: var(--cengi-accent-soft);
+  border: 1px solid #DCEFC4;
+  color: var(--cengi-primary-deep);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cengi-userbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cengi-avatar {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--cengi-primary);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cengi-userbox-u1 {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cengi-ink);
+}
+
+.cengi-userbox-u2 {
+  font-size: 11px;
+  color: var(--cengi-muted);
+}
+
+.cengi-menu-toggle {
+  display: none;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: var(--cengi-accent-soft);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: none;
+  cursor: pointer;
+}
+
+.cengi-menu-toggle span {
+  width: 17px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--cengi-primary-deep);
+}
+
+/* ===== Content wrapper (reemplaza a .main-content del shell anterior) ===== */
+
+.cengi-lab-content {
+  margin-left: var(--cengi-sidebar-width);
+  min-height: calc(100vh - var(--cengi-topbar-height));
+  padding: 26px 28px 60px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1024px) {
+  .cengi-sidebar {
+    left: calc(var(--cengi-sidebar-width) * -1);
+    transition: left 0.2s ease;
+  }
+
+  .cengi-sidebar.is-open {
+    left: 0;
+    box-shadow: 18px 0 40px rgba(15, 30, 18, 0.35);
+  }
+
+  .cengi-topbar,
+  .cengi-lab-content {
+    margin-left: 0;
+  }
+
+  .cengi-menu-toggle {
+    display: flex;
+  }
+}
+
+/* =========================================================
+   Componentes reutilizables de contenido (equivalentes a los
+   .kpi / .chip / .table-wrap / .card del mockup, pero con
+   tokens --cengi-*). Se usan desde las vistas rediseñadas.
+========================================================= */
+
+.cengi-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.cengi-kpi {
+  position: relative;
+  padding: 16px 18px;
+  border: 1px solid var(--cengi-border);
+  border-radius: var(--cengi-radius);
+  background: var(--cengi-surface);
+  box-shadow: var(--cengi-shadow);
+  overflow: hidden;
+}
+
+.cengi-kpi-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--cengi-primary);
+}
+
+.cengi-kpi-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cengi-accent-soft);
+  color: var(--cengi-primary-deep);
+  font-size: 15px;
+}
+
+.cengi-kpi-val {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  margin-top: 10px;
+  color: var(--cengi-ink);
+}
+
+.cengi-kpi-label {
+  font-size: 12px;
+  color: var(--cengi-muted);
+  margin-top: 2px;
+}
+
+.cengi-kpi-trend {
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
+.cengi-kpi-trend.is-up { color: var(--cengi-primary-strong); }
+.cengi-kpi-trend.is-down { color: var(--cengi-danger-strong); }
+.cengi-kpi-trend.is-flat { color: var(--cengi-muted); }
+
+.cengi-card {
+  position: relative;
+  padding: 20px;
+  border: 1px solid var(--cengi-border);
+  border-radius: 14px;
+  background: var(--cengi-surface);
+  box-shadow: 0 1px 2px rgba(31, 86, 50, 0.04);
+}
+
+.cengi-card h3 {
+  color: var(--cengi-primary-deep);
+  font-size: 15px;
+  margin: 0 0 4px;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.cengi-card .cengi-card-sub {
+  font-size: 11.5px;
+  color: var(--cengi-muted);
+  margin-bottom: 14px;
+}
+
+.cengi-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--cengi-border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.cengi-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cengi-table-wrap thead th {
+  white-space: nowrap;
+  background: #ffffff;
+  color: var(--cengi-primary-deep);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 11px 14px;
+  border-bottom: 2px solid var(--cengi-border);
+  text-align: left;
+}
+
+.cengi-table-wrap tbody td {
+  padding: 11px 14px;
+  font-size: 12.5px;
+  border-top: 1px solid #edf2ea;
+  vertical-align: middle;
+}
+
+.cengi-table-wrap tbody tr:hover td {
+  background: #fbfdf9;
+}
+
+.cengi-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.cengi-status-badge i,
+.cengi-status-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+}
+
+.cengi-status-badge.is-pending { border-color: #ecd998; background: #fff7df; color: #94610a; }
+.cengi-status-badge.is-info { border-color: #bcd7ef; background: #eaf3fc; color: #2160a0; }
+.cengi-status-badge.is-progress { border-color: #f4e5ac; background: #FFF6DA; color: #8A6600; }
+.cengi-status-badge.is-review { border-color: #f2c9a0; background: #fdeee0; color: #a15b0a; }
+.cengi-status-badge.is-approved { border-color: #cbe2b3; background: #eff9e4; color: var(--cengi-primary-strong); }
+.cengi-status-badge.is-rejected { border-color: #edc4bf; background: #fff1ef; color: var(--cengi-danger-strong); }
+.cengi-status-badge.is-delivered { border-color: var(--cengi-primary-deep); background: var(--cengi-primary); color: #fff; }
+.cengi-status-badge.is-neutral { border-color: var(--cengi-border); background: #F2F4EF; color: var(--cengi-muted); }
+
+.cengi-empty {
+  background: #f7fbf5;
+  border: 1px dashed #c4d7c0;
+  border-radius: 12px;
+  padding: 22px;
+  color: var(--cengi-muted);
+  text-align: center;
+}
+
+.cengi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cengi-btn:hover { transform: translateY(-1px); }
+
+.cengi-btn-primary {
+  background: var(--cengi-primary-deep);
+  border-color: var(--cengi-primary-deep);
+  color: #fff;
+  box-shadow: 0 5px 12px rgba(31, 86, 50, 0.12);
+}
+
+.cengi-btn-primary:hover { background: var(--cengi-primary-deep-2); color: #fff; }
+
+.cengi-btn-ghost {
+  background: #fff;
+  border-color: var(--cengi-border);
+  color: var(--cengi-ink);
+}
+
+.cengi-btn-ghost:hover { background: #f6faf3; }
+
+.cengi-btn-sm { min-height: 30px; padding: 6px 11px; font-size: 11.5px; }
+
+/* =========================================================
+   Segmented control (equivalente a .seg del mockup
+   "laboratorio-workflow-v2", pero con tokens --cengi-*).
+   Genérico: pensado para cualquier vista que necesite alternar
+   entre dos o más "modos" (ej. Ingreso manual / Escanear QR en
+   Identificación de muestra, Bandeja del analista, etc.), no
+   solo listar_lotes.php.
+
+   Nota de compatibilidad: algunas vistas (p. ej. listar_lotes.php)
+   también cargan laboratorio/styles/button.css, que fuerza con
+   !important las propiedades visuales de CUALQUIER <button> del
+   documento leyendo variables --btn-*. Por eso, además de las
+   propiedades planas de abajo (que gobiernan en vistas que solo
+   usan este shell), cada botón del segmentado también fija esas
+   mismas variables --btn-* para seguir viéndose correcto en las
+   vistas que cargan ese sistema de botones más agresivo.
+========================================================= */
+
+.cengi-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--cengi-accent-soft);
+  border: 1px solid var(--cengi-border);
+}
+
+.cengi-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cengi-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  /* compatibilidad con styles/button.css (ver nota arriba) */
+  --btn-min-height: 34px;
+  --btn-padding-y: 8px;
+  --btn-padding-x: 14px;
+  --btn-radius: 8px;
+  --btn-border: transparent;
+  --btn-bg: transparent;
+  --btn-fg: var(--cengi-muted);
+  --btn-font-size: 12.5px;
+  --btn-font-weight: 700;
+  --btn-shadow: none;
+}
+
+.cengi-seg button .material-symbols-outlined,
+.cengi-seg button i {
+  font-size: 15px;
+}
+
+.cengi-seg button.active,
+.cengi-seg button[aria-selected="true"] {
+  background: var(--cengi-surface);
+  color: var(--cengi-primary-deep);
+  box-shadow: var(--cengi-shadow);
+  --btn-bg: var(--cengi-surface);
+  --btn-fg: var(--cengi-primary-deep);
+  --btn-shadow: var(--cengi-shadow);
+}
+
+.cengi-seg button:disabled,
+.cengi-seg button[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cengi-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 26px 0 12px;
+}
+
+.cengi-section-title h2 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--cengi-ink);
+  margin: 0;
+}
+
+/* ===== Stepper (equivalente a .stepper del mockup) ===== */
+
+.cengi-stepper {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+}
+
+.cengi-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 104px;
+  position: relative;
+}
+
+.cengi-step .dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--cengi-border);
+  color: var(--cengi-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px var(--cengi-border);
+  z-index: 2;
+}
+
+.cengi-step .line {
+  position: absolute;
+  top: 13px;
+  left: calc(-50% + 13px);
+  width: 100%;
+  height: 2px;
+  background: var(--cengi-border);
+  z-index: 1;
+}
+
+.cengi-step:first-child .line { display: none; }
+
+.cengi-step .lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--cengi-muted);
+  margin-top: 7px;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.cengi-step.done .dot { background: var(--cengi-primary); color: #fff; box-shadow: 0 0 0 1px var(--cengi-primary); }
+.cengi-step.done .line { background: var(--cengi-primary); }
+.cengi-step.done .lbl { color: var(--cengi-ink); }
+.cengi-step.current .dot { background: var(--cengi-amarillo); color: #5C4400; box-shadow: 0 0 0 3px #fff6da; }
+.cengi-step.current .lbl { color: var(--cengi-ink); }
+.cengi-step.rejected .dot { background: var(--cengi-danger); color: #fff; }
+.cengi-step.rejected .lbl { color: var(--cengi-danger-strong); }
+
+/* ===== Trazabilidad (timeline) ===== */
+
+.cengi-timeline { position: relative; padding-left: 28px; }
+.cengi-timeline::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--cengi-border);
+}
+.cengi-timeline-item { position: relative; padding-bottom: 20px; }
+.cengi-timeline-item:last-child { padding-bottom: 0; }
+.cengi-timeline-dot {
+  position: absolute;
+  left: -28px;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 2px solid var(--cengi-border);
+  font-size: 11px;
+}
+.cengi-timeline-item.is-ok .cengi-timeline-dot { border-color: var(--cengi-primary); background: var(--cengi-accent-soft); color: var(--cengi-primary-deep); }
+.cengi-timeline-item.is-warn .cengi-timeline-dot { border-color: var(--cengi-danger); background: #fff1ef; color: var(--cengi-danger-strong); }
+.cengi-timeline-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cengi-timeline-head b { font-size: 13px; }
+.cengi-timeline-fecha { font-size: 11px; color: var(--cengi-muted); font-weight: 700; }
+.cengi-timeline-detail { font-size: 12px; color: var(--cengi-muted); margin-top: 2px; }
+
+/* ===== Kanban de planificacion ===== */
+
+.cengi-kanban-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(210px, 1fr));
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.cengi-kanban-col {
+  background: #f7fbf5;
+  border: 1px solid var(--cengi-border);
+  border-radius: 14px;
+  padding: 10px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cengi-kanban-col.drag-over { background: var(--cengi-accent-soft); border-color: var(--cengi-primary); }
+
+.cengi-kanban-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cengi-muted);
+}
+
+.cengi-kanban-card {
+  background: #fff;
+  border: 1px solid var(--cengi-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 1px 2px rgba(31, 86, 50, 0.06);
+  cursor: grab;
+}
+
+.cengi-kanban-card:active { cursor: grabbing; }
+.cengi-kanban-card.dragging { opacity: .4; }
+.cengi-kanban-card h5 { font-size: 12.5px; font-weight: 800; margin: 0 0 2px; color: var(--cengi-ink); }
+.cengi-kanban-card .muted { color: var(--cengi-muted); font-size: 11px; }
+
+/* ===== Matriz de validacion tecnica ===== */
+
+.cengi-matrix-wrap { overflow-x: auto; }
+table.cengi-matrix { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+table.cengi-matrix thead th {
+  background: #fafcf8;
+  color: var(--cengi-muted);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--cengi-border);
+  white-space: nowrap;
+  text-align: center;
+}
+table.cengi-matrix thead th.vc-hcol1 { text-align: left; }
+table.cengi-matrix tbody td { padding: 8px 10px; border-bottom: 1px solid #edf2ea; vertical-align: middle; white-space: nowrap; }
+table.cengi-matrix tbody tr:hover td { background: #fbfdf9; }
+td.vc-muestra, th.vc-hcol1 { position: sticky; left: 0; background: #fff; z-index: 2; box-shadow: 2px 0 0 var(--cengi-border); text-align: left; }
+table.cengi-matrix thead th.vc-hcol1 { z-index: 3; background: #fafcf8; }
+.vc-cell { text-align: center; border-radius: 8px; min-width: 90px; }
+.vc-empty { color: #c9d3ca; text-align: center; }
+.vc-tag { display: block; font-size: 8.5px; font-weight: 800; margin-top: 2px; text-transform: uppercase; }
+.vc-aprobada { background: var(--cengi-accent-soft); }
+.vc-aprobada .vc-tag { color: var(--cengi-primary-deep); }
+.vc-rechazada { background: #fff1ef; }
+.vc-rechazada .vc-tag { color: var(--cengi-danger-strong); }
+.vc-pending { background: #fafcf8; color: #b7c2b9; font-size: 10.5px; }
+.vc-actions { display: flex; gap: 4px; justify-content: center; margin-top: 5px; }
+.vc-actions button { width: 22px; height: 22px; border-radius: 6px; border: none; font-size: 12px; font-weight: 900; cursor: pointer; }
+.vc-ok { background: var(--cengi-primary); color: #fff; }
+.vc-no { background: var(--cengi-danger); color: #fff; }
+
+@media (max-width: 900px) {
+  .cengi-kanban-board { grid-template-columns: 1fr; }
+}
+
+/* =========================================================
+   Dashboard general (KPIs + graficas), view/dashboard.php.
+   Graficas en CSS puro (sin libreria externa / sin build step):
+   barras horizontales para "tiempo promedio por etapa" y
+   "productividad por analista", dona via conic-gradient para
+   "cumplimiento de SLA".
+========================================================= */
+
+.cengi-dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 1024px) {
+  .cengi-dashboard-grid { grid-template-columns: 1fr; }
+}
+
+.cengi-barchart { display: flex; flex-direction: column; gap: 12px; }
+
+.cengi-barchart-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 60px;
+  align-items: center;
+  gap: 10px;
+}
+
+.cengi-barchart-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--cengi-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cengi-barchart-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #eef2ea;
+  overflow: hidden;
+}
+
+.cengi-barchart-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--cengi-secondary), var(--cengi-primary));
+}
+
+.cengi-barchart-value {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--cengi-primary-deep);
+  text-align: right;
+}
+
+.cengi-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.cengi-donut {
+  position: relative;
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.cengi-donut-hole {
+  position: absolute;
+  inset: 14px;
+  border-radius: 50%;
+  background: var(--cengi-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.cengi-donut-hole strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px;
+  color: var(--cengi-ink);
+}
+
+.cengi-donut-hole span {
+  font-size: 9.5px;
+  color: var(--cengi-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.cengi-donut-legend { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+.cengi-donut-legend .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; }

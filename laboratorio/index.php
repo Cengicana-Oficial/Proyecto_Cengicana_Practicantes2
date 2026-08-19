@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/shell_sidebar.php';
 
 lab_require_module_access();
 
@@ -52,152 +53,31 @@ function labNuevoAnalisisUrl(string $tipo): string
 {
     return 'view/solicitud_formulario.php?tipo=' . rawurlencode($tipo);
 }
+
+lab_shell_head('Laboratorio', 'Registro y seguimiento de analisis del laboratorio agroindustrial', [
+    'css/laboratorio.css?v=2',
+]);
+lab_shell_open('index.php');
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laboratorio</title>
 
-    <link rel="stylesheet" href="css/laboratorio.css?v=2">
+<?php if ($canCreateSolicitud): ?>
+    <section class="menu-intro">
+        <span>Nuevo analisis</span>
+        <p>Seleccione el tipo de muestra para abrir el formulario de solicitud correspondiente.</p>
+    </section>
 
-    <link rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-</head>
-<body>
-
-<div class="sidebar closed" id="sidebar">
-
-    <div class="toggle-btn" id="toggleBtn">
-        <i class="fas fa-bars"></i>
+    <div class="cards-container">
+        <?php foreach ($nuevoAnalisisCards as $card): ?>
+            <a class="info-card analysis-card" href="<?= htmlspecialchars(labNuevoAnalisisUrl($card['tipo']), ENT_QUOTES, 'UTF-8') ?>">
+                <img src="<?= htmlspecialchars($card['imagen'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($card['titulo'], ENT_QUOTES, 'UTF-8') ?>">
+                <div class="card-body">
+                    <h2><?= htmlspecialchars($card['titulo'], ENT_QUOTES, 'UTF-8') ?></h2>
+                    <p><?= htmlspecialchars($card['descripcion'], ENT_QUOTES, 'UTF-8') ?></p>
+                </div>
+            </a>
+        <?php endforeach; ?>
     </div>
+<?php endif; ?>
 
-    <ul class="menu">
-
-        <?php if (lab_can('laboratorio.usuarios.gestionar') && is_file(__DIR__ . '/usuarios.php')): ?>
-            <li>
-                <a href="usuarios.php">
-                    <i class="fas fa-user"></i>
-                    <span>Usuarios</span>
-                </a>
-            </li>
-        <?php endif; ?>
-
-        <?php if (is_file(__DIR__ . '/muestras.php') && lab_can('laboratorio.muestras.ver')): ?>
-            <li>
-                <a href="muestras.php">
-                    <i class="fas fa-vial"></i>
-                    <span>Muestras</span>
-                </a>
-            </li>
-        <?php endif; ?>
-
-        <?php if ($canLotes): ?>
-            <li>
-                <a href="view/listar_lotes.php">
-                    <i class="fas fa-box"></i>
-                    <span>Lotes</span>
-                </a>
-            </li>
-        <?php endif; ?>
-
-        <?php if ($canFormulariosPendientes): ?>
-            <li>
-                <a href="view/solicitudes_pendientes_tecnico.php">
-                    <i class="fas fa-clipboard-list"></i>
-                    <span>Pendientes</span>
-                </a>
-            </li>
-        <?php endif; ?>
-
-        <?php if ($canLabc || $canAnalisis || $canBlancoControl || $canConsolidacion || $canCatalogoAnalisis || $canCatalogoMuestras): ?>
-            <li>
-                <a href="view/labc_index.php" class="active" aria-current="page">
-                    <i class="fas fa-flask-vial"></i>
-                    <span>LABC</span>
-                </a>
-            </li>
-        <?php endif; ?>
-
-        <?php if ($canCatalogoAnalisis): ?>
-            <li>
-                <a href="catalogo_analisis.php">
-                    <i class="fas fa-table-list"></i>
-                    <span>Catálogo de análisis</span>
-                </a>
-            </li>
-        <?php endif; ?>
-        <?php if ($canCatalogoMuestras): ?>
-            <li>
-                <a href="catalogo_muestras.php">
-                    <i class="fas fa-vials"></i>
-                    <span>Catálogo de muestras</span>
-                </a>
-            </li>
-        <?php endif; ?>
-
-        <?php if ($canConsolidacion): ?>
-            <li>
-                <a href="controllers/consolidacion_controller.php">
-                    <i class="fas fa-eye"></i>
-                    <span>Vista</span>
-                </a>
-            </li>
-        <?php endif; ?>
-
-        <?php if ($canFormulariosErroneos): ?>
-            <li>
-                <a href="controllers/formularios_erroneos_controller.php">
-                    <i class="fas fa-triangle-exclamation"></i>
-                    <span>Formularios erróneos</span>
-                </a>
-            </li>
-        <?php endif; ?>
-
-    </ul>
-
-    <!-- LOGOUT -->
-    <a href="<?= htmlspecialchars(lab_logout_url(), ENT_QUOTES, 'UTF-8') ?>" class="logout-btn">
-        <i class="fas fa-sign-out-alt"></i>
-        <span>Cerrar sesion</span>
-    </a>
-
-</div>
-
-<div class="main-content" id="mainContent">
-
-    <!-- LOGO -->
-    <div class="background-logo">
-        <img src="assets/cengica%C3%B1a_sin_fondo.png" alt="CENGICAÑA">
-    </div>
-  
-    <!-- TITULO -->
-    <h1 class="titulo-modulo">Laboratorio</h1>
-
-    <?php if ($canCreateSolicitud): ?>
-        <section class="menu-intro">
-            <span>Nuevo analisis</span>
-            <p>Seleccione el tipo de muestra para abrir el formulario de solicitud correspondiente.</p>
-        </section>
-
-        <div class="cards-container">
-            <?php foreach ($nuevoAnalisisCards as $card): ?>
-                <a class="info-card analysis-card" href="<?= htmlspecialchars(labNuevoAnalisisUrl($card['tipo']), ENT_QUOTES, 'UTF-8') ?>">
-                    <img src="<?= htmlspecialchars($card['imagen'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($card['titulo'], ENT_QUOTES, 'UTF-8') ?>">
-                    <div class="card-body">
-                        <h2><?= htmlspecialchars($card['titulo'], ENT_QUOTES, 'UTF-8') ?></h2>
-                        <p><?= htmlspecialchars($card['descripcion'], ENT_QUOTES, 'UTF-8') ?></p>
-                    </div>
-                </a>
-            <?php endforeach; ?>
-        </div>
-    <?php endif; ?>
-
-</div>
-
-<script src="js/sidebar.js?v=2"></script>
-
-</body>
-</html>
+<?php lab_shell_close(); ?>
 

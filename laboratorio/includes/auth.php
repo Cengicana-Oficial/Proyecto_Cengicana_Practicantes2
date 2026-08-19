@@ -216,6 +216,18 @@ function lab_all_permissions(): array
         'laboratorio.usuarios.gestionar',
         'laboratorio.roles.gestionar',
         'laboratorio.configuracion.gestionar',
+        // Flujo nuevo (planificacion, validacion tecnica, trazabilidad,
+        // documentos y firma electronica) agregado como parte de la
+        // adaptacion del modulo al flujo tipo SIGELAB.
+        'laboratorio.kanban.ver',
+        'laboratorio.kanban.gestionar',
+        'laboratorio.validacion_tecnica.ver',
+        'laboratorio.validacion_tecnica.aprobar',
+        'laboratorio.trazabilidad.ver',
+        'laboratorio.documentos.ver',
+        'laboratorio.documentos.gestionar',
+        'laboratorio.firma.gestionar',
+        'laboratorio.informes.ver',
     ];
 }
 
@@ -250,6 +262,13 @@ function lab_default_permissions_for_role(): array
             'laboratorio.analisis.crear',
             'laboratorio.analisis.editar',
             'laboratorio.formularios_pendientes.ver',
+            'laboratorio.kanban.ver',
+            'laboratorio.validacion_tecnica.ver',
+            'laboratorio.validacion_tecnica.aprobar',
+            'laboratorio.trazabilidad.ver',
+            'laboratorio.documentos.ver',
+            'laboratorio.firma.gestionar',
+            'laboratorio.informes.ver',
         ];
     }
 
@@ -261,6 +280,8 @@ function lab_default_permissions_for_role(): array
             'laboratorio.analisis.ver',
             'laboratorio.analisis.crear',
             'laboratorio.analisis.editar',
+            'laboratorio.kanban.ver',
+            'laboratorio.trazabilidad.ver',
         ];
     }
 
@@ -279,6 +300,10 @@ function lab_default_permissions_for_role(): array
             'laboratorio.formularios_erroneos.ver',
             'laboratorio.formularios.guardar_corregidos',
             'laboratorio.formularios.guardar_errores',
+            'laboratorio.trazabilidad.ver',
+            'laboratorio.documentos.ver',
+            'laboratorio.documentos.gestionar',
+            'laboratorio.informes.ver',
         ];
     }
 

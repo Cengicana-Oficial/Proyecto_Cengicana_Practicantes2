@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../conexion.php';
 require_once __DIR__ . '/../includes/solicitud_formulario_helpers.php';
 require_once __DIR__ . '/../includes/catalogo_analisis_helper.php';
+require_once __DIR__ . '/../models/trazabilidad_model.php';
 
 lab_require_module_access();
 asegurarColumnasFirmasSolicitud($conexion);
@@ -228,6 +229,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $conexion->commit();
+
+    $usuarioActualTraz = function_exists('lab_current_user') ? lab_current_user() : [];
+    lab_trazabilidad_registrar_evento($conexion, [
+      'id_lote' => $idLote,
+      'id_solicitud' => $idSolicitud,
+      'codigo_muestra' => $codigoInicio,
+      'tipo_evento' => $idSolicitudPost ? 'boleta_generada' : 'recepcion',
+      'descripcion' => $idSolicitudPost
+        ? "Solicitud #{$idSolicitud} actualizada. Numero de laboratorio: {$codigoInicio} a {$codigoFin}."
+        : "Lote recibido. Solicitud #{$idSolicitud} registrada con {$numeroMuestras} muestra(s). Numero de laboratorio: {$codigoInicio} a {$codigoFin}.",
+      'usuario_id' => $usuarioActualTraz['id'] ?? null,
+      'usuario_nombre' => $usuarioActualTraz['nombre'] ?? ($ingresadoPor ?: $recibidoPor),
+    ]);
+
     $message = "Solicitud #{$idSolicitud} guardada. Número de laboratorio: {$codigoInicio} a {$codigoFin}.";
   } catch (Exception $e) {
     if ($conexion->inTransaction()) {

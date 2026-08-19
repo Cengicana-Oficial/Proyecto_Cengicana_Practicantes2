@@ -12,24 +12,36 @@ if (
     die('Correo electrónico no válido.');
 }
 
-$enviado = cengi_enviar_correo(
-    $correo,
-    'Usuario de prueba',
-    'Prueba de correo CENGICANA',
-    '
-        <h2>Prueba de correo</h2>
+try {
 
-        <p>
-            Este correo fue enviado automáticamente
-            desde el sistema de CENGICANA.
-        </p>
+    $enviado = cengi_enviar_correo(
+        $correo,
+        'Usuario de prueba',
+        'Prueba de correo CENGICANA',
+        '
+            <h2>Prueba de correo</h2>
 
-        <p>
-            Si estás recibiendo este mensaje,
-            Brevo está configurado correctamente.
-        </p>
-    '
-);
+            <p>
+                Este correo fue enviado automáticamente
+                desde el sistema de CENGICANA.
+            </p>
+
+            <p>
+                Si estás recibiendo este mensaje,
+                Brevo está configurado correctamente.
+            </p>
+        '
+    );
+
+} catch (Throwable $mailError) {
+
+    error_log(
+        "Error enviando correo de prueba: " .
+        $mailError->getMessage()
+    );
+
+    $enviado = false;
+}
 
 if ($enviado) {
 

@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/catalogo_muestras_helper.php';
 require_once __DIR__ . '/../conexion.php';
+require_once __DIR__ . '/../includes/shell_sidebar.php';
+require_once __DIR__ . '/../models/bandeja_analista_model.php';
 
 lab_require_module_access();
 
@@ -9,63 +11,7 @@ if (!lab_can('laboratorio.formularios_pendientes.ver') && !lab_is_technician()) 
     lab_forbidden('No tiene permisos para ver formularios pendientes.');
 }
 
-$stmt = $conexion->query("
-    SELECT
-        l.id_lote,
-        l.codigo_lote,
-        s.id_solicitud,
-        s.fecha_ingreso,
-        s.fecha_estimada,
-        s.numero_muestras,
-        tm.id_tipo AS id_tipo_muestra,
-        tm.nombre AS tipo_muestra,
-        COUNT(DISTINCT ta.id_tipo) AS total_pendientes,
-        GROUP_CONCAT(DISTINCT ta.nombre ORDER BY ta.nombre SEPARATOR '||') AS analisis_pendientes
-    FROM solicitud s
-    INNER JOIN lote l
-        ON l.id_lote = s.id_lote
-    INNER JOIN tipo_muestra tm
-        ON tm.id_tipo = s.id_tipo
-    INNER JOIN solicitud_analisis sa
-        ON sa.id_solicitud = s.id_solicitud
-    INNER JOIN tipo_analisis ta
-        ON ta.id_tipo = sa.id_tipo_analisis
-    WHERE NOT EXISTS (
-        SELECT 1
-          FROM lote_rango lr2
-          INNER JOIN formulario f
-            ON f.id_rango = lr2.id_rango
-           AND f.id_tipo_analisis = ta.id_tipo
-         WHERE lr2.id_lote = l.id_lote
-    )
-      AND ta.id_tipo_muestra = s.id_tipo
-    GROUP BY
-        l.id_lote,
-        l.codigo_lote,
-        s.id_solicitud,
-        s.fecha_ingreso,
-        s.fecha_estimada,
-        s.numero_muestras,
-        tm.id_tipo,
-        tm.nombre
-    HAVING total_pendientes > 0
-    ORDER BY
-        CASE LOWER(tm.nombre)
-            WHEN 'suelos' THEN 10
-            WHEN 'agua' THEN 20
-            WHEN 'foliares' THEN 30
-            WHEN 'cañas' THEN 40
-            WHEN 'cana' THEN 40
-            WHEN 'mieles' THEN 50
-            WHEN 'miel' THEN 50
-            ELSE 90
-        END,
-        l.codigo_lote ASC,
-        s.fecha_ingreso DESC,
-        l.id_lote DESC
-");
-
-$pendientes = $stmt ? $stmt->fetchAll() : [];
+$pendientes = lab_bandeja_analista_pendientes($conexion);
 $pendientesPorTipo = [];
 
 foreach ($pendientes as $item) {
@@ -121,21 +67,20 @@ function fechaPendiente($fecha): string
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Solicitudes pendientes</title>
     <link rel="stylesheet" href="../css/solicitudes_pendientes.css?v=<?= filemtime(__DIR__ . '/../css/solicitudes_pendientes.css') ?>">
+    <link rel="stylesheet" href="../css/lab_shell.css?v=1">
 </head>
-<body>
-<nav>
-    <div class="nav-brand">Laboratorio</div>
-    <div class="nav-links">
-        <a href="../index.php" class="nav-link back">&larr; Regresar</a>
-    </div>
-</nav>
-
-<main>
+<body class="cengi-canvas">
+<?php lab_shell_open('solicitudes_pendientes_tecnico.php', 'Solicitudes pendientes', 'Analisis solicitados por lote que aun no tienen formulario ingresado'); ?>
+    <div class="solpend-content">
     <header class="page-header">
         <div>
             <span class="eyebrow">Tecnico</span>
             <h1>Solicitudes pendientes</h1>
             <p>Analisis solicitados por lote que aun no tienen formulario ingresado.</p>
+            <a href="labc_index.php" class="cengi-btn cengi-btn-ghost cengi-btn-sm" style="margin-top:10px;">
+                <span class="material-symbols-outlined" style="font-size:15px;">science</span>
+                Ir a la bandeja de captura (LABC)
+            </a>
         </div>
         <div class="count-pill">
             <?= count($pendientes) ?> lotes
@@ -190,6 +135,7 @@ function fechaPendiente($fecha): string
             </details>
         <?php endforeach; ?>
     <?php endif; ?>
-</main>
+    </div>
+<?php lab_shell_content_close(); ?>
 </body>
 </html>
