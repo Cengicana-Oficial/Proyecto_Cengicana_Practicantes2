@@ -81,7 +81,7 @@ if (!function_exists('lab_shell_nav_items')) {
         $canFirma = lab_can('laboratorio.firma.gestionar');
         $canDocumentos = lab_can('laboratorio.documentos.ver');
         $canCatalogoAnalisis = lab_can('laboratorio.catalogo_analisis.ver');
-        $canUsuarios = lab_can('laboratorio.usuarios.gestionar') && is_file(__DIR__ . '/../usuarios.php');
+        $canUsuarios = lab_can('laboratorio.usuarios.gestionar');
 
         $badges = lab_shell_nav_badges();
 
@@ -147,7 +147,10 @@ if (!function_exists('lab_shell_nav_items')) {
             $sistema[] = ['href' => 'catalogo_analisis.php', 'icon' => 'table_view', 'label' => 'Catalogo de analisis', 'match' => ['catalogo_analisis.php', 'catalogo_muestras.php']];
         }
         if ($canUsuarios) {
-            $sistema[] = ['href' => 'usuarios.php', 'icon' => 'group', 'label' => 'Administracion', 'match' => ['usuarios.php', 'usuarios_crear.php', 'usuarios_editar.php']];
+            // El CRUD de usuarios propio de Laboratorio fue eliminado; la
+            // gestion de usuarios ahora vive en el modulo central login/,
+            // con el scope "laboratorio" (ver login/usuarios/usuarios.php).
+            $sistema[] = ['href' => '../login/usuarios/usuarios.php?scope=laboratorio', 'icon' => 'group', 'label' => 'Administracion', 'match' => []];
         }
         if ($sistema) {
             $groups['Sistema'] = $sistema;
@@ -295,7 +298,7 @@ if (!function_exists('lab_shell_content_close')) {
     /**
      * Cierra <main class="cengi-lab-content"> e imprime el script del
      * toggle del sidebar, sin cerrar <body></html> (para paginas que ya
-     * traen su propio cierre de documento, ej. usuarios.php, catalogo_*.php).
+     * traen su propio cierre de documento, ej. catalogo_*.php).
      */
     function lab_shell_content_close(): void
     {

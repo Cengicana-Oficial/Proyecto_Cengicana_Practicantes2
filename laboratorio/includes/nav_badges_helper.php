@@ -15,7 +15,7 @@ if (!function_exists('lab_shell_db')) {
      * Conexion PDO perezosa y memoizada para uso exclusivo del shell
      * (sidebar). No usa la variable global $conexion de conexion.php para
      * no forzar su inclusion completa (con su bloque de ejecucion directa)
-     * en paginas que hoy no la requieren, ej. index.php o usuarios.php.
+     * en paginas que hoy no la requieren, ej. index.php.
      */
     function lab_shell_db(): ?PDO
     {
