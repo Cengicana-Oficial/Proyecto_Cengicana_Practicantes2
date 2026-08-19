@@ -45,9 +45,20 @@ if (!function_exists('lab_documentos_listar')) {
             SELECT
                 d.id_documento, d.tipo_documento, d.id_lote, d.id_solicitud,
                 d.version, d.titulo, d.vigente, d.generado_por, d.generado_en,
-                l.codigo_lote
+                l.codigo_lote,
+                COALESCE(sol.cliente, 'Sin institución') AS cliente
             FROM lab_documento d
             LEFT JOIN lote l ON l.id_lote = d.id_lote
+            LEFT JOIN (
+                SELECT
+                    id_lote,
+                    COALESCE(
+                        NULLIF(GROUP_CONCAT(DISTINCT NULLIF(TRIM(institucion), '') SEPARATOR ', '), ''),
+                        'Sin institución'
+                    ) AS cliente
+                FROM solicitud
+                GROUP BY id_lote
+            ) sol ON sol.id_lote = d.id_lote
         ";
         $params = [];
         if ($tipoDocumento !== null) {
@@ -60,6 +71,87 @@ if (!function_exists('lab_documentos_listar')) {
         $stmt->execute($params);
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+}
+
+if (!function_exists('lab_documento_obtener')) {
+    function lab_documento_obtener(PDO $pdo, int $idDocumento): ?array
+    {
+        if ($idDocumento <= 0 || !lab_documentos_tabla_existe($pdo, 'lab_documento')) {
+            return null;
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT
+                d.id_documento, d.tipo_documento, d.id_lote, d.id_solicitud,
+                d.version, d.titulo, d.contenido_html, d.vigente,
+                d.generado_por, d.generado_en, l.codigo_lote,
+                COALESCE(sol.cliente, 'Sin institución') AS cliente
+            FROM lab_documento d
+            LEFT JOIN lote l ON l.id_lote = d.id_lote
+            LEFT JOIN (
+                SELECT
+                    id_lote,
+                    COALESCE(
+                        NULLIF(GROUP_CONCAT(DISTINCT NULLIF(TRIM(institucion), '') SEPARATOR ', '), ''),
+                        'Sin institución'
+                    ) AS cliente
+                FROM solicitud
+                GROUP BY id_lote
+            ) sol ON sol.id_lote = d.id_lote
+            WHERE d.id_documento = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$idDocumento]);
+        $documento = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $documento ?: null;
+    }
+}
+
+if (!function_exists('lab_documentos_panel')) {
+    function lab_documentos_panel(PDO $pdo): array
+    {
+        $tablaDisponible = lab_documentos_tabla_existe($pdo, 'lab_documento');
+        $tablaHistorialDisponible = lab_documentos_tabla_existe($pdo, 'lab_documento_historial');
+        $documentos = $tablaDisponible ? lab_documentos_listar($pdo) : [];
+
+        $historialPorDocumento = [];
+        if ($tablaHistorialDisponible) {
+            $stmt = $pdo->query('
+                SELECT id_documento, COUNT(*) AS total
+                FROM lab_documento_historial
+                GROUP BY id_documento
+            ');
+            foreach ($stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [] as $fila) {
+                $historialPorDocumento[(int) $fila['id_documento']] = (int) $fila['total'];
+            }
+        }
+
+        $lotes = [];
+        $corregidos = 0;
+        foreach ($documentos as &$documento) {
+            $idDocumento = (int) ($documento['id_documento'] ?? 0);
+            $idLote = (int) ($documento['id_lote'] ?? 0);
+            $totalCambios = $historialPorDocumento[$idDocumento] ?? 0;
+            $documento['total_cambios'] = $totalCambios;
+            if ((int) ($documento['version'] ?? 1) > 1 || $totalCambios > 0) {
+                $corregidos++;
+            }
+            if ($idLote > 0) {
+                $lotes[$idLote] = true;
+            }
+        }
+        unset($documento);
+
+        return [
+            'tabla_disponible' => $tablaDisponible,
+            'tabla_historial_disponible' => $tablaHistorialDisponible,
+            'documentos' => $documentos,
+            'total' => count($documentos),
+            'corregidos' => $corregidos,
+            'lotes' => count($lotes),
+        ];
     }
 }
 

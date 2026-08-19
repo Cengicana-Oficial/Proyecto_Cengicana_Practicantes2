@@ -62,6 +62,10 @@ function user_scope_config($scope)
             'module_names' => ['solicitud de visitas'],
             'return_url' => '../../Pruebas/public/admin/dashboard_unificado.php?modulo=usuarios',
         ],
+        'laboratorio' => [
+            'module_names' => ['laboratorio'],
+            'return_url' => '../../laboratorio/index.php',
+        ],
     ];
 
     return $configs[$scope] ?? null;
