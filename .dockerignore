@@ -3,6 +3,15 @@
 **/.env
 deploy/env/*.env
 **/vendor
+# sigec/public/vendor y sigec/resources/lang/vendor NO son dependencias de
+# composer: son assets de aplicacion (AdminLTE/FontAwesome/jQuery
+# publicados, traducciones del paquete adminlte) trackeados en git y
+# necesarios en build. **/vendor de arriba los excluiria por nombre si no
+# fuera por estas excepciones.
+!sigec/public/vendor
+!sigec/public/vendor/**
+!sigec/resources/lang/vendor
+!sigec/resources/lang/vendor/**
 **/node_modules
 **/_Respaldo
 Pruebas/uploads

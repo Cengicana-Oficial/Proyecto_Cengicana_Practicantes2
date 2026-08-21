@@ -42,12 +42,14 @@ if (!function_exists('lab_validacion_contar_pendientes')) {
 
 if (!function_exists('lab_validacion_obtener_matriz')) {
     /**
-     * Devuelve ['lotes' => [...], 'columnas' => [...tipo_analisis...],
-     * 'celdas' => [id_lote][id_tipo_analisis] => fila de formulario].
-     * Solo incluye lotes que tienen al menos un analisis pendiente de
-     * validar (estado "revision"/"revisar"), para que la matriz sea
-     * realmente la cola de trabajo del validador y no un listado completo
-     * de todo el historico.
+     * Devuelve las lineas de formularios de los lotes que tienen analisis
+     * pendientes de validacion. Conserva las claves historicas de la matriz
+     * para no romper consumidores, pero la vista usa `lineas` para mostrar
+     * cada formulario con todas sus columnas y acciones.
+     *
+     * Algunos formularios heredados se guardaron sin id_tipo_analisis. En
+     * esos casos se recupera el analisis asociado al rango en lote_analisis;
+     * de otro modo la linea quedaba invisible y no mostraba sus botones.
      */
     function lab_validacion_obtener_matriz(PDO $pdo, ?int $idLoteFiltro = null): array
     {
@@ -56,17 +58,41 @@ if (!function_exists('lab_validacion_obtener_matriz')) {
                 f.id_formulario,
                 f.analista,
                 f.fecha,
+                f.created_at,
                 f.id_estado,
                 ef.nombre AS estado_nombre,
-                ta.id_tipo AS id_tipo_analisis,
-                ta.nombre AS analisis_nombre,
+                COALESCE(f.id_tipo_analisis, la_fallback.id_tipo_analisis) AS id_tipo_analisis,
+                COALESCE(ta.nombre, 'Analisis sin identificar') AS analisis_nombre,
+                COALESCE(tm.nombre, 'Sin tipo') AS tipo_muestra,
                 l.id_lote,
-                l.codigo_lote
+                l.codigo_lote,
+                lr.id_rango,
+                lr.inicio,
+                lr.fin
             FROM formulario f
             INNER JOIN lote_rango lr ON lr.id_rango = f.id_rango
             INNER JOIN lote l ON l.id_lote = lr.id_lote
             LEFT JOIN estado_formulario ef ON ef.id_estado = f.id_estado
-            LEFT JOIN tipo_analisis ta ON ta.id_tipo = f.id_tipo_analisis
+            LEFT JOIN lote_analisis la_fallback
+                   ON la_fallback.id = (
+                        SELECT la2.id
+                        FROM lote_analisis la2
+                        WHERE la2.id_rango = f.id_rango
+                          AND (
+                              f.id_tipo_analisis IS NULL
+                              OR la2.id_tipo_analisis = f.id_tipo_analisis
+                          )
+                        ORDER BY
+                            CASE
+                                WHEN LOWER(TRIM(COALESCE(la2.estado, ''))) IN ('pendiente', 'en revision', 'revisar') THEN 0
+                                ELSE 1
+                            END,
+                            la2.id DESC
+                        LIMIT 1
+                   )
+            LEFT JOIN tipo_analisis ta
+                   ON ta.id_tipo = COALESCE(f.id_tipo_analisis, la_fallback.id_tipo_analisis)
+            LEFT JOIN tipo_muestra tm ON tm.id_tipo = ta.id_tipo_muestra
             WHERE l.id_lote IN (
                 SELECT l2.id_lote
                 FROM formulario f2
@@ -81,7 +107,7 @@ if (!function_exists('lab_validacion_obtener_matriz')) {
             $sql .= ' AND l.id_lote = ?';
             $params[] = $idLoteFiltro;
         }
-        $sql .= ' ORDER BY l.codigo_lote ASC, ta.nombre ASC, f.fecha DESC';
+        $sql .= ' ORDER BY l.codigo_lote ASC, f.fecha DESC, f.id_formulario DESC';
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -99,14 +125,10 @@ if (!function_exists('lab_validacion_obtener_matriz')) {
                 $lotes[$idLote] = ['id_lote' => $idLote, 'codigo_lote' => $fila['codigo_lote']];
             }
             if ($idAnalisis > 0 && !isset($columnas[$idAnalisis])) {
-                $columnas[$idAnalisis] = ['id_tipo_analisis' => $idAnalisis, 'nombre' => $fila['analisis_nombre'] ?: 'Analisis'];
+                $columnas[$idAnalisis] = ['id_tipo_analisis' => $idAnalisis, 'nombre' => $fila['analisis_nombre']];
             }
-            if ($idAnalisis > 0) {
-                // Si ya hay una celda para este lote+analisis, nos quedamos con la
-                // mas reciente (ORDER BY f.fecha DESC ya la deja primero).
-                if (!isset($celdas[$idLote][$idAnalisis])) {
-                    $celdas[$idLote][$idAnalisis] = $fila;
-                }
+            if ($idAnalisis > 0 && !isset($celdas[$idLote][$idAnalisis])) {
+                $celdas[$idLote][$idAnalisis] = $fila;
             }
         }
 
@@ -115,6 +137,7 @@ if (!function_exists('lab_validacion_obtener_matriz')) {
         });
 
         return [
+            'lineas' => $filas,
             'lotes' => array_values($lotes),
             'columnas' => array_values($columnas),
             'celdas' => $celdas,

@@ -1,0 +1,281 @@
+:root {
+    --history-green: #66a925;
+    --history-green-dark: #4f8619;
+    --history-green-soft: #edf7e7;
+    --history-yellow: #e4b640;
+    --history-yellow-soft: #fff5d8;
+    --history-red: #d84a46;
+    --history-red-soft: #fdeceb;
+    --history-ink: #2c3730;
+    --history-muted: #778078;
+    --history-line: #dfe5df;
+}
+
+.history-page {
+    width: min(100%, 1370px);
+    margin: 0 auto;
+    padding: 20px 22px 38px;
+    color: var(--history-ink);
+    font-size: 13px;
+}
+
+.history-svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+}
+
+.history-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 4fr) minmax(520px, 8fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.history-card {
+    min-width: 0;
+    padding: 20px;
+    border: 1px solid var(--history-line);
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(28, 43, 30, .06);
+}
+
+.history-card-heading h2 {
+    margin: 0 0 3px;
+    color: #344039;
+    font-size: 14.5px;
+    font-weight: 800;
+}
+
+.history-card-heading p {
+    margin: 0;
+    color: var(--history-muted);
+    font-size: 11.5px;
+    line-height: 1.4;
+}
+
+.history-list {
+    margin-top: 10px;
+}
+
+.history-list-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 4px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+}
+
+.history-list-item:hover { background: #f5f8f4; }
+.history-list-item.is-active { background: var(--history-green-soft); }
+.history-list-item:focus-visible { outline: 2px solid rgba(102, 169, 37, .45); outline-offset: 1px; }
+
+.history-list-item > span { display: block; min-width: 0; }
+.history-list-item strong,
+.history-list-item small { display: block; }
+
+.history-list-item strong {
+    overflow: hidden;
+    color: #344039;
+    font-family: "Roboto Mono", Consolas, monospace;
+    font-size: 12.5px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-list-item small {
+    overflow: hidden;
+    margin-top: 2px;
+    color: var(--history-muted);
+    font-size: 10.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-list-item > b {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #eef1ee;
+    color: #647067;
+    font-size: 9.5px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.history-timelines { margin-top: 16px; }
+.history-timeline[hidden] { display: none; }
+
+.history-version {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+}
+
+.history-version-track {
+    display: flex;
+    width: 26px;
+    flex: 0 0 26px;
+    flex-direction: column;
+    align-items: center;
+}
+
+.history-version-track span {
+    display: grid;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--history-yellow);
+    color: #5c4400;
+    font-size: 10.5px;
+    font-weight: 900;
+}
+
+.history-version--rechazada .history-version-track span { background: var(--history-red); color: #fff; }
+.history-version--aprobada .history-version-track span { background: var(--history-green); color: #fff; }
+
+.history-version-track i {
+    width: 2px;
+    min-height: 28px;
+    flex: 1 1 28px;
+    margin: 4px 0;
+    background: #dfe4df;
+}
+
+.history-version-content {
+    min-width: 0;
+    flex: 1 1 auto;
+    padding: 1px 0 18px;
+}
+
+.history-version:last-child .history-version-content { padding-bottom: 4px; }
+
+.history-version-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.history-version-head h3 {
+    margin: 0;
+    color: #36423a;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.history-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 9.5px;
+    font-weight: 850;
+    white-space: nowrap;
+}
+
+.history-status--revision { background: var(--history-yellow-soft); color: #926500; }
+.history-status--rechazada { background: var(--history-red-soft); color: #b73531; }
+.history-status--aprobada { background: var(--history-green-soft); color: var(--history-green-dark); }
+
+.history-version-meta {
+    margin: 3px 0 0;
+    color: var(--history-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.history-version-meta strong { color: #566159; }
+
+.history-version-comment {
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    border-left: 3px solid #cad4ca;
+    border-radius: 0 5px 5px 0;
+    background: #f7f9f7;
+    color: #667168;
+    font-size: 10.5px;
+    line-height: 1.4;
+}
+
+.history-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 11px 13px;
+    border: 1px solid #dce4dc;
+    border-radius: 7px;
+    line-height: 1.45;
+}
+
+.history-alert--info {
+    margin-bottom: 16px;
+    border-color: #bad9ae;
+    background: #f0f8eb;
+    color: #4d6541;
+}
+
+.history-alert--error {
+    margin-top: 8px;
+    border-color: #efc2bf;
+    background: var(--history-red-soft);
+    color: #9f3531;
+    font-size: 11px;
+}
+
+.history-alert code {
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, .65);
+    font-size: 11px;
+}
+
+.history-empty {
+    display: flex;
+    min-height: 240px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 7px;
+    padding: 28px 20px;
+    color: #8b948d;
+    text-align: center;
+}
+
+.history-empty .history-svg { width: 29px; height: 29px; color: #a3aca4; }
+.history-empty strong { color: #626d65; font-size: 12px; }
+.history-empty span { max-width: 450px; font-size: 11px; line-height: 1.45; }
+
+.history-empty--compact {
+    min-height: 120px;
+    padding: 22px 10px;
+    font-size: 11px;
+}
+
+.history-empty--compact .history-svg { width: 23px; height: 23px; }
+
+@media (max-width: 960px) {
+    .history-grid { grid-template-columns: 1fr; }
+    .history-list-card { max-height: 390px; overflow: auto; }
+}
+
+@media (max-width: 640px) {
+    .history-page { padding: 14px 12px 28px; }
+    .history-card { padding: 15px; }
+    .history-version-head { align-items: flex-start; }
+    .history-version-meta { padding-right: 4px; }
+}

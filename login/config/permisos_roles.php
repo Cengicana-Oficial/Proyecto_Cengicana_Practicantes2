@@ -109,6 +109,10 @@ function sembrar_permisos_base(PDO $conn)
         'laboratorio.acceder' => 'Permite acceder al modulo de Laboratorio',
         'laboratorio.solicitudes.ver' => 'Permite ver las solicitudes de analisis de Laboratorio',
         'laboratorio.solicitudes.editar' => 'Permite editar solicitudes de analisis de Laboratorio',
+        'laboratorio.solicitudes.editar.foliar' => 'Permite editar solicitudes de muestras foliares',
+        'laboratorio.solicitudes.editar.suelo' => 'Permite editar solicitudes de muestras de suelo',
+        'laboratorio.solicitudes.editar.aguas' => 'Permite editar solicitudes de muestras de aguas',
+        'laboratorio.solicitudes.editar.cana' => 'Permite editar solicitudes de muestras de caña',
         'laboratorio.analisis.ver' => 'Permite ver los analisis registrados en Laboratorio',
         'laboratorio.analisis.crear' => 'Permite crear nuevos analisis en Laboratorio',
         'laboratorio.analisis.editar' => 'Permite editar analisis en Laboratorio',
@@ -117,6 +121,7 @@ function sembrar_permisos_base(PDO $conn)
         'laboratorio.usuarios.gestionar' => 'Permite gestionar los usuarios del modulo Laboratorio',
         'laboratorio.roles.gestionar' => 'Permite gestionar roles y permisos de Laboratorio',
         'laboratorio.configuracion.gestionar' => 'Permite gestionar la configuracion general de Laboratorio',
+        'sigec.acceder' => 'Permite acceder al modulo SIGEC',
     ];
 
     $stmt = $conn->prepare("
@@ -160,6 +165,7 @@ function agrupar_permisos(array $permisos)
         'Permisos de cursos' => [],
         'Permisos de solicitudes internas' => [],
         'Permisos de laboratorio' => [],
+        'Permisos de SIGEC' => [],
         'Permisos de pagos' => [],
         'Permisos de usuarios y accesos' => [],
         'Permisos generales' => [],
@@ -188,6 +194,10 @@ function clasificar_grupo_permiso($nombrePermiso)
         return 'Permisos de laboratorio';
     }
 
+    if (strpos($nombre, 'sigec.') === 0) {
+        return 'Permisos de SIGEC';
+    }
+
     if (strpos($nombre, 'pago') !== false) {
         return 'Permisos de pagos';
     }
@@ -210,6 +220,7 @@ function titulo_corto_grupo_permiso($grupo)
         'Permisos de cursos' => 'Cengicursos',
         'Permisos de solicitudes internas' => 'Solicitudes internas',
         'Permisos de laboratorio' => 'Cengilabs',
+        'Permisos de SIGEC' => 'SIGEC',
         'Permisos de pagos' => 'Pagos',
         'Permisos de usuarios y accesos' => 'General',
         'Permisos generales' => 'General',
@@ -225,6 +236,7 @@ function descripcion_grupo_permiso($grupo)
         'Permisos de cursos' => 'Agrupa acciones para cursos, participantes, notas, ingenios y asignaciones.',
         'Permisos de solicitudes internas' => 'Controla acceso a solicitudes, usuarios y programas del modulo Sistema de solicitudes.',
         'Permisos de laboratorio' => 'Controla el acceso a lotes, LABC, formularios, revision y controles de laboratorio.',
+        'Permisos de SIGEC' => 'Controla el acceso al modulo SIGEC (Sistema de Gestion de Ensayos Experimentales).',
         'Permisos de pagos' => 'Reune permisos relacionados con estados de pago y control de cobros.',
         'Permisos de usuarios y accesos' => 'Incluye gestion de usuarios, roles, modulos y acceso administrativo.',
         'Permisos generales' => 'Permisos transversales que no pertenecen a un solo modulo.',
@@ -309,6 +321,10 @@ function etiqueta_permiso($nombrePermiso)
         'laboratorio.acceder' => 'Acceder al modulo',
         'laboratorio.solicitudes.ver' => 'Ver solicitudes',
         'laboratorio.solicitudes.editar' => 'Editar solicitudes',
+        'laboratorio.solicitudes.editar.foliar' => 'Editar solicitudes foliares',
+        'laboratorio.solicitudes.editar.suelo' => 'Editar solicitudes de suelo',
+        'laboratorio.solicitudes.editar.aguas' => 'Editar solicitudes de aguas',
+        'laboratorio.solicitudes.editar.cana' => 'Editar solicitudes de caña',
         'laboratorio.analisis.ver' => 'Ver analisis',
         'laboratorio.analisis.crear' => 'Crear analisis',
         'laboratorio.analisis.editar' => 'Editar analisis',
@@ -317,6 +333,7 @@ function etiqueta_permiso($nombrePermiso)
         'laboratorio.usuarios.gestionar' => 'Gestionar usuarios',
         'laboratorio.roles.gestionar' => 'Gestionar roles y permisos',
         'laboratorio.configuracion.gestionar' => 'Gestionar configuracion',
+        'sigec.acceder' => 'Acceder al modulo SIGEC',
     ];
 
     if (isset($mapa[$nombrePermiso])) {

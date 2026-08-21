@@ -8,6 +8,7 @@ require_once __DIR__ . '/../models/trazabilidad_model.php';
 
 lab_require_module_access();
 asegurarColumnasFirmasSolicitud($conexion);
+labSolicitudHistorialAsegurarEsquema($conexion);
 labCatalogoAnalisisAsegurarEsquema($conexion);
 
 $catalogoMuestras = labCatalogoMuestrasFormularioData($conexion, false);
@@ -34,14 +35,31 @@ $dbWarning = '';
 $solicitudesDb = [];
 $correlativosDb = [];
 $loteSeleccionado = trim((string) ($_GET['lote'] ?? ''));
+$idSolicitudGet = !empty($_GET['id_solicitud']) ? (int) $_GET['id_solicitud'] : null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $idSolicitudPost = !empty($_POST['id_solicitud']) ? (int) $_POST['id_solicitud'] : null;
-  lab_require_permission($idSolicitudPost ? 'laboratorio.solicitudes.editar' : 'laboratorio.solicitudes.crear');
+  $tipoFormularioPost = (string) ($_POST['tipo_form'] ?? $tipoFormularioInicial);
+
+  if ($idSolicitudPost) {
+    $tipoSolicitudActual = labSolicitudObtenerTipoActual($conexion, $idSolicitudPost);
+    if (!$tipoSolicitudActual) {
+      lab_forbidden('La solicitud que intenta editar no existe.');
+    }
+
+    labSolicitudRequerirPermisoEdicionTipo($tipoSolicitudActual);
+
+    $tipoSolicitudObjetivo = labCatalogoMuestrasObtenerPorClave($conexion, $tipoFormularioPost, false);
+    if ($tipoSolicitudObjetivo) {
+      labSolicitudRequerirPermisoEdicionTipo($tipoSolicitudObjetivo);
+    }
+  } else {
+    lab_require_permission('laboratorio.solicitudes.crear');
+  }
 
   try {
     $conexion->beginTransaction();
 
-    $tipoFormulario = (string) ($_POST['tipo_form'] ?? $tipoFormularioInicial);
+    $tipoFormulario = $tipoFormularioPost;
     $tipoMuestra = labCatalogoMuestrasObtenerPorClave($conexion, $tipoFormulario, !$idSolicitudPost ? true : false);
     if (!$tipoMuestra) {
       throw new RuntimeException('El tipo de muestra seleccionado ya no está disponible.');
@@ -77,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $idLote = obtenerLote($conexion, $codigoLote);
     $fechaIngresoActual = date('Y-m-d');
     $solicitudExistente = null;
+    $snapshotAnterior = null;
 
     if ($idSolicitud) {
       $stmtSolicitudExistente = $conexion->prepare("
@@ -84,6 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         FROM solicitud
         WHERE id_solicitud = ?
         LIMIT 1
+        FOR UPDATE
       ");
       $stmtSolicitudExistente->execute([$idSolicitud]);
       $solicitudExistente = $stmtSolicitudExistente->fetch(PDO::FETCH_ASSOC) ?: null;
@@ -91,6 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       if (!$solicitudExistente) {
         throw new RuntimeException('La solicitud que intenta editar no existe.');
       }
+
+      $snapshotAnterior = labSolicitudObtenerSnapshot($conexion, $idSolicitud);
     }
 
     $fechaEstimadaNueva = calcularFechaEstimadaSolicitud($fechaIngresoActual, $tipoMuestra);
@@ -240,9 +262,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       insertarLoteAnalisis($conexion, $idRango, $idTipoAnalisis);
     }
 
+    $usuarioActualTraz = function_exists('lab_current_user') ? lab_current_user() : [];
+    if ($idSolicitudPost && $snapshotAnterior) {
+      $snapshotNuevo = labSolicitudObtenerSnapshot($conexion, $idSolicitud);
+      if ($snapshotNuevo) {
+        labSolicitudRegistrarHistorialCambio(
+          $conexion,
+          $idSolicitud,
+          $snapshotAnterior,
+          $snapshotNuevo,
+          $usuarioActualTraz
+        );
+      }
+    }
+
     $conexion->commit();
 
-    $usuarioActualTraz = function_exists('lab_current_user') ? lab_current_user() : [];
     lab_trazabilidad_registrar_evento($conexion, [
       'id_lote' => $idLote,
       'id_solicitud' => $idSolicitud,
@@ -265,7 +300,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-  lab_require_permission('laboratorio.solicitudes.crear');
+  if ($idSolicitudGet) {
+    $tipoSolicitudActual = labSolicitudObtenerTipoActual($conexion, $idSolicitudGet);
+    if (!$tipoSolicitudActual) {
+      lab_forbidden('La solicitud que intenta editar no existe.');
+    }
+    labSolicitudRequerirPermisoEdicionTipo($tipoSolicitudActual);
+  } else {
+    lab_require_permission('laboratorio.solicitudes.crear');
+  }
 }
 
 try {
@@ -277,6 +320,7 @@ try {
   ");
   $correlativosDb = $stmtCorrelativos->fetchAll();
 
+  $idSolicitudPrioritaria = (int) ($idSolicitudGet ?? 0);
   $sqlSolicitudes = "
     SELECT
       s.id_solicitud,
@@ -295,6 +339,11 @@ try {
       l.codigo_lote,
       tm.nombre AS tipo_nombre,
       tm.prefijo,
+      (
+        SELECT GROUP_CONCAT(sa.id_tipo_analisis ORDER BY sa.id_tipo_analisis SEPARATOR ',')
+        FROM solicitud_analisis sa
+        WHERE sa.id_solicitud = s.id_solicitud
+      ) AS analisis_ids,
       mr.inicio_laboratorio,
       mr.fin_laboratorio
     FROM solicitud s
@@ -309,7 +358,7 @@ try {
       WHERE codigo_lab IS NOT NULL AND codigo_lab <> ''
       GROUP BY id_solicitud
     ) mr ON mr.id_solicitud = s.id_solicitud
-    ORDER BY s.id_solicitud DESC
+    ORDER BY (s.id_solicitud = {$idSolicitudPrioritaria}) DESC, s.id_solicitud DESC
     LIMIT 100
   ";
 
@@ -336,7 +385,7 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="../css/lab_shell.css?v=1">
 <link rel="stylesheet" href="../css/solicitud_formulario.css?v=8">
-<link rel="stylesheet" href="../styles/recepcion_template.css?v=1">
+<link rel="stylesheet" href="../styles/recepcion_template.css?v=2">
 </head>
 <body class="cengi-canvas">
 <?php lab_shell_open('solicitud_formulario.php', 'Recepcion', 'Boleta de solicitud de analisis por lote'); ?>
@@ -367,6 +416,7 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
   <?php endif; ?>
 
   <form id="solicitud-form" method="post">
+  <input type="hidden" id="id_solicitud" name="id_solicitud" value="<?= $idSolicitudGet ? (int) $idSolicitudGet : '' ?>"/>
   <input type="hidden" id="tipo_form" name="tipo_form" value="<?= htmlspecialchars($tipoFormularioInicial, ENT_QUOTES, 'UTF-8') ?>"/>
   <input type="hidden" id="firma_ingreso" name="firma_ingreso" value=""/>
   <input type="hidden" id="firma_recibe" name="firma_recibe" value=""/>
@@ -450,6 +500,7 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
             id="lote"
             name="lote"
             type="text"
+            required
             placeholder="Ej. 185"
             value="<?= htmlspecialchars($loteSeleccionado, ENT_QUOTES, 'UTF-8') ?>"/>
     </div>
@@ -465,7 +516,8 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
         <input
             id="fecha_muestreo"
             name="fecha_de_muestreo"
-            type="date"/>
+            type="date"
+            required/>
     </div>
     <div class="field">
         <label for="fecha_ingreso">
@@ -503,6 +555,8 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
             id="numero_muestras"
             name="numero_muestras"
             type="number"
+            min="1"
+            required
             placeholder="Ej. 7"/>
     </div>
     <div class="field">
@@ -660,14 +714,19 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
           </div>
         <?php else: ?>
           <?php foreach ($recepcionesHoy as $recepcion): ?>
-            <a class="recent-item" href="?id_solicitud=<?= (int) $recepcion['id_solicitud'] ?>">
+            <?php $puedeEditarRecepcion = labSolicitudPuedeEditarTipo($recepcion); ?>
+            <<?= $puedeEditarRecepcion ? 'a' : 'div' ?>
+              class="recent-item<?= $puedeEditarRecepcion ? '' : ' recent-item--locked' ?>"
+              <?= $puedeEditarRecepcion
+                ? 'href="?id_solicitud=' . (int) $recepcion['id_solicitud'] . '"'
+                : 'aria-disabled="true" title="No tiene permiso para editar este tipo de solicitud"' ?>>
               <span class="recent-icon"><?= htmlspecialchars(strtoupper((string) ($recepcion['prefijo'] ?? 'L')), ENT_QUOTES, 'UTF-8') ?></span>
               <span class="recent-copy">
                 <strong><?= htmlspecialchars((string) ($recepcion['codigo_lote'] ?? 'Sin lote'), ENT_QUOTES, 'UTF-8') ?></strong>
                 <small><?= htmlspecialchars((string) ($recepcion['tipo_nombre'] ?? 'Muestra'), ENT_QUOTES, 'UTF-8') ?> · <?= (int) ($recepcion['numero_muestras'] ?? 0) ?> muestra(s)</small>
               </span>
-              <span class="recent-status">Recibida</span>
-            </a>
+              <span class="recent-status"><?= $puedeEditarRecepcion ? 'Editar' : 'Sin permiso' ?></span>
+            </<?= $puedeEditarRecepcion ? 'a' : 'div' ?>>
           <?php endforeach; ?>
         <?php endif; ?>
       </div>
@@ -701,7 +760,8 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
 <script type="application/json" id="correlativos-db"><?php echo json_encode($correlativosDb, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script type="application/json" id="analisis-catalogo"><?php echo json_encode($catalogoAnalisis, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-<script src="../js/solicitud_formulario.js?v=8"></script>
+<script src="../js/solicitud_pdf_layout.js?v=2"></script>
+<script src="../js/solicitud_formulario.js?v=11"></script>
 <?php lab_shell_content_close(); ?>
 </body>
 </html>

@@ -93,6 +93,12 @@ function menu_modulo_meta($nombre)
     } elseif ($modulo === 'solicitudes internas') {
         $ruta = '../sistema_de_solicitudes/index.php';
         $icono = 'assignment';
+    } elseif ($modulo === 'sigec') {
+        // SIGEC corre en su propio contenedor/dominio (no comparte sesion
+        // PHP nativa), por eso pasa por el puente de SSO en vez de saltar
+        // directo a una carpeta hermana como los demas modulos.
+        $ruta = 'sso_sigec.php';
+        $icono = 'biotech';
     } elseif ($modulo === 'solicitud de visitas') {
         $ruta = '../Pruebas/public/admin/dashboard_unificado.php?modulo=solicitudes';
         $icono = 'calendar_today';

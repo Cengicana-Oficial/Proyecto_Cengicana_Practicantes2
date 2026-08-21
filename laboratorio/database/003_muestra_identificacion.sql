@@ -1,0 +1,31 @@
+CREATE TABLE IF NOT EXISTS muestra_identificacion (
+    id_identificacion INT NOT NULL AUTO_INCREMENT,
+    id_muestra INT NOT NULL,
+    lectura_codigo VARCHAR(255) DEFAULT NULL,
+    cultivo VARCHAR(150) DEFAULT NULL,
+    bloque VARCHAR(120) DEFAULT NULL,
+    parcela VARCHAR(120) DEFAULT NULL,
+    punto_muestreo VARCHAR(180) DEFAULT NULL,
+    georreferencia VARCHAR(180) DEFAULT NULL,
+    fecha_muestreo DATETIME DEFAULT NULL,
+    repeticion VARCHAR(120) DEFAULT NULL,
+    variedad VARCHAR(180) DEFAULT NULL,
+    corte VARCHAR(120) DEFAULT NULL,
+    tratamiento VARCHAR(255) DEFAULT NULL,
+    tomado_por VARCHAR(180) DEFAULT NULL,
+    peso_cantidad DECIMAL(12,4) DEFAULT NULL,
+    unidad_peso VARCHAR(30) DEFAULT NULL,
+    contenedor VARCHAR(180) DEFAULT NULL,
+    condicion_fisica VARCHAR(80) DEFAULT NULL,
+    temperatura_recepcion DECIMAL(8,2) DEFAULT NULL,
+    observaciones TEXT DEFAULT NULL,
+    actualizado_por VARCHAR(180) DEFAULT NULL,
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_identificacion),
+    UNIQUE KEY uq_muestra_identificacion_muestra (id_muestra),
+    KEY idx_muestra_identificacion_lectura (lectura_codigo),
+    CONSTRAINT fk_muestra_identificacion_muestra
+        FOREIGN KEY (id_muestra) REFERENCES muestra (id_muestra)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
