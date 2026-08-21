@@ -118,17 +118,60 @@ function cengi_export_pdf_crear(array $contenidos)
  * de salida pendiente antes de mandar los headers, para que un warning/notice
  * accidental de PHP no rompa el binario ni el Content-Length.
  */
-function cengi_export_enviar_pdf($pdfBytes, $nombreArchivo)
+function cengi_export_enviar_pdf($pdfBytes, $nombreArchivo, $adjunto = true)
 {
+    $pdfBytes = (string) $pdfBytes;
+    if (strncmp($pdfBytes, '%PDF-', 5) !== 0) {
+        throw new RuntimeException('No se puede descargar un contenido que no sea un PDF valido.');
+    }
+
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
-    header('Content-Type: application/pdf');
-    header('Content-Disposition: attachment; filename="' . $nombreArchivo . '"');
+
+    // Evita que una configuracion global de PHP/Apache comprima, recodifique o
+    // conserve un Content-Type anterior. Cualquiera de esos casos puede hacer
+    // que el navegador muestre los objetos internos (%PDF, xref, stream, etc.)
+    // como texto en vez de tratar la respuesta como un archivo descargable.
+    if (function_exists('header_remove')) {
+        header_remove('Content-Type');
+        header_remove('Content-Disposition');
+        header_remove('Content-Length');
+        header_remove('Content-Encoding');
+    }
+    @ini_set('zlib.output_compression', '0');
+
+    $nombreArchivo = cengi_export_nombre_archivo($nombreArchivo, 'reporte.pdf');
+    $nombreAscii = function_exists('iconv')
+        ? iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $nombreArchivo)
+        : $nombreArchivo;
+    $nombreAscii = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string) $nombreAscii);
+    if ($nombreAscii === '') {
+        $nombreAscii = 'reporte.pdf';
+    }
+
+    http_response_code(200);
+    header('Content-Type: application/pdf', true);
+    $disposicion = $adjunto ? 'attachment' : 'inline';
+    header("Content-Disposition: {$disposicion}; filename=\"{$nombreAscii}\"; filename*=UTF-8''" . rawurlencode($nombreArchivo), true);
+    header('Content-Transfer-Encoding: binary', true);
     header('Content-Length: ' . strlen($pdfBytes));
     header('Cache-Control: no-store, no-cache, must-revalidate');
+    header('Pragma: no-cache');
+    header('X-Content-Type-Options: nosniff');
     echo $pdfBytes;
     exit;
+}
+
+/**
+ * Normaliza un nombre usado en Content-Disposition y bloquea saltos de linea
+ * o separadores de ruta que podrian romper los headers de descarga.
+ */
+function cengi_export_nombre_archivo($nombreArchivo, $predeterminado)
+{
+    $nombreArchivo = str_replace(["\r", "\n", '\\', '/'], ['', '', '_', '_'], trim((string) $nombreArchivo));
+    $nombreArchivo = trim($nombreArchivo, " .\t\n\r\0\x0B");
+    return $nombreArchivo !== '' ? $nombreArchivo : $predeterminado;
 }
 
 /**
@@ -157,7 +200,10 @@ function cengi_export_enviar_excel(array $encabezados, array $filas, $tituloHoja
     // generacion del archivo (sin ocultar errores fatales) y ademas se
     // envuelve todo en un buffer de salida que se descarta antes de mandar
     // los headers, como doble seguro.
-    $nivelErroresPrevio = error_reporting(E_ERROR | E_PARSE | E_COMPILE_ERROR | E_CORE_ERROR);
+    error_reporting(E_ERROR | E_PARSE | E_COMPILE_ERROR | E_CORE_ERROR);
+    set_error_handler(static function () {
+        return true;
+    }, E_DEPRECATED | E_USER_DEPRECATED);
     ob_start();
 
     require_once __DIR__ . '/PHPExcel.php';
@@ -206,18 +252,49 @@ function cengi_export_enviar_excel(array $encabezados, array $filas, $tituloHoja
     $hoja->setTitle(mb_substr($tituloHoja, 0, 31, 'UTF-8'));
     $objPHPExcel->setActiveSheetIndex(0);
 
+    $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel5');
+    $objWriter->save('php://output');
+    $excelBytes = ob_get_clean();
+
+    // La funcion siempre termina la peticion con exit. No se restaura aqui el
+    // handler porque PHPExcel conserva objetos estaticos y sus destructores se
+    // ejecutan durante el shutdown; en PHP 8.2 esos destructores vuelven a
+    // emitir avisos Deprecated despues del binario y corrompen el .xls.
+
+    if (!is_string($excelBytes)
+        || strncmp($excelBytes, "\xD0\xCF\x11\xE0", 4) !== 0
+        || strlen($excelBytes) % 512 !== 0) {
+        throw new RuntimeException('No se pudo generar un archivo de Excel valido.');
+    }
+
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
-    header('Content-Type: application/vnd.ms-excel');
-    header('Content-Disposition: attachment;filename="' . $nombreArchivoBase . '.xls"');
-    header('Cache-Control: max-age=0');
-    header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
-    header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
-    header('Cache-Control: cache, must-revalidate');
-    header('Pragma: public');
+    if (function_exists('header_remove')) {
+        header_remove('Content-Type');
+        header_remove('Content-Disposition');
+        header_remove('Content-Length');
+        header_remove('Content-Encoding');
+    }
+    @ini_set('zlib.output_compression', '0');
 
-    $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel5');
-    $objWriter->save('php://output');
+    $nombreArchivo = cengi_export_nombre_archivo($nombreArchivoBase . '.xls', 'reporte.xls');
+    $nombreAscii = function_exists('iconv')
+        ? iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $nombreArchivo)
+        : $nombreArchivo;
+    $nombreAscii = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string) $nombreAscii);
+    if ($nombreAscii === '') {
+        $nombreAscii = 'reporte.xls';
+    }
+
+    http_response_code(200);
+    header('Content-Type: application/vnd.ms-excel', true);
+    header("Content-Disposition: attachment; filename=\"{$nombreAscii}\"; filename*=UTF-8''" . rawurlencode($nombreArchivo), true);
+    header('Content-Transfer-Encoding: binary', true);
+    header('Content-Length: ' . strlen($excelBytes), true);
+    header('Cache-Control: no-store, no-cache, must-revalidate', true);
+    header('Pragma: no-cache', true);
+    header('X-Content-Type-Options: nosniff', true);
+    echo $excelBytes;
     exit;
 }

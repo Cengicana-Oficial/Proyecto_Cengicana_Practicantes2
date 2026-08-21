@@ -451,7 +451,7 @@ $ejemploParticipante = $db->query("
                         <div class="form-group cengi-form-full">
                             <label class="control-label">Archivo CSV o Excel (.xls)</label>
                             <input type="file" name="archivo_masivo" class="form-control" accept=".csv,.xls" required>
-                            <p class="help-block">Columnas en este orden: Nombre (obligatorio), CUI (opcional), Correo (opcional). <a href="plantilla_carga_masiva_eventos.php">Descargar plantilla Excel</a>.</p>
+                            <p class="help-block">Columnas en este orden: Nombre (obligatorio), CUI (opcional), Correo (opcional). <a href="plantilla_carga_masiva_eventos.php" download>Descargar plantilla Excel</a>.</p>
                         </div>
                         <div class="form-group cengi-form-full cengi-register-actions"><button type="button" class="btn btn-default btn-sm" id="evpCancelarCargaMasiva">Cancelar</button><button type="submit" class="btn btn-success btn-sm">Cargar participantes</button></div>
                     </div>

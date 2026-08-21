@@ -424,6 +424,20 @@ function aplicarSolicitudDb(idSolicitud) {
   document.getElementById("lote").value = solicitudSeleccionada.codigo_lote || "";
   document.getElementById("fecha_muestreo").value = solicitudSeleccionada.fecha_muestreo || "";
   document.getElementById("numero_muestras").value = solicitudSeleccionada.numero_muestras || "";
+  const institucion = document.getElementById("institucion");
+  const responsableEnvio = document.getElementById("responsable_envio");
+  const ingresadoPor = document.querySelector('input[name="ingresado_por"]');
+  const correoIngresado = document.querySelector('input[name="correo_ingresado_por"]');
+  const recibidoPor = document.querySelector('input[name="recibido_por"]');
+  const correoRecibido = document.querySelector('input[name="correo_recibido_por"]');
+  const observaciones = document.getElementById("observaciones");
+  if (institucion) institucion.value = solicitudSeleccionada.institucion || "";
+  if (responsableEnvio) responsableEnvio.value = solicitudSeleccionada.responsable_envio || "";
+  if (ingresadoPor) ingresadoPor.value = solicitudSeleccionada.ingresado_por || "";
+  if (correoIngresado) correoIngresado.value = solicitudSeleccionada.correo_ingresado || "";
+  if (recibidoPor) recibidoPor.value = solicitudSeleccionada.recibido_por || "";
+  if (correoRecibido) correoRecibido.value = solicitudSeleccionada.correo_recibido || "";
+  if (observaciones) observaciones.value = solicitudSeleccionada.observaciones || "";
   setCamposReadonly(true);
   updateNumeroLaboratorio();
 
@@ -1213,6 +1227,79 @@ function initFirmaSubmitSync() {
   if (form) form.addEventListener("submit", syncFirmaInputs);
 }
 
+function escaparTicket(valor) {
+  return String(valor ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function actualizarVistaBoleta() {
+  const lote = getInputValue("#lote");
+  const cliente = getInputValue("#institucion");
+  const campo = getInputValue("#numero_de_muestra");
+  const tipo = getInputValue("#tipo-label-header");
+  const fecha = getInputValue("#fecha_muestreo");
+  const cantidad = Math.max(0, parseInt(getInputValue("#numero_muestras"), 10) || 0);
+  const codigoInicio = getInputValue("#n_laboratorio_inicio");
+  const codigoFin = getInputValue("#n_laboratorio_fin");
+  const analisis = getAnalisisSeleccionados().map(item => item.nombre).filter(Boolean);
+
+  const ticketLote = document.getElementById("ticket-lote");
+  const ticketCliente = document.getElementById("ticket-cliente");
+  const ticketCampo = document.getElementById("ticket-campo");
+  const ticketMeta = document.getElementById("ticket-meta");
+  const ticketMuestras = document.getElementById("ticket-muestras");
+
+  if (ticketLote) ticketLote.textContent = lote ? `LOTE ${lote}` : "LOTE —";
+  if (ticketCliente) ticketCliente.textContent = cliente ? cliente : "Cliente —";
+  if (ticketCampo) ticketCampo.textContent = campo ? `Lote de campo ${campo}` : "Lote de campo —";
+  if (ticketMeta) {
+    ticketMeta.textContent = fecha
+      ? `${cantidad || 0} muestra(s) · Muestreo ${fecha} · Ingreso ${getInputValue("#fecha_ingreso") || "—"}`
+      : "Completa los datos para ver aqui el resumen de la recepcion.";
+  }
+
+  if (!ticketMuestras) return;
+  if (!cantidad || !fecha) {
+    ticketMuestras.innerHTML = '<tr><td colspan="3" class="ticket-empty">Aun no se ha completado la muestra.</td></tr>';
+    return;
+  }
+
+  const codigos = codigoInicio && codigoFin && codigoInicio !== codigoFin
+    ? `${codigoInicio} — ${codigoFin}`
+    : (codigoInicio || "Pendiente");
+  const resumenAnalisis = analisis.length ? analisis.join(", ") : "Sin analisis seleccionados";
+  ticketMuestras.innerHTML = `<tr><td>${escaparTicket(codigos)}</td><td>${escaparTicket(tipo || "Muestra")}</td><td>${escaparTicket(resumenAnalisis)}</td></tr>`;
+}
+
+function initVistaBoleta() {
+  const form = document.getElementById("solicitud-form");
+  if (form) {
+    form.addEventListener("input", actualizarVistaBoleta);
+    form.addEventListener("change", actualizarVistaBoleta);
+  }
+
+  const tipoLabel = document.getElementById("tipo-label-header");
+  if (tipoLabel && window.MutationObserver) {
+    new MutationObserver(actualizarVistaBoleta).observe(tipoLabel, { childList: true, characterData: true, subtree: true });
+  }
+
+  const proxyPdf = document.getElementById("ticket-generar-pdf");
+  if (proxyPdf) {
+    proxyPdf.addEventListener("click", () => document.getElementById("btn-generar-pdf")?.click());
+  }
+
+  const proxyFinalizar = document.getElementById("ticket-finalizar");
+  if (proxyFinalizar) {
+    proxyFinalizar.addEventListener("click", () => document.getElementById("btn-finalizar-solicitud")?.click());
+  }
+
+  actualizarVistaBoleta();
+}
+
 initSeleccionAnalisis();
 initFabMenu();
 initTipoButtons();
@@ -1224,6 +1311,7 @@ initSolicitudDesdeQuery(solicitudSelect);
 initFirmas();
 initPdfButton();
 initFirmaSubmitSync();
+initVistaBoleta();
 function initFinalizarButton() {
   const boton = document.getElementById('btn-finalizar-solicitud');
   if (boton) boton.addEventListener('click', finalizarSolicitud);

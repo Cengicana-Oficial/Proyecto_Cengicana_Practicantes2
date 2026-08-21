@@ -439,7 +439,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                     <span class="glyphicon glyphicon-download-alt"></span> Descargar listado <span class="caret"></span>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-right">
-                    <li><a href="<?php echo cengi_dbi_html($urlExportCursos . '&format=pdf'); ?>"><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
+                    <li><a href="<?php echo cengi_dbi_html($urlExportCursos . '&format=pdf'); ?>" download><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
                     <li><a href="<?php echo cengi_dbi_html($urlExportCursos . '&format=excel'); ?>"><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
                 </ul>
             </div>
@@ -492,7 +492,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                     <span class="glyphicon glyphicon-download-alt"></span> Descargar listado <span class="caret"></span>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-right">
-                    <li><a href="<?php echo cengi_dbi_html($urlExportParticipantes . '&format=pdf'); ?>"><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
+                    <li><a href="<?php echo cengi_dbi_html($urlExportParticipantes . '&format=pdf'); ?>" download><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
                     <li><a href="<?php echo cengi_dbi_html($urlExportParticipantes . '&format=excel'); ?>"><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
                 </ul>
             </div>
@@ -582,7 +582,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                     <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> Descargar listado <span class="caret"></span>
                 </button>
                 <ul class="dropdown-menu">
-                    <li><a href="#" id="dashboard-ingenio-course-export-pdf"><span class="glyphicon glyphicon-file" aria-hidden="true"></span> Descargar PDF</a></li>
+                    <li><a href="#" id="dashboard-ingenio-course-export-pdf" download><span class="glyphicon glyphicon-file" aria-hidden="true"></span> Descargar PDF</a></li>
                     <li><a href="#" id="dashboard-ingenio-course-export-excel"><span class="glyphicon glyphicon-list-alt" aria-hidden="true"></span> Descargar Excel</a></li>
                 </ul>
             </div>
@@ -816,12 +816,14 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
         // acciones. Visible siempre que haya al menos un participante que listar.
         if (participants.length && course.id) {
             var exportBase = 'exportardashboardingenio.php?' + $.param({ingenio_id: currentIngenioId, vista: 'curso_participantes', curso_id: Number(course.id)});
-            $courseExportPdf.attr('href', exportBase + '&format=pdf');
+            $courseExportPdf
+                .attr('href', exportBase + '&format=pdf')
+                .attr('download', 'participantes_curso_' + Number(course.id) + '_ingenio_' + currentIngenioId + '.pdf');
             $courseExportExcel.attr('href', exportBase + '&format=excel');
             $courseExportGroup.removeAttr('hidden');
         } else {
             $courseExportGroup.attr('hidden', true);
-            $courseExportPdf.attr('href', '#');
+            $courseExportPdf.attr('href', '#').removeAttr('download');
             $courseExportExcel.attr('href', '#');
         }
 
@@ -840,7 +842,7 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
         $courseError.attr('hidden', true).text('');
         $courseZipButton.attr('hidden', true).attr('href', '#');
         $courseExportGroup.attr('hidden', true);
-        $courseExportPdf.attr('href', '#');
+        $courseExportPdf.attr('href', '#').removeAttr('download');
         $courseExportExcel.attr('href', '#');
         $courseLoading.removeAttr('hidden');
         courseRequest = $.ajax({url: 'dashboard_ingenio.php', data: {curso_detalle_id: cursoId, ingenio_id: currentIngenioId}, dataType: 'json', cache: false})
