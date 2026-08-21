@@ -21,7 +21,7 @@ RUN sed -i 's|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|ht
         zip \
         mbstring \
         gd \
-    && a2enmod rewrite headers \
+    && a2enmod rewrite headers proxy proxy_http \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -31,6 +31,16 @@ RUN a2enconf no-php-uploads
 
 COPY dockerfiles/modulos-app/error-pages.conf /etc/apache2/conf-available/error-pages.conf
 RUN a2enconf error-pages
+
+# Reenvia /sigec/* al contenedor "sigec" (docker-compose.prod.yml), sin
+# exponer su puerto publicamente: modulos.cengicana.org/sigec/... se sirve
+# asi bajo el mismo dominio ya configurado, sin necesitar un subdominio ni
+# tocar el proxy externo. Ver dockerfiles/modulos-app/sigec-proxy.conf y
+# sigec/app/Providers/AppServiceProvider.php (URL::forceRootUrl) para la
+# otra mitad de este arreglo: sin eso, los enlaces/assets que genera
+# Laravel saldrian sin el prefijo /sigec.
+COPY dockerfiles/modulos-app/sigec-proxy.conf /etc/apache2/conf-available/sigec-proxy.conf
+RUN a2enconf sigec-proxy
 
 COPY dockerfiles/modulos-app/uploads.ini /usr/local/etc/php/conf.d/zz-uploads.ini
 

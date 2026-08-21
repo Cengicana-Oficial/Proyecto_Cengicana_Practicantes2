@@ -1,622 +1,479 @@
-@import url("../styles/tokens.css");
-@import url("../styles/button.css");
-@import url("../styles/forms.css");
-@import url("../styles/surfaces.css");
-@import url("../styles/tables.css");
-@import url("../styles/status.css");
-
-/* =========================================================
-   LOCAL TOKENS
-========================================================= */
-
 :root {
-  --page-bg: #ffffff;
-  --surface: #ffffff;
-  --surface-soft: #f7f8f8;
-  --border: #ced2d5;
-  --border-strong: #ced2d5;
-  --text-soft: #4a4d49;
-  --brand: #73bc25;
-  --brand-soft: rgba(115, 188, 37, 0.12);
-  --brand-accent: #73bc25;
-  --brand-secondary: #a3d300;
-  --chip-bg: rgba(163, 211, 0, 0.14);
-  --danger: #ff6b00;
-  --danger-soft: rgba(255, 107, 0, 0.08);
-  --warning: #ffcc00;
-  --warning-soft: rgba(255, 204, 0, 0.14);
-  --lab-body-background:
-    linear-gradient(180deg, #ffffff 0%, rgba(206, 210, 213, 0.12) 100%),
-    radial-gradient(circle at top right, rgba(163, 211, 0, 0.10), transparent 30%);
-  --lab-body-background-size: auto, auto;
-  --lab-body-background-position: center, center;
-  --lab-body-surface: rgba(255, 255, 255, 0.96);
-  --lab-body-surface-strong: rgba(255, 255, 255, 0.99);
-  --lab-body-border-soft: rgba(206, 210, 213, 0.82);
-  --lab-body-border-strong: rgba(206, 210, 213, 0.95);
-  --surface-card-bg: var(--surface);
-  --surface-panel-bg: var(--surface);
-  --surface-hero-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 255, 255, 0.96));
-  --surface-border: 1px solid var(--border);
-  --surface-border-soft: 1px solid var(--border);
-  --surface-border-strong: 1px solid var(--border);
-  --surface-radius-card: 28px;
-  --surface-radius-panel: 28px;
-  --surface-radius-hero: 28px;
-  --surface-shadow-card: 0 18px 48px rgba(12, 39, 27, 0.08);
-  --surface-shadow-panel: 0 18px 48px rgba(12, 39, 27, 0.08);
-  --surface-shadow-hero: 0 18px 48px rgba(12, 39, 27, 0.08);
-  --state-success-bg: rgba(163, 211, 0, 0.12);
-  --state-success-text: #73bc25;
-  --state-success-border: rgba(115, 188, 37, 0.22);
-  --state-info-bg: rgba(163, 211, 0, 0.12);
-  --state-info-text: #73bc25;
-  --state-info-border: rgba(163, 211, 0, 0.24);
-  --state-warning-bg: rgba(255, 204, 0, 0.16);
-  --state-warning-text: #8c3600;
-  --state-warning-border: rgba(255, 204, 0, 0.32);
-  --state-danger-bg: rgba(255, 107, 0, 0.08);
-  --state-danger-text: #8c3600;
-  --state-danger-border: rgba(255, 107, 0, 0.18);
+  --ident-green: #64a91f;
+  --ident-green-dark: #4f8618;
+  --ident-green-soft: #eef8e5;
+  --ident-ink: #292e32;
+  --ident-muted: #727b82;
+  --ident-line: #dfe3e5;
+  --ident-soft: #f7f8f8;
+  --ident-warning: #8a6500;
+  --ident-warning-bg: #fff8df;
+  --ident-info: #416d1a;
+  --ident-info-bg: #f1f8ea;
+  --ident-shadow: 0 1px 2px rgba(25, 31, 25, .04), 0 5px 16px rgba(25, 31, 25, .05);
 }
 
-/* =========================================================
-   RESET
-========================================================= */
+*, *::before, *::after { box-sizing: border-box; }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-/* =========================================================
-   BASE
-========================================================= */
-
-/*
- * NOTA: `padding` en <body> quedaba de cuando esta vista tenia su propio
- * .institution-header fijo. Con el shell compartido (.cengi-sidebar fijo +
- * .cengi-lab-content ya paddeado) un padding en <body> desalinea el
- * topbar/contenido respecto al borde del sidebar. El ancho del contenido se
- * limita mas abajo con `.page-shell`.
- */
-body {
-  min-height: 100vh;
-  font-family: "Inter", sans-serif;
-  color: var(--text-main);
-  background: var(--lab-body-background);
-  background-size: var(--lab-body-background-size);
-  background-position: var(--lab-body-background-position);
-}
-
-a {
-  text-decoration: none;
-}
-
-button,
-input,
-select {
-  font: inherit;
-}
-
-/*
- * NOTA: el header institucional fijo (.institution-header/.nav-brand/
- * .branding-zone/.nav-logo) se elimino porque ya no existe en el markup de
- * esta vista: fue reemplazado por el topbar del shell compartido
- * (.cengi-topbar en includes/shell_sidebar.php).
- */
-
-/* =========================================================
-   LAYOUT
-========================================================= */
-
-.page-shell {
-  max-width: 1180px;
+.sample-ident-page {
+  width: min(100%, 1370px);
   margin: 0 auto;
-}
-
-/* =========================================================
-   HERO ADMINISTRATIVO
-========================================================= */
-
-.hero-admin {
-  margin-bottom: 18px;
-}
-
-.panel {
-  overflow: hidden;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 255, 255, 0.96));
-  border: 1px solid rgba(206, 210, 213, 0.74);
-  border-radius: 28px;
-  box-shadow: 0 18px 48px rgba(12, 39, 27, 0.08);
-  backdrop-filter: blur(12px);
-}
-
-.panel-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 20px;
-  padding: 30px 30px 18px;
-}
-
-.hero-copy {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  max-width: 760px;
-}
-
-.back-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  width: fit-content;
-  margin-bottom: 12px;
-  padding: 10px 14px;
-  border: 1px solid rgba(206, 210, 213, 0.84);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--brand);
-  font-weight: 700;
-  box-shadow: 0 10px 22px rgba(12, 39, 27, 0.05);
-  backdrop-filter: blur(10px);
-  transition:
-    transform 200ms ease,
-    box-shadow 200ms ease,
-    border-color 200ms ease,
-    background 200ms ease;
-}
-
-.back-link:hover,
-.back-link:focus-visible {
-  transform: translateY(-1px);
-  border-color: rgba(115, 188, 37, 0.24);
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 14px 26px rgba(12, 39, 27, 0.07);
-  outline: none;
-}
-
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  margin-bottom: 12px;
-  padding: 7px 12px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--brand-soft), rgba(255, 255, 255, 0.96));
-  color: var(--brand);
+  color: var(--ident-ink);
   font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
 }
 
-.panel-header h1 {
-  margin: 0;
-  color: var(--brand);
-  font-size: clamp(32px, 4vw, 42px);
-  font-weight: 800;
-  line-height: 1.02;
-  letter-spacing: -0.04em;
+.ident-svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
 }
 
-.panel-header p {
-  max-width: 700px;
-  margin: 12px 0 0;
-  color: var(--text-soft);
-  font-size: 15px;
-  line-height: 1.6;
+.ident-intro {
+  margin: 0 0 14px;
+  color: var(--ident-muted);
+  font-size: 10.5px;
+  line-height: 1.55;
 }
 
-/*
- * El resumen de lotes ahora usa el componente compartido .cengi-kpi-grid /
- * .cengi-kpi de css/lab_shell.css (mismo "recuadro" que el resto del
- * modulo). Aqui solo se ajusta su encaje dentro del grid de
- * .panel-header (una sola tarjeta, alineada a la derecha).
- */
-.cengi-kpi-grid--single {
-  grid-template-columns: minmax(0, 250px);
-  justify-self: end;
-  align-self: start;
-  width: 100%;
-  max-width: 250px;
-  margin-bottom: 0;
-}
-
-/* =========================================================
-   TARJETA "IDENTIFICAR LOTE O MUESTRA" (buscador estilo
-   mockup, arriba de la tabla). Reutiliza .cengi-card y
-   .cengi-seg de css/lab_shell.css como base; aqui solo se
-   ajusta radio/sombra/spacing para que combine con el resto
-   de tarjetas "panel" de esta vista (28px, sombra suave) en
-   vez del .cengi-card generico (14px).
-========================================================= */
+.ident-intro strong { color: var(--ident-ink); }
 
 .ident-card {
-  margin-bottom: 18px;
-  padding: 22px 24px;
-  border-radius: 24px;
-  border-color: rgba(206, 210, 213, 0.74);
-  box-shadow: 0 14px 34px rgba(12, 39, 27, 0.07);
-}
-
-.ident-card h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 15px;
-}
-
-.ident-card h3 i {
-  color: var(--brand);
-  font-size: 14px;
-}
-
-.ident-card .cengi-card-sub {
   margin-bottom: 16px;
+  border: 1px solid var(--ident-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--ident-shadow);
 }
 
-.ident-mode {
-  margin-top: 14px;
+.ident-step-one { padding: 19px; }
+
+.ident-card h2,
+.ident-section-title h2,
+.ident-modal h2 {
+  margin: 0;
+  color: var(--ident-ink);
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: -.12px;
 }
 
-.ident-row {
-  display: flex;
-  flex-wrap: wrap;
+.ident-step-one > p,
+.ident-base-section > p {
+  margin: 5px 0 12px;
+  color: var(--ident-muted);
+  line-height: 1.45;
+}
+
+.ident-segment {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: 14px;
+  padding: 3px;
+  border: 1px solid var(--ident-line);
+  border-radius: 8px;
+  background: #f7f8f8;
+}
+
+.ident-segment button,
+.ident-tabs button {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 6px;
+  color: #687178;
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 800;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ident-segment button {
+  min-height: 31px;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.ident-segment button.is-active {
+  color: var(--ident-green-dark);
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(25, 31, 25, .08);
+}
+
+.ident-search-form,
+.ident-scanner-actions,
+.ident-form-head,
+.ident-form-actions,
+.ident-section-title,
+.ident-alert,
+.ident-btn,
+.ident-table-toolbar label,
+.ident-modal-card header,
+.ident-modal-card footer {
+  display: flex;
+  align-items: center;
+}
+
+.ident-search-form {
+  align-items: flex-end;
+  gap: 8px;
 }
 
 .ident-field {
-  flex: 1 1 260px;
-  min-width: 220px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
 }
 
-.ident-hint {
-  margin-top: 8px;
-  color: var(--text-soft);
-  font-size: 12px;
-  line-height: 1.5;
+.ident-search-form .ident-field { flex: 1; }
+
+.ident-field > span {
+  color: #5f686e;
+  font-size: 9px;
+  font-weight: 850;
 }
+
+.ident-field input,
+.ident-field select,
+.ident-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 35px;
+  padding: 7px 9px;
+  color: var(--ident-ink);
+  font: inherit;
+  font-size: 10.5px;
+  border: 1px solid #d5dade;
+  border-radius: 6px;
+  background: #fff;
+  outline: none;
+}
+
+.ident-field input:focus,
+.ident-field select:focus,
+.ident-field textarea:focus {
+  border-color: var(--ident-green);
+  box-shadow: 0 0 0 3px rgba(100, 169, 31, .12);
+}
+
+.ident-field input:disabled {
+  color: #747d82;
+  background: #f4f5f5;
+}
+
+.ident-field textarea {
+  min-height: 116px;
+  resize: vertical;
+}
+
+.ident-help {
+  margin: 7px 0 0;
+  color: var(--ident-muted);
+  font-size: 9.5px;
+  line-height: 1.45;
+}
+
+.ident-btn {
+  justify-content: center;
+  gap: 6px;
+  min-height: 35px;
+  padding: 7px 11px;
+  color: #566168;
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 850;
+  text-decoration: none;
+  border: 1px solid #d4dade;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.ident-btn:hover { transform: translateY(-1px); }
+.ident-btn--primary { color: #fff; border-color: var(--ident-green-dark); background: var(--ident-green-dark); }
+.ident-btn--dark { color: #fff; border-color: #283035; background: #283035; }
+.ident-btn--ghost { color: #596269; background: #fff; }
+.ident-btn--small { min-height: 31px; padding: 5px 9px; }
+
+.ident-scanner-actions { flex-wrap: wrap; gap: 7px; }
 
 .ident-alert {
-  margin-top: 14px;
-}
-
-@media (max-width: 600px) {
-  .ident-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .ident-row button,
-  .ident-row .ident-field {
-    width: 100%;
-  }
-}
-
-/* =========================================================
-   TOOLBAR ADMINISTRATIVA
-========================================================= */
-
-.toolbar {
-  display: grid;
-  grid-template-columns: minmax(300px, 1.65fr) minmax(190px, 0.95fr) auto;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding: 16px 30px 18px;
-  border-top: 1px solid rgba(206, 210, 213, 0.72);
-  border-bottom: 1px solid rgba(206, 210, 213, 0.72);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.94));
-}
-
-.search-box {
-  transition:
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    background 180ms ease,
-    transform 180ms ease;
-}
-
-.search-box:hover,
-.search-box:focus-within {
-  border-color: rgba(115, 188, 37, 0.24);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 8px 20px rgba(12, 39, 27, 0.06);
-  transform: translateY(-1px);
-}
-
-.search-box i {
-  color: var(--brand);
-}
-
-.filter-select {
-  width: 100%;
-  min-width: 0;
-  height: 50px;
-  padding: 0 16px;
-  border: 1px solid rgba(206, 210, 213, 0.92);
-  border-radius: 16px;
-  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.98));
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
-  color: var(--text-main);
-  font-size: 14px;
-  font-weight: 600;
-  outline: none;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  transition:
-    border-color 200ms ease,
-    box-shadow 200ms ease,
-    background 200ms ease,
-    transform 200ms ease;
-}
-
-.filter-select:hover {
-  border-color: rgba(115, 188, 37, 0.22);
-  background: linear-gradient(180deg, #ffffff, rgba(163, 211, 0, 0.08));
-  box-shadow: 0 8px 20px rgba(12, 39, 27, 0.06);
-  transform: translateY(-1px);
-}
-
-.filter-select:focus {
-  border-color: rgba(115, 188, 37, 0.34);
-  box-shadow:
-    0 0 0 4px rgba(115, 188, 37, 0.12),
-    0 8px 20px rgba(12, 39, 27, 0.06);
-}
-
-.toolbar-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
+  align-items: flex-start;
   gap: 8px;
-  min-width: 0;
+  margin-top: 13px;
+  padding: 10px 11px;
+  font-size: 10px;
+  line-height: 1.45;
+  border: 1px solid;
+  border-radius: 7px;
 }
 
-.search-button {
-  --btn-bg: linear-gradient(180deg, #73bc25, #73bc25);
-  --btn-border: #73bc25;
-  --btn-fg: #ffffff;
-  --btn-shadow: 0 12px 22px rgba(12, 39, 27, 0.12);
+.ident-alert--info,
+.ident-alert--ok { color: var(--ident-info); border-color: #cfe5ba; background: var(--ident-info-bg); }
+.ident-alert--warn { color: var(--ident-warning); border-color: #ead898; background: var(--ident-warning-bg); }
+
+.ident-new-sample {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed #d7dcdf;
 }
 
-.search-button:hover:not(:disabled):not([aria-disabled="true"]) {
-  --btn-bg: linear-gradient(180deg, #a3d300, #73bc25);
-  --btn-border: #73bc25;
-  --btn-shadow: 0 14px 26px rgba(12, 39, 27, 0.16);
+.ident-new-sample > p {
+  margin: 0 0 9px;
+  color: var(--ident-muted);
+  line-height: 1.45;
 }
 
-.btn-clear {
-  --btn-bg: rgba(255, 255, 255, 0.92);
-  --btn-border: var(--border);
-  --btn-fg: var(--brand);
+.ident-new-sample > .ident-btn { margin-top: 10px; }
+
+.ident-form-card { overflow: hidden; }
+
+.ident-form-head {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 19px 10px;
 }
 
-.btn-clear:hover:not(:disabled):not([aria-disabled="true"]) {
-  --btn-bg: rgba(255, 255, 255, 0.96);
-  --btn-border: rgba(115, 188, 37, 0.24);
-  --btn-shadow: 0 8px 20px rgba(12, 39, 27, 0.06);
+.ident-form-head strong {
+  display: block;
+  margin-top: 7px;
+  color: #5e676d;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px;
 }
 
-.search-button,
-.btn-clear {
-  --btn-min-height: 50px;
-  --btn-padding-y: 0px;
-  --btn-padding-x: 18px;
-  --btn-radius: 16px;
-  --btn-font-size: 14px;
+.ident-form-head p {
+  margin: 4px 0 0;
+  color: var(--ident-muted);
+  font-size: 9.5px;
 }
 
-.btn-clear {
-  min-width: 0;
-}
-
-/* =========================================================
-   TABLA ADMINISTRATIVA
-========================================================= */
-
-.table-area {
-  padding: 14px 18px 18px;
-}
-
-/*
- * Borde/radio/sombra/fondo del contenedor ahora los da el componente
- * compartido .cengi-table-wrap (css/lab_shell.css); aqui solo se agrega el
- * scroll horizontal que necesita esta tabla en pantallas angostas.
- */
-.cengi-table-wrap {
+.ident-tabs {
+  display: flex;
+  gap: 0;
+  margin: 0 19px;
   overflow-x: auto;
-  overflow-y: hidden;
+  border-bottom: 1px solid var(--ident-line);
 }
 
-.cengi-table-wrap > table {
+.ident-tabs button {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.ident-tabs button::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: -1px;
+  left: 10px;
+  height: 2px;
+  background: transparent;
+}
+
+.ident-tabs button.is-active { color: var(--ident-green-dark); }
+.ident-tabs button.is-active::after { background: var(--ident-green); }
+
+.ident-tab-content { padding: 17px 19px; }
+.ident-tab-panel[hidden] { display: none; }
+
+.ident-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px 13px;
+}
+
+.ident-field--full { grid-column: 1 / -1; }
+
+.ident-form-actions {
+  justify-content: flex-end;
+  gap: 7px;
+  padding: 13px 19px;
+  border-top: 1px solid var(--ident-line);
+  background: var(--ident-soft);
+}
+
+.ident-base-section { margin-top: 24px; }
+.ident-section-title { justify-content: space-between; gap: 12px; }
+.ident-section-title span { color: var(--ident-muted); font-size: 9px; font-weight: 800; }
+
+.ident-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  flex-wrap: wrap;
+  padding: 10px;
+  border: 1px solid var(--ident-line);
+  border-radius: 10px 10px 0 0;
+  background: #fff;
+  box-shadow: var(--ident-shadow);
+}
+
+.ident-table-toolbar .ident-table-search {
+  gap: 7px;
+  width: min(100%, 420px);
+  color: #7a8388;
+  padding: 0 9px;
+  border: 1px solid #d8dddf;
+  border-radius: 6px;
+}
+
+.ident-table-toolbar input {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  table-layout: auto;
+  min-height: 33px;
+  padding: 6px 0;
+  font: inherit;
+  font-size: 10px;
+  border: 0;
+  outline: 0;
 }
 
-.cengi-table-wrap > table thead th {
-  padding: 16px 16px 14px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 255, 255, 0.98));
-  color: var(--brand);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.25;
-  letter-spacing: 0.08em;
+.ident-table-toolbar .ident-type-filter {
+  display: flex;
+  width: auto;
+  min-width: 185px;
+  align-items: center;
+  gap: 8px;
+  color: #697279;
+  font-size: 9px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.ident-type-filter select {
+  min-width: 125px;
+  min-height: 33px;
+  padding: 6px 26px 6px 9px;
+  color: #4e575d;
+  font: inherit;
+  font-size: 10px;
+  border: 1px solid #d8dddf;
+  border-radius: 6px;
+  background: #fff;
+  outline: 0;
+}
+
+.ident-type-filter select:focus {
+  border-color: var(--ident-green);
+  box-shadow: 0 0 0 3px rgba(100, 169, 31, .12);
+}
+
+.ident-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--ident-line);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: #fff;
+  box-shadow: var(--ident-shadow);
+}
+
+.ident-table-wrap table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: collapse;
+}
+
+.ident-table-wrap th {
+  padding: 9px 10px;
+  color: #727a80;
+  font-size: 8px;
+  font-weight: 900;
+  text-align: left;
+  letter-spacing: .035em;
   text-transform: uppercase;
-  vertical-align: middle;
-  box-shadow: inset 0 -1px 0 rgba(206, 210, 213, 0.72);
+  background: #f5f6f6;
 }
 
-.cengi-table-wrap > table tbody td {
-  padding: 16px 16px;
-  line-height: 1.42;
-  vertical-align: middle;
-  border-bottom: 1px solid rgba(206, 210, 213, 0.68);
+.ident-table-wrap td {
+  padding: 10px;
+  color: #4e575d;
+  font-size: 9.5px;
+  border-top: 1px solid #edf0f1;
 }
 
-.cengi-table-wrap > table tbody tr {
-  transition: background 200ms ease, box-shadow 200ms ease;
+.ident-table-wrap td:first-child { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 800; }
+.ident-table-wrap td a { color: var(--ident-green-dark); text-decoration: none; }
+.ident-table-wrap td small { display: block; margin-top: 2px; color: var(--ident-muted); font-size: 8.5px; }
+.ident-table-wrap tr:hover td { background: #fbfdf9; }
+.ident-table-wrap td[colspan] { padding: 16px; color: var(--ident-muted); text-align: center; }
+
+.ident-lab-number {
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
-.cengi-table-wrap > table tbody tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.88);
+.ident-prefix {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  place-items: center;
+  border-radius: 6px;
+  color: #fff;
+  font-family: Inter, sans-serif;
+  font-size: 9px;
+  font-weight: 900;
 }
 
-.cengi-table-wrap > table tbody tr:hover td {
-  background: rgba(163, 211, 0, 0.08);
+.ident-prefix--foliar { background: #3e8e4f; }
+.ident-prefix--suelo { background: #8b5e3c; }
+.ident-prefix--aguas { background: #3a79c4; }
+.ident-prefix--cana { background: #b08900; }
+.ident-prefix--otro { background: #7b838a; }
+.ident-table-wrap .ident-type-caption { margin-left: 29px; font-family: Inter, sans-serif; }
+
+.ident-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(24, 29, 32, .55);
 }
 
-.cengi-table-wrap > table tbody tr:focus-within td {
-  background: rgba(163, 211, 0, 0.10);
+.ident-modal[hidden] { display: none; }
+
+.ident-modal-card {
+  width: min(100%, 600px);
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .22);
 }
 
-.cengi-table-wrap > table tbody tr:last-child td {
-  border-bottom: none;
+.ident-modal-card header,
+.ident-modal-card footer { justify-content: space-between; gap: 12px; padding: 14px 16px; }
+.ident-modal-card header { border-bottom: 1px solid var(--ident-line); }
+.ident-modal-card footer { justify-content: flex-end; border-top: 1px solid var(--ident-line); background: var(--ident-soft); }
+.ident-modal-card header button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; color: #626b70; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.ident-modal-body { padding: 15px; }
+.ident-modal-body .ident-alert { margin: 0 0 12px; }
+.ident-modal-body video { display: block; width: 100%; max-height: 420px; border-radius: 8px; background: #1f2427; }
+
+@media (max-width: 720px) {
+  .ident-search-form,
+  .ident-form-head { align-items: stretch; flex-direction: column; }
+  .ident-form-grid { grid-template-columns: 1fr; }
+  .ident-field--full { grid-column: 1; }
+  .ident-form-head .ident-btn { width: 100%; }
 }
 
-.cengi-table-wrap > table th:first-child,
-.cengi-table-wrap > table td:first-child {
-  padding-left: 18px;
-  text-align: center;
-}
-
-.cengi-table-wrap > table th:last-child,
-.cengi-table-wrap > table td:last-child {
-  padding-right: 18px;
-  text-align: center;
-}
-
-.cengi-table-wrap > table th:nth-child(4),
-.cengi-table-wrap > table td:nth-child(4),
-.cengi-table-wrap > table th:nth-child(5),
-.cengi-table-wrap > table td:nth-child(5) {
-  text-align: center;
-}
-
-.cengi-table-wrap > table td:nth-child(4) .estado-badge,
-.cengi-table-wrap > table td:nth-child(5) .btn-pdf {
-  margin-inline: auto;
-}
-
-.cengi-table-wrap .estado-badge {
-  min-height: 30px;
-  padding: 0.45rem 0.8rem;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.cengi-table-wrap .estado-badge.estado-pendiente {
-  --status-border-color: rgba(255, 204, 0, 0.32);
-  --status-bg: rgba(255, 204, 0, 0.16);
-  --status-color: #8c3600;
-}
-
-.cengi-table-wrap .estado-badge.estado-en-proceso {
-  --status-border-color: rgba(163, 211, 0, 0.26);
-  --status-bg: rgba(163, 211, 0, 0.12);
-  --status-color: #73bc25;
-}
-
-.cengi-table-wrap .estado-badge.estado-revision {
-  --status-border-color: rgba(255, 204, 0, 0.28);
-  --status-bg: rgba(255, 204, 0, 0.14);
-  --status-color: #8c3600;
-}
-
-.cengi-table-wrap .estado-badge.estado-aprobado {
-  --status-border-color: rgba(115, 188, 37, 0.24);
-  --status-bg: rgba(115, 188, 37, 0.10);
-  --status-color: #73bc25;
-}
-
-.cengi-table-wrap .btn-pdf {
-  --btn-min-height: 34px;
-  --btn-padding-y: 8px;
-  --btn-padding-x: 12px;
-  --btn-radius: 8px;
-  --btn-font-weight: 800;
-  --btn-bg: rgba(255, 255, 255, 0.92);
-  --btn-border: var(--border);
-  --btn-fg: var(--brand);
-}
-
-.cengi-table-wrap .btn-pdf:hover:not(:disabled):not([aria-disabled="true"]) {
-  --btn-bg: rgba(255, 255, 255, 0.96);
-  --btn-border: rgba(115, 188, 37, 0.24);
-  --btn-shadow: 0 8px 20px rgba(12, 39, 27, 0.06);
-}
-
-.cengi-table-wrap .empty-cell {
-  padding: 28px 18px;
-  color: var(--text-soft);
-  font-size: 14px;
-  font-weight: 600;
-  text-align: center;
-}
-
-/* =========================================================
-   RESPONSIVE
-========================================================= */
-
-@media (max-width: 980px) {
-  .panel-header {
-    grid-template-columns: 1fr;
-  }
-
-  .cengi-kpi-grid--single {
-    grid-template-columns: 1fr;
-    justify-self: start;
-    max-width: 320px;
-  }
-
-  .toolbar {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .toolbar-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-end;
-  }
-
-  .toolbar-actions :is(.search-button, .btn-clear) {
-    width: 100%;
-  }
-}
-
-@media (max-width: 760px) {
-  .panel-header,
-  .toolbar,
-  .table-area {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .toolbar {
-    grid-template-columns: 1fr;
-  }
-
-  .toolbar-actions {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .toolbar-actions :is(.search-button, .btn-clear) {
-    width: 100%;
-  }
-
-  .cengi-kpi-grid--single {
-    max-width: 100%;
-  }
+@media (max-width: 520px) {
+  .ident-segment { display: flex; width: 100%; }
+  .ident-segment button { flex: 1; }
+  .ident-scanner-actions { align-items: stretch; flex-direction: column; }
+  .ident-scanner-actions .ident-btn { width: 100%; }
+  .ident-form-actions { align-items: stretch; flex-direction: column-reverse; }
+  .ident-form-actions .ident-btn { width: 100%; }
+  .ident-table-toolbar { align-items: stretch; flex-direction: column; }
+  .ident-table-toolbar .ident-table-search,
+  .ident-table-toolbar .ident-type-filter { width: 100%; }
+  .ident-type-filter select { flex: 1; }
 }

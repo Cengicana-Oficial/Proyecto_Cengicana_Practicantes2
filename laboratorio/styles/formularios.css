@@ -1,6 +1,7 @@
 @import url('base.css');
 @import url('tokens.css');
 @import url('tables.css');
+@import url('captura_variables_embed.css');
 
 body {
   padding: var(--space-8) var(--space-8) var(--space-16);

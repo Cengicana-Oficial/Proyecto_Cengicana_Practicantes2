@@ -170,6 +170,55 @@ if (!function_exists('labCapturaContextoAnalisis')) {
     {
         global $labAnalysisContexto;
 
+        $catalogoId = (int) ($_GET['catalogo_id'] ?? 0);
+        $captureKey = trim((string) ($_GET['analisis'] ?? ''));
+        if (
+            $catalogoId > 0
+            && $captureKey !== ''
+            && (string) ($_GET['embed'] ?? '') === '1'
+            && (string) ($_GET['from'] ?? '') === 'bandeja'
+        ) {
+            try {
+                require_once __DIR__ . '/captura_variables_registry.php';
+                $capture = lab_captura_variables_por_clave($captureKey);
+                $pdo = labCapturaConexion();
+
+                if ($capture && $pdo && !empty($capture['controller'])) {
+                    $stmt = $pdo->prepare("
+                        SELECT ta.id_tipo, ta.nombre, ta.id_tipo_muestra,
+                               tm.nombre AS nombre_muestra, tm.prefijo AS prefijo_muestra
+                          FROM tipo_analisis ta
+                          INNER JOIN tipo_muestra tm ON tm.id_tipo = ta.id_tipo_muestra
+                         WHERE ta.id_tipo = ?
+                           AND COALESCE(ta.activo, 1) = 1
+                         LIMIT 1
+                    ");
+                    $stmt->execute([$catalogoId]);
+                    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+                    if ($row) {
+                        $rowType = labCatalogoMuestrasClaveDesdePrefijo(
+                            (string) ($row['prefijo_muestra'] ?? ''),
+                            (string) ($row['nombre_muestra'] ?? '')
+                        );
+                        $captureType = labCatalogoMuestrasClaveDesdePrefijo(null, (string) $capture['tipo']);
+                        $rowName = lab_captura_variables_normalizar((string) ($row['nombre'] ?? ''));
+                        $aliases = array_map('lab_captura_variables_normalizar', (array) $capture['aliases']);
+
+                        if ($rowType === $captureType && in_array($rowName, $aliases, true)) {
+                            return [
+                                'tipo_ids' => [(int) $row['id_tipo_muestra']],
+                                'analisis_ids' => [(int) $row['id_tipo']],
+                                'label' => (string) ($capture['label'] ?? $row['nombre']),
+                            ];
+                        }
+                    }
+                }
+            } catch (Throwable $e) {
+                // Si el contexto explicito no es valido, se conserva el flujo historico.
+            }
+        }
+
         if (isset($labAnalysisContexto) && is_array($labAnalysisContexto)) {
             return $labAnalysisContexto;
         }

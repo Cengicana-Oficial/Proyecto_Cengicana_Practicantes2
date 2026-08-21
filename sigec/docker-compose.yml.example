@@ -1,0 +1,36 @@
+services:
+    app:
+        build:
+            context: ./
+            dockerfile: dockerfiles/app/Dockerfile
+        volumes:
+            - "./:/var/www"
+        restart: always
+        ports:
+            - "8082:80"
+            - "8888:8080"
+        links:
+            - mysql
+            - redis
+        environment:
+            - "TZ=America/Guatemala"
+    mysql:
+        build:
+            context: ./
+            dockerfile: dockerfiles/mysql/mysql.docker
+        volumes:
+            - "sigec-mysql-data:/var/lib/mysql"
+        restart: always
+        environment:
+            - "TZ=America/Guatemala"
+            - MYSQL_ROOT_PASSWORD=secret
+            - MYSQL_DATABASE=sigec
+        ports:
+            - "33062:3306"
+    redis:
+        build:
+            context: ./
+            dockerfile: dockerfiles/redis/redis.docker
+        restart: always
+volumes:
+    sigec-mysql-data: null

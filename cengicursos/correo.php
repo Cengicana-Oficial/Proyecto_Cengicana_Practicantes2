@@ -7,7 +7,7 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 /**
- * Envia un correo via Brevo/PHPMailer con el layout HTML ya armado por quien
+ * Envia un correo via SMTP/PHPMailer con el layout HTML ya armado por quien
  * llama (ver cengicursos/correos/*.php).
  *
  * $adjuntos es opcional (default []) para no romper a los llamadores existentes
@@ -27,30 +27,21 @@ function cengi_enviar_correo(
 
     $env = cengicursos_env();
 
-    // El default es "smtp-relay.sendinblue.com" (alias legado, todavia vigente,
-    // del mismo servicio) y no "smtp-relay.brevo.com": desde la red de este
-    // proyecto, ese segundo hostname resuelve consistentemente a un backend de
-    // Brevo cuyo certificado TLS (valido, emitido por Let's Encrypt) solo
-    // cubre los nombres "*.sendinblue.com" en su Subject Alternative Name, no
-    // "brevo.com" -> PHP rechaza el handshake por hostname distinto
-    // (verify_peer_name). Conectando directo al hostname que si esta en el SAN
-    // del certificado se valida con total seguridad, sin bajar ninguna
-    // verificacion. Ver deploy/env/cengicursos.env.example.
-    $smtpHost = $env['BREVO_SMTP_HOST'] ?? 'smtp-relay.sendinblue.com';
-    $smtpPort = (int) ($env['BREVO_SMTP_PORT'] ?? 587);
-    $smtpUser = $env['BREVO_SMTP_USER'] ?? '';
-    $smtpKey = $env['BREVO_SMTP_KEY'] ?? '';
+    $smtpHost = $env['MAIL_HOST'] ?? 'mail.smtp2go.com';
+    $smtpPort = (int) ($env['MAIL_PORT'] ?? 2525);
+    $smtpUser = $env['MAIL_USERNAME'] ?? '';
+    $smtpPassword = $env['MAIL_PASSWORD'] ?? '';
 
-    $fromEmail = $env['BREVO_FROM_EMAIL'] ?? '';
-    $fromName = $env['BREVO_FROM_NAME'] ?? 'CENGICANA';
+    $fromEmail = $env['MAIL_FROM_ADDRESS'] ?? '';
+    $fromName = $env['MAIL_FROM_NAME'] ?? 'CENGICANA';
 
     if (
         $smtpUser === '' ||
-        $smtpKey === '' ||
+        $smtpPassword === '' ||
         $fromEmail === ''
     ) {
         throw new RuntimeException(
-            'La configuración de correo de Brevo está incompleta.'
+            'La configuración SMTP2GO está incompleta.'
         );
     }
 
@@ -72,7 +63,7 @@ function cengi_enviar_correo(
             $mail->SMTPAuth = true;
 
             $mail->Username = $smtpUser;
-            $mail->Password = $smtpKey;
+            $mail->Password = $smtpPassword;
 
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port = $smtpPort;
@@ -130,7 +121,7 @@ function cengi_enviar_correo(
     }
 
     error_log(
-        "Error enviando correo con Brevo (tras {$intentosMaximos} intentos): " .
+        "Error enviando correo con SMTP2GO (tras {$intentosMaximos} intentos): " .
         $ultimoError
     );
 

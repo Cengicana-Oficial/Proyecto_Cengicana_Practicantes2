@@ -19,6 +19,22 @@ services:
     depends_on:
       - mysql
 
+  sigec:
+    build:
+      context: .
+      dockerfile: dockerfiles/sigec-app/Dockerfile
+    container_name: cengicana-ui-new-sigec
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8087:80"
+    environment:
+      TZ: America/Guatemala
+    volumes:
+      - ./deploy/env/sigec.env:/var/www/html/sigec/.env:ro
+      - sigec-storage:/var/www/html/sigec/storage/app/public
+    depends_on:
+      - mysql
+
   mysql:
     image: mysql:8.0
     container_name: cengicana-ui-new-mysql
@@ -35,3 +51,5 @@ services:
 volumes:
   mysql-data:
     name: cengicana-ui-new-mysql-data
+  sigec-storage:
+    name: cengicana-ui-new-sigec-storage

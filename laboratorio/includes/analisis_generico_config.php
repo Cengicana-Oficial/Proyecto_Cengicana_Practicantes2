@@ -103,7 +103,7 @@ function lab_generic_analysis_configs(): array
             'elemento' => 'Dureza',
             'table' => 'agua_dureza',
             'tipos' => ['agua', 'aguas'],
-            'analisis' => ['Dureza', 'Dureza total'],
+            'analisis' => ['Dureza', 'Dureza total', 'Dureza total (CaCO₃)', 'Dureza total (CaCO3)'],
             'fields' => [
                 ['name' => 'ml_edta', 'label' => 'ml EDTA'],
                 ['name' => 'ml_muestra', 'label' => 'ml muestra'],
@@ -128,7 +128,7 @@ function lab_generic_analysis_configs(): array
             'elemento' => 'Solidos Totales Disueltos',
             'table' => 'agua_tds',
             'tipos' => ['agua', 'aguas'],
-            'analisis' => ['TDS', 'Solidos Totales Disueltos', 'Solidos totales disueltos'],
+            'analisis' => ['TDS', 'STD', 'Solidos Totales Disueltos', 'Solidos totales disueltos', 'Sólidos totales disueltos (STD)'],
             'fields' => [
                 ['name' => 'lectura_tds', 'label' => 'Lectura TDS'],
                 ['name' => 'tds_mgl', 'label' => 'TDS mg/L'],

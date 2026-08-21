@@ -875,6 +875,22 @@ table.cengi-matrix thead th.vc-hcol1 { z-index: 3; background: #fafcf8; }
 .vc-ok { background: var(--cengi-primary); color: #fff; }
 .vc-no { background: var(--cengi-danger); color: #fff; }
 
+.vt-table-wrap { overflow-x: auto; }
+.vt-table { min-width: 1080px; }
+.vt-table tbody tr.vt-row-pending td { background: #fffdf8; }
+.vt-table tbody tr.vt-row-pending:hover td { background: #fffaf0; }
+.vt-analysis-cell { min-width: 210px; font-weight: 700; color: var(--cengi-ink); }
+.vt-line-actions { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.vt-line-actions .material-symbols-outlined { font-size: 16px; }
+.vt-line-actions .cengi-btn { min-height: 32px; }
+.vt-line-actions .vt-reject {
+  border-color: #e5b5af;
+  background: #fff4f2;
+  color: var(--cengi-danger-strong);
+}
+.vt-line-actions .vt-reject:hover { background: #ffe9e6; }
+.vt-line-actions button:disabled { cursor: wait; opacity: .58; transform: none; }
+
 @media (max-width: 900px) {
   .cengi-kanban-board { grid-template-columns: 1fr; }
 }
