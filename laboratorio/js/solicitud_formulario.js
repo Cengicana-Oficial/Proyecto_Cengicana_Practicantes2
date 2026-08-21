@@ -1,6 +1,6 @@
 const SOLICITUDES_DB = readJsonData("solicitudes-db", []);
 const CORRELATIVOS_DB = readJsonData("correlativos-db", []);
-const PDF_LOGO_URL = "../../assets/Marca%20Cengica%C3%B1a/SinFondo_logo_cengicana_Vertical.png";
+const PDF_LOGO_URL = "../assets/logo.png";
 let solicitudSeleccionada = null;
 
 const ANALISIS = readJsonData("analisis-catalogo", {});
@@ -420,6 +420,16 @@ function aplicarSolicitudDb(idSolicitud) {
   }
 
   seleccionarTipoPorSolicitud(solicitudSeleccionada);
+  const analisisSeleccionados = new Set(
+    String(solicitudSeleccionada.analisis_ids || "")
+      .split(",")
+      .map(id => id.trim())
+      .filter(Boolean)
+  );
+  getAnalisisCheckboxes().forEach(input => {
+    input.checked = analisisSeleccionados.has(String(input.value));
+  });
+  syncSelectAllAnalisis();
   document.getElementById("numero_de_muestra").value = solicitudSeleccionada.codigo_muestreo || "";
   document.getElementById("lote").value = solicitudSeleccionada.codigo_lote || "";
   document.getElementById("fecha_muestreo").value = solicitudSeleccionada.fecha_muestreo || "";
@@ -438,7 +448,7 @@ function aplicarSolicitudDb(idSolicitud) {
   if (recibidoPor) recibidoPor.value = solicitudSeleccionada.recibido_por || "";
   if (correoRecibido) correoRecibido.value = solicitudSeleccionada.correo_recibido || "";
   if (observaciones) observaciones.value = solicitudSeleccionada.observaciones || "";
-  setCamposReadonly(true);
+  setCamposReadonly(false);
   updateNumeroLaboratorio();
 
   const fechaIngresoInput = document.getElementById("fecha_ingreso");
@@ -682,7 +692,10 @@ function getDatosSolicitudPdf() {
 
   return {
     tipo: getInputValue("#tipo-label-header"),
+    institucion: getInputValue("#institucion"),
+    responsableEnvio: getInputValue("#responsable_envio"),
     lote: getInputValue("#lote"),
+    codigoMuestreo: getInputValue("#numero_de_muestra"),
     fechaMuestreo: getInputValue("#fecha_muestreo"),
     numeroMuestras: getInputValue("#numero_muestras"),
     numeroLaboratorioInicio: getInputValue("#n_laboratorio_inicio"),
@@ -811,7 +824,10 @@ async function enviarPdfPorCorreo(pdfBytes, fileName, datos) {
       emails: datos.correos,
       solicitud: {
         tipo: datos.tipo,
+        institucion: datos.institucion,
+        responsable_envio: datos.responsableEnvio,
         lote: datos.lote,
+        codigo_muestreo: datos.codigoMuestreo,
         fecha_muestreo: datos.fechaMuestreo,
         numero_muestras: datos.numeroMuestras,
         laboratorio_inicio: datos.numeroLaboratorioInicio,
@@ -829,12 +845,14 @@ async function enviarPdfPorCorreo(pdfBytes, fileName, datos) {
   });
 
   let payload = null;
+  const responseText = await response.text();
   try {
-    payload = await response.json();
+    payload = JSON.parse(responseText);
   } catch {
+    const detalleHttp = response.status ? ` (HTTP ${response.status})` : "";
     payload = {
       ok: false,
-      message: "El servidor no devolvio una respuesta valida al enviar el correo.",
+      message: `El servidor no devolvio una respuesta valida al enviar el correo${detalleHttp}.`,
     };
   }
 
@@ -850,11 +868,17 @@ async function enviarPdfPorCorreo(pdfBytes, fileName, datos) {
 
 async function generarPdfSolicitud(options = {}) {
   const boton = document.getElementById("btn-generar-pdf");
+  let pdfGenerado = false;
   let pdfDescargado = false;
   const download = options.download !== false;
 
   if (!window.PDFLib) {
     alert("No se pudo cargar la libreria para generar PDF.");
+    return;
+  }
+
+  if (!window.CengiSolicitudPdf) {
+    alert("No se pudo cargar el diseno de la boleta PDF.");
     return;
   }
 
@@ -868,253 +892,16 @@ async function generarPdfSolicitud(options = {}) {
       boton.title = "Generando PDF...";
     }
 
-    const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+    const { PDFDocument } = window.PDFLib;
     const pdfDoc = await PDFDocument.create();
-    const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const logoCengicana = await cargarLogoPdf(pdfDoc);
-    const pageSize = [595.28, 841.89];
-    const margin = 44;
-    const bottom = 46;
-    const width = pageSize[0];
-    const height = pageSize[1];
-    const contentWidth = width - margin * 2;
-    const green = rgb(0.23, 0.43, 0.07);
-    const darkGreen = rgb(0.1, 0.2, 0.04);
-    const softGreen = rgb(0.9, 0.96, 0.86);
-    const borderGreen = rgb(0.68, 0.79, 0.53);
-    const muted = rgb(0.34, 0.44, 0.27);
-    let page = pdfDoc.addPage(pageSize);
-    let y = height - margin;
-
-    const addHeader = isContinuation => {
-      const logoWidth = isContinuation ? 58 : 82;
-      const logoX = margin;
-      const logoY = y - (isContinuation ? 34 : 50);
-      const textX = logoCengicana ? margin + logoWidth + 18 : margin;
-
-      if (logoCengicana) {
-        const logoHeight = logoWidth * (logoCengicana.height / logoCengicana.width);
-        page.drawImage(logoCengicana, {
-          x: logoX,
-          y: logoY,
-          width: logoWidth,
-          height: logoHeight,
-        });
-      }
-
-      page.drawText("Laboratorio Agroindustrial", {
-        x: textX,
-        y,
-        size: isContinuation ? 12 : 18,
-        font: boldFont,
-        color: darkGreen,
-      });
-
-      page.drawText(isContinuation ? "Boleta de solicitud - continuacion" : "Boleta de solicitud de analisis", {
-        x: textX,
-        y: y - (isContinuation ? 16 : 22),
-        size: isContinuation ? 9 : 11,
-        font: regularFont,
-        color: muted,
-      });
-
-      if (!isContinuation) {
-        page.drawRectangle({
-          x: width - margin - 78,
-          y: y - 26,
-          width: 78,
-          height: 34,
-          borderColor: borderGreen,
-          borderWidth: 1,
-          color: softGreen,
-        });
-        page.drawText("VF", { x: width - margin - 64, y: y - 6, size: 8, font: boldFont, color: muted });
-        page.drawText("005", { x: width - margin - 64, y: y - 20, size: 12, font: boldFont, color: green });
-      }
-
-      y -= isContinuation ? 52 : 78;
-    };
-
-    const newPage = () => {
-      page = pdfDoc.addPage(pageSize);
-      y = height - margin;
-      addHeader(true);
-    };
-
-    const ensureSpace = needed => {
-      if (y - needed < bottom) newPage();
-    };
-
-    const drawSection = title => {
-      ensureSpace(32);
-      page.drawText(limpiarTextoPdf(title).toUpperCase(), {
-        x: margin,
-        y,
-        size: 9,
-        font: boldFont,
-        color: green,
-      });
-      page.drawLine({
-        start: { x: margin + 150, y: y + 3 },
-        end: { x: width - margin, y: y + 3 },
-        thickness: 0.8,
-        color: borderGreen,
-      });
-      y -= 20;
-    };
-
-    const drawWrapped = (text, x, maxWidth, size = 10, font = regularFont, color = darkGreen, lineHeight = 14) => {
-      const lines = wrapPdfText(text, font, size, maxWidth);
-      lines.forEach(line => {
-        ensureSpace(lineHeight + 2);
-        if (line) page.drawText(line, { x, y, size, font, color });
-        y -= lineHeight;
-      });
-    };
-
-    const drawInfoCell = (label, value, x, topY, cellWidth) => {
-      page.drawRectangle({
-        x,
-        y: topY - 38,
-        width: cellWidth,
-        height: 38,
-        borderColor: borderGreen,
-        borderWidth: 0.8,
-      });
-      page.drawText(limpiarTextoPdf(label).toUpperCase(), {
-        x: x + 8,
-        y: topY - 13,
-        size: 7,
-        font: boldFont,
-        color: muted,
-      });
-
-      const valueLines = wrapPdfText(value || "-", regularFont, 9.5, cellWidth - 16).slice(0, 2);
-      valueLines.forEach((line, index) => {
-        page.drawText(line || "-", {
-          x: x + 8,
-          y: topY - 28 - index * 10,
-          size: 9.5,
-          font: regularFont,
-          color: darkGreen,
-        });
-      });
-    };
-
-    const drawInfoRows = rows => {
-      const gap = 12;
-      const cellWidth = (contentWidth - gap) / 2;
-
-      for (let i = 0; i < rows.length; i += 2) {
-        ensureSpace(46);
-        const topY = y;
-        drawInfoCell(rows[i][0], rows[i][1], margin, topY, cellWidth);
-        if (rows[i + 1]) drawInfoCell(rows[i + 1][0], rows[i + 1][1], margin + cellWidth + gap, topY, cellWidth);
-        y -= 46;
-      }
-    };
-
-    const drawSignature = async (title, name, email, dataUrl, x, topY, boxWidth) => {
-      page.drawText(limpiarTextoPdf(title).toUpperCase(), {
-        x,
-        y: topY,
-        size: 8,
-        font: boldFont,
-        color: muted,
-      });
-      page.drawText(limpiarTextoPdf(name || " "), {
-        x,
-        y: topY - 15,
-        size: 9.5,
-        font: regularFont,
-        color: darkGreen,
-      });
-      if (email) {
-        page.drawText(limpiarTextoPdf(email), {
-          x,
-          y: topY - 29,
-          size: 8.5,
-          font: regularFont,
-          color: muted,
-        });
-      }
-
-      if (dataUrl) {
-        const signature = await pdfDoc.embedPng(dataUrl);
-        const maxImageWidth = boxWidth;
-        const maxImageHeight = 54;
-        const scale = Math.min(maxImageWidth / signature.width, maxImageHeight / signature.height);
-        const imageWidth = signature.width * scale;
-        const imageHeight = signature.height * scale;
-        page.drawImage(signature, {
-          x,
-          y: topY - 78,
-          width: imageWidth,
-          height: imageHeight,
-        });
-      }
-
-      page.drawLine({
-        start: { x, y: topY - 86 },
-        end: { x: x + boxWidth, y: topY - 86 },
-        thickness: 0.8,
-        color: borderGreen,
-      });
-    };
-
-    addHeader(false);
-
-    drawSection("Datos del muestreo");
-    drawInfoRows([
-      ["Tipo de muestra", datos.tipo],
-      ["Numero de lote", datos.lote],
-      ["Fecha de muestreo", datos.fechaMuestreo],
-      ["Fecha de ingreso", datos.fechaIngreso],
-      ["Fecha estimada", datos.fechaEstimada],
-      ["Numero de muestras", datos.numeroMuestras],
-      ["Laboratorio inicio", datos.numeroLaboratorioInicio],
-      ["Laboratorio fin", datos.numeroLaboratorioFin],
-    ]);
-
-    drawSection("Analisis solicitados");
-    if (datos.analisis.length) {
-      datos.analisis.forEach(item => {
-        ensureSpace(18);
-        page.drawText("- ", { x: margin, y, size: 10, font: boldFont, color: green });
-        drawWrapped(`${item.nombre}${item.tipo ? ` (${item.tipo})` : ""}`, margin + 14, contentWidth - 14, 10, regularFont, darkGreen, 14);
-      });
-    } else {
-      drawWrapped("Sin analisis seleccionados.", margin, contentWidth, 10, regularFont, muted);
-    }
-
-    drawSection("Observaciones");
-    drawWrapped(datos.observaciones || "Sin observaciones.", margin, contentWidth, 10, regularFont, darkGreen, 14);
-
-    drawSection("Responsables y firmas");
-    ensureSpace(108);
-    const signatureTop = y;
-    const signatureWidth = (contentWidth - 24) / 2;
-    await drawSignature("Ingresado por", datos.ingresadoPor, datos.correoIngresadoPor, datos.firmaIngreso, margin, signatureTop, signatureWidth);
-    await drawSignature("Recibido por", datos.recibidoPor, datos.correoRecibidoPor, datos.firmaRecibe, margin + signatureWidth + 24, signatureTop, signatureWidth);
-    y -= 110;
-
-    ensureSpace(24);
-    page.drawLine({
-      start: { x: margin, y: bottom + 20 },
-      end: { x: width - margin, y: bottom + 20 },
-      thickness: 0.6,
-      color: borderGreen,
+    const pdfBytes = await window.CengiSolicitudPdf.crearPdfSolicitud({
+      pdfDoc,
+      PDFLib: window.PDFLib,
+      datos,
+      logo: logoCengicana,
     });
-    page.drawText("Generado por TecnoBoris v2.1", {
-      x: margin,
-      y: bottom + 5,
-      size: 8,
-      font: regularFont,
-      color: muted,
-    });
-
-    const pdfBytes = await pdfDoc.save();
+    pdfGenerado = true;
     const fileName = buildPdfFileName(datos);
     if (download) {
       descargarPdf(pdfBytes, fileName);
@@ -1128,7 +915,9 @@ async function generarPdfSolicitud(options = {}) {
     console.error(error);
     const mensaje = pdfDescargado
       ? `El PDF se genero y se descargo, pero no se pudo enviar por correo: ${error.message}`
-      : `No se pudo generar el PDF: ${error.message}`;
+      : pdfGenerado
+        ? `El PDF se genero, pero no se pudo enviar por correo: ${error.message}`
+        : `No se pudo generar el PDF: ${error.message}`;
     alert(mensaje);
   } finally {
     if (boton) {
@@ -1139,18 +928,19 @@ async function generarPdfSolicitud(options = {}) {
 }
 
 async function finalizarSolicitud(event) {
+  const form = document.getElementById('solicitud-form');
+  if (!form || !form.reportValidity()) return;
   if (!validarCorreosResponsables()) return;
 
   const btn = document.getElementById('btn-finalizar-solicitud');
   if (btn) btn.disabled = true;
 
   try {
-    const envio = await generarPdfSolicitud({ download: false });
-    if (envio && envio.sent === false) {
-      alert(envio.message || 'No se envio el correo. Se continuara con el guardado de la solicitud.');
-    }
+    const envio = await generarPdfSolicitud({ download: true });
+    if (!envio) return;
+
     syncFirmaInputs();
-    document.getElementById('solicitud-form').submit();
+    form.submit();
   } catch (err) {
     alert('No se pudo generar o enviar el PDF: ' + (err.message || err));
   } finally {

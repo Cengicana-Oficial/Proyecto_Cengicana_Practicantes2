@@ -5,448 +5,381 @@ lab_require_permission('laboratorio.lotes.ver');
 
 require_once __DIR__ . '/../conexion.php';
 require_once __DIR__ . '/../includes/solicitud_formulario_helpers.php';
-require_once __DIR__ . '/../includes/estado_lote_helper.php';
 require_once __DIR__ . '/../includes/shell_sidebar.php';
+require_once __DIR__ . '/../includes/muestra_identificacion_helper.php';
 
 asegurarColumnasFirmasSolicitud($conexion);
+labMuestraIdentificacionEnsureSchema($conexion);
 
-$correoIngresadoSelect = solicitudColumnExists($conexion, 'correo_ingresado')
-    ? 's.correo_ingresado'
-    : 'NULL';
-$correoRecibidoSelect = solicitudColumnExists($conexion, 'correo_recibido')
-    ? 's.correo_recibido'
-    : 'NULL';
-$firmaIngresoSelect = solicitudColumnExists($conexion, 'firma_ingreso')
-    ? 's.firma_ingreso'
-    : 'NULL';
-$firmaRecibeSelect = solicitudColumnExists($conexion, 'firma_recibe')
-    ? 's.firma_recibe'
-    : 'NULL';
-
-$busquedaLote = trim((string) ($_GET['buscar'] ?? ''));
-$estadoFiltro = strtolower(trim((string) ($_GET['estado'] ?? '')));
-$estadosPermitidos = ['pendiente', 'en_proceso', 'revision', 'aprobado'];
-if (!in_array($estadoFiltro, $estadosPermitidos, true)) {
-    $estadoFiltro = '';
+if (empty($_SESSION['muestra_identificacion_csrf'])) {
+    $_SESSION['muestra_identificacion_csrf'] = bin2hex(random_bytes(32));
 }
 
-$analisisRequeridosSql = "
-    SELECT
-        s.id_lote,
-        COUNT(DISTINCT sa.id_tipo_analisis) AS analisis_requeridos
-    FROM solicitud s
-    INNER JOIN solicitud_analisis sa
-        ON sa.id_solicitud = s.id_solicitud
-    GROUP BY s.id_lote
-";
-
-$analisisIngresadosSql = "
-    SELECT
-        lr.id_lote,
-        COUNT(DISTINCT f.id_tipo_analisis) AS analisis_ingresados,
-        COUNT(
-            DISTINCT CASE
-                WHEN LOWER(COALESCE(ef.nombre, '')) = 'aprobado'
-                THEN f.id_tipo_analisis
-            END
-        ) AS analisis_aprobados
-    FROM lote_rango lr
-    LEFT JOIN formulario f
-        ON f.id_rango = lr.id_rango
-    LEFT JOIN estado_formulario ef
-        ON ef.id_estado = f.id_estado
-    GROUP BY lr.id_lote
-";
-
-$filtrosLote = [];
-$params = [];
-
-if ($busquedaLote !== '') {
-    $filtrosLote[] = 'l2.codigo_lote = ?';
-    $params[] = $busquedaLote;
-}
-
-if ($estadoFiltro === 'pendiente') {
-    $filtrosLote[] = 'COALESCE(ai2.analisis_ingresados, 0) = 0';
-} elseif ($estadoFiltro === 'en_proceso') {
-    $filtrosLote[] = 'COALESCE(ai2.analisis_ingresados, 0) > 0 AND COALESCE(ai2.analisis_ingresados, 0) < COALESCE(ar2.analisis_requeridos, 0)';
-} elseif ($estadoFiltro === 'revision') {
-    $filtrosLote[] = 'COALESCE(ar2.analisis_requeridos, 0) > 0 AND COALESCE(ai2.analisis_ingresados, 0) >= COALESCE(ar2.analisis_requeridos, 0) AND COALESCE(ai2.analisis_aprobados, 0) < COALESCE(ar2.analisis_requeridos, 0)';
-} elseif ($estadoFiltro === 'aprobado') {
-    $filtrosLote[] = 'COALESCE(ar2.analisis_requeridos, 0) > 0 AND COALESCE(ai2.analisis_aprobados, 0) >= COALESCE(ar2.analisis_requeridos, 0)';
-}
-
-$whereLotes = $filtrosLote ? 'WHERE ' . implode(' AND ', $filtrosLote) : '';
-$limitarLotes = $busquedaLote === '';
-$limitSql = $limitarLotes ? 'LIMIT 20' : '';
-
-$stmt = $conexion->prepare("
-    SELECT
-        l.id_lote,
-        l.codigo_lote,
-        COALESCE(ar.analisis_requeridos, 0) AS analisis_requeridos,
-        COALESCE(ai.analisis_ingresados, 0) AS analisis_ingresados,
-        COALESCE(ai.analisis_aprobados, 0) AS analisis_aprobados,
-        s.id_solicitud,
-        s.fecha_muestreo,
-        s.numero_muestras,
-        s.ingresado_por,
-        s.recibido_por,
-        {$correoIngresadoSelect} AS correo_ingresado,
-        {$correoRecibidoSelect} AS correo_recibido,
-        {$firmaIngresoSelect} AS firma_ingreso,
-        {$firmaRecibeSelect} AS firma_recibe,
-        s.fecha_ingreso,
-        s.fecha_estimada,
-        s.observaciones,
-        tm.nombre AS tipo_muestra,
-        mr.codigo_inicio,
-        mr.codigo_fin,
-        GROUP_CONCAT(DISTINCT ta.nombre ORDER BY ta.nombre SEPARATOR '||') AS analisis
-    FROM lote l
-    INNER JOIN (
-        SELECT l2.id_lote
-        FROM lote l2
-        LEFT JOIN ({$analisisRequeridosSql}) ar2
-            ON ar2.id_lote = l2.id_lote
-        LEFT JOIN ({$analisisIngresadosSql}) ai2
-            ON ai2.id_lote = l2.id_lote
-        {$whereLotes}
-        ORDER BY l2.id_lote DESC
-        {$limitSql}
-    ) lotes_filtrados
-        ON lotes_filtrados.id_lote = l.id_lote
-    LEFT JOIN ({$analisisRequeridosSql}) ar
-        ON ar.id_lote = l.id_lote
-    LEFT JOIN ({$analisisIngresadosSql}) ai
-        ON ai.id_lote = l.id_lote
-    LEFT JOIN solicitud s
-        ON s.id_lote = l.id_lote
-    LEFT JOIN tipo_muestra tm
-        ON tm.id_tipo = s.id_tipo
-    LEFT JOIN (
-        SELECT
-            m.id_solicitud,
-            (
-                SELECT mi.codigo_lab
-                FROM muestra mi
-                WHERE mi.id_solicitud = m.id_solicitud
-                  AND mi.codigo_lab IS NOT NULL
-                  AND mi.codigo_lab <> ''
-                ORDER BY mi.numero_muestra ASC
-                LIMIT 1
-            ) AS codigo_inicio,
-            (
-                SELECT mf.codigo_lab
-                FROM muestra mf
-                WHERE mf.id_solicitud = m.id_solicitud
-                  AND mf.codigo_lab IS NOT NULL
-                  AND mf.codigo_lab <> ''
-                ORDER BY mf.numero_muestra DESC
-                LIMIT 1
-            ) AS codigo_fin
-        FROM muestra m
-        GROUP BY m.id_solicitud
-    ) mr
-        ON mr.id_solicitud = s.id_solicitud
-    LEFT JOIN solicitud_analisis sa
-        ON sa.id_solicitud = s.id_solicitud
-    LEFT JOIN tipo_analisis ta
-        ON ta.id_tipo = sa.id_tipo_analisis
-    GROUP BY
-        l.id_lote,
-        l.codigo_lote,
-        ar.analisis_requeridos,
-        ai.analisis_ingresados,
-        ai.analisis_aprobados,
-        s.id_solicitud,
-        s.fecha_muestreo,
-        s.numero_muestras,
-        s.ingresado_por,
-        s.recibido_por,
-        correo_ingresado,
-        correo_recibido,
-        firma_ingreso,
-        firma_recibe,
-        s.fecha_ingreso,
-        s.fecha_estimada,
-        s.observaciones,
-        tm.nombre,
-        mr.codigo_inicio,
-        mr.codigo_fin
-    ORDER BY l.id_lote DESC, s.id_solicitud DESC
-");
-
-$stmt->execute($params);
-$lotesRows = $stmt->fetchAll();
-$lotes = [];
-
-foreach ($lotesRows as $row) {
-    $idLote = (int) $row['id_lote'];
-    if (!isset($lotes[$idLote])) {
-        $estadoLote = labCalcularEstadoLote(
-            $row['analisis_requeridos'] ?? 0,
-            $row['analisis_ingresados'] ?? 0,
-            $row['analisis_aprobados'] ?? 0
-        );
-        $lotes[$idLote] = [
-            'id_lote' => $idLote,
-            'codigo_lote' => $row['codigo_lote'],
-            'estado_lote' => $estadoLote,
-            'analisis_requeridos' => (int) ($row['analisis_requeridos'] ?? 0),
-            'analisis_ingresados' => (int) ($row['analisis_ingresados'] ?? 0),
-            'analisis_aprobados' => (int) ($row['analisis_aprobados'] ?? 0),
-            'numeros_laboratorio' => [],
-            'solicitudes' => [],
-        ];
-    }
-
-    if (!empty($row['id_solicitud'])) {
-        $laboratorio = $row['codigo_inicio'] ?: null;
-        if (!empty($row['codigo_inicio']) && !empty($row['codigo_fin']) && $row['codigo_inicio'] !== $row['codigo_fin']) {
-            $laboratorio = $row['codigo_inicio'] . ' a ' . $row['codigo_fin'];
-        }
-
-        if ($laboratorio) {
-            $lotes[$idLote]['numeros_laboratorio'][] = $laboratorio;
-        }
-
-        $lotes[$idLote]['solicitudes'][] = [
-            'id_solicitud' => (int) $row['id_solicitud'],
-            'tipo_muestra' => $row['tipo_muestra'] ?: '-',
-            'fecha_muestreo' => $row['fecha_muestreo'] ?: '-',
-            'numero_muestras' => $row['numero_muestras'] ?: '-',
-            'laboratorio_inicio' => $row['codigo_inicio'] ?: '-',
-            'laboratorio_fin' => $row['codigo_fin'] ?: '-',
-            'fecha_ingreso' => $row['fecha_ingreso'] ?: '-',
-            'fecha_estimada' => $row['fecha_estimada'] ?: '-',
-            'ingresado_por' => $row['ingresado_por'] ?: '-',
-            'recibido_por' => $row['recibido_por'] ?: '-',
-            'correo_ingresado' => $row['correo_ingresado'] ?: '',
-            'correo_recibido' => $row['correo_recibido'] ?: '',
-            'firma_ingreso' => $row['firma_ingreso'] ?: '',
-            'firma_recibe' => $row['firma_recibe'] ?: '',
-            'observaciones' => $row['observaciones'] ?: '',
-            'analisis' => !empty($row['analisis']) ? explode('||', $row['analisis']) : [],
-        ];
-    }
-}
-
-$lotes = array_values(array_map(static function ($lote) {
-    $lote['numeros_laboratorio'] = implode(', ', array_values(array_unique($lote['numeros_laboratorio'])));
-    if ($lote['numeros_laboratorio'] === '') {
-        $lote['numeros_laboratorio'] = 'Sin numero asignado';
-    }
-    return $lote;
-}, $lotes));
-
-function eLotes($value)
+function ident_e($value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
-?>
 
+function ident_svg(string $name): string
+{
+    $paths = [
+        'edit' => '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/>',
+        'qr' => '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM19 14h2M14 19h2M19 19h2v2h-2z"/>',
+        'search' => '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+        'camera' => '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+        'barcode' => '<path d="M3 5v14M7 5v14M10 5v14M14 5v14M16 5v14M20 5v14M18 5v14"/>',
+        'info' => '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+        'warn' => '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+        'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+        'close' => '<path d="M18 6 6 18M6 6l12 12"/>',
+        'save' => '<path d="M5 4h12l2 2v14H5zM8 4v6h8V4M8 16h8"/>',
+    ];
+
+    return '<svg class="ident-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        . ($paths[$name] ?? $paths['info']) . '</svg>';
+}
+
+function ident_estado(array $muestra): string
+{
+    if (empty($muestra['id_identificacion'])) {
+        return 'Recibida · pendiente de identificación';
+    }
+    $requeridos = (int) ($muestra['analisis_requeridos'] ?? 0);
+    $ingresados = (int) ($muestra['analisis_ingresados'] ?? 0);
+    if ($requeridos > 0 && $ingresados >= $requeridos) {
+        return 'Identificada · análisis completos';
+    }
+    if ($ingresados > 0) {
+        return 'Identificada · análisis en curso';
+    }
+    return 'Identificada · pendiente de análisis';
+}
+
+function ident_tipo_muestra_clave(array $registro): string
+{
+    $tipo = trim((string) ($registro['tipo_muestra'] ?? ''));
+    $normalizado = function_exists('mb_strtolower') ? mb_strtolower($tipo, 'UTF-8') : strtolower($tipo);
+    if (function_exists('iconv')) {
+        $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $normalizado);
+        if ($ascii !== false) {
+            $normalizado = strtolower($ascii);
+        }
+    }
+
+    if (strpos($normalizado, 'foliar') !== false) {
+        return 'foliar';
+    }
+    if (strpos($normalizado, 'suelo') !== false) {
+        return 'suelo';
+    }
+    if (strpos($normalizado, 'agua') !== false) {
+        return 'aguas';
+    }
+    if (strpos($normalizado, 'cana') !== false) {
+        return 'cana';
+    }
+
+    $codigo = strtoupper(trim((string) ($registro['codigo_lab'] ?? '')));
+    $prefijo = substr($codigo, 0, 1);
+    return ['F' => 'foliar', 'S' => 'suelo', 'A' => 'aguas', 'C' => 'cana'][$prefijo] ?? 'otro';
+}
+
+$usuarioActual = lab_current_user();
+$nombreUsuario = trim((string) ($usuarioActual['nombre'] ?? '')) ?: 'Usuario de laboratorio';
+$postError = '';
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $token = (string) ($_POST['csrf_token'] ?? '');
+    if (!hash_equals((string) $_SESSION['muestra_identificacion_csrf'], $token)) {
+        $postError = 'La sesión del formulario venció. Recargue la página e inténtelo nuevamente.';
+    } else {
+        try {
+            $accion = (string) ($_POST['accion'] ?? '');
+            if ($accion === 'crear') {
+                $creada = labMuestraIdentificacionCrear(
+                    $conexion,
+                    (string) ($_POST['codigo_nuevo'] ?? ''),
+                    (int) ($_POST['id_solicitud'] ?? 0),
+                    (string) ($_POST['cultivo_nuevo'] ?? ''),
+                    $nombreUsuario
+                );
+                $codigoCreado = (string) ($creada['codigo_lab'] ?? '');
+                $_SESSION['muestra_identificacion_flash'] = ['tipo' => 'info', 'mensaje' => 'Identificación creada. Complete el formulario y guarde sus datos.'];
+                header('Location: listar_lotes.php?muestra=' . rawurlencode($codigoCreado));
+                exit;
+            }
+
+            if ($accion === 'guardar') {
+                $codigoGuardado = labMuestraIdentificacionGuardar(
+                    $conexion,
+                    (int) ($_POST['id_muestra'] ?? 0),
+                    $_POST,
+                    $nombreUsuario
+                );
+                $_SESSION['muestra_identificacion_flash'] = ['tipo' => 'ok', 'mensaje' => 'Identificación guardada correctamente para ' . $codigoGuardado . '.'];
+                header('Location: listar_lotes.php?muestra=' . rawurlencode($codigoGuardado));
+                exit;
+            }
+
+            throw new InvalidArgumentException('La acción solicitada no es válida.');
+        } catch (Throwable $e) {
+            $postError = $e->getMessage();
+        }
+    }
+}
+
+$flash = $_SESSION['muestra_identificacion_flash'] ?? null;
+unset($_SESSION['muestra_identificacion_flash']);
+
+$codigoBusqueda = labMuestraIdentificacionCodigo((string) ($_GET['muestra'] ?? $_GET['buscar'] ?? ''));
+$muestraActual = $codigoBusqueda !== '' ? labMuestraIdentificacionBuscar($conexion, $codigoBusqueda) : null;
+$solicitudes = labMuestraIdentificacionSolicitudes($conexion);
+$baseIdentificaciones = labMuestraIdentificacionBase($conexion);
+$tiposFiltro = [
+    'foliar' => ['label' => 'Foliar', 'prefix' => 'F'],
+    'suelo' => ['label' => 'Suelo', 'prefix' => 'S'],
+    'aguas' => ['label' => 'Aguas', 'prefix' => 'A'],
+    'cana' => ['label' => 'Caña', 'prefix' => 'C'],
+];
+
+$cultivos = ['Caña de azúcar', 'Maíz', 'Café', 'Banano', 'Palma africana', 'Hortalizas', 'Otro'];
+$cultivoActual = trim((string) ($muestraActual['cultivo'] ?? ''));
+if ($cultivoActual !== '' && !in_array($cultivoActual, $cultivos, true)) {
+    array_unshift($cultivos, $cultivoActual);
+}
+
+$tomadores = [];
+foreach ([$muestraActual['tomado_por'] ?? '', $muestraActual['responsable_envio'] ?? '', $muestraActual['ingresado_por'] ?? '', $muestraActual['recibido_por'] ?? '', $nombreUsuario] as $tomador) {
+    $tomador = trim((string) $tomador);
+    if ($tomador !== '') {
+        $tomadores[$tomador] = $tomador;
+    }
+}
+
+$fechaMuestreo = (string) ($muestraActual['fecha_muestreo'] ?? '');
+if ($fechaMuestreo === '' && !empty($muestraActual['fecha_muestreo_solicitud'])) {
+    $fechaMuestreo = (string) $muestraActual['fecha_muestreo_solicitud'] . ' 00:00:00';
+}
+$fechaMuestreoInput = $fechaMuestreo !== '' ? date('Y-m-d\TH:i', strtotime($fechaMuestreo)) : '';
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Listado de Lotes</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<link rel="stylesheet" href="../css/listar_lotes.css">
-<link rel="stylesheet" href="../css/lab_shell.css?v=1">
-<script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Identificación de muestra</title>
+    <link rel="stylesheet" href="../css/lab_shell.css?v=1">
+    <link rel="stylesheet" href="../css/listar_lotes.css?v=<?= (int) filemtime(__DIR__ . '/../css/listar_lotes.css') ?>">
 </head>
-
 <body class="cengi-canvas">
-<?php lab_shell_open('listar_lotes.php', 'Listado de lotes', 'Consulta de lotes registrados y su estado de avance'); ?>
-    <div class="page-shell">
-        <section class="hero-admin">
-            <section class="panel">
-                <div class="panel-header">
-                    <div class="hero-copy">
-                        <a href="../index.php" class="back-link">
-                            <i class="fa-solid fa-arrow-left"></i>
-                            <span>Regresar</span>
-                        </a>
-                        <span class="eyebrow">
-                            <i class="fa-solid fa-flask-vial"></i>
-                            <span>Gestión de lotes del módulo</span>
-                        </span>
-                        <h1>Listado de Lotes</h1>
-                        <p>Consulta de lotes registrados.</p>
-                    </div>
+<?php lab_shell_open('listar_lotes.php', 'Identificación de muestra', 'Registro único mediante QR, código de barras o captura manual'); ?>
+<main class="sample-ident-page" data-ident-page>
+    <p class="ident-intro">
+        Registro único de identificación de muestras — un solo formulario por pestañas, válido para cualquier tipo de muestra. Identifícala escaneando el <strong>QR</strong> o <strong>código de barras</strong> impreso en la boleta; si no cuentas con lector, <strong>tabula el código manualmente</strong>. La identificación queda enlazada al lote y al informe de resultados.
+    </p>
 
-                    <div class="cengi-kpi-grid cengi-kpi-grid--single" aria-label="Resumen de lotes">
-                        <article class="cengi-kpi">
-                            <span class="cengi-kpi-icon"><i class="fa-solid fa-boxes-stacked"></i></span>
-                            <div class="cengi-kpi-val"><?= count($lotes) ?></div>
-                            <div class="cengi-kpi-label">Lotes visibles</div>
-                            <div class="cengi-kpi-trend is-flat"><?= $limitarLotes ? 'Mostrando primeros' : 'Resultados' ?></div>
-                            <span class="cengi-kpi-bar"></span>
-                        </article>
-                    </div>
-                </div>
-            </section>
-        </section>
+    <section class="ident-card ident-step-one" aria-labelledby="identificarTitulo">
+        <h2 id="identificarTitulo">1. Identificar muestra</h2>
+        <p>Elige cómo identificar la muestra — ambos caminos consultan y guardan en la misma base de identificación.</p>
 
-        <section class="cengi-card ident-card" aria-labelledby="identTitulo">
-            <h3 id="identTitulo"><i class="fa-solid fa-magnifying-glass-location"></i> Identificar lote o muestra</h3>
-            <p class="cengi-card-sub">Busca un lote por su código exacto para revisar su estado de avance. Ambos caminos guardan la misma búsqueda.</p>
-
-            <div class="cengi-seg" id="identSeg" role="tablist" aria-label="Modo de identificación">
-                <button type="button" class="active" data-seg-target="identModoManual" aria-selected="true" role="tab">
-                    <i class="fa-solid fa-keyboard"></i> Ingreso manual
-                </button>
-                <button type="button" data-seg-target="identModoEscaneo" aria-selected="false" role="tab">
-                    <i class="fa-solid fa-qrcode"></i> Escanear QR / código de barras
-                </button>
-            </div>
-
-            <div id="identModoManual" class="ident-mode">
-                <form method="GET" class="ident-row">
-                    <?php if ($estadoFiltro !== ''): ?>
-                        <input type="hidden" name="estado" value="<?= eLotes($estadoFiltro) ?>">
-                    <?php endif; ?>
-                    <label class="search-box ident-field" for="identCodigo">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                        <input type="text" id="identCodigo" name="buscar" value="<?= eLotes($busquedaLote) ?>" placeholder="Ej. LT-2026-001">
-                    </label>
-                    <button type="submit" class="search-button">Buscar</button>
-                </form>
-                <p class="ident-hint">Tabula el código exacto impreso en la boleta del lote y presiona "Buscar" — la tabla de abajo se filtra automáticamente.</p>
-            </div>
-
-            <div id="identModoEscaneo" class="ident-mode" hidden>
-                <div class="ident-row">
-                    <button type="button" class="btn-clear" disabled aria-disabled="true">
-                        <i class="fa-solid fa-camera"></i> Escanear con cámara
-                    </button>
-                    <button type="button" class="btn-clear" disabled aria-disabled="true">
-                        <i class="fa-solid fa-barcode"></i> Leer código de barras
-                    </button>
-                </div>
-                <p class="ident-hint">Requiere lector de QR o código de barras conectado — mientras tanto usa el ingreso manual, se guarda igual.</p>
-            </div>
-
-            <?php if ($busquedaLote !== ''): ?>
-                <div class="notice <?= empty($lotes) ? 'warning' : 'success' ?> ident-alert">
-                    <?php if (empty($lotes)): ?>
-                        No se encontró ningún lote con el código <strong>"<?= eLotes($busquedaLote) ?>"</strong>. Verifica el código o intenta con otro.
-                    <?php else: ?>
-                        Se <?= count($lotes) === 1 ? 'encontró' : 'encontraron' ?> <strong><?= count($lotes) ?></strong> lote<?= count($lotes) === 1 ? '' : 's' ?> con el código <strong>"<?= eLotes($busquedaLote) ?>"</strong>.
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-        </section>
-
-        <form class="toolbar" method="GET">
-            <label class="search-box" for="buscar">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="search" id="buscar" name="buscar" value="<?= eLotes($busquedaLote) ?>" placeholder="Ej. 20 o LT-2026-001">
-            </label>
-
-            <select id="estado" name="estado" class="filter-select" onchange="this.form.submit()">
-                <option value="" <?= $estadoFiltro === '' ? 'selected' : '' ?>>Todos los estados</option>
-                <option value="pendiente" <?= $estadoFiltro === 'pendiente' ? 'selected' : '' ?>>Pendiente</option>
-                <option value="en_proceso" <?= $estadoFiltro === 'en_proceso' ? 'selected' : '' ?>>En proceso</option>
-                <option value="revision" <?= $estadoFiltro === 'revision' ? 'selected' : '' ?>>En revisión</option>
-                <option value="aprobado" <?= $estadoFiltro === 'aprobado' ? 'selected' : '' ?>>Aprobado</option>
-            </select>
-
-            <div class="toolbar-actions">
-                <button type="submit" class="search-button">Buscar</button>
-
-                <?php if ($busquedaLote !== '' || $estadoFiltro !== ''): ?>
-                    <a href="listar_lotes.php" class="btn-clear">Limpiar</a>
-                <?php endif; ?>
-            </div>
-        </form>
-
-        <div class="table-area">
-            <div class="cengi-table-wrap">
-                <table class="lotes-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Número de Laboratorio</th>
-                            <th>Código de Lote</th>
-                            <th>Estado</th>
-                            <th>PDF</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    <?php if (empty($lotes)): ?>
-                        <tr>
-                            <td colspan="5" class="empty-cell">No se encontraron lotes con los filtros seleccionados.</td>
-                        </tr>
-                    <?php endif; ?>
-                    <?php foreach ($lotes as $lote): ?>
-                        <?php
-                            $pdfData = [
-                                'id' => (int) $lote['id_lote'],
-                                'codigo_lote' => $lote['codigo_lote'],
-                                'numeros_laboratorio' => $lote['numeros_laboratorio'],
-                                'solicitudes' => $lote['solicitudes'],
-                            ];
-                        ?>
-                        <tr>
-                            <td><?= (int) $lote['id_lote'] ?></td>
-                            <td><?= eLotes($pdfData['numeros_laboratorio']) ?></td>
-                            <td><?= eLotes($pdfData['codigo_lote']) ?></td>
-                            <td>
-                                <span class="estado-badge <?= eLotes($lote['estado_lote']['clase']) ?>">
-                                    <?= eLotes($lote['estado_lote']['texto']) ?>
-                                </span>
-                            </td>
-                            <td>
-                                <button
-                                    class="btn-pdf"
-                                    type="button"
-                                    data-lote='<?= eLotes(json_encode($pdfData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?>'>
-                                    Descargar PDF
-                                </button>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+        <div class="ident-segment" role="tablist" aria-label="Modo de identificación">
+            <button type="button" class="is-active" data-ident-mode="manual" role="tab" aria-selected="true"><?= ident_svg('edit') ?> Ingreso manual</button>
+            <button type="button" data-ident-mode="scanner" role="tab" aria-selected="false"><?= ident_svg('qr') ?> Escanear QR / código de barras</button>
         </div>
+
+        <div data-ident-panel="manual">
+            <form method="GET" class="ident-search-form">
+                <label class="ident-field">
+                    <span>Código de muestra</span>
+                    <input type="text" name="muestra" value="<?= ident_e($codigoBusqueda) ?>" placeholder="Ej. S001-07-26" autocomplete="off" autofocus>
+                </label>
+                <button class="ident-btn ident-btn--primary" type="submit"><?= ident_svg('search') ?> Buscar</button>
+            </form>
+            <p class="ident-help">Tabula el código impreso en la boleta y presiona “Buscar”; si no existe, podrás crear una nueva identificación.</p>
+        </div>
+
+        <div data-ident-panel="scanner" hidden>
+            <div class="ident-scanner-actions">
+                <button class="ident-btn ident-btn--dark" type="button" data-open-scanner><?= ident_svg('camera') ?> Escanear con cámara</button>
+                <button class="ident-btn ident-btn--ghost" type="button" data-focus-reader><?= ident_svg('qr') ?> Escanear QR</button>
+                <button class="ident-btn ident-btn--ghost" type="button" data-focus-reader><?= ident_svg('barcode') ?> Leer código de barras</button>
+            </div>
+            <p class="ident-help">Si la cámara o el lector fallan, cambia a “Ingreso manual”; no se pierde información.</p>
+        </div>
+
+        <?php if ($postError !== ''): ?>
+            <div class="ident-alert ident-alert--warn"><?= ident_svg('warn') ?><div><?= ident_e($postError) ?></div></div>
+        <?php elseif (is_array($flash)): ?>
+            <div class="ident-alert ident-alert--<?= ($flash['tipo'] ?? '') === 'ok' ? 'ok' : 'info' ?>"><?= ident_svg('info') ?><div><?= ident_e($flash['mensaje'] ?? '') ?></div></div>
+        <?php elseif ($codigoBusqueda !== '' && $muestraActual): ?>
+            <div class="ident-alert ident-alert--info"><?= ident_svg('info') ?><div>Identificación existente cargada: <strong><?= ident_e($muestraActual['codigo_lab']) ?></strong> · Lote <?= ident_e($muestraActual['codigo_lote']) ?> · <?= ident_e($muestraActual['cliente'] ?: 'Sin cliente') ?></div></div>
+        <?php elseif ($codigoBusqueda !== ''): ?>
+            <div class="ident-alert ident-alert--warn"><?= ident_svg('warn') ?><div>No existe ninguna muestra con el código <strong><?= ident_e($codigoBusqueda) ?></strong>. Puedes crearla a continuación.</div></div>
+        <?php endif; ?>
+
+        <?php if ($codigoBusqueda !== '' && !$muestraActual): ?>
+            <form method="POST" class="ident-new-sample" data-new-sample-form>
+                <input type="hidden" name="csrf_token" value="<?= ident_e($_SESSION['muestra_identificacion_csrf']) ?>">
+                <input type="hidden" name="accion" value="crear">
+                <p><strong>Ingreso manual de una muestra nueva</strong> — completa estos datos mínimos; el resto se llena en el formulario de identificación.</p>
+                <div class="ident-form-grid">
+                    <label class="ident-field"><span>Código de la nueva muestra</span><input name="codigo_nuevo" value="<?= ident_e($codigoBusqueda) ?>" required></label>
+                    <label class="ident-field"><span>Lote donde se registrará</span>
+                        <select name="id_solicitud" data-request-select required>
+                            <option value="">Seleccione un lote…</option>
+                            <?php foreach ($solicitudes as $solicitud): ?>
+                                <option value="<?= (int) $solicitud['id_solicitud'] ?>" data-type="<?= ident_e($solicitud['tipo_muestra']) ?>">
+                                    <?= ident_e($solicitud['codigo_lote']) ?> · <?= ident_e($solicitud['cliente']) ?> (<?= ident_e($solicitud['tipo_muestra']) ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                    <label class="ident-field"><span>Tipo de muestra</span><input data-request-type value="Seleccione un lote" disabled></label>
+                    <label class="ident-field"><span>Cultivo</span>
+                        <select name="cultivo_nuevo"><?php foreach ($cultivos as $cultivo): ?><option><?= ident_e($cultivo) ?></option><?php endforeach; ?></select>
+                    </label>
+                </div>
+                <button class="ident-btn ident-btn--primary" type="submit">Crear identificación y continuar</button>
+            </form>
+        <?php endif; ?>
+    </section>
+
+    <?php if ($muestraActual): ?>
+        <section class="ident-card ident-form-card" id="formulario-identificacion">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?= ident_e($_SESSION['muestra_identificacion_csrf']) ?>">
+                <input type="hidden" name="accion" value="guardar">
+                <input type="hidden" name="id_muestra" value="<?= (int) $muestraActual['id_muestra'] ?>">
+
+                <header class="ident-form-head">
+                    <div>
+                        <h2>2. Formulario de identificación</h2>
+                        <strong><?= ident_e($muestraActual['codigo_lab']) ?> · <?= ident_e($muestraActual['tipo_muestra']) ?> · <?= ident_e($cultivoActual ?: 'Sin cultivo') ?></strong>
+                        <p><?= ident_e(ident_estado($muestraActual)) ?></p>
+                    </div>
+                    <a class="ident-btn ident-btn--ghost ident-btn--small" href="trazabilidad_view.php?id_lote=<?= (int) $muestraActual['id_lote'] ?>"><?= ident_svg('clock') ?> Ver trazabilidad completa</a>
+                </header>
+
+                <div class="ident-tabs" role="tablist" aria-label="Secciones de identificación">
+                    <button type="button" class="is-active" data-ident-tab="general" aria-selected="true">Información general</button>
+                    <button type="button" data-ident-tab="ubicacion" aria-selected="false">Ubicación</button>
+                    <button type="button" data-ident-tab="muestreo" aria-selected="false">Muestreo</button>
+                    <button type="button" data-ident-tab="fisica" aria-selected="false">Información física</button>
+                    <button type="button" data-ident-tab="observaciones" aria-selected="false">Observaciones</button>
+                </div>
+
+                <div class="ident-tab-content">
+                    <section class="ident-tab-panel is-active" data-ident-tab-panel="general">
+                        <div class="ident-form-grid">
+                            <label class="ident-field"><span>Código de muestra</span><input value="<?= ident_e($muestraActual['codigo_lab']) ?>" disabled></label>
+                            <label class="ident-field"><span>Tipo de muestra</span><input value="<?= ident_e($muestraActual['tipo_muestra']) ?>" disabled></label>
+                            <label class="ident-field"><span>Cliente / Ingenio</span><input value="<?= ident_e($muestraActual['cliente'] ?: 'Sin cliente') ?>" disabled></label>
+                            <label class="ident-field"><span>Cultivo</span><select name="cultivo"><?php foreach ($cultivos as $cultivo): ?><option value="<?= ident_e($cultivo) ?>" <?= $cultivo === $cultivoActual ? 'selected' : '' ?>><?= ident_e($cultivo) ?></option><?php endforeach; ?></select></label>
+                            <label class="ident-field"><span>Estado de la muestra</span><input value="<?= ident_e(ident_estado($muestraActual)) ?>" disabled></label>
+                            <label class="ident-field"><span>Lote asociado</span><input value="<?= ident_e($muestraActual['codigo_lote']) ?>" disabled></label>
+                            <label class="ident-field ident-field--full"><span>Lectura QR / código de barras</span><input name="lectura_codigo" value="<?= ident_e($muestraActual['lectura_codigo'] ?: $muestraActual['codigo_lab']) ?>" placeholder="Valor leído del QR o código de barras"></label>
+                        </div>
+                    </section>
+
+                    <section class="ident-tab-panel" data-ident-tab-panel="ubicacion" hidden>
+                        <div class="ident-form-grid">
+                            <label class="ident-field"><span>Finca</span><input value="No registrada en recepción" disabled></label>
+                            <label class="ident-field"><span>Bloque</span><input name="bloque" value="<?= ident_e($muestraActual['bloque']) ?>" placeholder="Ej. B-04"></label>
+                            <label class="ident-field"><span>Parcela</span><input name="parcela" value="<?= ident_e($muestraActual['parcela']) ?>" placeholder="Ej. P-12"></label>
+                            <label class="ident-field"><span>Punto de muestreo</span><input name="punto_muestreo" value="<?= ident_e($muestraActual['punto_muestreo']) ?>"></label>
+                            <label class="ident-field ident-field--full"><span>Georreferencia (lat, long)</span><input name="georreferencia" value="<?= ident_e($muestraActual['georreferencia']) ?>" placeholder="Ej. 14.3417, -90.9500"></label>
+                        </div>
+                    </section>
+
+                    <section class="ident-tab-panel" data-ident-tab-panel="muestreo" hidden>
+                        <div class="ident-form-grid">
+                            <label class="ident-field"><span>Fecha y hora de muestreo</span><input type="datetime-local" name="fecha_muestreo" value="<?= ident_e($fechaMuestreoInput) ?>"></label>
+                            <label class="ident-field"><span>Repetición</span><input name="repeticion" value="<?= ident_e($muestraActual['repeticion']) ?>" placeholder="Ej. R1"></label>
+                            <label class="ident-field"><span>Variedad</span><input name="variedad" value="<?= ident_e($muestraActual['variedad']) ?>" placeholder="Ej. CP 72-2086"></label>
+                            <label class="ident-field"><span>Corte</span><input name="corte" value="<?= ident_e($muestraActual['corte']) ?>" placeholder="Ej. Corte 2"></label>
+                            <label class="ident-field"><span>Tratamiento</span><input name="tratamiento" value="<?= ident_e($muestraActual['tratamiento']) ?>" placeholder="Ej. T3 - Fertilización foliar"></label>
+                            <label class="ident-field"><span>Tomada / recibida por</span><select name="tomado_por"><option value="">Seleccione…</option><?php foreach ($tomadores as $tomador): ?><option value="<?= ident_e($tomador) ?>" <?= $tomador === ($muestraActual['tomado_por'] ?? '') ? 'selected' : '' ?>><?= ident_e($tomador) ?></option><?php endforeach; ?></select></label>
+                        </div>
+                    </section>
+
+                    <section class="ident-tab-panel" data-ident-tab-panel="fisica" hidden>
+                        <div class="ident-form-grid">
+                            <label class="ident-field"><span>Peso / cantidad recibida</span><input type="number" step="any" name="peso_cantidad" value="<?= ident_e($muestraActual['peso_cantidad']) ?>" placeholder="Ej. 500"></label>
+                            <label class="ident-field"><span>Unidad</span><select name="unidad_peso"><?php foreach (['g', 'kg', 'ml', 'l', 'unidades'] as $unidad): ?><option <?= $unidad === ($muestraActual['unidad_peso'] ?: 'g') ? 'selected' : '' ?>><?= ident_e($unidad) ?></option><?php endforeach; ?></select></label>
+                            <label class="ident-field"><span>Contenedor / envase</span><select name="contenedor"><?php foreach (['Bolsa plástica sellada', 'Bolsa de papel kraft', 'Frasco estéril', 'Hielera con refrigerante', 'Envase del cliente'] as $contenedor): ?><option <?= $contenedor === ($muestraActual['contenedor'] ?: 'Bolsa plástica sellada') ? 'selected' : '' ?>><?= ident_e($contenedor) ?></option><?php endforeach; ?></select></label>
+                            <label class="ident-field"><span>Condición física al recibir</span><select name="condicion_fisica"><?php foreach (['Buena', 'Regular', 'Deficiente'] as $condicion): ?><option <?= $condicion === ($muestraActual['condicion_fisica'] ?: 'Buena') ? 'selected' : '' ?>><?= ident_e($condicion) ?></option><?php endforeach; ?></select></label>
+                            <label class="ident-field"><span>Temperatura de recepción (°C)</span><input type="number" step="any" name="temperatura_recepcion" value="<?= ident_e($muestraActual['temperatura_recepcion']) ?>" placeholder="Ej. 4"></label>
+                        </div>
+                    </section>
+
+                    <section class="ident-tab-panel" data-ident-tab-panel="observaciones" hidden>
+                        <label class="ident-field ident-field--full"><span>Observaciones</span><textarea name="observaciones" placeholder="Estado del empaque, incidencias durante el traslado, etc."><?= ident_e($muestraActual['observaciones']) ?></textarea></label>
+                    </section>
+                </div>
+
+                <footer class="ident-form-actions">
+                    <a class="ident-btn ident-btn--ghost" href="listar_lotes.php">Cancelar</a>
+                    <button class="ident-btn ident-btn--primary" type="submit"><?= ident_svg('save') ?> Guardar identificación</button>
+                </footer>
+            </form>
+        </section>
+    <?php endif; ?>
+
+    <section class="ident-base-section">
+        <div class="ident-section-title"><h2>Base de identificación de muestras</h2><span data-base-count><?= count($baseIdentificaciones) ?> registradas</span></div>
+        <p>Registro consolidado de todas las muestras identificadas — permite ubicar rápidamente muestra, lote, lectura QR o código de barras y datos de campo.</p>
+        <div class="ident-table-toolbar">
+            <label class="ident-table-search"><?= ident_svg('search') ?><input type="search" placeholder="Buscar por muestra, lote, lectura QR, parcela…" data-base-filter></label>
+            <label class="ident-type-filter">
+                <span>Tipo de muestra</span>
+                <select data-base-type-filter aria-label="Filtrar por tipo de muestra">
+                    <option value="">Todos los tipos</option>
+                    <?php foreach ($tiposFiltro as $clave => $meta): ?><option value="<?= ident_e($clave) ?>"><?= ident_e($meta['prefix'] . ' · ' . $meta['label']) ?></option><?php endforeach; ?>
+                </select>
+            </label>
+        </div>
+        <div class="ident-table-wrap">
+            <table>
+                <thead><tr><th>Número lab</th><th>Lote</th><th>Lectura QR / código de barras</th><th>Parcela / Tratamiento / Repetición</th><th>Observaciones</th></tr></thead>
+                <tbody data-base-body>
+                <?php if (!$baseIdentificaciones): ?><tr data-empty-row><td colspan="5">Aún no hay muestras identificadas.</td></tr><?php endif; ?>
+                <?php foreach ($baseIdentificaciones as $registro): ?>
+                    <?php
+                        $campo = implode(' / ', array_filter([$registro['parcela'], $registro['tratamiento'], $registro['repeticion']])) ?: '—';
+                        $tipoClave = ident_tipo_muestra_clave($registro);
+                        $tipoMeta = $tiposFiltro[$tipoClave] ?? ['label' => ($registro['tipo_muestra'] ?: 'Otro'), 'prefix' => '?'];
+                    ?>
+                    <tr data-base-row data-type="<?= ident_e($tipoClave) ?>" data-search="<?= ident_e(strtolower(implode(' ', [$registro['codigo_lab'], $registro['codigo_lote'], $registro['lectura_codigo'], $campo, $registro['observaciones'], $registro['cliente'], $tipoMeta['label'], $tipoMeta['prefix']]))) ?>">
+                        <td>
+                            <div class="ident-lab-number"><span class="ident-prefix ident-prefix--<?= ident_e($tipoClave) ?>"><?= ident_e($tipoMeta['prefix']) ?></span><a href="listar_lotes.php?muestra=<?= rawurlencode((string) $registro['codigo_lab']) ?>"><?= ident_e($registro['codigo_lab']) ?></a></div>
+                            <small class="ident-type-caption"><?= ident_e($tipoMeta['label']) ?></small>
+                        </td>
+                        <td><?= ident_e($registro['codigo_lote']) ?><small><?= ident_e($registro['cliente']) ?></small></td>
+                        <td><?= ident_e($registro['lectura_codigo'] ?: $registro['codigo_lab']) ?></td>
+                        <td><?= ident_e($campo) ?></td>
+                        <td><?= ident_e($registro['observaciones'] ?: '—') ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<div class="ident-modal" data-scanner-modal hidden>
+    <div class="ident-modal-card" role="dialog" aria-modal="true" aria-labelledby="scannerTitle">
+        <header><h2 id="scannerTitle">Escanear QR / código de barras</h2><button type="button" data-close-scanner aria-label="Cerrar"><?= ident_svg('close') ?></button></header>
+        <div class="ident-modal-body">
+            <div class="ident-alert ident-alert--info" data-scanner-status><?= ident_svg('info') ?><div>Solicitando acceso a la cámara…</div></div>
+            <video data-scanner-video playsinline autoplay muted></video>
+            <canvas data-scanner-canvas hidden></canvas>
+        </div>
+        <footer><button class="ident-btn ident-btn--ghost" type="button" data-close-scanner>Cerrar</button></footer>
     </div>
+</div>
 
-<script src="../js/pdf_tablas.js"></script>
-<script>
-document.querySelectorAll(".btn-pdf").forEach((button) => {
-    button.addEventListener("click", async () => {
-        const lote = JSON.parse(button.dataset.lote || "{}");
-        const codigo = LabPdfTablas.normalizarTexto(lote.codigo_lote);
-
-        await LabPdfTablas.crearPdfBoletaLote({
-            lote,
-            fileName: `lote_${LabPdfTablas.nombreArchivo(codigo)}.pdf`,
-        });
-    });
-});
-
-document.querySelectorAll("#identSeg [data-seg-target]").forEach((boton) => {
-    boton.addEventListener("click", () => {
-        document.querySelectorAll("#identSeg [data-seg-target]").forEach((otro) => {
-            otro.classList.remove("active");
-            otro.setAttribute("aria-selected", "false");
-        });
-        boton.classList.add("active");
-        boton.setAttribute("aria-selected", "true");
-
-        document.querySelectorAll(".ident-mode").forEach((panel) => {
-            panel.hidden = panel.id !== boton.dataset.segTarget;
-        });
-    });
-});
-</script>
+<form method="GET" data-scanner-submit hidden><input name="muestra" data-scanner-value></form>
+<script src="../js/identificacion_muestra.js?v=<?= (int) filemtime(__DIR__ . '/../js/identificacion_muestra.js') ?>"></script>
 <?php lab_shell_content_close(); ?>
 </body>
 </html>

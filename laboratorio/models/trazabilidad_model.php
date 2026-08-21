@@ -80,6 +80,255 @@ if (!function_exists('lab_trazabilidad_obtener_lotes')) {
     }
 }
 
+if (!function_exists('lab_historial_normalizar')) {
+    function lab_historial_normalizar(string $valor): string
+    {
+        $valor = function_exists('mb_strtolower') ? mb_strtolower($valor, 'UTF-8') : strtolower($valor);
+        if (function_exists('iconv')) {
+            $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $valor);
+            if ($ascii !== false) {
+                $valor = strtolower($ascii);
+            }
+        }
+        return preg_replace('/[^a-z0-9]+/', '_', $valor) ?: '';
+    }
+}
+
+if (!function_exists('lab_historial_snapshot_resultado')) {
+    function lab_historial_snapshot_resultado(string $json, string $codigoMuestra, string $numeroMuestra): string
+    {
+        $datos = json_decode($json, true);
+        if (!is_array($datos)) {
+            return '-';
+        }
+
+        $clavesMuestra = ['numero_laboratorio', 'no_laboratorio', 'no_lab', 'numero_muestra', 'codigo_muestra', 'muestra'];
+        $clavesIgnoradas = array_merge($clavesMuestra, [
+            'id', 'id_formulario', 'id_solicitud', 'id_lote', 'id_muestra', 'id_encabezado',
+            'fecha', 'fecha_creacion', 'created_at', 'updated_at', 'analista', 'usuario', 'observaciones', 'comentario',
+        ]);
+        $prioridades = [
+            'resultado', 'resultado_final', 'valor_final', 'promedio', 'media', 'valor', 'ph', 'brix', 'pol',
+            'porcentaje', 'conductividad', 'ce', 'densidad', 'cloruros', 'calcio', 'magnesio', 'sodio',
+            'potasio', 'fosforo', 'nitrogeno', 'boro', 'ras', 'tds', 'salinidad',
+        ];
+
+        $candidatos = [];
+        foreach (($datos['tablas'] ?? []) as $tabla) {
+            foreach (($tabla['filas'] ?? []) as $fila) {
+                if (!is_array($fila)) {
+                    continue;
+                }
+
+                $identificadores = [];
+                foreach ($fila as $campo => $valor) {
+                    if (in_array(lab_historial_normalizar((string) $campo), $clavesMuestra, true)) {
+                        $identificadores[] = trim((string) $valor);
+                    }
+                }
+                $identificadores = array_filter($identificadores, static fn($valor) => $valor !== '');
+                if ($identificadores
+                    && !in_array($codigoMuestra, $identificadores, true)
+                    && !in_array($numeroMuestra, $identificadores, true)) {
+                    continue;
+                }
+
+                foreach ($fila as $campo => $valor) {
+                    if (!is_scalar($valor) || trim((string) $valor) === '') {
+                        continue;
+                    }
+                    $normalizado = lab_historial_normalizar((string) $campo);
+                    if ($normalizado === '' || in_array($normalizado, $clavesIgnoradas, true) || strpos($normalizado, 'id_') === 0) {
+                        continue;
+                    }
+                    $peso = 50;
+                    foreach ($prioridades as $indice => $patron) {
+                        if ($normalizado === $patron || strpos($normalizado, $patron) !== false) {
+                            $peso = $indice;
+                            break;
+                        }
+                    }
+                    if ($peso < 50) {
+                        $candidatos[] = ['peso' => $peso, 'valor' => trim((string) $valor)];
+                    }
+                }
+            }
+        }
+
+        if (!$candidatos) {
+            return '-';
+        }
+        usort($candidatos, static fn($a, $b) => $a['peso'] <=> $b['peso']);
+        return (string) $candidatos[0]['valor'];
+    }
+}
+
+if (!function_exists('lab_historial_estado_version')) {
+    function lab_historial_estado_version(array $version, bool $esUltima): array
+    {
+        $tipo = lab_historial_normalizar((string) ($version['tipo_version'] ?? ''));
+        $estadoActual = lab_historial_normalizar((string) ($version['estado_actual'] ?? ''));
+
+        if ($tipo === 'con_errores' || ($esUltima && strpos($estadoActual, 'rechaz') !== false)) {
+            return ['key' => 'rechazada', 'label' => 'RECHAZADA'];
+        }
+        if ($esUltima && strpos($estadoActual, 'aprob') !== false) {
+            return ['key' => 'aprobada', 'label' => 'APROBADA'];
+        }
+        return ['key' => 'revision', 'label' => 'EN REVISIÓN'];
+    }
+}
+
+if (!function_exists('lab_historial_versiones_muestras')) {
+    /**
+     * Historial para la pantalla del template: una entrada por combinación
+     * muestra + análisis que tenga reanálisis, corrección o rechazo.
+     */
+    function lab_historial_versiones_muestras(PDO $pdo): array
+    {
+        if (!lab_trazabilidad_tabla_existe($pdo, 'formulario_version')) {
+            return [];
+        }
+
+        $stmt = $pdo->query("
+            SELECT
+                v.id_version,
+                v.id_formulario,
+                v.version_numero,
+                v.tipo_version,
+                v.datos_json,
+                v.usuario,
+                v.fecha,
+                v.comentario,
+                f.analista,
+                ef.nombre AS estado_actual,
+                ta.nombre AS analisis_nombre,
+                lr.inicio,
+                lr.fin,
+                l.id_lote,
+                l.codigo_lote,
+                tm.nombre AS tipo_muestra
+            FROM formulario_version v
+            INNER JOIN formulario f ON f.id_formulario = v.id_formulario
+            LEFT JOIN estado_formulario ef ON ef.id_estado = f.id_estado
+            LEFT JOIN tipo_analisis ta ON ta.id_tipo = f.id_tipo_analisis
+            LEFT JOIN lote_rango lr ON lr.id_rango = f.id_rango
+            LEFT JOIN lote l ON l.id_lote = lr.id_lote
+            LEFT JOIN solicitud s ON s.id_lote = l.id_lote
+            LEFT JOIN tipo_muestra tm ON tm.id_tipo = s.id_tipo
+            ORDER BY v.id_formulario, v.version_numero, v.id_version
+        ");
+        $versiones = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+        if (!$versiones) {
+            return [];
+        }
+
+        $muestrasPorLote = [];
+        $muestrasStmt = $pdo->query("
+            SELECT m.id_muestra, m.codigo_lab, m.numero_muestra, s.id_lote
+            FROM muestra m
+            INNER JOIN solicitud s ON s.id_solicitud = m.id_solicitud
+            ORDER BY s.id_lote, m.numero_muestra, m.id_muestra
+        ");
+        foreach (($muestrasStmt ? $muestrasStmt->fetchAll(PDO::FETCH_ASSOC) : []) as $muestra) {
+            $muestrasPorLote[(int) $muestra['id_lote']][] = $muestra;
+        }
+
+        $rechazos = [];
+        if (lab_trazabilidad_tabla_existe($pdo, 'historial_formulario')) {
+            $rechazosStmt = $pdo->query("
+                SELECT id_formulario, comentario, fecha
+                FROM historial_formulario
+                WHERE LOWER(COALESCE(estado_nuevo, '')) LIKE '%rechaz%'
+                ORDER BY fecha DESC, id_historial DESC
+            ");
+            foreach (($rechazosStmt ? $rechazosStmt->fetchAll(PDO::FETCH_ASSOC) : []) as $rechazo) {
+                $idFormulario = (int) $rechazo['id_formulario'];
+                if (!isset($rechazos[$idFormulario])) {
+                    $rechazos[$idFormulario] = $rechazo;
+                }
+            }
+        }
+
+        $porFormulario = [];
+        foreach ($versiones as $version) {
+            $porFormulario[(int) $version['id_formulario']][] = $version;
+        }
+
+        $pares = [];
+        foreach ($porFormulario as $idFormulario => $versionesFormulario) {
+            $primera = $versionesFormulario[0];
+            $tieneRechazo = isset($rechazos[$idFormulario])
+                || count(array_filter($versionesFormulario, static fn($version) => ($version['tipo_version'] ?? '') === 'con_errores')) > 0;
+            if (count($versionesFormulario) < 2 && !$tieneRechazo) {
+                continue;
+            }
+
+            $inicio = (int) ($primera['inicio'] ?? 0);
+            $fin = (int) ($primera['fin'] ?? 0);
+            $muestras = [];
+            foreach (($muestrasPorLote[(int) ($primera['id_lote'] ?? 0)] ?? []) as $muestra) {
+                $numero = (int) preg_replace('/\D+/', '', (string) ($muestra['numero_muestra'] ?? ''));
+                if ($inicio > 0 && $fin > 0 && $numero > 0 && ($numero < $inicio || $numero > $fin)) {
+                    continue;
+                }
+                $muestras[] = $muestra;
+            }
+            if (!$muestras) {
+                $muestras[] = [
+                    'id_muestra' => 0,
+                    'codigo_lab' => $inicio === $fin ? (string) $inicio : trim($inicio . ' - ' . $fin),
+                    'numero_muestra' => $inicio === $fin ? (string) $inicio : trim($inicio . ' - ' . $fin),
+                ];
+            }
+
+            foreach ($muestras as $muestra) {
+                $codigo = trim((string) ($muestra['codigo_lab'] ?? ''));
+                $numero = trim((string) ($muestra['numero_muestra'] ?? ''));
+                if ($codigo === '') {
+                    $codigo = $numero !== '' ? $numero : 'Formulario #' . $idFormulario;
+                }
+
+                $timeline = [];
+                $cantidad = count($versionesFormulario);
+                foreach ($versionesFormulario as $indice => $version) {
+                    $estado = lab_historial_estado_version($version, $indice === $cantidad - 1);
+                    $motivo = null;
+                    if ($estado['key'] === 'rechazada') {
+                        $motivo = trim((string) ($version['comentario'] ?? ''));
+                        if ($motivo === '' && isset($rechazos[$idFormulario])) {
+                            $motivo = trim((string) ($rechazos[$idFormulario]['comentario'] ?? ''));
+                        }
+                    }
+                    $timeline[] = [
+                        'numero' => (int) $version['version_numero'],
+                        'estado' => $estado,
+                        'fecha' => $version['fecha'],
+                        'usuario' => trim((string) ($version['usuario'] ?: $version['analista'] ?: 'Sistema')),
+                        'valor' => lab_historial_snapshot_resultado((string) ($version['datos_json'] ?? ''), $codigo, $numero),
+                        'motivo' => $motivo,
+                        'comentario' => trim((string) ($version['comentario'] ?? '')),
+                    ];
+                }
+
+                $pares[] = [
+                    'key' => $idFormulario . '-' . (int) ($muestra['id_muestra'] ?? 0),
+                    'id_formulario' => $idFormulario,
+                    'muestra' => $codigo,
+                    'lote' => (string) ($primera['codigo_lote'] ?? '-'),
+                    'tipo_muestra' => (string) ($primera['tipo_muestra'] ?? '-'),
+                    'analisis' => (string) ($primera['analisis_nombre'] ?? 'Análisis'),
+                    'versiones' => $timeline,
+                    'ultima_fecha' => (string) ($versionesFormulario[$cantidad - 1]['fecha'] ?? ''),
+                ];
+            }
+        }
+
+        usort($pares, static fn($a, $b) => strcmp((string) $b['ultima_fecha'], (string) $a['ultima_fecha']));
+        return $pares;
+    }
+}
+
 if (!function_exists('lab_trazabilidad_obtener_linea_tiempo')) {
     /**
      * Devuelve la linea de tiempo combinada (eventos genericos +

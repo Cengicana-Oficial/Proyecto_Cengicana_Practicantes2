@@ -107,7 +107,7 @@ if (!function_exists('lab_shell_nav_items')) {
         if ($canBandeja) {
             $flujo[] = [
                 'href' => 'view/solicitudes_pendientes_tecnico.php', 'icon' => 'checklist', 'label' => 'Bandeja del analista',
-                'match' => ['solicitudes_pendientes_tecnico.php'], 'badge' => $badges['bandeja'] ?? null,
+                'match' => ['solicitudes_pendientes_tecnico.php', 'captura_variables.php'], 'badge' => $badges['bandeja'] ?? null,
             ];
         }
         if ($canValidacion) {

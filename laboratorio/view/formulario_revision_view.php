@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/shell_sidebar.php';
 
 function eRevision($value)
 {
@@ -90,20 +91,25 @@ $formulariosRevision = $formulariosRevision ?? [];
 $puedeAprobarRevision = (bool) ($puedeAprobarRevision ?? false);
 $puedeGuardarErrores = (bool) ($puedeGuardarErrores ?? false);
 $puedeVerObservacion = $puedeAprobarRevision || $puedeGuardarErrores;
-?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Revision de formulario</title>
-    <link rel="stylesheet" href="../styles/formularios.css">
-</head>
-<body>
-<div class="page-wrap revision-page">
-    <a href="../controllers/consolidacion_controller.php" class="back-link">Volver a consolidacion</a>
 
-    <h2>Revision de formulario <?= eRevision($resumenRango['codigo_lote'] ?? '-') ?></h2>
+$codigoLoteRevision = (string) ($resumenRango['codigo_lote'] ?? '-');
+$subtituloRevision = 'Lote ' . $codigoLoteRevision
+    . ' · Rango ' . ($resumenRango['inicio'] ?? '-')
+    . ' - ' . ($resumenRango['fin'] ?? '-');
+
+lab_shell_head('Revision de formulario', $subtituloRevision, [
+    '../styles/formularios.css?v=2',
+    '../css/revision_shell.css?v=1',
+]);
+lab_shell_open('validacion_tecnica_view.php');
+?>
+<div class="revision-page cengi-shell-page">
+    <div class="cengi-page-actions">
+        <a href="../view/validacion_tecnica_view.php" class="cengi-btn cengi-btn-ghost cengi-btn-sm">
+            <span class="material-symbols-outlined">arrow_back</span>
+            Volver a validacion tecnica
+        </a>
+    </div>
 
     <?php if ($mensajeRevision): ?>
         <div class="alerta exito"><?= eRevision($mensajeRevision) ?></div>
@@ -130,7 +136,7 @@ $puedeVerObservacion = $puedeAprobarRevision || $puedeGuardarErrores;
             <input type="hidden" name="id_rango" value="<?= (int) $idRango ?>">
 
             <div class="revision-workbench">
-                <div class="table-shell revision-table-shell">
+                <div class="table-shell revision-table-shell cengi-table-wrap">
                     <table class="consolidacion-table revision-table">
                         <thead>
                             <tr>
@@ -169,7 +175,7 @@ $puedeVerObservacion = $puedeAprobarRevision || $puedeGuardarErrores;
                                     <td>
                                         <button
                                             type="button"
-                                            class="btn-submit secondary revision-toggle"
+                                            class="cengi-btn cengi-btn-ghost cengi-btn-sm revision-toggle"
                                             data-revision-toggle
                                             aria-expanded="false"
                                             aria-controls="<?= eRevision($panelId) ?>">
@@ -310,10 +316,16 @@ $puedeVerObservacion = $puedeAprobarRevision || $puedeGuardarErrores;
 
                     <div class="revision-panel-actions">
                         <?php if ($puedeGuardarErrores): ?>
-                            <button class="btn-submit secondary" type="submit" name="accion" value="marcar_error" data-requires-comment="1">Mandar a corregir</button>
+                            <button class="cengi-btn cengi-btn-sm is-danger" type="submit" name="accion" value="marcar_error" data-requires-comment="1">
+                                <span class="material-symbols-outlined">error</span>
+                                Mandar a corregir
+                            </button>
                         <?php endif; ?>
                         <?php if ($puedeAprobarRevision): ?>
-                            <button class="btn-submit" type="submit" name="accion" value="aprobar">Aprobar</button>
+                            <button class="cengi-btn cengi-btn-primary cengi-btn-sm" type="submit" name="accion" value="aprobar">
+                                <span class="material-symbols-outlined">check_circle</span>
+                                Aprobar
+                            </button>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -370,5 +382,4 @@ $puedeVerObservacion = $puedeAprobarRevision || $puedeGuardarErrores;
     }
 })();
 </script>
-</body>
-</html>
+<?php lab_shell_close(); ?>

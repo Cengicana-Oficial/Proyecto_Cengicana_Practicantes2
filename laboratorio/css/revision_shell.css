@@ -1,0 +1,187 @@
+/* Compatibilidad de las vistas de revision con el shell compartido de CENGILABS. */
+
+body.cengi-canvas {
+  padding: 0;
+  color: var(--cengi-ink);
+  background: #f6f8f4;
+  font-family: 'Inter', sans-serif;
+}
+
+.cengi-lab-content .cengi-shell-page {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  gap: 18px;
+}
+
+.cengi-page-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cengi-shell-page .cengi-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.cengi-shell-page .cengi-btn.is-danger {
+  border-color: #e5b5af;
+  background: #fff4f2;
+  color: var(--cengi-danger-strong);
+}
+
+.cengi-shell-page .cengi-btn.is-danger:hover {
+  background: #ffe9e6;
+}
+
+.cengi-shell-page > .alerta,
+.cengi-shell-page .alerta,
+.cengi-shell-page .review-alert {
+  margin: 0;
+  border-radius: 12px;
+}
+
+.cengi-shell-page .review-summary,
+.cengi-shell-page .summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.cengi-shell-page .review-summary span,
+.cengi-shell-page .summary-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 11px;
+  border: 1px solid var(--cengi-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--cengi-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cengi-shell-page .revision-table-shell,
+.cengi-shell-page .review-table-shell,
+.cengi-shell-page > .cengi-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+}
+
+.cengi-shell-page .revision-table,
+.cengi-shell-page .review-table,
+.cengi-shell-page > .cengi-table-wrap table {
+  width: 100%;
+}
+
+.cengi-shell-page .revision-review-actions,
+.cengi-shell-page .review-section {
+  border: 1px solid var(--cengi-border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(31, 86, 50, 0.04);
+}
+
+.cengi-shell-page .review-section {
+  display: grid;
+  gap: 18px;
+}
+
+.cengi-shell-page .review-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.cengi-shell-page .review-section-head h2 {
+  margin: 0 0 4px;
+  color: var(--cengi-primary-deep);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+}
+
+.cengi-shell-page .review-id {
+  color: var(--cengi-muted);
+  font-size: 11.5px;
+}
+
+.cengi-shell-page .review-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.cengi-shell-page .review-meta label {
+  display: grid;
+  gap: 7px;
+  color: var(--cengi-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cengi-shell-page .review-meta input:disabled {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--cengi-border);
+  border-radius: 9px;
+  background: #f8faf6;
+  color: var(--cengi-ink);
+  opacity: 1;
+}
+
+.cengi-shell-page .revision-panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.cengi-shell-page .revision-toggle {
+  min-width: 78px;
+  justify-content: center;
+}
+
+.cengi-shell-page .empty-state {
+  padding: 24px;
+  border: 1px dashed #c4d7c0;
+  border-radius: 12px;
+  background: #f7fbf5;
+  color: var(--cengi-muted);
+  text-align: center;
+}
+
+@media (max-width: 1024px) {
+  body.cengi-canvas {
+    padding: 0;
+  }
+
+  .cengi-shell-page .review-meta {
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  body.cengi-canvas {
+    padding: 0;
+  }
+
+  .cengi-shell-page .review-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .cengi-shell-page .revision-panel-actions .cengi-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

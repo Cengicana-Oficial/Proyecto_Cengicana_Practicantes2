@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/shell_sidebar.php';
 
 function eErrorForm($value): string
 {
@@ -61,28 +62,30 @@ function columnasErrorForm(array $tabla): array
 $detalleDatos = is_array($detalleError['datos'] ?? null) ? $detalleError['datos'] : [];
 $detalleFormulario = is_array($detalleDatos['formulario'] ?? null) ? $detalleDatos['formulario'] : [];
 $detalleTablas = is_array($detalleDatos['tablas'] ?? null) ? $detalleDatos['tablas'] : [];
-?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Formularios con errores</title>
-    <link rel="stylesheet" href="../styles/consolidacion.css">
-</head>
-<body>
-<div class="page-wrap review-wrap">
-    <a href="../index.php" class="back-link">Volver a Laboratorio</a>
 
-    <header class="page-header">
-        <div>
-            <span class="eyebrow">Revision</span>
-            <h1>Formularios con errores</h1>
-        </div>
+$subtituloErrores = $detalleError
+    ? 'Detalle del formulario #' . (int) $detalleError['id_formulario'] . ' · Version v' . (int) $detalleError['version_numero']
+    : count($formulariosErroneos) . ' registro(s) conservados para revision';
+
+lab_shell_head('Formularios con errores', $subtituloErrores, [
+    '../styles/consolidacion.css?v=2',
+    '../css/revision_shell.css?v=1',
+]);
+lab_shell_open('validacion_tecnica_view.php');
+?>
+<div class="review-wrap cengi-shell-page">
+    <div class="cengi-page-actions">
+        <a href="../view/validacion_tecnica_view.php" class="cengi-btn cengi-btn-ghost cengi-btn-sm">
+            <span class="material-symbols-outlined">arrow_back</span>
+            Volver a validacion tecnica
+        </a>
         <?php if ($detalleError): ?>
-            <a class="pdf-button secondary" href="../controllers/formularios_erroneos_controller.php">Ver listado</a>
+            <a class="cengi-btn cengi-btn-primary cengi-btn-sm" href="../controllers/formularios_erroneos_controller.php">
+                <span class="material-symbols-outlined">list</span>
+                Ver listado
+            </a>
         <?php endif; ?>
-    </header>
+    </div>
 
     <?php if ($detalleError): ?>
         <div class="summary-row">
@@ -93,14 +96,17 @@ $detalleTablas = is_array($detalleDatos['tablas'] ?? null) ? $detalleDatos['tabl
             <span>Guardado <?= eErrorForm(fechaErrorForm($detalleError['fecha'] ?? null)) ?></span>
         </div>
 
-        <section class="review-section">
+        <section class="review-section cengi-card">
             <div class="review-section-head">
                 <div>
                     <h2>Datos originales con errores</h2>
                     <div class="review-id">Registrado por <?= eErrorForm($detalleError['usuario'] ?? '-') ?></div>
                 </div>
                 <?php if (!empty($detalleError['id_rango'])): ?>
-                    <a class="pdf-button secondary" href="../controllers/formulario_revision_controller.php?id_rango=<?= urlencode((string) $detalleError['id_rango']) ?>">Abrir revision actual</a>
+                    <a class="cengi-btn cengi-btn-ghost cengi-btn-sm" href="../controllers/formulario_revision_controller.php?id_rango=<?= urlencode((string) $detalleError['id_rango']) ?>">
+                        <span class="material-symbols-outlined">fact_check</span>
+                        Abrir revision actual
+                    </a>
                 <?php endif; ?>
             </div>
 
@@ -130,7 +136,7 @@ $detalleTablas = is_array($detalleDatos['tablas'] ?? null) ? $detalleDatos['tabl
             <?php else: ?>
                 <?php foreach ($detalleTablas as $tabla): ?>
                     <?php $columnas = columnasErrorForm($tabla); ?>
-                    <div class="table-shell review-table-shell">
+                    <div class="table-shell review-table-shell cengi-table-wrap">
                         <table class="consolidacion-table review-table">
                             <caption><?= eErrorForm(labelErrorForm($tabla['tabla'] ?? 'Datos')) ?></caption>
                             <thead>
@@ -168,7 +174,7 @@ $detalleTablas = is_array($detalleDatos['tablas'] ?? null) ? $detalleDatos['tabl
         <?php if (!$formulariosErroneos): ?>
             <div class="empty-state">Aun no hay formularios guardados con errores.</div>
         <?php else: ?>
-            <div class="table-shell">
+            <div class="table-shell cengi-table-wrap">
                 <table class="consolidacion-table">
                     <thead>
                         <tr>
@@ -195,7 +201,10 @@ $detalleTablas = is_array($detalleDatos['tablas'] ?? null) ? $detalleDatos['tabl
                                 <td><?= eErrorForm($item['usuario'] ?? '-') ?></td>
                                 <td><?= eErrorForm($item['comentario'] ?? '-') ?></td>
                                 <td>
-                                    <a class="estado-link estado-revisar" href="../controllers/formularios_erroneos_controller.php?id_version=<?= (int) $item['id_version'] ?>">Ver</a>
+                                    <a class="cengi-btn cengi-btn-ghost cengi-btn-sm" href="../controllers/formularios_erroneos_controller.php?id_version=<?= (int) $item['id_version'] ?>">
+                                        <span class="material-symbols-outlined">visibility</span>
+                                        Ver
+                                    </a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -205,5 +214,4 @@ $detalleTablas = is_array($detalleDatos['tablas'] ?? null) ? $detalleDatos['tabl
         <?php endif; ?>
     <?php endif; ?>
 </div>
-</body>
-</html>
+<?php lab_shell_close(); ?>

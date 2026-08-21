@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/catalogo_muestras_helper.php';
+require_once __DIR__ . '/../includes/captura_variables_registry.php';
 require_once __DIR__ . '/../conexion.php';
 require_once __DIR__ . '/../includes/shell_sidebar.php';
 require_once __DIR__ . '/../models/bandeja_analista_model.php';
@@ -104,8 +105,13 @@ function bandejaSvgIcono(string $nombre): string
     return '<svg class="tray-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $trazo . '</svg>';
 }
 
-function bandejaHrefCaptura(string $clave): string
+function bandejaHrefCaptura(string $clave, string $nombreAnalisis): string
 {
+    $captura = lab_captura_variables_resolver($clave, $nombreAnalisis);
+    if ($captura) {
+        return 'captura_variables.php?analisis=' . rawurlencode((string) $captura['key']);
+    }
+
     if ($clave === 'agua') {
         $clave = 'aguas';
     }
@@ -210,7 +216,7 @@ function bandejaHrefCaptura(string $clave): string
                                                 <?php endforeach; ?>
                                             </td>
                                             <td class="sample-count"><strong><?= (int) $analisis['muestras'] ?></strong><span>pendiente<?= (int) $analisis['muestras'] === 1 ? '' : 's' ?></span></td>
-                                            <td class="queue-action"><a class="capture-button" href="<?= ePendientes(bandejaHrefCaptura($grupo['clave'])) ?>">Capturar <?= bandejaSvgIcono('flecha') ?></a></td>
+                                            <td class="queue-action"><a class="capture-button" href="<?= ePendientes(bandejaHrefCaptura($grupo['clave'], $analisis['nombre'])) ?>">Capturar <?= bandejaSvgIcono('flecha') ?></a></td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>

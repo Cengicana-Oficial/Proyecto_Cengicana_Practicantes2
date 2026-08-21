@@ -1,0 +1,58 @@
+name: Laravel Tests
+
+on:
+  push:
+    branches:
+      - main
+      - desarrollo
+
+  pull_request:
+    branches:
+      - main
+      - desarrollo
+
+  # Permite ejecutarlo manualmente desde la pestaña Actions
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Composer and Laravel Tests
+    runs-on: ubuntu-latest
+
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ":memory:"
+      CACHE_DRIVER: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v7
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "7.4"
+          extensions: mbstring, pdo_sqlite, sqlite3, xml, ctype, json, tokenizer, fileinfo
+          coverage: none
+          tools: composer:v2
+
+      - name: Validar Composer
+        run: composer validate --strict
+
+      - name: Preparar archivo de entorno
+        run: cp .env.example .env
+
+      - name: Instalar dependencias
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Generar clave de Laravel
+        run: php artisan key:generate
+
+      - name: Ejecutar pruebas de Laravel
+        run: php artisan test

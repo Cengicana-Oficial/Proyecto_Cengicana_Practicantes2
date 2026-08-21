@@ -645,6 +645,16 @@ body.cengi-canvas {
   background: var(--recepcion-green-soft);
 }
 
+.recent-item--locked {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.recent-item--locked:hover {
+  border-color: var(--recepcion-line);
+  background: #fff;
+}
+
 .recent-icon {
   display: grid;
   place-items: center;
