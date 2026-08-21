@@ -1,4 +1,5 @@
 <?php
+ob_start();
 // Endpoint de descarga de un diploma/constancia individual, con el nombre de
 // archivo formateado por cengi_diploma_nombre_archivo() (conexion.php), en vez
 // de servir el PDF crudo por su URL/nombre de archivo en disco tal cual.
@@ -11,6 +12,7 @@
 //   ?evento_participante_id=N -> constancia de evento (tabla diplomas, tipo evento)
 require_once __DIR__ . '/revisar_permisos.php';
 require_once __DIR__ . '/conexion.php';
+require_once __DIR__ . '/classes/export_helpers.php';
 
 $db = conectar();
 
@@ -127,9 +129,9 @@ if (!is_file($rutaAbsoluta)) {
     exit('El archivo del diploma no esta disponible.');
 }
 
-header('Content-Type: application/pdf');
-header('Content-Disposition: attachment; filename="' . $nombreArchivo . '"');
-header('Content-Length: ' . filesize($rutaAbsoluta));
-header('Cache-Control: no-store, no-cache, must-revalidate');
-readfile($rutaAbsoluta);
-exit;
+$pdfBytes = file_get_contents($rutaAbsoluta);
+if ($pdfBytes === false) {
+    http_response_code(500);
+    exit('No se pudo leer el archivo del diploma.');
+}
+cengi_export_enviar_pdf($pdfBytes, $nombreArchivo);

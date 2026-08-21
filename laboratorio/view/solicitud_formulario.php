@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../conexion.php';
 require_once __DIR__ . '/../includes/solicitud_formulario_helpers.php';
 require_once __DIR__ . '/../includes/catalogo_analisis_helper.php';
+require_once __DIR__ . '/../includes/shell_sidebar.php';
 require_once __DIR__ . '/../models/trazabilidad_model.php';
 
 lab_require_module_access();
@@ -45,10 +46,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$tipoMuestra) {
       throw new RuntimeException('El tipo de muestra seleccionado ya no está disponible.');
     }
-    $codigoMuestreo = '';
+    $codigoMuestreo = trim((string) ($_POST['codigo_muestreo'] ?? ''));
     $codigoLote = trim($_POST['lote'] ?? '');
     $fechaMuestreo = $_POST['fecha_de_muestreo'] ?? null;
     $numeroMuestras = max(1, (int) ($_POST['numero_muestras'] ?? 1));
+    $institucion = trim((string) ($_POST['institucion'] ?? ''));
+    $responsableEnvio = trim((string) ($_POST['responsable_envio'] ?? ''));
     $observaciones = trim($_POST['observaciones'] ?? '');
     $ingresadoPor = trim($_POST['ingresado_por'] ?? '');
     $correoIngresado = trim($_POST['correo_ingresado_por'] ?? '');
@@ -106,6 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $updateSolicitud = $conexion->prepare("
           UPDATE solicitud
           SET id_tipo = ?, id_lote = ?, codigo_muestreo = ?, fecha_muestreo = ?, numero_muestras = ?,
+              institucion = ?, responsable_envio = ?,
               ingresado_por = ?, correo_ingresado = ?, recibido_por = ?, correo_recibido = ?,
               fecha_estimada = ?, observaciones = ?,
               firma_ingreso = COALESCE(NULLIF(?, ''), firma_ingreso),
@@ -118,6 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $codigoMuestreo,
           $fechaMuestreo,
           $numeroMuestras,
+          $institucion,
+          $responsableEnvio,
           $ingresadoPor,
           $correoIngresado,
           $recibidoPor,
@@ -132,6 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $updateSolicitud = $conexion->prepare("
           UPDATE solicitud
           SET id_tipo = ?, id_lote = ?, codigo_muestreo = ?, fecha_muestreo = ?, numero_muestras = ?,
+              institucion = ?, responsable_envio = ?,
               ingresado_por = ?, correo_ingresado = ?, recibido_por = ?, correo_recibido = ?,
               observaciones = ?,
               firma_ingreso = COALESCE(NULLIF(?, ''), firma_ingreso),
@@ -144,6 +151,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $codigoMuestreo,
           $fechaMuestreo,
           $numeroMuestras,
+          $institucion,
+          $responsableEnvio,
           $ingresadoPor,
           $correoIngresado,
           $recibidoPor,
@@ -162,6 +171,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $codigoMuestreo,
         $fechaMuestreo,
         $numeroMuestras,
+        $institucion,
+        $responsableEnvio,
         $ingresadoPor,
         $correoIngresado,
         $recibidoPor,
@@ -176,9 +187,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $insertSolicitud = $conexion->prepare("
         INSERT INTO solicitud (
           id_tipo, id_lote, codigo_muestreo, fecha_muestreo, numero_muestras,
+          institucion, responsable_envio,
           ingresado_por, correo_ingresado, recibido_por, correo_recibido,
           fecha_ingreso, fecha_estimada, observaciones, firma_ingreso, firma_recibe
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ");
       $insertSolicitud->execute($paramsSolicitud);
       $idSolicitud = (int) $conexion->lastInsertId();
@@ -273,6 +285,13 @@ try {
       s.fecha_ingreso,
       s.fecha_estimada,
       s.numero_muestras,
+      s.institucion,
+      s.responsable_envio,
+      s.ingresado_por,
+      s.correo_ingresado,
+      s.recibido_por,
+      s.correo_recibido,
+      s.observaciones,
       l.codigo_lote,
       tm.nombre AS tipo_nombre,
       tm.prefijo,
@@ -300,6 +319,11 @@ try {
   $dbWarning = 'No se pudieron cargar las solicitudes desde la base de datos: ' . $e->getMessage();
 }
 
+$recepcionesHoy = array_values(array_filter($solicitudesDb, static function (array $solicitud): bool {
+  return (string) ($solicitud['fecha_ingreso'] ?? '') === date('Y-m-d');
+}));
+$recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
+
 ?>
 
 <!DOCTYPE html>
@@ -310,9 +334,12 @@ try {
 <title>Laboratorios AgroLab — Boleta de Solicitud</title>
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="../css/lab_shell.css?v=1">
+<link rel="stylesheet" href="../css/solicitud_formulario.css?v=8">
+<link rel="stylesheet" href="../styles/recepcion_template.css?v=1">
 </head>
-<body>
-   <link rel="stylesheet" href="../css/solicitud_formulario.css?v=7">
+<body class="cengi-canvas">
+<?php lab_shell_open('solicitud_formulario.php', 'Recepcion', 'Boleta de solicitud de analisis por lote'); ?>
 
 <!-- NAV -->
 <nav>
@@ -325,7 +352,7 @@ try {
 </nav>
 
 <!-- MAIN -->
-<main>
+<main class="reception-page">
 
   <?php if (!empty($message)): ?>
     <div style="padding:12px;margin-bottom:14px;border-radius:8px;background:#e9f7e7;border:1px solid #c7e5c8;color:#184d12">
@@ -362,7 +389,7 @@ try {
         <span class="material-symbols-outlined">eco</span>
       </div>
       <div>
-        <div class="doc-title">Laboratorio Agroindustrial</div>
+        <div class="doc-title">1. Datos del cliente y procedencia del lote</div>
         <div class="doc-subtitle">
           Boleta de solicitud de análisis de <strong id="tipo-label-header"><?= htmlspecialchars((string) ($catalogoMuestras[$tipoFormularioInicial]['label'] ?? 'Suelos'), ENT_QUOTES, 'UTF-8') ?></strong>
         </div>
@@ -407,6 +434,14 @@ try {
 
 <div class="field-grid">
     <div class="field">
+        <label for="institucion">Cliente / institucion</label>
+        <input id="institucion" name="institucion" type="text" placeholder="Nombre del cliente" value="<?= htmlspecialchars((string) ($_POST['institucion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"/>
+    </div>
+    <div class="field">
+        <label for="responsable_envio">Responsable del envio</label>
+        <input id="responsable_envio" name="responsable_envio" type="text" placeholder="Nombre o contacto" value="<?= htmlspecialchars((string) ($_POST['responsable_envio'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"/>
+    </div>
+    <div class="field">
         <label for="lote">
             Número de lote
         </label>
@@ -417,6 +452,10 @@ try {
             type="text"
             placeholder="Ej. 185"
             value="<?= htmlspecialchars($loteSeleccionado, ENT_QUOTES, 'UTF-8') ?>"/>
+    </div>
+    <div class="field">
+        <label for="numero_de_muestra">Lote de campo / codigo de muestreo</label>
+        <input id="numero_de_muestra" name="codigo_muestreo" type="text" placeholder="Ej. Lote 4B" value="<?= htmlspecialchars((string) ($_POST['codigo_muestreo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"/>
     </div>
     <div class="field">
         <label for="fecha_muestreo">
@@ -542,6 +581,13 @@ try {
     <textarea id="observaciones" name="observaciones" rows="4"
       placeholder="Detalles adicionales sobre las muestras o el envío..."></textarea>
   </div>
+  <div class="form-completion">
+    <span>Se generara un codigo individual para cada muestra del lote</span>
+    <button type="button" class="reception-btn reception-btn--primary" id="ticket-finalizar">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6M4 4h16v16H4z"/></svg>
+      Generar boleta de solicitud de analisis
+    </button>
+  </div>
   <!-- FOOTER -->
   <footer class="doc-footer">
     <div class="footer-info">
@@ -561,6 +607,72 @@ try {
     </div>
   </footer>
   </form>
+
+  <aside class="reception-side" aria-label="Vista previa de la boleta">
+    <section class="reception-card ticket-panel">
+      <h2>Boleta de solicitud de analisis</h2>
+      <p class="card-sub">Documento generado para respaldar la trazabilidad del lote y enviarlo a los responsables.</p>
+
+      <div class="boleta-doc">
+        <div class="boleta-head">
+          <div>
+            <strong class="ticket-lot" id="ticket-lote">LOTE —</strong>
+            <div class="ticket-client" id="ticket-cliente">Cliente —</div>
+            <div class="ticket-client" id="ticket-campo">Lote de campo —</div>
+            <span class="status-chip">RECIBIDA</span>
+          </div>
+          <div class="ticket-mark" aria-hidden="true">
+            <span>VF</span><b>005</b>
+          </div>
+        </div>
+        <div class="boleta-body">
+          <p id="ticket-meta">Completa los datos para ver aqui el resumen de la recepcion.</p>
+          <div class="ticket-table-wrap">
+            <table class="ticket-table">
+              <thead><tr><th>Codigo</th><th>Tipo</th><th>Analisis solicitados</th></tr></thead>
+              <tbody id="ticket-muestras"><tr><td colspan="3" class="ticket-empty">Aun no se ha completado la muestra.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="ticket-actions">
+        <button type="button" class="reception-btn reception-btn--primary" id="ticket-generar-pdf">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l4 4v16H6zM14 2v5h5M8 15h3a2 2 0 0 0 0-4H8v7M14 18v-7h4"/></svg>
+          Generar y enviar PDF
+        </button>
+        <button type="button" class="reception-btn reception-btn--ghost" onclick="window.print()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
+          Imprimir boleta
+        </button>
+      </div>
+
+      <div class="panel-divider"></div>
+      <div class="recent-head">
+        <h2>Lotes recibidos hoy</h2>
+        <span><?= count($recepcionesHoy) ?></span>
+      </div>
+      <div class="recent-list">
+        <?php if (!$recepcionesHoy): ?>
+          <div class="recent-empty">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v13H4zM8 4h8v3M8 12h8M8 16h5"/></svg>
+            <div><strong>Sin recepciones hoy</strong><small>Los lotes guardados apareceran aqui.</small></div>
+          </div>
+        <?php else: ?>
+          <?php foreach ($recepcionesHoy as $recepcion): ?>
+            <a class="recent-item" href="?id_solicitud=<?= (int) $recepcion['id_solicitud'] ?>">
+              <span class="recent-icon"><?= htmlspecialchars(strtoupper((string) ($recepcion['prefijo'] ?? 'L')), ENT_QUOTES, 'UTF-8') ?></span>
+              <span class="recent-copy">
+                <strong><?= htmlspecialchars((string) ($recepcion['codigo_lote'] ?? 'Sin lote'), ENT_QUOTES, 'UTF-8') ?></strong>
+                <small><?= htmlspecialchars((string) ($recepcion['tipo_nombre'] ?? 'Muestra'), ENT_QUOTES, 'UTF-8') ?> · <?= (int) ($recepcion['numero_muestras'] ?? 0) ?> muestra(s)</small>
+              </span>
+              <span class="recent-status">Recibida</span>
+            </a>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
+    </section>
+  </aside>
 </main>
 <!-- FAB -->
   <aside class="actions-panel" aria-label="Acciones de solicitud">
@@ -589,6 +701,7 @@ try {
 <script type="application/json" id="correlativos-db"><?php echo json_encode($correlativosDb, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script type="application/json" id="analisis-catalogo"><?php echo json_encode($catalogoAnalisis, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-<script src="../js/solicitud_formulario.js?v=7"></script>
+<script src="../js/solicitud_formulario.js?v=8"></script>
+<?php lab_shell_content_close(); ?>
 </body>
 </html>

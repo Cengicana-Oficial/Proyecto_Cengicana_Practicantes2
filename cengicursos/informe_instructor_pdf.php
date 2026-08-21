@@ -1,4 +1,6 @@
 <?php
+ob_start();
+
 /**
  * Genera el "informe de instructor" como un PDF real (Dompdf), en vez de
  * depender de window.print()/@media print del navegador: Dompdf renderiza un
@@ -9,6 +11,7 @@
  */
 require_once "conexion.php";
 require_once "menu.php";
+require_once __DIR__ . '/classes/export_helpers.php';
 
 cengi_require_generar_informe_instructor();
 
@@ -580,5 +583,4 @@ if ($nombreArchivo === '' || $nombreArchivo === '.pdf') {
     $nombreArchivo = 'informe-instructor-' . $id . '.pdf';
 }
 
-$dompdf->stream($nombreArchivo, ['Attachment' => true]);
-exit;
+cengi_export_enviar_pdf($dompdf->output(), $nombreArchivo);

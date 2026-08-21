@@ -1,4 +1,6 @@
 <?php
+ob_start();
+
 /**
  * Genera el "informe de instructor" para UN modulo puntual de un curso como
  * PDF real (Dompdf), analogo a informe_instructor_curso_pdf.php pero a nivel
@@ -11,6 +13,7 @@
  */
 require_once "conexion.php";
 require_once "menu.php";
+require_once __DIR__ . '/classes/export_helpers.php';
 
 cengi_require_generar_informe_instructor();
 
@@ -384,5 +387,4 @@ if ($nombreArchivo === '' || $nombreArchivo === '.pdf') {
     $nombreArchivo = 'informe-instructor-' . $instructorId . '-modulo-' . $cursoModuloId . '.pdf';
 }
 
-$dompdf->stream($nombreArchivo, ['Attachment' => true]);
-exit;
+cengi_export_enviar_pdf($dompdf->output(), $nombreArchivo);

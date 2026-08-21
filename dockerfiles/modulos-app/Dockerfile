@@ -53,7 +53,8 @@ RUN chown -R www-data:www-data /var/www/html
 # quedan cubiertos por este RUN. Ver dockerfiles/modulos-app/entrypoint.sh,
 # que corrige eso en cada arranque del contenedor.
 COPY dockerfiles/modulos-app/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
+    && chmod +x /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["apache2-foreground"]

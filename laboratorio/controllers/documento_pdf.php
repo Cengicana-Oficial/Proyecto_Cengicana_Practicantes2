@@ -1,4 +1,5 @@
 <?php
+ob_start();
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../conexion.php';
@@ -25,6 +26,7 @@ if (!is_file($autoload)) {
     exit;
 }
 require_once $autoload;
+require_once __DIR__ . '/../../cengicursos/classes/export_helpers.php';
 
 function documento_pdf_e($valor): string
 {
@@ -89,6 +91,8 @@ if ($tituloArchivo === '') {
     $tituloArchivo = 'documento-' . (int) $documento['id_documento'];
 }
 
-$dompdf->stream($tituloArchivo . '-v' . (int) ($documento['version'] ?? 1) . '.pdf', [
-    'Attachment' => isset($_GET['download']) && $_GET['download'] === '1',
-]);
+cengi_export_enviar_pdf(
+    $dompdf->output(),
+    $tituloArchivo . '-v' . (int) ($documento['version'] ?? 1) . '.pdf',
+    isset($_GET['download']) && $_GET['download'] === '1'
+);
