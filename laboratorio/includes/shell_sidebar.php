@@ -93,7 +93,7 @@ if (!function_exists('lab_shell_nav_items')) {
             $flujo[] = ['href' => 'view/dashboard.php', 'icon' => 'monitoring', 'label' => 'Dashboard', 'match' => ['dashboard.php']];
         }
         if ($canRecepcion) {
-            $flujo[] = ['href' => 'index.php', 'icon' => 'inbox', 'label' => 'Recepcion', 'match' => ['index.php']];
+            $flujo[] = ['href' => 'view/solicitud_formulario.php', 'icon' => 'inbox', 'label' => 'Recepcion', 'match' => ['index.php', 'solicitud_formulario.php']];
         }
         if ($canLotes) {
             $flujo[] = ['href' => 'view/listar_lotes.php', 'icon' => 'search', 'label' => 'Identificacion de muestra', 'match' => ['listar_lotes.php']];

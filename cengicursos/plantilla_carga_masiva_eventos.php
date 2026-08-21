@@ -1,4 +1,6 @@
 <?php
+ob_start();
+
 require_once __DIR__ . "/classes/export_helpers.php";
 
 $encabezados = ['NOMBRE', 'CUI', 'CORREO_ELECTRONICO'];
