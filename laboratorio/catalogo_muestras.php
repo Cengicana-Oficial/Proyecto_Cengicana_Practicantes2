@@ -3,12 +3,13 @@
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/includes/catalogo_muestras_helper.php';
+require_once __DIR__ . '/includes/schema_safe_helper.php';
 require_once __DIR__ . '/includes/shell_sidebar.php';
 
 lab_require_module_access();
 lab_require_permission('laboratorio.catalogo_muestras.ver');
 
-labCatalogoMuestrasAsegurarEsquema($conexion);
+lab_ensure_schema_safe(fn() => labCatalogoMuestrasAsegurarEsquema($conexion), 'catalogo_muestras');
 
 function catalogoMuestrasE(string $value): string
 {

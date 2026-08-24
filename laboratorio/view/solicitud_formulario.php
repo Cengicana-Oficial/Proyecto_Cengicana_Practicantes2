@@ -7,9 +7,9 @@ require_once __DIR__ . '/../includes/shell_sidebar.php';
 require_once __DIR__ . '/../models/trazabilidad_model.php';
 
 lab_require_module_access();
-asegurarColumnasFirmasSolicitud($conexion);
-labSolicitudHistorialAsegurarEsquema($conexion);
-labCatalogoAnalisisAsegurarEsquema($conexion);
+lab_ensure_schema_safe(fn() => asegurarColumnasFirmasSolicitud($conexion), 'solicitud_firmas');
+lab_ensure_schema_safe(fn() => labSolicitudHistorialAsegurarEsquema($conexion), 'solicitud_historial');
+lab_ensure_schema_safe(fn() => labCatalogoAnalisisAsegurarEsquema($conexion), 'catalogo_analisis');
 
 $catalogoMuestras = labCatalogoMuestrasFormularioData($conexion, false);
 $catalogoAnalisis = labCatalogoAnalisisFormularioData($conexion);

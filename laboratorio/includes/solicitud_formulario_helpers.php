@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/catalogo_muestras_helper.php';
+require_once __DIR__ . '/schema_safe_helper.php';
 
 function solicitudColumnExists(PDO $conexion, string $column): bool
 {
