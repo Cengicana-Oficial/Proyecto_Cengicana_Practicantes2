@@ -17,26 +17,31 @@ function labFormularioEnsureSchema(): void
 
     $pdo = labFormularioPdo();
 
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS formulario_version (
-            id_version INT AUTO_INCREMENT PRIMARY KEY,
-            id_formulario INT NOT NULL,
-            version_numero INT NOT NULL,
-            tipo_version VARCHAR(50) NOT NULL,
-            datos_json LONGTEXT NOT NULL,
-            usuario VARCHAR(255) NULL,
-            fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            comentario TEXT NULL,
-            INDEX idx_formulario_version_formulario (id_formulario),
-            CONSTRAINT fk_formulario_version_formulario
-                FOREIGN KEY (id_formulario)
-                REFERENCES formulario(id_formulario)
-                ON DELETE CASCADE
-        )
-    ");
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS formulario_version (
+                id_version INT AUTO_INCREMENT PRIMARY KEY,
+                id_formulario INT NOT NULL,
+                version_numero INT NOT NULL,
+                tipo_version VARCHAR(50) NOT NULL,
+                datos_json LONGTEXT NOT NULL,
+                usuario VARCHAR(255) NULL,
+                fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                comentario TEXT NULL,
+                INDEX idx_formulario_version_formulario (id_formulario),
+                CONSTRAINT fk_formulario_version_formulario
+                    FOREIGN KEY (id_formulario)
+                    REFERENCES formulario(id_formulario)
+                    ON DELETE CASCADE
+            )
+        ");
 
-    labFormularioEstadoId('Revisar', 'Formulario ingresado y pendiente de revision.');
-    labFormularioEstadoId('Aprobado', 'Formulario revisado y aprobado.');
+        labFormularioEstadoId('Revisar', 'Formulario ingresado y pendiente de revision.');
+        labFormularioEstadoId('Aprobado', 'Formulario revisado y aprobado.');
+    } catch (Throwable $e) {
+        error_log('[laboratorio][schema:formulario_version] ' . $e->getMessage());
+        throw $e;
+    }
 
     $schemaEnsured = true;
 }

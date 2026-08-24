@@ -163,31 +163,37 @@ if (!function_exists('labCatalogoAnalisisAsegurarEsquema')) {
             return;
         }
 
-        $columnas = [
-            'activo' => 'TINYINT(1) NOT NULL DEFAULT 1 AFTER nombre',
-            'metodo' => 'VARCHAR(255) NULL AFTER activo',
-            'norma' => 'VARCHAR(255) NULL AFTER metodo',
-            'equipo_default' => 'VARCHAR(255) NULL AFTER norma',
-            'unidad' => 'VARCHAR(80) NULL AFTER equipo_default',
-            'limite_min' => 'DECIMAL(18,6) NULL AFTER unidad',
-            'limite_max' => 'DECIMAL(18,6) NULL AFTER limite_min',
-            'tiempo_estimado_min' => 'INT NULL AFTER limite_max',
-        ];
+        try {
+            $columnas = [
+                'activo' => 'TINYINT(1) NOT NULL DEFAULT 1 AFTER nombre',
+                'metodo' => 'VARCHAR(255) NULL AFTER activo',
+                'norma' => 'VARCHAR(255) NULL AFTER metodo',
+                'equipo_default' => 'VARCHAR(255) NULL AFTER norma',
+                'unidad' => 'VARCHAR(80) NULL AFTER equipo_default',
+                'limite_min' => 'DECIMAL(18,6) NULL AFTER unidad',
+                'limite_max' => 'DECIMAL(18,6) NULL AFTER limite_min',
+                'tiempo_estimado_min' => 'INT NULL AFTER limite_max',
+            ];
 
-        foreach ($columnas as $columna => $definicion) {
-            if (!labCatalogoAnalisisColumnExists($conexion, 'tipo_analisis', $columna)) {
-                try {
-                    $conexion->exec("ALTER TABLE tipo_analisis ADD COLUMN {$columna} {$definicion}");
-                } catch (PDOException $e) {
-                    $codigoMysql = (int) ($e->errorInfo[1] ?? 0);
-                    if ($codigoMysql !== 1060) {
-                        throw $e;
+            foreach ($columnas as $columna => $definicion) {
+                if (!labCatalogoAnalisisColumnExists($conexion, 'tipo_analisis', $columna)) {
+                    try {
+                        $conexion->exec("ALTER TABLE tipo_analisis ADD COLUMN {$columna} {$definicion}");
+                    } catch (PDOException $e) {
+                        $codigoMysql = (int) ($e->errorInfo[1] ?? 0);
+                        if ($codigoMysql !== 1060) {
+                            throw $e;
+                        }
                     }
                 }
             }
+
+            $conexion->exec("UPDATE tipo_analisis SET activo = 1 WHERE activo IS NULL");
+        } catch (Throwable $e) {
+            error_log('[laboratorio][schema:catalogo_analisis] ' . $e->getMessage());
+            throw $e;
         }
 
-        $conexion->exec("UPDATE tipo_analisis SET activo = 1 WHERE activo IS NULL");
         $esquemaAsegurado = true;
     }
 }

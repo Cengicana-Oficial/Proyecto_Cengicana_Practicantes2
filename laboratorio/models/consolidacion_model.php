@@ -3,9 +3,10 @@
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/../includes/formulario_revision_helper.php';
 require_once __DIR__ . '/../includes/estado_lote_helper.php';
+require_once __DIR__ . '/../includes/schema_safe_helper.php';
 
 $connConsolidacion = Conexion::conectar();
-labFormularioEnsureSchema();
+lab_ensure_schema_safe(fn() => labFormularioEnsureSchema(), 'formulario_version');
 
 function listarTiposMuestraConsolidacion()
 {

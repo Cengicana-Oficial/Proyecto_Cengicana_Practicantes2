@@ -8,8 +8,8 @@ require_once __DIR__ . '/../includes/solicitud_formulario_helpers.php';
 require_once __DIR__ . '/../includes/shell_sidebar.php';
 require_once __DIR__ . '/../includes/muestra_identificacion_helper.php';
 
-asegurarColumnasFirmasSolicitud($conexion);
-labMuestraIdentificacionEnsureSchema($conexion);
+lab_ensure_schema_safe(fn() => asegurarColumnasFirmasSolicitud($conexion), 'solicitud_firmas');
+lab_ensure_schema_safe(fn() => labMuestraIdentificacionEnsureSchema($conexion), 'muestra_identificacion');
 
 if (empty($_SESSION['muestra_identificacion_csrf'])) {
     $_SESSION['muestra_identificacion_csrf'] = bin2hex(random_bytes(32));
