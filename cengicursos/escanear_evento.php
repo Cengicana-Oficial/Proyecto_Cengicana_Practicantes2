@@ -185,6 +185,32 @@ function cengi_esc_html($valor)
             color: var(--cengi-danger);
         }
 
+        .cengi-scan-retry-btn {
+            width: 100%;
+            margin-top: 4px;
+            padding: 11px 18px;
+            border: none;
+            border-radius: 12px;
+            background: var(--cengi-primary);
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .cengi-scan-retry-btn:active {
+            background: var(--cengi-primary-strong);
+        }
+
+        .cengi-scan-help {
+            font-size: 12.5px;
+            color: var(--cengi-muted);
+            margin: 10px 0 0;
+            line-height: 1.5;
+            text-align: left;
+        }
+
         @keyframes cengiFadeIn {
             from { opacity: 0; transform: translateY(16px); }
             to { opacity: 1; transform: translateY(0); }
@@ -210,6 +236,7 @@ function cengi_esc_html($valor)
 
     <div id="cengiScanEstado" class="cengi-scan-status">Solicitando acceso a la cámara…</div>
     <div id="cengiScanResultado" class="cengi-scan-result" style="display:none;"></div>
+    <button type="button" id="cengiScanReintentar" class="cengi-scan-retry-btn" style="display:none;">Reintentar acceso a la cámara</button>
 </div>
 
 <script src="js/jsQR.js"></script>
@@ -223,6 +250,7 @@ function cengi_esc_html($valor)
     var ctx = canvas.getContext('2d', {willReadFrequently: true});
     var estadoEl = document.getElementById('cengiScanEstado');
     var resultadoEl = document.getElementById('cengiScanResultado');
+    var reintentarBtn = document.getElementById('cengiScanReintentar');
     var ESTADO_ESCANEANDO = 'Apunta la cámara al código QR del gafete…';
     var pausado = false;
 
@@ -300,7 +328,23 @@ function cengi_esc_html($valor)
         }
     }
 
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    // Si el navegador ya tiene guardada una decision de "Bloquear" camara para este
+    // origen (de una prueba anterior), getUserMedia() rechaza de inmediato con
+    // NotAllowedError SIN volver a mostrar el popup nativo: ningun sitio puede forzar
+    // ese popup una vez que el usuario ya decidio. Lo unico que se puede hacer desde
+    // aqui es detectar ese caso y explicar como resetear el permiso a mano, mas dar un
+    // boton para reintentar sin recargar toda la pagina una vez arreglado.
+    function solicitarCamara() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            estadoEl.textContent = 'Este navegador no soporta acceso a la cámara.';
+            estadoEl.className = 'cengi-scan-status is-error';
+            return;
+        }
+
+        estadoEl.textContent = 'Solicitando acceso a la cámara…';
+        estadoEl.className = 'cengi-scan-status';
+        reintentarBtn.style.display = 'none';
+
         navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: 'environment'}}, audio: false})
             .then(function (stream) {
                 video.srcObject = stream;
@@ -308,14 +352,23 @@ function cengi_esc_html($valor)
                 estadoEl.textContent = ESTADO_ESCANEANDO;
                 window.requestAnimationFrame(tick);
             })
-            .catch(function () {
-                estadoEl.textContent = 'No fue posible acceder a la cámara. Revisa los permisos del navegador.';
+            .catch(function (error) {
                 estadoEl.className = 'cengi-scan-status is-error';
+                if (error && error.name === 'NotAllowedError') {
+                    estadoEl.innerHTML = 'El navegador tiene bloqueado el acceso a la cámara para este sitio.'
+                        + '<p class="cengi-scan-help">Toca el ícono de candado o de información junto a la dirección del sitio, '
+                        + 'entra a "Permisos" y cambia Cámara a "Permitir". Luego presiona reintentar.</p>';
+                } else if (error && error.name === 'NotFoundError') {
+                    estadoEl.textContent = 'No se detectó ninguna cámara en este dispositivo.';
+                } else {
+                    estadoEl.textContent = 'No fue posible acceder a la cámara. Revisa los permisos del navegador.';
+                }
+                reintentarBtn.style.display = 'block';
             });
-    } else {
-        estadoEl.textContent = 'Este navegador no soporta acceso a la cámara.';
-        estadoEl.className = 'cengi-scan-status is-error';
     }
+
+    reintentarBtn.addEventListener('click', solicitarCamara);
+    solicitarCamara();
 }());
 </script>
 

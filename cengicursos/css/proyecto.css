@@ -4197,6 +4197,69 @@ body.cengi-nav-loading {
     .cengi-eventos-qr-page #modalQrParticipante.in { padding: 10px !important; align-items: flex-start; }
     .cengi-eventos-qr-page .cengi-event-participants-dialog { width: 100%; max-width: none; margin-top: 8px; }
     .cengi-eventos-qr-page #evpTablaWrap { max-height: calc(100vh - 285px); }
+
+    /* Filas de participantes como tarjetas apiladas: en la tabla ancha original,
+       "Marcar ingreso" y el boton de QR quedan en las ultimas columnas y requieren
+       scroll horizontal para alcanzarlos en un telefono. Aqui se reordena cada <tr>
+       (via flexbox + order en los <td>, sin tocar el DOM/JS) para que el QR, el
+       estado de ingreso y las acciones queden siempre visibles de entrada. */
+    .cengi-eventos-qr-page .cengi-event-participants-table,
+    .cengi-eventos-qr-page .cengi-event-participants-table tbody { display: block; width: 100%; }
+    .cengi-eventos-qr-page .cengi-event-participants-table thead { display: none; }
+    .cengi-eventos-qr-page .cengi-event-participants-table tr {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 10px;
+        padding: 12px 14px;
+        margin: 10px;
+        border: 1px solid #e4e9e1;
+        border-radius: 12px;
+        background: #fff;
+    }
+    .cengi-eventos-qr-page .cengi-event-participants-table td {
+        display: block;
+        border: none;
+        padding: 0;
+        width: auto;
+    }
+    .cengi-eventos-qr-page .cengi-td-check { order: 1; }
+    .cengi-eventos-qr-page .cengi-td-participante { order: 2; flex: 1 1 calc(100% - 34px); min-width: 0; }
+    .cengi-eventos-qr-page .cengi-td-ingenio,
+    .cengi-eventos-qr-page .cengi-td-correo {
+        order: 3;
+        flex: 1 1 auto;
+        min-width: 0;
+        padding-left: 39px;
+        color: var(--cengi-muted);
+        font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .cengi-eventos-qr-page .cengi-td-qr {
+        order: 4;
+        flex: 0 0 100%;
+        margin-top: 8px;
+        padding-top: 8px !important;
+        border-top: 1px dashed #e4e9e1;
+    }
+    .cengi-eventos-qr-page .cengi-td-ingreso {
+        order: 5;
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .cengi-eventos-qr-page .cengi-td-acciones {
+        order: 6;
+        flex: 0 0 auto;
+        margin-left: auto;
+        display: flex;
+        gap: 6px;
+    }
+    .cengi-eventos-qr-page .cengi-event-participants-table .cengi-action-btn { width: 38px; height: 38px; }
+    .cengi-eventos-qr-page .cengi-inline-entry-form .btn { padding: 8px 12px; font-size: 12.5px; }
 }
 
 /* ===== Cursos: modal de creación y edición ===== */

@@ -599,18 +599,18 @@ $ejemploParticipante = $db->query("
                 ? '<form method="POST" class="cengi-inline-entry-form"><input type="hidden" name="accion" value="marcar_ingreso"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><button type="submit" class="btn btn-success btn-xs">Marcar ingreso</button></form>'
                 : '';
             var check = puedeGestionar
-                ? '<td><input type="checkbox" class="cengi-participant-check" data-id="' + Number(p.id) + '"' + (seleccionados[p.id] ? ' checked' : '') + '></td>'
+                ? '<td class="cengi-td-check"><input type="checkbox" class="cengi-participant-check" data-id="' + Number(p.id) + '"' + (seleccionados[p.id] ? ' checked' : '') + '></td>'
                 : '';
             var editar = puedeGestionar
                 ? '<button type="button" class="cengi-action-btn is-edit" title="Editar participante" onclick="cengiEvtEditarParticipante(' + indice + ')"><span class="glyphicon glyphicon-pencil"></span></button>'
                 : '';
             return '<tr>' + check +
-                '<td><div class="cengi-person-cell"><span class="cengi-avatar-sm">' + escapeHtml(iniciales(p.nombre)) + '</span><span><strong>' + escapeHtml(p.nombre) + '</strong>' + (p.cui ? '<small>CUI ' + escapeHtml(p.cui) + '</small>' : '') + '</span></div></td>' +
-                '<td>' + escapeHtml(p.ingenio) + '</td>' +
-                '<td>' + (p.correo ? escapeHtml(p.correo) : '<span class="text-muted">Sin correo</span>') + '</td>' +
-                '<td><div class="cengi-person-qr"><span class="cengi-mini-qr" data-codigo="' + escapeHtml(p.codigo_qr) + '"></span><span class="mono">' + escapeHtml(p.codigo_qr) + '</span></div></td>' +
-                '<td>' + ingreso + marcar + '</td>' +
-                '<td><button type="button" class="cengi-action-btn is-view" title="Ver QR y gafete" onclick="cengiEvtVerQr(' + indice + ')"><span class="glyphicon glyphicon-qrcode"></span></button>' + editar + '</td></tr>';
+                '<td class="cengi-td-participante"><div class="cengi-person-cell"><span class="cengi-avatar-sm">' + escapeHtml(iniciales(p.nombre)) + '</span><span><strong>' + escapeHtml(p.nombre) + '</strong>' + (p.cui ? '<small>CUI ' + escapeHtml(p.cui) + '</small>' : '') + '</span></div></td>' +
+                '<td class="cengi-td-ingenio">' + escapeHtml(p.ingenio) + '</td>' +
+                '<td class="cengi-td-correo">' + (p.correo ? escapeHtml(p.correo) : '<span class="text-muted">Sin correo</span>') + '</td>' +
+                '<td class="cengi-td-qr"><div class="cengi-person-qr"><span class="cengi-mini-qr" data-codigo="' + escapeHtml(p.codigo_qr) + '"></span><span class="mono">' + escapeHtml(p.codigo_qr) + '</span></div></td>' +
+                '<td class="cengi-td-ingreso">' + ingreso + marcar + '</td>' +
+                '<td class="cengi-td-acciones"><button type="button" class="cengi-action-btn is-view" title="Ver QR y gafete" onclick="cengiEvtVerQr(' + indice + ')"><span class="glyphicon glyphicon-qrcode"></span></button>' + editar + '</td></tr>';
         }).join(''));
         $('#tablaEventoParticipantes .cengi-mini-qr').each(function () { crearQr($(this).attr('data-codigo'), this, false); });
 
