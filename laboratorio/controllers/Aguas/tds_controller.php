@@ -4,6 +4,7 @@ lab_require_analysis_access('aguas.tds');
 
 require_once __DIR__ . '/../../includes/analisis_post_helper.php';
 require_once __DIR__ . '/../../includes/formulario_revision_helper.php';
+require_once __DIR__ . '/../../includes/schema_safe_helper.php';
 require_once __DIR__ . '/../../includes/analisis_generico_config.php';
 require_once __DIR__ . '/../../models/conexion.php';
 require_once __DIR__ . '/../../models/analisis_generico_model.php';
@@ -35,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'mensaje' => 'Complete fecha y analista para guardar el registro.',
         ];
     } else {
-        labFormularioEnsureSchema();
+        lab_ensure_schema_safe(fn() => labFormularioEnsureSchema(), 'formulario_version');
 
         $configGuardar = $config;
 

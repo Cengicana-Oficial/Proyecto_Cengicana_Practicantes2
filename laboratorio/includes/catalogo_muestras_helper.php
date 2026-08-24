@@ -182,17 +182,22 @@ if (!function_exists('labCatalogoMuestrasColumnExists')) {
 if (!function_exists('labCatalogoMuestrasAsegurarEsquema')) {
     function labCatalogoMuestrasAsegurarEsquema(PDO $conexion): void
     {
-        if (!labCatalogoMuestrasColumnExists($conexion, 'tipo_muestra', 'activo')) {
-            try {
-                $conexion->exec("ALTER TABLE tipo_muestra ADD COLUMN activo TINYINT(1) NOT NULL DEFAULT 1 AFTER prefijo");
-            } catch (PDOException $e) {
-                if ((int) $e->getCode() !== 1060) {
-                    throw $e;
+        try {
+            if (!labCatalogoMuestrasColumnExists($conexion, 'tipo_muestra', 'activo')) {
+                try {
+                    $conexion->exec("ALTER TABLE tipo_muestra ADD COLUMN activo TINYINT(1) NOT NULL DEFAULT 1 AFTER prefijo");
+                } catch (PDOException $e) {
+                    if ((int) $e->getCode() !== 1060) {
+                        throw $e;
+                    }
                 }
             }
-        }
 
-        $conexion->exec("UPDATE tipo_muestra SET activo = 1 WHERE activo IS NULL");
+            $conexion->exec("UPDATE tipo_muestra SET activo = 1 WHERE activo IS NULL");
+        } catch (Throwable $e) {
+            error_log('[laboratorio][schema:catalogo_muestras] ' . $e->getMessage());
+            throw $e;
+        }
     }
 }
 
