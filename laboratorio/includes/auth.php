@@ -320,7 +320,7 @@ function lab_login_url(): string
     $base = lab_base_path();
     $parent = $base ? rtrim(str_replace('\\', '/', dirname($base)), '/') : '';
 
-    return ($parent === '' ? '' : $parent) . '/login.php';
+    return ($parent === '' ? '' : $parent) . '/login/login.php';
 }
 
 function lab_logout_url(): string
