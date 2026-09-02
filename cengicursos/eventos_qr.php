@@ -1,6 +1,7 @@
 <?php
 require_once "conexion.php";
 require_once "menu.php";
+require_once __DIR__ . "/eventos_helpers.php";
 
 cengi_require_ver_eventos();
 $db = conectar();
@@ -16,16 +17,6 @@ const CENGI_EVT_CARGA_MASIVA_MAX_BYTES = 5 * 1024 * 1024;
 function cengi_evt_html($valor)
 {
     return htmlspecialchars((string) ($valor ?? ''), ENT_QUOTES, 'UTF-8');
-}
-
-function cengi_evt_generar_codigo(PDO $db)
-{
-    do {
-        $codigo = 'EVT-' . date('Y') . '-' . str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
-        $stmt = $db->prepare("SELECT COUNT(*) FROM evento_participantes WHERE codigo_qr = ?");
-        $stmt->execute([$codigo]);
-    } while ((int) $stmt->fetchColumn() > 0);
-    return $codigo;
 }
 
 function cengi_evt_carga_masiva_valor($valor)
@@ -103,7 +94,7 @@ function cengi_evt_estado_badge($estado)
 if (($_GET['accion'] ?? '') === 'listar_participantes') {
     header('Content-Type: application/json; charset=UTF-8');
     $eventoId = (int) ($_GET['evento_id'] ?? 0);
-    $stmt = $db->prepare("SELECT id, nombre, tipo, fecha, estado FROM eventos WHERE id = ?");
+    $stmt = $db->prepare("SELECT id, nombre, tipo, modalidad_pago, costo, fecha, estado FROM eventos WHERE id = ?");
     $stmt->execute([$eventoId]);
     $evento = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$evento) {
@@ -128,6 +119,41 @@ if (($_GET['accion'] ?? '') === 'listar_participantes') {
         'evento' => $evento,
         'participantes' => $stmt->fetchAll(PDO::FETCH_ASSOC),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+/* Enlace publico para que cada participante se inscriba y obtenga su QR. */
+if (($_GET['accion'] ?? '') === 'enlace_inscripcion') {
+    header('Content-Type: application/json; charset=UTF-8');
+    if (!$puedeGestionar) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'mensaje' => 'No tienes permiso para generar este enlace.']);
+        exit;
+    }
+
+    $eventoId = (int) ($_GET['evento_id'] ?? 0);
+    $stmt = $db->prepare('SELECT id, nombre FROM eventos WHERE id = ?');
+    $stmt->execute([$eventoId]);
+    $evento = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$evento) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'mensaje' => 'El evento no existe.']);
+        exit;
+    }
+
+    try {
+        $token = cengi_evento_asegurar_token_inscripcion($db, $eventoId);
+        echo json_encode([
+            'ok' => true,
+            'evento_id' => (int) $evento['id'],
+            'evento_nombre' => $evento['nombre'],
+            'token' => $token,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } catch (Throwable $e) {
+        error_log('No se pudo generar el enlace de inscripcion del evento ' . $eventoId . ': ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'mensaje' => 'No fue posible generar el enlace.']);
+    }
     exit;
 }
 
@@ -172,11 +198,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($accion === 'crear_evento' && $puedeGestionar) {
         $nombre = trim((string) ($_POST['nombre'] ?? ''));
         $tipo = trim((string) ($_POST['tipo'] ?? 'Capacitación'));
+        $modalidadPago = cengi_evento_modalidad_pago($_POST['modalidad_pago'] ?? 'Gratuito');
+        $costo = $modalidadPago === 'Pagado' ? max(0, (float) ($_POST['costo'] ?? 0)) : 0;
         $fecha = trim((string) ($_POST['fecha'] ?? '')) ?: null;
-        if ($nombre !== '') {
-            $stmt = $db->prepare("INSERT INTO eventos (nombre, tipo, fecha, estado, creado_por) VALUES (?, ?, ?, 'Planificado', ?)");
-            $stmt->execute([$nombre, $tipo, $fecha, cengi_usuario_actual_id()]);
+        if ($nombre !== '' && ($modalidadPago === 'Gratuito' || $costo > 0)) {
+            $stmt = $db->prepare("INSERT INTO eventos (nombre, tipo, modalidad_pago, costo, fecha, estado, creado_por) VALUES (?, ?, ?, ?, ?, 'Planificado', ?)");
+            $stmt->execute([$nombre, $tipo, $modalidadPago, $costo, $fecha, cengi_usuario_actual_id()]);
             $mensaje = 'Evento creado correctamente.';
+        } else {
+            $mensaje = $modalidadPago === 'Pagado' ? 'Ingresa un costo mayor que cero para el evento pagado.' : 'Escribe el nombre del evento.';
+            $mensajeTipo = 'error';
         }
     } elseif ($accion === 'registrar_participante' && $puedeGestionar) {
         $eventoId = (int) ($_POST['evento_id'] ?? 0);
@@ -185,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $correoInvitado = trim((string) ($_POST['correo_invitado'] ?? ''));
         $eventoReabrirId = $eventoId;
         if ($eventoId > 0 && $nombre !== '') {
-            $codigo = cengi_evt_generar_codigo($db);
+            $codigo = cengi_evento_generar_codigo_qr($db);
             $stmt = $db->prepare("INSERT INTO evento_participantes (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, codigo_qr) VALUES (?, NULL, ?, ?, ?, ?)");
             $stmt->execute([$eventoId, $nombre, $cui, $correoInvitado !== '' ? $correoInvitado : null, $codigo]);
             $mensaje = "Participante registrado. Su código QR es {$codigo}.";
@@ -254,7 +285,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 }
                             }
 
-                            $codigo = cengi_evt_generar_codigo($db);
+                            $codigo = cengi_evento_generar_codigo_qr($db);
                             $stmt = $db->prepare("INSERT INTO evento_participantes (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, codigo_qr) VALUES (?, NULL, ?, ?, ?, ?)");
                             $stmt->execute([$eventoId, $nombreFila, $cuiFila, $correoValido, $codigo]);
                             $registrados++;
@@ -308,6 +339,18 @@ $eventos = $db->query("
     FROM eventos e ORDER BY e.fecha DESC, e.id DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
+$estadisticasEventos = $db->query("
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN modalidad_pago = 'Pagado' THEN 1 ELSE 0 END) AS pagados,
+      SUM(CASE WHEN modalidad_pago = 'Pagado' THEN 0 ELSE 1 END) AS gratuitos
+    FROM eventos
+")->fetch(PDO::FETCH_ASSOC) ?: ['total' => 0, 'pagados' => 0, 'gratuitos' => 0];
+$totalEventos = (int) ($estadisticasEventos['total'] ?? 0);
+$eventosPagados = (int) ($estadisticasEventos['pagados'] ?? 0);
+$eventosGratuitos = (int) ($estadisticasEventos['gratuitos'] ?? 0);
+$porcentajeGratuitos = $totalEventos > 0 ? (int) round(($eventosGratuitos / $totalEventos) * 100) : 0;
+
 $ejemploParticipante = $db->query("
     SELECT ep.nombre_invitado AS nombre, ep.codigo_qr, e.nombre AS evento,
            COALESCE(i.nombre_ingenios, 'Invitado externo') AS ingenio
@@ -335,6 +378,33 @@ $ejemploParticipante = $db->query("
         </div>
     <?php endif; ?>
 
+    <div class="cengi-kpi-grid cengi-event-stats" aria-label="Estadísticas de eventos por modalidad de pago">
+        <div class="cengi-kpi">
+            <div class="cengi-kpi-bar" style="background:var(--cengi-primary);"></div>
+            <div class="cengi-kpi-icon"><span class="glyphicon glyphicon-calendar"></span></div>
+            <div class="cengi-kpi-val"><?php echo $totalEventos; ?></div>
+            <div class="cengi-kpi-label">Eventos registrados</div>
+        </div>
+        <div class="cengi-kpi">
+            <div class="cengi-kpi-bar" style="background:var(--cengi-verde-claro);"></div>
+            <div class="cengi-kpi-icon" style="background:#EAF6DD;color:#326B00;"><span class="glyphicon glyphicon-gift"></span></div>
+            <div class="cengi-kpi-val"><?php echo $eventosGratuitos; ?></div>
+            <div class="cengi-kpi-label">Eventos gratuitos</div>
+        </div>
+        <div class="cengi-kpi">
+            <div class="cengi-kpi-bar" style="background:var(--cengi-amarillo);"></div>
+            <div class="cengi-kpi-icon" style="background:#FFF6DA;color:#8A6600;"><span class="glyphicon glyphicon-usd"></span></div>
+            <div class="cengi-kpi-val"><?php echo $eventosPagados; ?></div>
+            <div class="cengi-kpi-label">Eventos pagados</div>
+        </div>
+        <div class="cengi-kpi">
+            <div class="cengi-kpi-bar" style="background:var(--cengi-naranja);"></div>
+            <div class="cengi-kpi-icon" style="background:#FFE9D9;color:#B34E00;"><span class="glyphicon glyphicon-stats"></span></div>
+            <div class="cengi-kpi-val"><?php echo $porcentajeGratuitos; ?>%</div>
+            <div class="cengi-kpi-label">Proporción de eventos gratuitos</div>
+        </div>
+    </div>
+
     <div class="cengi-two-col">
         <div>
             <div class="panel panel-success cengi-event-card">
@@ -350,14 +420,20 @@ $ejemploParticipante = $db->query("
                 <div class="panel-body cengi-event-table-body">
                     <div class="cengi-table-wrap">
                         <table class="table cengi-events-table">
-                            <thead><tr><th>Evento</th><th>Fecha</th><th>Registrados</th><th>Ingresos QR</th><th>% Asistencia</th><th>Estado</th><th></th></tr></thead>
+                            <thead><tr><th>Evento</th><th>Fecha</th><th>Acceso</th><th>Registrados</th><th>Ingresos QR</th><th>% Asistencia</th><th>Estado</th><th></th></tr></thead>
                             <tbody>
-                            <?php if (!$eventos): ?><tr><td colspan="7" class="text-center cengi-empty-cell">No hay eventos registrados todavía.</td></tr><?php endif; ?>
+                            <?php if (!$eventos): ?><tr><td colspan="8" class="text-center cengi-empty-cell">No hay eventos registrados todavía.</td></tr><?php endif; ?>
                             <?php foreach ($eventos as $evt): ?>
                                 <?php $pct = (int) $evt['registrados'] > 0 ? round(((int) $evt['ingresos'] / (int) $evt['registrados']) * 100) : 0; ?>
                                 <tr>
                                     <td><strong><?php echo cengi_evt_html($evt['nombre']); ?></strong><br><small class="text-muted"><?php echo cengi_evt_html($evt['tipo']); ?></small></td>
                                     <td><?php echo cengi_evt_html($evt['fecha'] ?: '—'); ?></td>
+                                    <td>
+                                        <span class="cengi-payment-badge <?php echo $evt['modalidad_pago'] === 'Pagado' ? 'is-paid' : 'is-free'; ?>">
+                                            <?php echo cengi_evt_html($evt['modalidad_pago']); ?>
+                                        </span>
+                                        <?php if ($evt['modalidad_pago'] === 'Pagado'): ?><small class="cengi-event-cost">Q <?php echo number_format((float) $evt['costo'], 2); ?></small><?php endif; ?>
+                                    </td>
                                     <td><?php echo (int) $evt['registrados']; ?></td>
                                     <td><?php echo (int) $evt['ingresos']; ?></td>
                                     <td><div class="cengi-event-progress"><div class="cengi-progress-track"><div class="cengi-progress-fill" style="width:<?php echo (int) $pct; ?>%;"></div></div><span><?php echo (int) $pct; ?>%</span></div></td>
@@ -365,6 +441,7 @@ $ejemploParticipante = $db->query("
                                     <td>
                                         <button type="button" class="btn btn-default btn-sm cengi-view-participants" onclick="cengiEvtAbrirParticipantes(<?php echo (int) $evt['id']; ?>)">Ver participantes</button>
                                         <?php if ($puedeGestionar): ?>
+                                        <button type="button" class="btn btn-default btn-sm" title="Copiar enlace público de inscripción" onclick="cengiEvtEnlaceInscripcion(<?php echo (int) $evt['id']; ?>)"><span class="glyphicon glyphicon-link"></span></button>
                                         <button type="button" class="btn btn-default btn-sm" title="Enlace de escaneo en la entrada" onclick="cengiEvtEnlaceEscaneo(<?php echo (int) $evt['id']; ?>)"><span class="glyphicon glyphicon-camera"></span></button>
                                         <?php endif; ?>
                                     </td>
@@ -491,6 +568,27 @@ $ejemploParticipante = $db->query("
 </div>
 
 <?php if ($puedeGestionar): ?>
+<div class="modal fade" id="modalEnlaceInscripcion" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><button class="close" type="button" data-dismiss="modal" aria-hidden="true">&times;</button><h4 class="modal-title">Enlace público de inscripción</h4></div>
+            <div class="modal-body">
+                <p><strong id="eivNombreEvento">Cargando…</strong></p>
+                <div class="form-group">
+                    <label class="control-label">URL para compartir con los participantes</label>
+                    <input type="text" id="eivUrl" class="form-control" readonly onclick="this.select();">
+                </div>
+                <div class="cengi-notice cengi-qr-notice"><span class="glyphicon glyphicon-info-sign"></span><span>Quien tenga este enlace podrá completar el formulario y recibirá un código QR único.</span></div>
+                <span id="eivCopiarFeedback" class="text-success" style="display:none;"></span>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" id="eivCopiar"><span class="glyphicon glyphicon-copy"></span> Copiar enlace</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal" id="modalEnlaceEscaneo" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -523,6 +621,8 @@ $ejemploParticipante = $db->query("
                 <div class="form-group cengi-form-full"><label class="control-label">Nombre del evento</label><input type="text" name="nombre" class="form-control" required></div>
                 <div class="form-group"><label class="control-label">Tipo</label><select name="tipo" class="form-control"><option>Capacitación</option><option>Seminario</option><option>Taller</option><option>Evento técnico</option><option>Feria</option></select></div>
                 <div class="form-group"><label class="control-label">Fecha</label><input type="date" name="fecha" class="form-control"></div>
+                <div class="form-group"><label class="control-label">Modalidad de acceso</label><select name="modalidad_pago" id="evtModalidadPago" class="form-control"><option value="Gratuito">Gratuito</option><option value="Pagado">Pagado</option></select></div>
+                <div class="form-group" id="evtCostoGrupo" style="display:none;"><label class="control-label">Costo (Q)</label><input type="number" name="costo" id="evtCosto" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00"></div>
             </div>
         </div>
         <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Guardar</button></div>
@@ -783,10 +883,51 @@ $ejemploParticipante = $db->query("
     var ejemplo = document.getElementById('cengiQrEjemplo');
     if (ejemplo) crearQr(ejemplo.getAttribute('data-codigo'), ejemplo, true);
 
+    $('#evtModalidadPago').on('change', function () {
+        var esPagado = this.value === 'Pagado';
+        $('#evtCostoGrupo').toggle(esPagado);
+        $('#evtCosto').prop('required', esPagado);
+        if (!esPagado) $('#evtCosto').val('');
+    });
+
     // Enlace publico de escaneo QR (cengicursos/escanear_evento.php): el token se
     // resuelve/genera siempre en el servidor (accion=enlace_escaneo), nunca en el
     // cliente, mismo criterio que copyEvaluationLink() en instructores.php.
     if (puedeGestionar) {
+        window.cengiEvtEnlaceInscripcion = function (eventoId) {
+            $('#eivNombreEvento').text('Cargando…');
+            $('#eivUrl').val('');
+            $('#eivCopiarFeedback').hide();
+            $('#modalEnlaceInscripcion').modal('show');
+            $.getJSON('eventos_qr.php', {accion: 'enlace_inscripcion', evento_id: eventoId})
+                .done(function (respuesta) {
+                    if (!respuesta || !respuesta.ok) {
+                        $('#eivNombreEvento').text((respuesta && respuesta.mensaje) || 'No fue posible generar el enlace.');
+                        return;
+                    }
+                    $('#eivNombreEvento').text(respuesta.evento_nombre);
+                    $('#eivUrl').val(window.location.origin + '/cengicursos/inscripcion_evento.php?token=' + encodeURIComponent(respuesta.token));
+                })
+                .fail(function () {
+                    $('#eivNombreEvento').text('No fue posible generar el enlace. Intenta nuevamente.');
+                });
+        };
+
+        $('#eivCopiar').on('click', function () {
+            var url = $('#eivUrl').val();
+            if (!url) return;
+            function mostrarCopiado() {
+                $('#eivCopiarFeedback').text('¡Copiado!').show();
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(mostrarCopiado, function () {
+                    window.prompt('Copia el enlace de inscripción:', url);
+                });
+            } else {
+                window.prompt('Copia el enlace de inscripción:', url);
+            }
+        });
+
         window.cengiEvtEnlaceEscaneo = function (eventoId) {
             $('#eevNombreEvento').text('Cargando…');
             $('#eevUrl').val('');

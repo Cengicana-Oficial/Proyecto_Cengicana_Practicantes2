@@ -391,6 +391,89 @@ function obtenerLote(PDO $conexion, $codigoLote)
   return (int) $conexion->lastInsertId();
 }
 
+/**
+ * Extrae la parte correlativa de un codigo de lote. Acepta los lotes
+ * historicos puramente numericos y el formato actual "PREFIJO-000".
+ */
+function labSolicitudNumeroLoteDesdeCodigo($codigoLote, $prefijo): ?int
+{
+  $codigoLote = trim((string) $codigoLote);
+  $prefijo = strtoupper(trim((string) $prefijo));
+
+  if ($codigoLote === '') {
+    return null;
+  }
+
+  if (ctype_digit($codigoLote)) {
+    return (int) $codigoLote;
+  }
+
+  if ($prefijo !== '' && preg_match('/^' . preg_quote($prefijo, '/') . '-(\d+)$/i', $codigoLote, $matches)) {
+    return (int) $matches[1];
+  }
+
+  return null;
+}
+
+/**
+ * Obtiene el siguiente lote a partir de la ultima solicitud registrada del
+ * mismo tipo de muestra. El prefijo evita colisiones entre correlativos que
+ * pueden tener el mismo numero (por ejemplo S-001 y C-001).
+ */
+function labSolicitudSiguienteLotePorTipo(PDO $conexion, array $tipoMuestra, bool $bloquear = false): array
+{
+  $idTipo = (int) ($tipoMuestra['id_tipo'] ?? 0);
+  $prefijo = strtoupper(trim((string) ($tipoMuestra['prefijo'] ?? '')));
+
+  if ($idTipo <= 0 || $prefijo === '') {
+    throw new RuntimeException('El tipo de muestra no tiene un prefijo valido para generar el lote.');
+  }
+
+  if ($bloquear) {
+    // Serializa la asignacion para que dos recepciones simultaneas no
+    // obtengan el mismo correlativo.
+    $lock = $conexion->prepare('SELECT id_tipo FROM tipo_muestra WHERE id_tipo = ? FOR UPDATE');
+    $lock->execute([$idTipo]);
+    if (!$lock->fetchColumn()) {
+      throw new RuntimeException('El tipo de muestra seleccionado ya no existe.');
+    }
+  }
+
+  $stmt = $conexion->prepare("
+    SELECT l.codigo_lote
+    FROM solicitud s
+    INNER JOIN lote l ON l.id_lote = s.id_lote
+    WHERE s.id_tipo = ?
+    ORDER BY s.id_solicitud DESC
+  ");
+  $stmt->execute([$idTipo]);
+
+  $ultimoNumero = 0;
+  $ultimoCodigo = '';
+  foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $codigoExistente) {
+    $numero = labSolicitudNumeroLoteDesdeCodigo($codigoExistente, $prefijo);
+    if ($numero === null) {
+      continue;
+    }
+
+    $ultimoNumero = $numero;
+    $ultimoCodigo = (string) $codigoExistente;
+    break;
+  }
+
+  $siguienteNumero = $ultimoNumero + 1;
+
+  return [
+    'id_tipo' => $idTipo,
+    'clave' => labSolicitudFormularioNormalizarTipoMuestra($tipoMuestra),
+    'prefijo' => $prefijo,
+    'ultimo_codigo' => $ultimoCodigo,
+    'ultimo_numero' => $ultimoNumero,
+    'siguiente_numero' => $siguienteNumero,
+    'siguiente_codigo' => $prefijo . '-' . str_pad((string) $siguienteNumero, 3, '0', STR_PAD_LEFT),
+  ];
+}
+
 function obtenerTipoAnalisis(PDO $conexion, $idTipoMuestra, $nombreAnalisis)
 {
   $stmt = $conexion->prepare("

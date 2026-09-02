@@ -13,6 +13,7 @@ lab_ensure_schema_safe(fn() => labCatalogoAnalisisAsegurarEsquema($conexion), 'c
 
 $catalogoMuestras = labCatalogoMuestrasFormularioData($conexion, false);
 $catalogoAnalisis = labCatalogoAnalisisFormularioData($conexion);
+$usuarioActualSolicitud = lab_current_user();
 
 $tipoFormularioInicial = null;
 foreach ($catalogoMuestras as $clave => $muestra) {
@@ -34,6 +35,7 @@ $message = '';
 $dbWarning = '';
 $solicitudesDb = [];
 $correlativosDb = [];
+$correlativosLoteDb = [];
 $loteSeleccionado = trim((string) ($_GET['lote'] ?? ''));
 $idSolicitudGet = !empty($_GET['id_solicitud']) ? (int) $_GET['id_solicitud'] : null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
