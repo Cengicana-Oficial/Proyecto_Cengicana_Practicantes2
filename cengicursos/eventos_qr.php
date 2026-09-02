@@ -386,7 +386,7 @@ $ejemploParticipante = $db->query("
             <div class="cengi-kpi-label">Eventos registrados</div>
         </div>
         <div class="cengi-kpi">
-            <div class="cengi-kpi-bar" style="background:var(--cengi-verde-claro);"></div>
+            <div class="cengi-kpi-bar" style="background:#73BC25;"></div>
             <div class="cengi-kpi-icon" style="background:#EAF6DD;color:#326B00;"><span class="glyphicon glyphicon-gift"></span></div>
             <div class="cengi-kpi-val"><?php echo $eventosGratuitos; ?></div>
             <div class="cengi-kpi-label">Eventos gratuitos</div>

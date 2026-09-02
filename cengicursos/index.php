@@ -101,6 +101,9 @@ $serieCategoria = cengi_dash_serie($db, "
 ");
 $categoriaLabels = array_map(static function ($fila) { return (string) $fila[0]; }, $serieCategoria);
 $categoriaValores = array_map(static function ($fila) { return (int) $fila[1]; }, $serieCategoria);
+
+$eventosGratuitos = cengi_dash_valor($db, "SELECT COUNT(*) FROM eventos WHERE modalidad_pago <> 'Pagado' OR modalidad_pago IS NULL");
+$eventosPagados = cengi_dash_valor($db, "SELECT COUNT(*) FROM eventos WHERE modalidad_pago = 'Pagado'");
 ?>
 
 <html lang="es">
@@ -163,6 +166,11 @@ $categoriaValores = array_map(static function ($fila) { return (int) $fila[1]; }
 			<div class="panel-body"><div class="cengi-chart-wrap"><canvas id="chartCategoria"></canvas></div></div>
 		</div>
 
+		<div class="panel panel-success">
+			<div class="panel-heading"><h3 class="panel-title">Eventos pagados y gratuitos</h3></div>
+			<div class="panel-body"><div class="cengi-chart-wrap"><canvas id="chartEventosPago"></canvas></div></div>
+		</div>
+
 	</div>
 
 	<script>
@@ -176,6 +184,7 @@ $categoriaValores = array_map(static function ($fila) { return (int) $fila[1]; }
 	var ingenioValores = <?php echo json_encode($ingenioValores); ?>;
 	var categoriaLabels = <?php echo json_encode($categoriaLabels); ?>;
 	var categoriaValores = <?php echo json_encode($categoriaValores); ?>;
+	var eventosPagoValores = <?php echo json_encode([$eventosGratuitos, $eventosPagados]); ?>;
 
 	new Chart(document.getElementById('chartAnual'), {
 		type: 'bar',
@@ -193,6 +202,12 @@ $categoriaValores = array_map(static function ($fila) { return (int) $fila[1]; }
 		type: 'bar',
 		data: { labels: categoriaLabels, datasets: [{ data: categoriaValores, backgroundColor: '#A3D300', borderRadius: 5, maxBarThickness: 28 }] },
 		options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#EEF0EA' }, beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } }, maintainAspectRatio: false }
+	});
+
+	new Chart(document.getElementById('chartEventosPago'), {
+		type: 'doughnut',
+		data: { labels: ['Gratuitos', 'Pagados'], datasets: [{ data: eventosPagoValores, backgroundColor: ['#73BC25', '#FFCC00'], borderWidth: 0 }] },
+		options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 9, padding: 12 } } }, maintainAspectRatio: false, cutout: '62%' }
 	});
 	</script>
 </body>

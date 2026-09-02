@@ -1,5 +1,6 @@
 const SOLICITUDES_DB = readJsonData("solicitudes-db", []);
 const CORRELATIVOS_DB = readJsonData("correlativos-db", []);
+const CORRELATIVOS_LOTE_DB = readJsonData("correlativos-lote-db", {});
 const PDF_LOGO_URL = "../assets/logo.png";
 let solicitudSeleccionada = null;
 
@@ -199,8 +200,12 @@ function initSeleccionAnalisis() {
 }
 
 function getInicialTipo(tipo) {
-  if (solicitudSeleccionada?.prefijo) {
+  if (solicitudSeleccionada?.prefijo && getTipoPorPrefijo(solicitudSeleccionada.prefijo) === tipo) {
     return solicitudSeleccionada.prefijo.toUpperCase();
+  }
+
+  if (CORRELATIVOS_LOTE_DB[tipo]?.prefijo) {
+    return String(CORRELATIVOS_LOTE_DB[tipo].prefijo).toUpperCase();
   }
 
   const iniciales = {
@@ -234,6 +239,22 @@ function getSiguienteNumeroPorPrefijo(prefijo) {
   return correlativo ? parseInt(correlativo.ultimo_numero, 10) + 1 : 492;
 }
 
+function updateNumeroLote() {
+  const tipoActivo = document.querySelector(".tipo-btn.active")?.dataset.tipo || "suelos";
+  const loteInput = document.getElementById("lote");
+  const loteResumen = document.getElementById("lote-resumen");
+  if (!loteInput) return;
+
+  const tipoSolicitud = getTipoPorPrefijo(solicitudSeleccionada?.prefijo);
+  const codigo = solicitudSeleccionada && tipoSolicitud === tipoActivo
+    ? String(solicitudSeleccionada.codigo_lote || "")
+    : String(CORRELATIVOS_LOTE_DB[tipoActivo]?.siguiente_codigo || "");
+
+  loteInput.value = codigo;
+  if (loteResumen) loteResumen.value = codigo;
+  actualizarVistaBoleta();
+}
+
 function updateNumeroLaboratorio() {
   const tipoActivo = document.querySelector(".tipo-btn.active")?.dataset.tipo || "suelos";
   const fecha = document.getElementById("fecha_muestreo")?.value || "";
@@ -245,6 +266,7 @@ function updateNumeroLaboratorio() {
   if (!inicioInput || !finInput || !ocultoInput) return;
 
   sincronizarFechasSolicitudVisuales(tipoActivo);
+  updateNumeroLote();
 
   const inicial = getInicialTipo(tipoActivo);
   const inicioGuardado = solicitudSeleccionada?.inicio_laboratorio ? parseInt(solicitudSeleccionada.inicio_laboratorio, 10) : null;
@@ -379,10 +401,13 @@ function sincronizarFechasSolicitudVisuales(tipoForzado = null) {
   }
 }
 function setCamposReadonly(readonly) {
-  ["numero_de_muestra", "lote", "fecha_muestreo", "numero_muestras"].forEach(id => {
+  ["numero_de_muestra", "fecha_muestreo", "numero_muestras"].forEach(id => {
     const input = document.getElementById(id);
     if (input) input.readOnly = readonly;
   });
+
+  const lote = document.getElementById("lote");
+  if (lote) lote.readOnly = true;
 }
 
 function getTipoPorPrefijo(prefijo) {
@@ -478,7 +503,7 @@ function initTipoButtons() {
 }
 
 function initLaboratorioInputs() {
-  ["lote", "fecha_muestreo", "numero_muestras"].forEach(id => {
+  ["fecha_muestreo", "numero_muestras"].forEach(id => {
     const input = document.getElementById(id);
     if (input) input.addEventListener("input", updateNumeroLaboratorio);
   });

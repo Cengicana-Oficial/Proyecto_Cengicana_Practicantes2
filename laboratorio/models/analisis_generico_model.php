@@ -34,10 +34,12 @@ function labGenericDestino(array $config, string $codigoLote, string $numeroLabo
                m.numero_muestra
           FROM lote l
           LEFT JOIN solicitud s ON s.id_lote = l.id_lote
-          LEFT JOIN lote_rango lr ON lr.id_lote = l.id_lote
           LEFT JOIN muestra m
                  ON m.id_solicitud = s.id_solicitud
                 AND (m.codigo_lab = ? OR CAST(m.numero_muestra AS CHAR) = ?)
+          LEFT JOIN lote_rango lr
+                 ON lr.id_lote = l.id_lote
+                AND m.numero_muestra BETWEEN lr.inicio AND lr.fin
           LEFT JOIN tipo_muestra tm ON tm.id_tipo = s.id_tipo
           LEFT JOIN solicitud_analisis sa ON sa.id_solicitud = s.id_solicitud
           LEFT JOIN tipo_analisis ta ON ta.id_tipo = sa.id_tipo_analisis
@@ -279,6 +281,8 @@ function labGenericGuardarAnalisis(array $config, array $rows, string $fecha, st
 
     $guardados = 0;
     $errores = [];
+    $formulariosPorDestino = [];
+    $formulariosNuevos = [];
     labFormularioEnsureSchema();
     foreach ($rows as $index => $row) {
         $codigoLote = trim((string) ($row['lote'] ?? ''));
@@ -307,12 +311,27 @@ function labGenericGuardarAnalisis(array $config, array $rows, string $fecha, st
             }
 
             $destino = labGenericDestino($config, $codigoLote, $numeroLaboratorio);
-            $idFormulario = labGenericCrearFormulario($destino, $fecha, $analista);
+            if (empty($destino['id_rango']) || empty($destino['id_tipo_analisis']) || empty($destino['id_solicitud'])) {
+                throw new RuntimeException('La muestra no pertenece a una solicitud y rango validos para este analisis.');
+            }
+
+            $claveDestino = (int) $destino['id_rango'] . ':' . (int) $destino['id_tipo_analisis'];
+            $formularioNuevo = false;
+            if (isset($formulariosPorDestino[$claveDestino])) {
+                $idFormulario = $formulariosPorDestino[$claveDestino];
+            } else {
+                $idFormulario = labGenericCrearFormulario($destino, $fecha, $analista);
+                $formularioNuevo = true;
+            }
             labGenericInsertarAnalisis($config, $row, $destino, $idFormulario, $fecha, $codigoLote, $numeroLaboratorio);
-            labFormularioGuardarVersion($idFormulario, 'inicial', $analista, 'Version enviada desde el formulario de analisis.');
 
             if ($useTransaction) {
                 $pdo->commit();
+            }
+
+            if ($formularioNuevo) {
+                $formulariosPorDestino[$claveDestino] = $idFormulario;
+                $formulariosNuevos[$idFormulario] = true;
             }
 
             $guardados++;
@@ -322,6 +341,14 @@ function labGenericGuardarAnalisis(array $config, array $rows, string $fecha, st
             }
 
             $errores[] = 'Fila ' . ($index + 1) . ': ' . $e->getMessage();
+        }
+    }
+
+    foreach (array_keys($formulariosNuevos) as $idFormulario) {
+        try {
+            labFormularioGuardarVersion((int) $idFormulario, 'inicial', $analista, 'Version enviada desde el formulario de analisis.');
+        } catch (Throwable $e) {
+            $errores[] = 'No se pudo registrar la version del formulario #' . (int) $idFormulario . ': ' . $e->getMessage();
         }
     }
 

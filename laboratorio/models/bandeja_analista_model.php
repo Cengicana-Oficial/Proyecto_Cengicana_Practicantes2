@@ -39,11 +39,20 @@ if (!function_exists('lab_bandeja_analista_pendientes')) {
                 ON ta.id_tipo = sa.id_tipo_analisis
             WHERE NOT EXISTS (
                 SELECT 1
-                  FROM lote_rango lr2
-                  INNER JOIN formulario f
-                    ON f.id_rango = lr2.id_rango
-                   AND f.id_tipo_analisis = ta.id_tipo
-                 WHERE lr2.id_lote = l.id_lote
+                FROM formulario f_done
+                LEFT JOIN estado_formulario ef_done ON ef_done.id_estado = f_done.id_estado
+                WHERE f_done.id_formulario = (
+                    SELECT MAX(f_latest.id_formulario)
+                    FROM muestra m_scope
+                    INNER JOIN lote_rango lr_scope
+                        ON lr_scope.id_lote = s.id_lote
+                       AND m_scope.numero_muestra BETWEEN lr_scope.inicio AND lr_scope.fin
+                    INNER JOIN formulario f_latest
+                        ON f_latest.id_rango = lr_scope.id_rango
+                       AND f_latest.id_tipo_analisis = ta.id_tipo
+                    WHERE m_scope.id_solicitud = s.id_solicitud
+                )
+                  AND LOWER(TRIM(COALESCE(ef_done.nombre, ''))) NOT LIKE '%rechaz%'
             )
               AND ta.id_tipo_muestra = s.id_tipo
             GROUP BY

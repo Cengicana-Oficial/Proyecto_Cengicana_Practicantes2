@@ -157,8 +157,12 @@ if (!function_exists('lab_validacion_resolver')) {
             throw new InvalidArgumentException('Accion no valida.');
         }
 
+        if ($accion === 'rechazar' && trim($comentario) === '') {
+            throw new InvalidArgumentException('Debe indicar el motivo del rechazo.');
+        }
+
         $stmt = $pdo->prepare("
-            SELECT f.id_formulario, f.id_estado, f.id_rango, ef.nombre AS estado_actual, lr.id_lote
+            SELECT f.id_formulario, f.id_estado, f.id_rango, f.id_tipo_analisis, ef.nombre AS estado_actual, lr.id_lote
             FROM formulario f
             LEFT JOIN estado_formulario ef ON ef.id_estado = f.id_estado
             INNER JOIN lote_rango lr ON lr.id_rango = f.id_rango
@@ -170,6 +174,10 @@ if (!function_exists('lab_validacion_resolver')) {
 
         if (!$formulario) {
             throw new RuntimeException('El analisis indicado no existe.');
+        }
+
+        if (!lab_validacion_estado_es_revision($formulario['estado_actual'] ?? '')) {
+            throw new RuntimeException('El analisis ya no esta pendiente de validacion tecnica.');
         }
 
         $nuevoEstadoNombre = $accion === 'aprobar' ? 'Aprobado' : 'Rechazado';
@@ -191,6 +199,19 @@ if (!function_exists('lab_validacion_resolver')) {
 
             $update = $pdo->prepare('UPDATE formulario SET id_estado = ? WHERE id_formulario = ?');
             $update->execute([(int) $idNuevoEstado, $idFormulario]);
+
+            if (!empty($formulario['id_tipo_analisis'])) {
+                $updateLoteAnalisis = $pdo->prepare('
+                    UPDATE lote_analisis
+                    SET estado = ?
+                    WHERE id_rango = ? AND id_tipo_analisis = ?
+                ');
+                $updateLoteAnalisis->execute([
+                    $nuevoEstadoNombre,
+                    (int) $formulario['id_rango'],
+                    (int) $formulario['id_tipo_analisis'],
+                ]);
+            }
 
             $hist = $pdo->prepare("
                 INSERT INTO historial_formulario (id_formulario, accion, estado_anterior, estado_nuevo, usuario, fecha, comentario)

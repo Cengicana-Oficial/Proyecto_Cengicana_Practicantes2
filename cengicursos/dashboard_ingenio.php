@@ -554,7 +554,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
     </div></div>
 </div>
 
-<div class="modal fade cengi-directory-modal" id="dashboard-ingenio-course-modal" tabindex="-1" role="dialog" aria-labelledby="dashboard-ingenio-course-name">
+<div class="modal fade cengi-directory-modal cengi-directory-course-modal" id="dashboard-ingenio-course-modal" tabindex="-1" role="dialog" aria-labelledby="dashboard-ingenio-course-name">
     <div class="modal-dialog" role="document"><div class="modal-content">
         <header class="cengi-directory-profile-head">
             <span class="cengi-directory-profile-avatar" id="dashboard-ingenio-course-avatar"><span class="glyphicon glyphicon-book" aria-hidden="true"></span></span>
@@ -565,8 +565,8 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
             <div class="cengi-directory-modal-loading" id="dashboard-ingenio-course-loading"><span class="glyphicon glyphicon-refresh"></span> Cargando participantes…</div>
             <div id="dashboard-ingenio-course-content" hidden>
                 <h3 class="cengi-directory-history-title">Participantes de tu ingenio en este curso</h3>
-                <div class="cengi-table-wrap">
-                    <table class="table table-striped table-bordered cengi-directory-table">
+                <div class="cengi-table-wrap cengi-directory-course-table-wrap" tabindex="0" aria-label="Participantes inscritos en el curso">
+                    <table class="table table-striped table-bordered cengi-directory-table cengi-directory-course-table">
                         <thead>
                             <tr><th>Participante</th><th>CUI</th><th>Estado</th><th>Asistencia</th><th>Sesiones asistidas</th><th>Evaluación</th><th>Diploma</th></tr>
                         </thead>
@@ -576,8 +576,8 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
             </div>
             <div class="cengi-directory-modal-error" id="dashboard-ingenio-course-error" hidden></div>
         </div>
-        <footer class="modal-footer">
-            <div class="btn-group" id="dashboard-ingenio-course-export-group" hidden style="float:left;">
+        <footer class="modal-footer cengi-directory-course-footer">
+            <div class="btn-group dropup" id="dashboard-ingenio-course-export-group" hidden>
                 <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> Descargar listado <span class="caret"></span>
                 </button>

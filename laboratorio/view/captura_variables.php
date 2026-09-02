@@ -57,11 +57,18 @@ if ($idAnalysis > 0) {
         WHERE sa.id_tipo_analisis = ?
           AND NOT EXISTS (
               SELECT 1
-              FROM lote_rango lr_done
-              INNER JOIN formulario f_done
-                      ON f_done.id_rango = lr_done.id_rango
-                     AND f_done.id_tipo_analisis = sa.id_tipo_analisis
-              WHERE lr_done.id_lote = l.id_lote
+              FROM formulario f_done
+              LEFT JOIN estado_formulario ef_done ON ef_done.id_estado = f_done.id_estado
+              WHERE f_done.id_formulario = (
+                  SELECT MAX(f_latest.id_formulario)
+                  FROM lote_rango lr_scope
+                  INNER JOIN formulario f_latest
+                          ON f_latest.id_rango = lr_scope.id_rango
+                         AND f_latest.id_tipo_analisis = sa.id_tipo_analisis
+                  WHERE lr_scope.id_lote = l.id_lote
+                    AND m.numero_muestra BETWEEN lr_scope.inicio AND lr_scope.fin
+              )
+                AND LOWER(TRIM(COALESCE(ef_done.nombre, ''))) NOT LIKE '%rechaz%'
           )
         ORDER BY l.codigo_lote ASC, m.numero_muestra ASC, m.id_muestra ASC
     ");

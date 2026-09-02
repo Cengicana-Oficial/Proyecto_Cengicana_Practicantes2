@@ -67,7 +67,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       throw new RuntimeException('El tipo de muestra seleccionado ya no está disponible.');
     }
     $codigoMuestreo = trim((string) ($_POST['codigo_muestreo'] ?? ''));
-    $codigoLote = trim($_POST['lote'] ?? '');
     $fechaMuestreo = $_POST['fecha_de_muestreo'] ?? null;
     $numeroMuestras = max(1, (int) ($_POST['numero_muestras'] ?? 1));
     $institucion = trim((string) ($_POST['institucion'] ?? ''));
@@ -86,24 +85,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $analisisSeleccionados = [$analisisSeleccionados];
     }
 
-    if ($codigoLote === '') {
-      throw new RuntimeException('Ingrese o seleccione un número de lote.');
-    }
-
     if (!$fechaMuestreo) {
       throw new RuntimeException('Ingrese la fecha de muestreo.');
     }
 
-    $idLote = obtenerLote($conexion, $codigoLote);
+    if ($ingresadoPor === '') {
+      throw new RuntimeException('Ingrese el nombre del muestreador.');
+    }
+
+    if (!$idSolicitudPost) {
+      $nombreRecepcionista = trim((string) ($usuarioActualSolicitud['nombre'] ?? ''));
+      $correoRecepcionista = trim((string) ($usuarioActualSolicitud['correo'] ?? ''));
+      if ($nombreRecepcionista !== '') {
+        $recibidoPor = $nombreRecepcionista;
+      }
+      if ($correoRecepcionista !== '') {
+        $correoRecibido = $correoRecepcionista;
+      }
+    }
+
+    if ($recibidoPor === '') {
+      throw new RuntimeException('No se pudo identificar a la recepcionista que recibe las muestras.');
+    }
+
+    foreach ([$correoIngresado, $correoRecibido] as $correoResponsable) {
+      if ($correoResponsable !== '' && !filter_var($correoResponsable, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Revise los correos de los responsables.');
+      }
+    }
+
     $fechaIngresoActual = date('Y-m-d');
     $solicitudExistente = null;
     $snapshotAnterior = null;
 
     if ($idSolicitud) {
       $stmtSolicitudExistente = $conexion->prepare("
-        SELECT id_solicitud, id_tipo, fecha_ingreso, fecha_estimada
-        FROM solicitud
-        WHERE id_solicitud = ?
+        SELECT s.id_solicitud, s.id_tipo, s.id_lote, s.fecha_ingreso, s.fecha_estimada, l.codigo_lote
+        FROM solicitud s
+        INNER JOIN lote l ON l.id_lote = s.id_lote
+        WHERE s.id_solicitud = ?
         LIMIT 1
         FOR UPDATE
       ");
@@ -120,6 +140,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fechaEstimadaNueva = calcularFechaEstimadaSolicitud($fechaIngresoActual, $tipoMuestra);
     $tipoMuestraCambia = $solicitudExistente
       && (int) ($solicitudExistente['id_tipo'] ?? 0) !== (int) $tipoMuestra['id_tipo'];
+
+    if ($solicitudExistente && !$tipoMuestraCambia) {
+      $idLote = (int) $solicitudExistente['id_lote'];
+      $codigoLote = (string) $solicitudExistente['codigo_lote'];
+    } else {
+      $loteNuevo = labSolicitudSiguienteLotePorTipo($conexion, $tipoMuestra, true);
+      $codigoLote = (string) $loteNuevo['siguiente_codigo'];
+      $idLote = obtenerLote($conexion, $codigoLote);
+    }
 
     if ($idSolicitud) {
       if ($tipoMuestraCambia) {
@@ -316,6 +345,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 try {
   sincronizarCorrelativosConMuestras($conexion);
 
+  foreach ($catalogoMuestras as $clave => $tipoMuestraCatalogo) {
+    if (!empty($tipoMuestraCatalogo['activo'])) {
+      $correlativosLoteDb[$clave] = labSolicitudSiguienteLotePorTipo($conexion, $tipoMuestraCatalogo);
+    }
+  }
+
   $stmtCorrelativos = $conexion->query("
     SELECT tipo_muestra, prefijo, ultimo_numero
     FROM correlativo_envio_solicitud
@@ -451,7 +486,7 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
       <div class="meta-badge"><span>VF</span> 005</div>
       <div class="meta-badge">
         <span>Lote</span>
-        <input class="lote-input" type="text" placeholder="Ej. 185" aria-label="Número de lote"/>
+        <input class="lote-input" id="lote-resumen" type="text" placeholder="Automático" aria-label="Número de lote asignado" readonly tabindex="-1"/>
       </div>
     </div>
   </header>
@@ -503,8 +538,12 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
             name="lote"
             type="text"
             required
-            placeholder="Ej. 185"
+            readonly
+            aria-readonly="true"
+            title="Se asigna automáticamente según el último lote del tipo de muestra"
+            placeholder="Se asignará automáticamente"
             value="<?= htmlspecialchars($loteSeleccionado, ENT_QUOTES, 'UTF-8') ?>"/>
+        <small>Correlativo automático e independiente para cada tipo de muestra.</small>
     </div>
     <div class="field">
         <label for="numero_de_muestra">Lote de campo / codigo de muestreo</label>
@@ -607,10 +646,10 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
   <div class="section-title">Responsables y firmas</div>
   <div class="firma-grid">
     <div class="firma-card">
-      <span class="firma-label">Ingresado por</span>
-      <input class="firma-name-input" name="ingresado_por" type="text" placeholder="Nombre del analista" aria-label="Nombre del analista"/>
-      <input class="firma-email-input" name="correo_ingresado_por" type="email" placeholder="correo@ejemplo.com" aria-label="Correo del analista"/>
-      <canvas class="firma-canvas" id="canvas-ingreso" aria-label="Campo de firma — ingresado por"></canvas>
+      <span class="firma-label">Muestreador (ingresado por)</span>
+      <input class="firma-name-input" name="ingresado_por" type="text" required placeholder="Nombre del muestreador" aria-label="Nombre del muestreador" value="<?= htmlspecialchars((string) ($_POST['ingresado_por'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"/>
+      <input class="firma-email-input" name="correo_ingresado_por" type="email" placeholder="correo@ejemplo.com" aria-label="Correo del muestreador" value="<?= htmlspecialchars((string) ($_POST['correo_ingresado_por'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"/>
+      <canvas class="firma-canvas" id="canvas-ingreso" aria-label="Firma del muestreador"></canvas>
       <div class="firma-actions">
         <button type="button" class="btn-clear" data-clear-canvas="canvas-ingreso">
           <span class="material-symbols-outlined">ink_eraser</span> Limpiar
@@ -619,10 +658,10 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
       </div>
     </div>
     <div class="firma-card">
-      <span class="firma-label">Recibido por</span>
-      <input class="firma-name-input" name="recibido_por" type="text" placeholder="Nombre del receptor" aria-label="Nombre del receptor"/>
-      <input class="firma-email-input" name="correo_recibido_por" type="email" placeholder="correo@ejemplo.com" aria-label="Correo del receptor"/>
-      <canvas class="firma-canvas" id="canvas-recibe" aria-label="Campo de firma — recibido por"></canvas>
+      <span class="firma-label">Recepcionista (recibido por)</span>
+      <input class="firma-name-input" name="recibido_por" type="text" required placeholder="Nombre de la recepcionista" aria-label="Nombre de la recepcionista" value="<?= htmlspecialchars((string) ($_POST['recibido_por'] ?? ($usuarioActualSolicitud['nombre'] ?? '')), ENT_QUOTES, 'UTF-8') ?>" <?= !empty($usuarioActualSolicitud['nombre']) && !$idSolicitudGet ? 'readonly aria-readonly="true"' : '' ?>/>
+      <input class="firma-email-input" name="correo_recibido_por" type="email" placeholder="correo@ejemplo.com" aria-label="Correo de la recepcionista" value="<?= htmlspecialchars((string) ($_POST['correo_recibido_por'] ?? ($usuarioActualSolicitud['correo'] ?? '')), ENT_QUOTES, 'UTF-8') ?>" <?= !empty($usuarioActualSolicitud['correo']) && !$idSolicitudGet ? 'readonly aria-readonly="true"' : '' ?>/>
+      <canvas class="firma-canvas" id="canvas-recibe" aria-label="Firma de la recepcionista"></canvas>
       <div class="firma-actions">
         <button type="button" class="btn-clear" data-clear-canvas="canvas-recibe">
           <span class="material-symbols-outlined">ink_eraser</span> Limpiar
@@ -760,10 +799,11 @@ $recepcionesHoy = array_slice($recepcionesHoy, 0, 5);
   </aside>
 <script type="application/json" id="solicitudes-db"><?php echo json_encode($solicitudesDb, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script type="application/json" id="correlativos-db"><?php echo json_encode($correlativosDb, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
+<script type="application/json" id="correlativos-lote-db"><?php echo json_encode($correlativosLoteDb, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script type="application/json" id="analisis-catalogo"><?php echo json_encode($catalogoAnalisis, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG); ?></script>
 <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
 <script src="../js/solicitud_pdf_layout.js?v=2"></script>
-<script src="../js/solicitud_formulario.js?v=11"></script>
+<script src="../js/solicitud_formulario.js?v=12"></script>
 <?php lab_shell_content_close(); ?>
 </body>
 </html>

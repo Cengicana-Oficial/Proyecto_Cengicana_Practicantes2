@@ -4037,6 +4037,20 @@ body.cengi-nav-loading {
 }
 
 /* Control QR de eventos: vista y modales basados en el prototipo Cengicursos2. */
+.cengi-eventos-qr-page .cengi-event-stats { margin-bottom: 22px; }
+.cengi-eventos-qr-page .cengi-payment-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+.cengi-eventos-qr-page .cengi-payment-badge.is-free { background: #EAF6DD; color: #326B00; }
+.cengi-eventos-qr-page .cengi-payment-badge.is-paid { background: #FFF1D6; color: #8A5A00; }
+.cengi-eventos-qr-page .cengi-event-cost { display: block; margin-top: 4px; color: var(--cengi-muted); white-space: nowrap; }
 .cengi-eventos-qr-page .cengi-event-card {
     border-radius: 12px;
     overflow: hidden;
@@ -5028,6 +5042,60 @@ body.cengi-nav-loading {
     box-shadow: none !important;
 }
 
+/* El modal de participantes necesita mas espacio que la ficha individual.
+   La tabla conserva el desplazamiento horizontal en pantallas angostas sin
+   empujar ni superponerse con las acciones del pie. */
+.cengi-directory-course-modal .modal-dialog {
+    width: min(1040px, calc(100vw - 40px));
+    max-width: 1040px;
+}
+
+.cengi-directory-course-table-wrap {
+    -webkit-overflow-scrolling: touch;
+}
+
+.cengi-directory-course-table {
+    min-width: 880px;
+}
+
+.cengi-directory-course-table th,
+.cengi-directory-course-table td {
+    white-space: nowrap;
+}
+
+.cengi-directory-course-table .cengi-directory-person {
+    min-width: 210px;
+    white-space: normal;
+}
+
+.cengi-directory-course-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    text-align: initial;
+}
+
+.cengi-directory-course-footer::before,
+.cengi-directory-course-footer::after {
+    display: none;
+    content: none;
+}
+
+.cengi-directory-course-footer > .btn-group {
+    margin-right: auto;
+}
+
+.cengi-directory-course-footer .btn + .btn {
+    margin-left: 0;
+}
+
+.cengi-directory-course-footer .dropdown-menu {
+    min-width: 100%;
+    z-index: 1060;
+}
+
 @media (max-width: 1100px) {
     .cengi-directory-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -5045,6 +5113,18 @@ body.cengi-nav-loading {
     .cengi-directory-clear,
     .cengi-directory-export { width: 100%; max-width: none; }
     .cengi-directory-export { margin-left: 0; }
+    .cengi-directory-course-footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    .cengi-directory-course-footer > .btn-group,
+    .cengi-directory-course-footer > .btn {
+        width: 100%;
+        margin: 0;
+    }
+    .cengi-directory-course-footer > .btn-group > .btn {
+        width: 100%;
+    }
 }
 
 @media (max-width: 520px) {

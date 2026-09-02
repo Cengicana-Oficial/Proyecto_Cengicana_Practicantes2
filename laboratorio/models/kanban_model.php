@@ -80,7 +80,7 @@ if (!function_exists('lab_planificacion_tareas')) {
                 ta.id_tipo AS id_tipo_analisis,
                 ta.nombre AS analisis_nombre,
                 ultimo.id_formulario,
-                ultimo.versiones,
+                CASE WHEN ultimo.id_formulario IS NULL THEN 0 ELSE 1 END AS versiones,
                 f.analista,
                 f.fecha AS fecha_formulario,
                 ef.nombre AS estado_nombre
@@ -90,17 +90,18 @@ if (!function_exists('lab_planificacion_tareas')) {
             INNER JOIN tipo_muestra tm ON tm.id_tipo = s.id_tipo
             INNER JOIN solicitud_analisis sa ON sa.id_solicitud = s.id_solicitud
             INNER JOIN tipo_analisis ta ON ta.id_tipo = sa.id_tipo_analisis
+            LEFT JOIN lote_rango lr_tarea
+                ON lr_tarea.id_lote = s.id_lote
+               AND m.numero_muestra BETWEEN lr_tarea.inicio AND lr_tarea.fin
             LEFT JOIN (
                 SELECT
-                    lr.id_lote,
+                    f2.id_rango,
                     f2.id_tipo_analisis,
-                    MAX(f2.id_formulario) AS id_formulario,
-                    COUNT(*) AS versiones
+                    MAX(f2.id_formulario) AS id_formulario
                 FROM formulario f2
-                INNER JOIN lote_rango lr ON lr.id_rango = f2.id_rango
-                GROUP BY lr.id_lote, f2.id_tipo_analisis
+                GROUP BY f2.id_rango, f2.id_tipo_analisis
             ) ultimo
-                ON ultimo.id_lote = s.id_lote
+                ON ultimo.id_rango = lr_tarea.id_rango
                AND ultimo.id_tipo_analisis = ta.id_tipo
             LEFT JOIN formulario f ON f.id_formulario = ultimo.id_formulario
             LEFT JOIN estado_formulario ef ON ef.id_estado = f.id_estado
