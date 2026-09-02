@@ -145,6 +145,12 @@ try {
     $stmtBuscarIngenio = $db->prepare("SELECT id FROM ingenios WHERE TRIM(nombre_ingenios) = TRIM(?) LIMIT 1");
     $cacheIngenios = [];
 
+    // Correlativo para filas sin CUI: se calcula el ultimo usado una sola vez y
+    // se reparte con un contador local, de modo que cada fila sin CUI del mismo
+    // archivo reciba un valor "NNNND" consecutivo y distinto.
+    $baseCorrelativoNd = cengi_cui_nd_ultimo_correlativo($db);
+    $contadorNd = 0;
+
     $db->beginTransaction();
 
     foreach ($filasDatos as $indice => $fila) {
@@ -163,7 +169,7 @@ try {
             continue;
         }
 
-        if ($cui === '' || $nombre === '' || $puesto === '' || $area === '' || $gradoAcademico === '' || $telefono === '') {
+        if ($nombre === '' || $puesto === '' || $area === '' || $gradoAcademico === '' || $telefono === '') {
             $advertencias[] = "Línea {$lineaReal}: se omitió porque faltan datos obligatorios.";
             $omitidos++;
             continue;
@@ -195,6 +201,10 @@ try {
             $advertencias[] = "Línea {$lineaReal}: se omitió porque el ingenio \"{$ingenioNombre}\" no coincide con ningún ingenio registrado.";
             $omitidos++;
             continue;
+        }
+
+        if ($cui === '') {
+            $cui = cengi_cui_nd_formatear($baseCorrelativoNd + (++$contadorNd));
         }
 
         $stmt->execute([

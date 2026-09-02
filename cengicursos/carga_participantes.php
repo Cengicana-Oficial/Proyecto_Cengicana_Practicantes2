@@ -210,6 +210,12 @@ try {
     $asignados = 0;
     $advertencias = [];
 
+    // Correlativo para filas sin CUI: se calcula el ultimo usado una sola vez y
+    // se reparte con un contador local, de modo que cada fila sin CUI del mismo
+    // archivo reciba un valor "NNNND" consecutivo y distinto.
+    $baseCorrelativoNd = cengi_cui_nd_ultimo_correlativo($db);
+    $contadorNd = 0;
+
     $db->beginTransaction();
 
     foreach ($filas as $indice => $fila) {
@@ -231,8 +237,8 @@ try {
             continue;
         }
 
-        if ($cui === '' || $nombre === '') {
-            $advertencias[] = "Linea {$lineaReal}: se omitio porque faltan CUI o nombre.";
+        if ($nombre === '') {
+            $advertencias[] = "Linea {$lineaReal}: se omitio porque falta el nombre.";
             continue;
         }
 
@@ -259,6 +265,10 @@ try {
         if ($ingenioID <= 0) {
             $advertencias[] = "Linea {$lineaReal}: se omitio porque el ingenio \"{$ingenioNombre}\" no coincide con ningun ingenio registrado.";
             continue;
+        }
+
+        if ($cui === '') {
+            $cui = cengi_cui_nd_formatear($baseCorrelativoNd + (++$contadorNd));
         }
 
         $stmtBuscarParticipante->execute([$cui]);

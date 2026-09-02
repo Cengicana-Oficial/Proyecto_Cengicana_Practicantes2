@@ -186,7 +186,7 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
 
                     <div>
                         <label class="label-form">
-                            CUI Participante
+                            CUI Participante <span class="text-gray-400 font-normal">(opcional)</span>
                         </label>
 
                         <input
@@ -194,8 +194,11 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
                             name="cui_participante"
                             class="input-form"
                             maxlength="25"
-                            required
                         >
+
+                        <p class="text-xs text-gray-500 mt-1">
+                            Si no se proporciona, se asignará un identificador correlativo automático.
+                        </p>
                     </div>
 
                 </div>

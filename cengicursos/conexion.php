@@ -482,3 +482,76 @@ function cengi_instructor_tiene_curso_relevante_ingenio(PDO $db, $instructorId, 
 
     return $fila && (int) $fila['es_relevante'] === 1;
 }
+
+/**
+ * ------------------------------------------------------------------
+ * Correlativo de CUI para participantes que no proporcionan CUI
+ * ------------------------------------------------------------------
+ *
+ * Cuando alguien se inscribe a un curso -- por el formulario individual o por
+ * carga masiva -- sin dar CUI, se le asigna un identificador generado con el
+ * formato "NNNND": un correlativo numerico de al menos 4 digitos con ceros a la
+ * izquierda seguido del sufijo "ND" ("no disponible"). Ej.: 0091ND, 0092ND...
+ *
+ * El correlativo NO se reinicia: continua a partir del mayor numero ya usado.
+ * Se busca ese maximo en las DOS columnas donde vive un CUI de participante
+ * (participantes.cui_participantes y solicitudes_inscripcion.cui_participante),
+ * para que los valores generados por el alta directa de participantes y por las
+ * solicitudes de inscripcion todavia pendientes de aprobar no colisionen entre
+ * si.
+ */
+
+/**
+ * True si $cui tiene el formato de un CUI generado automaticamente ("NNNND").
+ */
+function cengi_cui_nd_es_generado($cui)
+{
+    return (bool) preg_match('/^[0-9]+ND$/', strtoupper(trim((string) $cui)));
+}
+
+/**
+ * Mayor correlativo numerico ya usado en un CUI con formato "NNNND", mirando
+ * tanto participantes como solicitudes_inscripcion. Devuelve 0 si no hay
+ * ninguno.
+ */
+function cengi_cui_nd_ultimo_correlativo(PDO $db)
+{
+    $sql = "
+        SELECT MAX(correlativo) AS ultimo
+        FROM (
+            SELECT CAST(REPLACE(UPPER(cui_participantes), 'ND', '') AS UNSIGNED) AS correlativo
+            FROM participantes
+            WHERE cui_participantes REGEXP '^[0-9]+ND$'
+            UNION ALL
+            SELECT CAST(REPLACE(UPPER(cui_participante), 'ND', '') AS UNSIGNED) AS correlativo
+            FROM solicitudes_inscripcion
+            WHERE cui_participante REGEXP '^[0-9]+ND$'
+        ) AS correlativos_nd
+    ";
+
+    $valor = $db->query($sql)->fetchColumn();
+
+    return ($valor === null || $valor === false) ? 0 : (int) $valor;
+}
+
+/**
+ * Formatea un correlativo numerico como CUI generado ("NNNND"), con un minimo
+ * de 4 digitos y ceros a la izquierda.
+ */
+function cengi_cui_nd_formatear($numero)
+{
+    return str_pad((string) (int) $numero, 4, '0', STR_PAD_LEFT) . 'ND';
+}
+
+/**
+ * Siguiente CUI generado disponible ("NNNND"). Para altas individuales.
+ *
+ * Para cargas masivas conviene llamar UNA vez a
+ * cengi_cui_nd_ultimo_correlativo() y luego formatear con un contador local por
+ * lote (cengi_cui_nd_formatear($base + $n)), de modo que las filas sin CUI del
+ * mismo archivo reciban correlativos consecutivos y distintos.
+ */
+function cengi_cui_nd_generar(PDO $db)
+{
+    return cengi_cui_nd_formatear(cengi_cui_nd_ultimo_correlativo($db) + 1);
+}

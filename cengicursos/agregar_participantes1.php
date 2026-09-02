@@ -52,8 +52,9 @@ $stmtCursos = $db->query("
                 <form method="POST" action="guardar_participante_curso.php" autocomplete="off">
                     <div class="cengi-form-grid">
                         <div class="form-group">
-                            <label for="cui" class="control-label">CUI</label>
-                            <input type="text" class="form-control" id="cui" name="cui" placeholder="0000-00000-0000" required>
+                            <label for="cui" class="control-label">CUI <span class="text-muted">(opcional)</span></label>
+                            <input type="text" class="form-control" id="cui" name="cui" placeholder="0000-00000-0000">
+                            <span class="help-block">Si se deja vacío, se asignará un identificador correlativo automático.</span>
                         </div>
                         <div class="form-group">
                             <label for="nombre" class="control-label">Nombre</label>

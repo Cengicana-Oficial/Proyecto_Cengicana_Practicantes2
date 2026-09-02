@@ -26,8 +26,15 @@ $ingenioId = (int) ($_POST['ingenio_id'] ?? 0);
 $tipoPago = trim((string) ($_POST['tipo_pago'] ?? ''));
 $cursoId = (int) ($_POST['curso_id'] ?? 0);
 
-if ($nombreParticipante === '' || $cuiParticipante === '' || $puestoParticipante === '' || $areaParticipante === '' || $gradoAcademico === '' || $telefono === '') {
+if ($nombreParticipante === '' || $puestoParticipante === '' || $areaParticipante === '' || $gradoAcademico === '' || $telefono === '') {
     inscripcion_error('Completa todos los campos obligatorios.');
+}
+
+// El CUI es opcional: si el participante no lo proporciona se le asigna un
+// correlativo generado con formato "NNNND" que continua a partir del ultimo
+// usado (ver cengi_cui_nd_generar() en conexion.php).
+if ($cuiParticipante === '') {
+    $cuiParticipante = cengi_cui_nd_generar($db);
 }
 
 if (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {

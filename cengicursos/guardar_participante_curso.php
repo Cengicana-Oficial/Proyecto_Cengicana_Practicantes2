@@ -22,7 +22,6 @@ if (!cengi_ve_todo_por_rol_o_ingenio()) {
 }
 
 if (
-    $cui === '' ||
     $nombre === '' ||
     $ingenioID <= 0 ||
     $cursoID <= 0 ||
@@ -108,6 +107,13 @@ $stmtActualizarAsignacion = $db->prepare("
 
 try {
     $db->beginTransaction();
+
+    // El CUI es opcional: si no se proporciona se asigna un correlativo
+    // generado con formato "NNNND" que continua a partir del ultimo usado
+    // (ver cengi_cui_nd_generar() en conexion.php).
+    if ($cui === '') {
+        $cui = cengi_cui_nd_generar($db);
+    }
 
     $stmtBuscarParticipante->execute([$cui]);
     $participanteID = $stmtBuscarParticipante->fetchColumn();
