@@ -583,8 +583,11 @@ $error = trim((string) ($_GET['error'] ?? ''));
 
             <?php if ($moduloId > 0): ?>
                 <div style="margin-bottom: 20px; text-align: right;">
-                    <a href="exportar_notas_modulo.php?curso_id=<?php echo (int) $idcurso; ?>&modulo_id=<?php echo (int) $moduloId; ?>" class="btn btn-default">
-                        <span class="glyphicon glyphicon-download-alt"></span> Descargar listado de este modulo
+                    <a href="exportar_notas_modulo.php?curso_id=<?php echo (int) $idcurso; ?>&modulo_id=<?php echo (int) $moduloId; ?>&format=excel" class="btn btn-default" download>
+                        <span class="glyphicon glyphicon-download-alt"></span> Descargar Excel
+                    </a>
+                    <a href="exportar_notas_modulo.php?curso_id=<?php echo (int) $idcurso; ?>&modulo_id=<?php echo (int) $moduloId; ?>&format=pdf" class="btn btn-default" download>
+                        <span class="glyphicon glyphicon-file"></span> Descargar PDF
                     </a>
                     <button type="button" class="btn btn-default" data-toggle="modal" data-target="#bulk-grades-modulo-modal">
                         <span class="glyphicon glyphicon-upload"></span> Cargar notas de este modulo
@@ -597,6 +600,30 @@ $error = trim((string) ($_GET['error'] ?? ''));
                     <button type="button" class="btn btn-success" data-toggle="modal" data-target="#add-participant-modal">
                         Agregar participante al curso
                     </button>
+                </div>
+            <?php endif; ?>
+
+            <?php
+                // Numero de columnas de la tabla (se usa tanto para la fila "sin
+                // participantes" como para la fila "sin coincidencias" del filtro).
+                $cengiColspan = 3
+                    + ($mostrarAsistencia ? 2 : 0)
+                    + ($mostrarPre ? 1 : 0)
+                    + ($mostrarPost ? 1 : 0)
+                    + ($moduloId === 0 ? 1 : 0)
+                    + ($puedeGestionar ? 1 : 0);
+            ?>
+
+            <?php if (!empty($filas)): ?>
+                <div class="cengi-participante-filtro" style="margin-bottom:14px;max-width:360px;">
+                    <input
+                        type="text"
+                        id="cengi-participante-buscar"
+                        class="form-control input-sm"
+                        placeholder="Buscar por nombre, CUI o ingenio..."
+                        autocomplete="off"
+                        aria-label="Buscar participantes en la tabla"
+                    >
                 </div>
             <?php endif; ?>
 
@@ -621,14 +648,6 @@ $error = trim((string) ($_GET['error'] ?? ''));
                 </thead>
                 <tbody>
                     <?php if (empty($filas)) { ?>
-                        <?php
-                            $cengiColspan = 3
-                                + ($mostrarAsistencia ? 2 : 0)
-                                + ($mostrarPre ? 1 : 0)
-                                + ($mostrarPost ? 1 : 0)
-                                + ($moduloId === 0 ? 1 : 0)
-                                + ($puedeGestionar ? 1 : 0);
-                        ?>
                         <tr>
                             <td colspan="<?php echo $cengiColspan; ?>" class="text-center">
                                 No hay participantes asignados a este curso todavia.
@@ -748,6 +767,14 @@ $error = trim((string) ($_GET['error'] ?? ''));
                                 <?php endif; ?>
                         </tr>
                     <?php } ?>
+
+                    <?php if (!empty($filas)): ?>
+                        <tr id="cengi-participante-sin-coincidencias" style="display:none;">
+                            <td colspan="<?php echo $cengiColspan; ?>" class="text-center text-muted">
+                                No hay participantes que coincidan con la búsqueda.
+                            </td>
+                        </tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
             </div>
@@ -772,7 +799,7 @@ $error = trim((string) ($_GET['error'] ?? ''));
             <div class="modal-body">
                 <input type="hidden" name="curso_id" value="<?php echo (int) $idcurso; ?>">
                 <input type="hidden" name="modulo_id" value="<?php echo (int) $moduloId; ?>">
-                <div class="cengi-upload-guide"><strong>Formato requerido</strong><span>CUI, ASISTENCIA, PRE_EVALUACION, POST_EVALUACION</span><small>Los valores deben estar entre 0 y 100. Descarga el listado de este modulo, llénalo y súbelo tal cual (Excel .xlsx, tambien se acepta CSV).</small></div>
+                <div class="cengi-upload-guide"><strong>Formato requerido</strong><span>CUI, ASISTENCIA<?php echo $mostrarPre ? ', PRE_EVALUACION' : ''; ?><?php echo $mostrarPost ? ', POST_EVALUACION' : ''; ?></span><small>Los valores deben estar entre 0 y 100. Descarga el listado de este modulo, llénalo y súbelo tal cual (Excel .xlsx, tambien se acepta CSV).<?php if (!$mostrarPre || !$mostrarPost): ?> Las columnas de evaluación que este módulo no utiliza pueden dejarse vacías o quitarse.<?php endif; ?></small></div>
                 <label class="cengi-upload-dropzone" for="bulk-grades-modulo-file"><span class="glyphicon glyphicon-cloud-upload"></span><strong>Selecciona el archivo Excel (.xlsx)</strong><small>Máximo 5 MB</small><input type="file" id="bulk-grades-modulo-file" name="archivo" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" required></label>
             </div>
             <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Procesar archivo</button></div>
@@ -1101,5 +1128,63 @@ $error = trim((string) ($_GET['error'] ?? ''));
 })();
 </script>
 <?php endif; ?>
+
+<script>
+// Filtro en el cliente de la tabla "Participantes del curso": muestra/oculta las
+// filas del <tbody> segun el texto escrito, comparando contra nombre, CUI e
+// ingenio (las primeras tres celdas). No hace AJAX ni recarga: la tabla ya viene
+// renderizada. El input vive fuera del <form action="guardar_control.php"> para
+// que Enter no dispare el guardado de registros.
+(function ($) {
+    'use strict';
+
+    var $input = $('#cengi-participante-buscar');
+    if (!$input.length) {
+        return;
+    }
+
+    var $tabla = $input.closest('.panel-body').find('table.table').first();
+    var $sinCoincidencias = $('#cengi-participante-sin-coincidencias');
+    var $filas = $tabla.find('tbody > tr').not($sinCoincidencias);
+
+    function normalizar(texto) {
+        texto = (texto == null ? '' : texto).toString().toLowerCase();
+        if (texto.normalize) {
+            texto = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+        return texto;
+    }
+
+    // Se indexa el texto buscable de cada fila una sola vez (nombre, CUI e
+    // ingenio = primeras tres celdas) para no releer el DOM en cada pulsacion.
+    $filas.each(function () {
+        var partes = [];
+        $(this).children('td').slice(0, 3).each(function () {
+            partes.push($(this).text());
+        });
+        $(this).data('cengiBuscar', normalizar(partes.join(' ')));
+    });
+
+    $input.on('input', function () {
+        var termino = normalizar($.trim(this.value));
+
+        if (termino === '') {
+            $filas.show();
+            $sinCoincidencias.hide();
+            return;
+        }
+
+        var visibles = 0;
+        $filas.each(function () {
+            var coincide = $(this).data('cengiBuscar').indexOf(termino) !== -1;
+            $(this).toggle(coincide);
+            if (coincide) {
+                visibles++;
+            }
+        });
+        $sinCoincidencias.toggle(visibles === 0);
+    });
+})(jQuery);
+</script>
 </body>
 </html>

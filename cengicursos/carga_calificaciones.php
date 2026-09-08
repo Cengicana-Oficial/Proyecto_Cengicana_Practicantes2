@@ -1,6 +1,7 @@
 <?php
 require_once 'revisar_permisos.php';
 require_once 'conexion.php';
+require_once 'curso_form_helpers.php';
 
 cengi_require_calificador('participantes.php');
 
@@ -52,6 +53,20 @@ try {
         throw new RuntimeException('El curso no está disponible para este usuario.');
     }
 
+    // Pre/Pos-Evaluacion opcionales cuando el curso no las requiere: se cargan
+    // los modulos del curso y se aplica la misma regla que la vista de
+    // seguimiento (cengi_curso_pre_post_visibles con modulo_id 0 = "todo el
+    // curso"). Si no se requieren, las columnas PRE_EVALUACION / POST_EVALUACION
+    // pueden faltar o venir vacias sin marcar error, y su valor no se guarda
+    // (queda NULL), igual que en la carga manual (guardar_control.php).
+    $stmtModulosCurso = $db->prepare('SELECT * FROM curso_modulos WHERE curso_id = ? ORDER BY orden');
+    $stmtModulosCurso->execute([$cursoId]);
+    $modulosCurso = $stmtModulosCurso->fetchAll(PDO::FETCH_ASSOC);
+    $prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, 0);
+    $requierePre = $prePostVisibles['pre'];
+    $requierePost = $prePostVisibles['post'];
+    $columnasMinimas = $requierePost ? 4 : ($requierePre ? 3 : 2);
+
     $archivo = fopen($_FILES['archivo']['tmp_name'], 'r');
     if ($archivo === false) {
         throw new RuntimeException('No fue posible leer el archivo CSV.');
@@ -78,11 +93,14 @@ try {
     $procesados = 0;
     while (($fila = fgetcsv($archivo, 0, $separador)) !== false) {
         $filaNumero++;
-        if (count($fila) < 4) {
+        if (count($fila) < $columnasMinimas) {
             if ($filaNumero === 1) {
                 continue;
             }
-            throw new RuntimeException('La fila ' . $filaNumero . ' no contiene las cuatro columnas requeridas.');
+            $columnasEsperadas = 'CUI, ASISTENCIA'
+                . ($requierePre ? ', PRE_EVALUACION' : '')
+                . ($requierePost ? ', POST_EVALUACION' : '');
+            throw new RuntimeException('La fila ' . $filaNumero . ' no contiene las columnas requeridas (' . $columnasEsperadas . ').');
         }
         $cui = preg_replace('/[^0-9A-Za-z-]/', '', trim((string) $fila[0]));
         if ($filaNumero === 1 && in_array(strtolower($cui), ['cui', 'dpi'], true)) {
@@ -92,9 +110,11 @@ try {
             continue;
         }
 
-        $asistencia = cengi_calificacion_numero($fila[1]);
-        $pre = cengi_calificacion_numero($fila[2]);
-        $post = cengi_calificacion_numero($fila[3]);
+        $asistencia = cengi_calificacion_numero($fila[1] ?? '');
+        // Pre/Pos-Evaluacion solo se leen y validan si el curso las requiere; si
+        // no, se ignoran (aunque el archivo traiga la columna) y quedan NULL.
+        $pre = $requierePre ? cengi_calificacion_numero($fila[2] ?? '') : null;
+        $post = $requierePost ? cengi_calificacion_numero($fila[3] ?? '') : null;
         $paramsAsignacion = [$cursoId, $cui];
         if (!cengi_ve_todo_por_rol_o_ingenio()) {
             $paramsAsignacion[] = cengi_ingenio_id_actual();

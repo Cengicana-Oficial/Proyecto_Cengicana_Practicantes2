@@ -49,12 +49,31 @@ try {
     }
 
     // El modulo debe pertenecer al curso indicado (mismo estilo de
-    // validacion que guardar_control.php con curso_modulos).
-    $stmtModuloValido = $db->prepare('SELECT id FROM curso_modulos WHERE id = ? AND curso_id = ?');
-    $stmtModuloValido->execute([$moduloId, $cursoId]);
-    if (!$stmtModuloValido->fetch()) {
+    // validacion que guardar_control.php con curso_modulos). Se cargan todos los
+    // modulos del curso para reutilizar cengi_curso_pre_post_visibles() y saber
+    // si este modulo requiere Pre/Pos-Evaluacion.
+    $stmtModulosCurso = $db->prepare('SELECT * FROM curso_modulos WHERE curso_id = ? ORDER BY orden');
+    $stmtModulosCurso->execute([$cursoId]);
+    $modulosCurso = $stmtModulosCurso->fetchAll(PDO::FETCH_ASSOC);
+    $moduloPertenece = false;
+    foreach ($modulosCurso as $m) {
+        if ((int) $m['id'] === $moduloId) {
+            $moduloPertenece = true;
+            break;
+        }
+    }
+    if (!$moduloPertenece) {
         throw new RuntimeException('El módulo no existe o no pertenece a este curso.');
     }
+
+    // Si el modulo no requiere Pre/Pos-Evaluacion, esas columnas del archivo son
+    // opcionales: pueden faltar o venir vacias sin marcar error de validacion, y
+    // su valor no se guarda (queda NULL), igual que en la carga manual
+    // (ver_participante_curso.php / guardar_control.php).
+    $prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, $moduloId);
+    $requierePre = $prePostVisibles['pre'];
+    $requierePost = $prePostVisibles['post'];
+    $columnasMinimas = $requierePost ? 4 : ($requierePre ? 3 : 2);
 
     $sqlCurso = 'SELECT c.id FROM cursos c WHERE c.id = ?';
     $paramsCurso = [$cursoId];
@@ -116,11 +135,14 @@ try {
     $procesados = 0;
     foreach ($filasDatos as $fila) {
         $filaNumero++;
-        if (!is_array($fila) || count($fila) < 4) {
+        if (!is_array($fila) || count($fila) < $columnasMinimas) {
             if ($filaNumero === 1) {
                 continue;
             }
-            throw new RuntimeException('La fila ' . $filaNumero . ' no contiene las cuatro columnas requeridas.');
+            $columnasEsperadas = 'CUI, ASISTENCIA'
+                . ($requierePre ? ', PRE_EVALUACION' : '')
+                . ($requierePost ? ', POST_EVALUACION' : '');
+            throw new RuntimeException('La fila ' . $filaNumero . ' no contiene las columnas requeridas (' . $columnasEsperadas . ').');
         }
         $fila = array_values($fila);
         $cui = preg_replace('/[^0-9A-Za-z-]/', '', trim((string) $fila[0]));
@@ -131,9 +153,11 @@ try {
             continue;
         }
 
-        $asistencia = cengi_calificacion_modulo_numero($fila[1]);
-        $pre = cengi_calificacion_modulo_numero($fila[2]);
-        $post = cengi_calificacion_modulo_numero($fila[3]);
+        $asistencia = cengi_calificacion_modulo_numero($fila[1] ?? '');
+        // Pre/Pos-Evaluacion solo se leen y validan si el modulo las requiere; si
+        // no, se ignoran (aunque el archivo traiga la columna) y quedan NULL.
+        $pre = $requierePre ? cengi_calificacion_modulo_numero($fila[2] ?? '') : null;
+        $post = $requierePost ? cengi_calificacion_modulo_numero($fila[3] ?? '') : null;
         $paramsAsignacion = [$cursoId, $cui];
         if (!cengi_ve_todo_por_rol_o_ingenio()) {
             $paramsAsignacion[] = cengi_ingenio_id_actual();
