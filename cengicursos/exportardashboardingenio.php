@@ -13,9 +13,20 @@
 // exportarparticipantes.php).
 ob_start();
 
+// Este endpoint solo devuelve archivos binarios (PDF/Excel) o mensajes de
+// error explicitos. Ningun aviso/notice/deprecated de PHP 8.2 debe llegar al
+// navegador mezclado con los bytes del archivo: cuando eso pasaba, el
+// Content-Type/Content-Disposition quedaba invalidado y el navegador mostraba
+// el contenido crudo del archivo en pantalla en vez de descargarlo (habia que
+// recargar para que "de casualidad" saliera bien). Los errores se siguen
+// registrando en el log del servidor via error_log.
+@ini_set('display_errors', '0');
+@ini_set('zlib.output_compression', '0');
+
 require_once __DIR__ . '/revisar_permisos.php';
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/classes/export_helpers.php';
+require_once __DIR__ . '/vendor/autoload.php';
 
 // Exportacion PDF/Excel del dashboard de ingenio (participantes y cursos).
 // Misma guarda que dashboard_ingenio.php: solo admins o el rol "ingenio" con
@@ -78,7 +89,7 @@ if (!$ingenio) {
 
 $cursoFiltro = null;
 if ($vista === 'curso_participantes') {
-    $stmtCursoFiltro = $db->prepare('SELECT id, nombre_cursos FROM cursos WHERE id = ? LIMIT 1');
+    $stmtCursoFiltro = $db->prepare('SELECT id, codigo_curso, nombre_cursos FROM cursos WHERE id = ? LIMIT 1');
     $stmtCursoFiltro->execute([$cursoIdFiltro]);
     $cursoFiltro = $stmtCursoFiltro->fetch(PDO::FETCH_ASSOC);
     if (!$cursoFiltro) {
@@ -118,6 +129,142 @@ function cengi_dbi_estado_curso_export($inicio, $fin)
     return 'Activo';
 }
 
+function cengi_dbi_nombre_archivo_segmento($valor)
+{
+    $valor = trim((string) $valor);
+    if (function_exists('iconv')) {
+        $convertido = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $valor);
+        if ($convertido !== false) {
+            $valor = $convertido;
+        }
+    }
+    $valor = strtolower($valor);
+    $valor = preg_replace('/[^a-z0-9._-]+/', '_', $valor);
+    $valor = trim((string) $valor, '._-');
+    return $valor !== '' ? $valor : 'sin_nombre';
+}
+
+/**
+ * Genera el listado como un .xlsx real con PhpSpreadsheet (el mismo motor que
+ * exportar_notas_modulo.php) y termina la peticion.
+ *
+ * Antes esta ruta usaba el helper compartido cengi_export_enviar_excel(), que
+ * se apoya en la libreria PHPExcel de 2014. Bajo PHP 8.2 PHPExcel dispara
+ * errores durante la generacion del archivo que, con display_errors activo, se
+ * intercalaban con los bytes del .xls: el navegador entonces mostraba el
+ * contenido crudo en pantalla en vez de descargarlo y habia que recargar.
+ * PhpSpreadsheet no emite esos avisos y escribe cadenas en UTF-8 nativo, asi
+ * que los acentos y la "ñ" salen correctos sin conversiones adicionales.
+ *
+ * Cubre las tres vistas del dashboard (participantes, cursos y
+ * curso_participantes): todas llegan aqui con el mismo formato de
+ * $encabezados/$filas.
+ *
+ * @param string[]                    $encabezados     Titulos de columna (fila 1, en negrita).
+ * @param array<int, array<int, mixed>> $filas          Cada fila es un arreglo indexado alineado con $encabezados.
+ * @param string                      $tituloHoja      Nombre de la hoja (se sanea y recorta a 31 caracteres).
+ * @param string                      $nombreArchivoBase Nombre de archivo sin extension.
+ * @param int[]                       $anchosColumnas  Ancho opcional por columna (indice 0..n).
+ */
+function cengi_dbi_enviar_xlsx(array $encabezados, array $filas, $tituloHoja, $nombreArchivoBase, array $anchosColumnas = [])
+{
+    $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+    $hoja = $spreadsheet->getActiveSheet();
+
+    // PhpSpreadsheet lanza una excepcion si el nombre de hoja trae caracteres
+    // reservados (* : / \ ? [ ]) o pasa de 31 caracteres; los nombres de curso
+    // o de ingenio pueden traer cualquiera de esos.
+    $tituloLimpio = str_replace(['*', ':', '/', '\\', '?', '[', ']'], ' ', (string) $tituloHoja);
+    $tituloLimpio = trim(preg_replace('/\s+/u', ' ', $tituloLimpio));
+    $tituloLimpio = function_exists('mb_substr')
+        ? mb_substr($tituloLimpio, 0, 31, 'UTF-8')
+        : substr($tituloLimpio, 0, 31);
+    $hoja->setTitle($tituloLimpio !== '' ? $tituloLimpio : 'Reporte');
+
+    $totalColumnas = max(1, count($encabezados));
+    $ultimaColumna = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($totalColumnas);
+
+    foreach (array_values($encabezados) as $i => $titulo) {
+        $columna = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1);
+        $hoja->setCellValueExplicit(
+            $columna . '1',
+            (string) $titulo,
+            \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+        );
+        $hoja->getColumnDimension($columna)->setWidth((float) ($anchosColumnas[$i] ?? 22));
+    }
+
+    $fila = 2;
+    foreach ($filas as $datosFila) {
+        foreach (array_values($datosFila) as $i => $valor) {
+            $columna = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1);
+            // TYPE_STRING para no perder ceros a la izquierda (CUI "0091ND",
+            // codigos de curso) ni interpretar como formula un valor que
+            // empiece con "=", "+", "-" o "@".
+            $hoja->setCellValueExplicit(
+                $columna . $fila,
+                (string) $valor,
+                \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+            );
+        }
+        $fila++;
+    }
+
+    $hoja->getStyle('A1:' . $ultimaColumna . '1')->applyFromArray([
+        'font' => ['bold' => true],
+        'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+    ]);
+    if ($fila > 2) {
+        $hoja->getStyle('A1:' . $ultimaColumna . ($fila - 1))->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'color' => ['rgb' => 'CCCCCC'],
+                ],
+            ],
+        ]);
+    }
+    $hoja->freezePane('A2');
+
+    $nombreArchivo = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string) $nombreArchivoBase . '.xlsx');
+    if ($nombreArchivo === '' || $nombreArchivo === '.xlsx') {
+        $nombreArchivo = 'reporte.xlsx';
+    }
+
+    ob_start();
+    (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet))->save('php://output');
+    $xlsxBytes = ob_get_clean();
+    if (!is_string($xlsxBytes) || strncmp($xlsxBytes, "PK\x03\x04", 4) !== 0) {
+        throw new RuntimeException('No se pudo generar un archivo de Excel valido.');
+    }
+
+    // Descarta el buffer abierto al inicio del script (y cualquier otro): asi
+    // los header() de abajo son los unicos que llegan al navegador y nada de lo
+    // que se haya escrito antes contamina el archivo.
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    if (function_exists('header_remove')) {
+        header_remove('Content-Type');
+        header_remove('Content-Disposition');
+        header_remove('Content-Length');
+        header_remove('Content-Encoding');
+    }
+    @ini_set('zlib.output_compression', '0');
+
+    http_response_code(200);
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', true);
+    header("Content-Disposition: attachment; filename=\"{$nombreArchivo}\"; filename*=UTF-8''" . rawurlencode($nombreArchivo), true);
+    header('Content-Transfer-Encoding: binary', true);
+    header('Content-Length: ' . strlen($xlsxBytes), true);
+    header('Cache-Control: no-store, no-cache, must-revalidate', true);
+    header('Pragma: no-cache', true);
+    header('X-Content-Type-Options: nosniff', true);
+
+    echo $xlsxBytes;
+    exit;
+}
+
 // ---------------------------------------------------------------------
 // Datos segun la vista solicitada.
 // ---------------------------------------------------------------------
@@ -130,7 +277,7 @@ $nombreArchivoBase = '';
 
 if ($vista === 'participantes') {
     $titulo = 'Participantes de ' . $ingenio['nombre_ingenios'];
-    $nombreArchivoBase = 'participantes_ingenio_' . $ingenioId;
+    $nombreArchivoBase = 'participantes_ingenio_' . cengi_dbi_nombre_archivo_segmento($ingenio['nombre_ingenios']);
 
     $condiciones = ['p.ingenio_id = ?'];
     $params = [$ingenioId];
@@ -184,7 +331,14 @@ if ($vista === 'participantes') {
     // "curso_detalle_id" del modal "Ver participantes" de dashboard_ingenio.php,
     // para que el PDF/Excel coincida con lo que el usuario ve en el modal.
     $titulo = 'Participantes de ' . $cursoFiltro['nombre_cursos'] . ' — ' . $ingenio['nombre_ingenios'];
-    $nombreArchivoBase = 'participantes_curso_' . $cursoIdFiltro . '_ingenio_' . $ingenioId;
+    $codigoCursoFiltro = trim((string) ($cursoFiltro['codigo_curso'] ?? ''));
+    if ($codigoCursoFiltro === '') {
+        $codigoCursoFiltro = 'CEN-' . str_pad((string) $cursoIdFiltro, 3, '0', STR_PAD_LEFT);
+    }
+    $nombreArchivoBase = 'participantes_'
+        . cengi_dbi_nombre_archivo_segmento($codigoCursoFiltro) . '_'
+        . cengi_dbi_nombre_archivo_segmento($cursoFiltro['nombre_cursos'])
+        . '_ingenio_' . cengi_dbi_nombre_archivo_segmento($ingenio['nombre_ingenios']);
 
     $stmt = $db->prepare("
         SELECT p.nombre_participantes, p.cui_participantes, p.puesto_participantes,
@@ -221,7 +375,7 @@ if ($vista === 'participantes') {
     }
 } else {
     $titulo = 'Cursos de ' . $ingenio['nombre_ingenios'];
-    $nombreArchivoBase = 'cursos_ingenio_' . $ingenioId;
+    $nombreArchivoBase = 'cursos_ingenio_' . cengi_dbi_nombre_archivo_segmento($ingenio['nombre_ingenios']);
 
     $stmt = $db->prepare("
         SELECT
@@ -263,7 +417,7 @@ if ($vista === 'participantes') {
 }
 
 if ($formato === 'excel') {
-    cengi_export_enviar_excel($encabezadoExcel, $filas, $titulo, $nombreArchivoBase, $anchosExcel);
+    cengi_dbi_enviar_xlsx($encabezadoExcel, $filas, $titulo, $nombreArchivoBase, $anchosExcel);
 }
 
 // ---------------------------------------------------------------------
