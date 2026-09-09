@@ -317,44 +317,6 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
             </div>
         </section>
 
-        <section class="content-section">
-            <div class="section-heading">
-                <div>
-                    <span class="section-kicker">Vista general</span>
-                    <h2>Panel general del sistema</h2>
-                    <p>Consulta responsables y usuarios vinculados a cada módulo.</p>
-                </div>
-                <span class="section-total"><?php echo count($dashboard); ?> módulos</span>
-            </div>
-
-            <div class="dashboard-grid">
-                <?php foreach ($dashboard as $item): ?>
-                    <?php
-                    $adminNombre = $item['admin_nombre'] ?: 'No asignado';
-                    $adminIniciales = mb_strtoupper(mb_substr($adminNombre, 0, 2, 'UTF-8'), 'UTF-8');
-                    ?>
-                    <article class="module-card">
-                        <div class="module-card-top">
-                            <span class="module-icon"><span class="material-symbols-outlined">dashboard</span></span>
-                            <span class="active-badge"><i></i> Activo</span>
-                        </div>
-                        <h3><?php echo htmlspecialchars($item['modulo']); ?></h3>
-                        <div class="module-admin">
-                            <span class="admin-avatar"><?php echo htmlspecialchars($adminIniciales); ?></span>
-                            <div>
-                                <strong><?php echo htmlspecialchars($adminNombre); ?></strong>
-                                <small><?php echo htmlspecialchars($item['admin_correo'] ?? 'Sin correo asignado'); ?></small>
-                            </div>
-                        </div>
-                        <div class="module-metric">
-                            <strong><?php echo (int) $item['total_usuarios']; ?></strong>
-                            <span>usuarios activos</span>
-                        </div>
-                    </article>
-                <?php endforeach; ?>
-            </div>
-        </section>
-
         <section class="systems-section">
             <div class="section-heading">
                 <div>
