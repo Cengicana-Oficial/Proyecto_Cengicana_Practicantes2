@@ -4105,8 +4105,8 @@ body.cengi-nav-loading {
 }
 
 .cengi-eventos-qr-page .cengi-event-participants-dialog {
-    width: min(780px, calc(100vw - 40px));
-    max-width: 780px;
+    width: min(1140px, calc(100vw - 40px));
+    max-width: 1140px;
     margin: 0 auto;
 }
 
@@ -4163,12 +4163,20 @@ body.cengi-nav-loading {
 .cengi-eventos-qr-page .cengi-empty-participants { padding: 35px 22px; color: var(--cengi-muted); text-align: center; }
 .cengi-eventos-qr-page .cengi-modal-loading .glyphicon { margin-right: 5px; }
 .cengi-eventos-qr-page #evpTablaWrap {
-    max-height: min(430px, calc(100vh - 245px));
-    overflow: auto;
+    max-height: min(460px, calc(100vh - 245px));
+    overflow-y: auto;
+    overflow-x: hidden;
     border-top: 1px solid #e4e9e1;
 }
 
-.cengi-eventos-qr-page .cengi-event-participants-table { margin-bottom: 0; }
+.cengi-eventos-qr-page .cengi-event-participants-table { margin-bottom: 0; width: 100%; }
+/* El modal es ancho (1140px); en vez de scroll horizontal, las columnas de texto
+   (participante, ingenio, correo) envuelven su contenido para que la tabla entera
+   quepa siempre dentro del diálogo. */
+.cengi-eventos-qr-page .cengi-event-participants-table > thead > tr > th,
+.cengi-eventos-qr-page .cengi-event-participants-table > tbody > tr > td { padding-left: 10px; padding-right: 10px; }
+.cengi-eventos-qr-page .cengi-td-ingenio { white-space: normal; }
+.cengi-eventos-qr-page .cengi-td-correo { white-space: normal; word-break: break-word; }
 .cengi-eventos-qr-page .cengi-event-participants-table > thead > tr > th {
     position: sticky;
     top: 0;
@@ -4181,7 +4189,7 @@ body.cengi-nav-loading {
 
 .cengi-eventos-qr-page .cengi-person-cell,
 .cengi-eventos-qr-page .cengi-person-qr { display: flex; align-items: center; gap: 9px; }
-.cengi-eventos-qr-page .cengi-person-cell strong { display: block; white-space: nowrap; }
+.cengi-eventos-qr-page .cengi-person-cell strong { display: block; white-space: normal; word-break: break-word; }
 .cengi-eventos-qr-page .cengi-person-cell small,
 .cengi-eventos-qr-page .cengi-entry-time { display: block; margin-top: 2px; color: var(--cengi-muted); font-size: 10px; }
 .cengi-eventos-qr-page .cengi-avatar-sm { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #EAF6DD; color: var(--cengi-primary-deep); font-weight: 700; flex: none; }

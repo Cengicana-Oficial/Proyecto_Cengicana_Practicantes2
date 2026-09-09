@@ -30,7 +30,7 @@ function cengi_evt_carga_masiva_valor($valor)
 
 /* Igual patron que cengi_carga_inscripcion_filas() en carga_inscripcion.php:
    CSV se lee con fgetcsv(); .xls se lee con la libreria PHPExcel vendorizada
-   (classes/PHPExcel.php). Devuelve un array de filas [nombre, cui, correo]. */
+   (classes/PHPExcel.php). Devuelve un array de filas [nombre, cui, correo, ingenio]. */
 function cengi_evt_carga_masiva_filas($archivoTemporal, $extension)
 {
     if ($extension === 'csv') {
@@ -73,6 +73,7 @@ function cengi_evt_carga_masiva_filas($archivoTemporal, $extension)
             cengi_evt_carga_masiva_valor($hoja->getCellByColumnAndRow(0, $fila)->getCalculatedValue()),
             cengi_evt_carga_masiva_valor($hoja->getCellByColumnAndRow(1, $fila)->getCalculatedValue()),
             cengi_evt_carga_masiva_valor($hoja->getCellByColumnAndRow(2, $fila)->getCalculatedValue()),
+            cengi_evt_carga_masiva_valor($hoja->getCellByColumnAndRow(3, $fila)->getCalculatedValue()),
         ];
     }
 
@@ -90,6 +91,16 @@ function cengi_evt_estado_badge($estado)
     return $mapa[$estado] ?? 'is-neutral';
 }
 
+/* Devuelve 'Pagado' o 'Gratuito' para un evento (usa la misma normalizacion que
+   cengi_evento_modalidad_pago()). Sirve para decidir si el estado "pagado" por
+   participante aplica al registrar/editar. */
+function cengi_evt_modalidad_evento(PDO $db, $eventoId)
+{
+    $stmt = $db->prepare('SELECT modalidad_pago FROM eventos WHERE id = ?');
+    $stmt->execute([(int) $eventoId]);
+    return cengi_evento_modalidad_pago($stmt->fetchColumn());
+}
+
 /* Respuesta JSON usada por el modal de participantes. */
 if (($_GET['accion'] ?? '') === 'listar_participantes') {
     header('Content-Type: application/json; charset=UTF-8');
@@ -104,20 +115,27 @@ if (($_GET['accion'] ?? '') === 'listar_participantes') {
     }
     $stmt = $db->prepare("
         SELECT ep.id, ep.nombre_invitado AS nombre, ep.cui_invitado AS cui,
-               ep.codigo_qr, ep.ingreso_en,
-               COALESCE(i.nombre_ingenios, 'Invitado externo') AS ingenio,
+               ep.codigo_qr, ep.ingreso_en, ep.pagado, ep.ingenio_id,
+               COALESCE(ip.nombre_ingenios, ie.nombre_ingenios, 'Invitado externo') AS ingenio,
                COALESCE(NULLIF(p.correo_participantes, ''), NULLIF(ep.correo_invitado, '')) AS correo
         FROM evento_participantes ep
         LEFT JOIN participantes p ON p.id = ep.participante_id
-        LEFT JOIN ingenios i ON i.id = p.ingenio_id
+        LEFT JOIN ingenios ip ON ip.id = p.ingenio_id
+        LEFT JOIN ingenios ie ON ie.id = ep.ingenio_id
         WHERE ep.evento_id = ?
         ORDER BY ep.nombre_invitado, ep.id
     ");
     $stmt->execute([$eventoId]);
+    // pagado / ingenio_id llegan como string desde PDO; se normalizan a int para el front.
+    $participantes = array_map(static function (array $fila) {
+        $fila['pagado'] = (int) $fila['pagado'];
+        $fila['ingenio_id'] = $fila['ingenio_id'] !== null ? (int) $fila['ingenio_id'] : null;
+        return $fila;
+    }, $stmt->fetchAll(PDO::FETCH_ASSOC));
     echo json_encode([
         'ok' => true,
         'evento' => $evento,
-        'participantes' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+        'participantes' => $participantes,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -214,11 +232,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $nombre = trim((string) ($_POST['nombre_invitado'] ?? ''));
         $cui = trim((string) ($_POST['cui_invitado'] ?? ''));
         $correoInvitado = trim((string) ($_POST['correo_invitado'] ?? ''));
+        $ingenioId = (int) ($_POST['ingenio_id'] ?? 0);
         $eventoReabrirId = $eventoId;
         if ($eventoId > 0 && $nombre !== '') {
+            // "Pagado" solo tiene sentido si el evento es de modalidad Pagado; para un
+            // evento Gratuito se fuerza a 0 aunque el cliente envie el checkbox.
+            $modalidadEvento = cengi_evt_modalidad_evento($db, $eventoId);
+            $pagado = ($modalidadEvento === 'Pagado' && !empty($_POST['pagado'])) ? 1 : 0;
             $codigo = cengi_evento_generar_codigo_qr($db);
-            $stmt = $db->prepare("INSERT INTO evento_participantes (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, codigo_qr) VALUES (?, NULL, ?, ?, ?, ?)");
-            $stmt->execute([$eventoId, $nombre, $cui, $correoInvitado !== '' ? $correoInvitado : null, $codigo]);
+            $stmt = $db->prepare("INSERT INTO evento_participantes (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, ingenio_id, codigo_qr, pagado) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$eventoId, $nombre, $cui, $correoInvitado !== '' ? $correoInvitado : null, $ingenioId > 0 ? $ingenioId : null, $codigo, $pagado]);
             $mensaje = "Participante registrado. Su código QR es {$codigo}.";
         } else {
             $mensaje = 'Escribe el nombre del participante.';
@@ -261,13 +284,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $filasDatos = array_slice($filas, 1, CENGI_EVT_CARGA_MASIVA_MAX_FILAS);
                         $registrados = 0;
 
+                        // Resolucion del nombre del ingenio contra la tabla ingenios, mismo
+                        // patron (cache + TRIM) que cengi_carga_inscripcion en carga_inscripcion.php.
+                        $stmtBuscarIngenio = $db->prepare("SELECT id FROM ingenios WHERE TRIM(nombre_ingenios) = TRIM(?) LIMIT 1");
+                        $cacheIngenios = [];
+
                         foreach ($filasDatos as $indice => $fila) {
                             $lineaReal = $indice + 2;
                             $nombreFila = trim((string) ($fila[0] ?? ''));
                             $cuiFila = trim((string) ($fila[1] ?? ''));
                             $correoFila = trim((string) ($fila[2] ?? ''));
+                            $ingenioFila = trim((string) ($fila[3] ?? ''));
 
-                            if ($nombreFila === '' && $cuiFila === '' && $correoFila === '') {
+                            if ($nombreFila === '' && $cuiFila === '' && $correoFila === '' && $ingenioFila === '') {
                                 continue;
                             }
 
@@ -285,9 +314,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 }
                             }
 
+                            $ingenioIdFila = null;
+                            if ($ingenioFila !== '') {
+                                $claveIngenio = mb_strtolower($ingenioFila);
+                                if (array_key_exists($claveIngenio, $cacheIngenios)) {
+                                    $ingenioIdFila = $cacheIngenios[$claveIngenio];
+                                } else {
+                                    $stmtBuscarIngenio->execute([$ingenioFila]);
+                                    $encontrado = $stmtBuscarIngenio->fetchColumn();
+                                    $ingenioIdFila = $encontrado !== false ? (int) $encontrado : null;
+                                    $cacheIngenios[$claveIngenio] = $ingenioIdFila;
+                                }
+                                if ($ingenioIdFila === null) {
+                                    $avisos[] = "Línea {$lineaReal}: el ingenio \"{$ingenioFila}\" no coincide con ningún ingenio registrado; se registró a {$nombreFila} sin ingenio.";
+                                }
+                            }
+
                             $codigo = cengi_evento_generar_codigo_qr($db);
-                            $stmt = $db->prepare("INSERT INTO evento_participantes (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, codigo_qr) VALUES (?, NULL, ?, ?, ?, ?)");
-                            $stmt->execute([$eventoId, $nombreFila, $cuiFila, $correoValido, $codigo]);
+                            $stmt = $db->prepare("INSERT INTO evento_participantes (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, ingenio_id, codigo_qr) VALUES (?, NULL, ?, ?, ?, ?, ?)");
+                            $stmt->execute([$eventoId, $nombreFila, $cuiFila, $correoValido, $ingenioIdFila, $codigo]);
                             $registrados++;
                         }
 
@@ -317,17 +362,138 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $nombre = trim((string) ($_POST['nombre_invitado'] ?? ''));
         $cui = trim((string) ($_POST['cui_invitado'] ?? ''));
         $correoInvitado = trim((string) ($_POST['correo_invitado'] ?? ''));
+        $ingenioId = (int) ($_POST['ingenio_id'] ?? 0);
         $eventoReabrirId = $eventoId;
         if ($eventoId > 0 && $participanteEventoId > 0 && $nombre !== '') {
+            // "Pagado" solo aplica a eventos de modalidad Pagado; en un evento Gratuito se
+            // fuerza a 0 aunque el cliente envie el checkbox.
+            $modalidadEvento = cengi_evt_modalidad_evento($db, $eventoId);
+            $pagado = ($modalidadEvento === 'Pagado' && !empty($_POST['pagado'])) ? 1 : 0;
             // Mismo criterio de scoping que marcar_ingreso: el "AND evento_id = ?" evita
             // editar un evento_participante_id que en realidad pertenece a otro evento
             // (no se confia en que el id recibido del cliente ya este acotado al evento).
-            $stmt = $db->prepare("UPDATE evento_participantes SET nombre_invitado = ?, cui_invitado = ?, correo_invitado = ? WHERE id = ? AND evento_id = ?");
-            $stmt->execute([$nombre, $cui, $correoInvitado !== '' ? $correoInvitado : null, $participanteEventoId, $eventoId]);
+            $stmt = $db->prepare("UPDATE evento_participantes SET nombre_invitado = ?, cui_invitado = ?, correo_invitado = ?, ingenio_id = ?, pagado = ? WHERE id = ? AND evento_id = ?");
+            $stmt->execute([$nombre, $cui, $correoInvitado !== '' ? $correoInvitado : null, $ingenioId > 0 ? $ingenioId : null, $pagado, $participanteEventoId, $eventoId]);
             $mensaje = 'Participante actualizado correctamente.';
         } else {
             $mensaje = 'Escribe el nombre del participante.';
             $mensajeTipo = 'error';
+        }
+    } elseif ($accion === 'marcar_pago' && $puedeGestionar) {
+        $eventoId = (int) ($_POST['evento_id'] ?? 0);
+        $participanteEventoId = (int) ($_POST['evento_participante_id'] ?? 0);
+        $pagado = !empty($_POST['pagado']) ? 1 : 0;
+        $eventoReabrirId = $eventoId;
+        if ($eventoId > 0 && $participanteEventoId > 0) {
+            // Solo se alterna el estado de pago en eventos de modalidad Pagado; para uno
+            // Gratuito la accion no tiene efecto (el control del modal va deshabilitado).
+            if (cengi_evt_modalidad_evento($db, $eventoId) === 'Pagado') {
+                // Mismo scoping "AND evento_id = ?" que marcar_ingreso/editar_participante.
+                $stmt = $db->prepare("UPDATE evento_participantes SET pagado = ? WHERE id = ? AND evento_id = ?");
+                $stmt->execute([$pagado, $participanteEventoId, $eventoId]);
+                $mensaje = $pagado ? 'Participante marcado como pagado.' : 'Participante marcado como no pagado.';
+            } else {
+                $mensaje = 'El evento es gratuito: no se registra estado de pago.';
+                $mensajeTipo = 'error';
+            }
+        }
+    } elseif ($accion === 'eliminar_participante' && $puedeGestionar) {
+        $eventoId = (int) ($_POST['evento_id'] ?? 0);
+        $participanteEventoId = (int) ($_POST['evento_participante_id'] ?? 0);
+        $eventoReabrirId = $eventoId;
+        if ($eventoId > 0 && $participanteEventoId > 0) {
+            try {
+                // Borrado fisico del participante del evento junto con sus filas hijas de
+                // FK RESTRICT (diplomas.evento_participante_id, declarada sin ON DELETE)
+                // dentro de una transaccion, mismo criterio que eliminar_cursos.php y la
+                // accion eliminar_evento: si tuviera un diploma emitido se borra aqui en
+                // cascada (no se bloquea), para que "quitar al participante" sea siempre
+                // posible. El scoping "AND evento_id = ?" es el mismo que usan
+                // marcar_ingreso / editar_participante.
+                $db->beginTransaction();
+
+                $stmtDiplomas = $db->prepare("
+                    DELETE FROM diplomas
+                    WHERE evento_participante_id = (
+                        SELECT id FROM evento_participantes WHERE id = ? AND evento_id = ?
+                    )
+                ");
+                $stmtDiplomas->execute([$participanteEventoId, $eventoId]);
+
+                $stmtParticipante = $db->prepare("DELETE FROM evento_participantes WHERE id = ? AND evento_id = ?");
+                $stmtParticipante->execute([$participanteEventoId, $eventoId]);
+
+                $db->commit();
+
+                if ($stmtParticipante->rowCount() > 0) {
+                    $mensaje = 'Participante eliminado del evento.';
+                } else {
+                    $mensaje = 'El participante ya no existe en este evento.';
+                    $mensajeTipo = 'error';
+                }
+            } catch (PDOException $e) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                error_log('No fue posible eliminar el participante ' . $participanteEventoId . ' del evento ' . $eventoId . ': ' . $e->getMessage());
+                if (stripos($e->getMessage(), 'foreign key') !== false) {
+                    $mensaje = 'El participante tiene registros asociados que impiden eliminarlo.';
+                } else {
+                    $mensaje = 'No fue posible eliminar al participante.';
+                }
+                $mensajeTipo = 'error';
+            }
+        }
+    } elseif ($accion === 'eliminar_evento' && $puedeGestionar) {
+        $eventoId = (int) ($_POST['evento_id'] ?? 0);
+        if ($eventoId <= 0) {
+            $mensaje = 'No se indicó el evento a eliminar.';
+            $mensajeTipo = 'error';
+        } else {
+            try {
+                // Borrado fisico del evento con todas sus filas dependientes dentro de una
+                // transaccion, mismo patron que eliminar_cursos.php: primero se borran a
+                // mano las filas cuya FK a evento_participantes es RESTRICT
+                // (diplomas.evento_participante_id, declarada sin ON DELETE), luego los
+                // evento_participantes y por ultimo la fila de eventos. La FK
+                // evento_participantes.evento_id ya es ON DELETE CASCADE, pero se borra
+                // explicitamente para no depender de ese cascade tras limpiar diplomas.
+                $db->beginTransaction();
+
+                $stmtDiplomas = $db->prepare("
+                    DELETE FROM diplomas
+                    WHERE evento_participante_id IN (
+                        SELECT id FROM evento_participantes WHERE evento_id = ?
+                    )
+                ");
+                $stmtDiplomas->execute([$eventoId]);
+
+                $stmtParticipantes = $db->prepare("DELETE FROM evento_participantes WHERE evento_id = ?");
+                $stmtParticipantes->execute([$eventoId]);
+
+                $stmtEvento = $db->prepare("DELETE FROM eventos WHERE id = ?");
+                $stmtEvento->execute([$eventoId]);
+
+                $db->commit();
+
+                if ($stmtEvento->rowCount() > 0) {
+                    $mensaje = 'Evento eliminado correctamente.';
+                } else {
+                    $mensaje = 'El evento ya no existe.';
+                    $mensajeTipo = 'error';
+                }
+            } catch (PDOException $e) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                error_log('No fue posible eliminar el evento ' . $eventoId . ': ' . $e->getMessage());
+                if (stripos($e->getMessage(), 'foreign key') !== false) {
+                    $mensaje = 'El evento tiene registros asociados que impiden eliminarlo.';
+                } else {
+                    $mensaje = 'No fue posible eliminar el evento.';
+                }
+                $mensajeTipo = 'error';
+            }
         }
     }
 }
@@ -338,6 +504,10 @@ $eventos = $db->query("
       (SELECT COUNT(*) FROM evento_participantes ep WHERE ep.evento_id = e.id AND ep.ingreso_en IS NOT NULL) AS ingresos
     FROM eventos e ORDER BY e.fecha DESC, e.id DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
+
+// Catalogo de ingenios para el <select> "Ingenio" del formulario de registro
+// individual de participantes (opcion vacia = "Invitado externo").
+$ingeniosLista = $db->query("SELECT id, nombre_ingenios FROM ingenios ORDER BY nombre_ingenios")->fetchAll(PDO::FETCH_ASSOC);
 
 $estadisticasEventos = $db->query("
     SELECT
@@ -443,6 +613,11 @@ $ejemploParticipante = $db->query("
                                         <?php if ($puedeGestionar): ?>
                                         <button type="button" class="btn btn-default btn-sm" title="Copiar enlace público de inscripción" onclick="cengiEvtEnlaceInscripcion(<?php echo (int) $evt['id']; ?>)"><span class="glyphicon glyphicon-link"></span></button>
                                         <button type="button" class="btn btn-default btn-sm" title="Enlace de escaneo en la entrada" onclick="cengiEvtEnlaceEscaneo(<?php echo (int) $evt['id']; ?>)"><span class="glyphicon glyphicon-camera"></span></button>
+                                        <form method="POST" class="cengi-inline-entry-form" data-evento-nombre="<?php echo cengi_evt_html($evt['nombre']); ?>" onsubmit="return cengiEvtConfirmarEliminarEvento(this);">
+                                            <input type="hidden" name="accion" value="eliminar_evento">
+                                            <input type="hidden" name="evento_id" value="<?php echo (int) $evt['id']; ?>">
+                                            <button type="submit" class="btn btn-danger btn-sm" title="Eliminar evento"><span class="glyphicon glyphicon-trash"></span></button>
+                                        </form>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -517,6 +692,22 @@ $ejemploParticipante = $db->query("
                         <div class="form-group"><label class="control-label">Nombre completo</label><input type="text" name="nombre_invitado" id="evpRegistroNombre" class="form-control"></div>
                         <div class="form-group"><label class="control-label">CUI</label><input type="text" name="cui_invitado" id="evpRegistroCui" class="form-control"></div>
                         <div class="form-group"><label class="control-label">Correo electrónico</label><input type="email" name="correo_invitado" id="evpRegistroCorreo" class="form-control" placeholder="Para el envío del gafete"></div>
+                        <div class="form-group">
+                            <label class="control-label">Ingenio</label>
+                            <select name="ingenio_id" id="evpRegistroIngenio" class="form-control">
+                                <option value="">Invitado externo</option>
+                                <?php foreach ($ingeniosLista as $ing): ?>
+                                    <option value="<?php echo (int) $ing['id']; ?>"><?php echo cengi_evt_html($ing['nombre_ingenios']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="control-label">Pago</label>
+                            <div class="checkbox" style="margin-top:4px;">
+                                <label><input type="checkbox" name="pagado" id="evpRegistroPagado" value="1"> Pagado</label>
+                            </div>
+                            <p class="help-block" id="evpRegistroPagadoAyuda" style="display:none;">Solo disponible en eventos de acceso pagado.</p>
+                        </div>
                         <div class="form-group cengi-form-full cengi-register-actions"><button type="button" class="btn btn-default btn-sm" id="evpCancelarRegistro">Cancelar</button><button type="submit" class="btn btn-success btn-sm" id="evpRegistroSubmitBtn">Generar QR y registrar</button></div>
                     </div>
                 </form>
@@ -528,7 +719,7 @@ $ejemploParticipante = $db->query("
                         <div class="form-group cengi-form-full">
                             <label class="control-label">Archivo CSV o Excel (.xls)</label>
                             <input type="file" name="archivo_masivo" class="form-control" accept=".csv,.xls" required>
-                            <p class="help-block">Columnas en este orden: Nombre (obligatorio), CUI (opcional), Correo (opcional). <a href="plantilla_carga_masiva_eventos.php" download>Descargar plantilla Excel</a>.</p>
+                            <p class="help-block">Columnas en este orden: Nombre (obligatorio), CUI (opcional), Correo (opcional), Ingenio (opcional; debe coincidir con un ingenio registrado, si no se deja sin ingenio). <a href="plantilla_carga_masiva_eventos.php" download>Descargar plantilla Excel</a>.</p>
                         </div>
                         <div class="form-group cengi-form-full cengi-register-actions"><button type="button" class="btn btn-default btn-sm" id="evpCancelarCargaMasiva">Cancelar</button><button type="submit" class="btn btn-success btn-sm">Cargar participantes</button></div>
                     </div>
@@ -540,7 +731,7 @@ $ejemploParticipante = $db->query("
                     <table class="table cengi-event-participants-table">
                         <thead><tr>
                             <?php if ($puedeGestionar): ?><th class="cengi-participant-check-col"><input type="checkbox" id="evpSeleccionarTodos" title="Seleccionar todos"></th><?php endif; ?>
-                            <th>Participante</th><th>Ingenio</th><th>Correo</th><th>Código QR</th><th>Ingreso</th><th></th>
+                            <th>Participante</th><th>Ingenio</th><th>Correo</th><th>Código QR</th><th>Pago</th><th>Ingreso</th><th></th>
                         </tr></thead>
                         <tbody id="tablaEventoParticipantes"></tbody>
                     </table>
@@ -695,6 +886,15 @@ $ejemploParticipante = $db->query("
             var ingreso = p.ingreso_en
                 ? '<span class="cengi-status-badge is-active"><i></i>Ingresó</span><small class="cengi-entry-time">' + escapeHtml(p.ingreso_en) + '</small>'
                 : '<span class="cengi-status-badge is-neutral"><i></i>Sin ingreso</span>';
+            var esEventoPagado = !!(eventoActual && eventoActual.modalidad_pago === 'Pagado');
+            var pagoBadge = !esEventoPagado
+                ? '<span class="cengi-status-badge is-neutral" title="El evento es gratuito"><i></i>No aplica</span>'
+                : (Number(p.pagado)
+                    ? '<span class="cengi-status-badge is-active"><i></i>Pagado</span>'
+                    : '<span class="cengi-status-badge is-rejected"><i></i>No pagado</span>');
+            var pagoToggle = (esEventoPagado && puedeGestionar)
+                ? '<form method="POST" class="cengi-inline-entry-form"><input type="hidden" name="accion" value="marcar_pago"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><input type="hidden" name="pagado" value="' + (Number(p.pagado) ? 0 : 1) + '"><button type="submit" class="btn btn-default btn-xs">' + (Number(p.pagado) ? 'Marcar no pagado' : 'Marcar pagado') + '</button></form>'
+                : '';
             var marcar = (!p.ingreso_en && puedeGestionar)
                 ? '<form method="POST" class="cengi-inline-entry-form"><input type="hidden" name="accion" value="marcar_ingreso"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><button type="submit" class="btn btn-success btn-xs">Marcar ingreso</button></form>'
                 : '';
@@ -704,13 +904,17 @@ $ejemploParticipante = $db->query("
             var editar = puedeGestionar
                 ? '<button type="button" class="cengi-action-btn is-edit" title="Editar participante" onclick="cengiEvtEditarParticipante(' + indice + ')"><span class="glyphicon glyphicon-pencil"></span></button>'
                 : '';
+            var eliminar = puedeGestionar
+                ? '<form method="POST" class="cengi-inline-entry-form" data-participante-nombre="' + escapeHtml(p.nombre) + '" onsubmit="return cengiEvtConfirmarEliminarParticipante(this);"><input type="hidden" name="accion" value="eliminar_participante"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><button type="submit" class="cengi-action-btn is-delete" title="Eliminar participante"><span class="glyphicon glyphicon-trash"></span></button></form>'
+                : '';
             return '<tr>' + check +
                 '<td class="cengi-td-participante"><div class="cengi-person-cell"><span class="cengi-avatar-sm">' + escapeHtml(iniciales(p.nombre)) + '</span><span><strong>' + escapeHtml(p.nombre) + '</strong>' + (p.cui ? '<small>CUI ' + escapeHtml(p.cui) + '</small>' : '') + '</span></div></td>' +
                 '<td class="cengi-td-ingenio">' + escapeHtml(p.ingenio) + '</td>' +
                 '<td class="cengi-td-correo">' + (p.correo ? escapeHtml(p.correo) : '<span class="text-muted">Sin correo</span>') + '</td>' +
                 '<td class="cengi-td-qr"><div class="cengi-person-qr"><span class="cengi-mini-qr" data-codigo="' + escapeHtml(p.codigo_qr) + '"></span><span class="mono">' + escapeHtml(p.codigo_qr) + '</span></div></td>' +
+                '<td class="cengi-td-pago">' + pagoBadge + pagoToggle + '</td>' +
                 '<td class="cengi-td-ingreso">' + ingreso + marcar + '</td>' +
-                '<td class="cengi-td-acciones"><button type="button" class="cengi-action-btn is-view" title="Ver QR y gafete" onclick="cengiEvtVerQr(' + indice + ')"><span class="glyphicon glyphicon-qrcode"></span></button>' + editar + '</td></tr>';
+                '<td class="cengi-td-acciones"><button type="button" class="cengi-action-btn is-view" title="Ver QR y gafete" onclick="cengiEvtVerQr(' + indice + ')"><span class="glyphicon glyphicon-qrcode"></span></button>' + editar + eliminar + '</td></tr>';
         }).join(''));
         $('#tablaEventoParticipantes .cengi-mini-qr').each(function () { crearQr($(this).attr('data-codigo'), this, false); });
 
@@ -728,8 +932,34 @@ $ejemploParticipante = $db->query("
         $('#evpRegistroForm')[0] && $('#evpRegistroForm')[0].reset();
         $('#evpRegistroAccion').val('registrar_participante');
         $('#evpRegistroParticipanteId').val('');
+        $('#evpRegistroIngenio').val('');
+        $('#evpRegistroPagado').prop('checked', false);
         $('#evpRegistroSubmitBtn').text('Generar QR y registrar');
+        sincronizarControlPagoRegistro();
     }
+
+    // El checkbox "Pagado" del formulario de registro solo se habilita cuando el evento
+    // actual es de acceso pagado (eventoActual.modalidad_pago, que llega en el JSON de
+    // listar_participantes). En eventos gratuitos queda deshabilitado y sin marcar.
+    function sincronizarControlPagoRegistro() {
+        var esEventoPagado = !!(eventoActual && eventoActual.modalidad_pago === 'Pagado');
+        $('#evpRegistroPagado').prop('disabled', !esEventoPagado);
+        if (!esEventoPagado) $('#evpRegistroPagado').prop('checked', false);
+        $('#evpRegistroPagadoAyuda').toggle(!esEventoPagado);
+    }
+
+    // Confirmacion antes del borrado fisico de un evento (accion POST eliminar_evento).
+    window.cengiEvtConfirmarEliminarEvento = function (form) {
+        var nombre = form ? (form.getAttribute('data-evento-nombre') || '') : '';
+        return window.confirm('¿Eliminar el evento "' + nombre + '" y todos sus participantes? Esta acción no se puede deshacer.');
+    };
+
+    // Confirmacion antes del borrado fisico de un participante del evento
+    // (accion POST eliminar_participante).
+    window.cengiEvtConfirmarEliminarParticipante = function (form) {
+        var nombre = form ? (form.getAttribute('data-participante-nombre') || '') : '';
+        return window.confirm('¿Eliminar a "' + nombre + '" de este evento? Esta acción no se puede deshacer.');
+    };
 
     window.cengiEvtAbrirParticipantes = function (eventoId) {
         eventoActual = {id: Number(eventoId)};
@@ -754,6 +984,7 @@ $ejemploParticipante = $db->query("
                 eventoActual = respuesta.evento;
                 participantes = respuesta.participantes || [];
                 $('#evpTitulo').text(eventoActual.nombre);
+                sincronizarControlPagoRegistro();
                 renderParticipantes();
             })
             .fail(function () {
@@ -783,6 +1014,9 @@ $ejemploParticipante = $db->query("
         $('#evpRegistroNombre').val(p.nombre || '');
         $('#evpRegistroCui').val(p.cui || '');
         $('#evpRegistroCorreo').val(p.correo || '');
+        $('#evpRegistroIngenio').val(p.ingenio_id ? String(p.ingenio_id) : '');
+        sincronizarControlPagoRegistro();
+        $('#evpRegistroPagado').prop('checked', !$('#evpRegistroPagado').prop('disabled') && !!Number(p.pagado));
         $('#evpRegistroSubmitBtn').text('Guardar cambios');
         $('#evpRegistroForm').slideDown(150);
         var campo = document.getElementById('evpRegistroForm');
@@ -856,8 +1090,10 @@ $ejemploParticipante = $db->query("
 
     $('#evpDescargar').on('click', function () {
         if (!eventoActual) return;
-        var filas = [['Participante', 'CUI', 'Ingenio', 'Correo', 'Código QR', 'Ingreso']].concat(participantes.map(function (p) {
-            return [p.nombre, p.cui || '', p.ingenio, p.correo || '', p.codigo_qr, p.ingreso_en || 'Sin ingreso'];
+        var eventoPagado = !!(eventoActual && eventoActual.modalidad_pago === 'Pagado');
+        var filas = [['Participante', 'CUI', 'Ingenio', 'Correo', 'Código QR', 'Pago', 'Ingreso']].concat(participantes.map(function (p) {
+            var pago = eventoPagado ? (Number(p.pagado) ? 'Pagado' : 'No pagado') : 'No aplica';
+            return [p.nombre, p.cui || '', p.ingenio, p.correo || '', p.codigo_qr, pago, p.ingreso_en || 'Sin ingreso'];
         }));
         var csv = '\uFEFF' + filas.map(function (fila) {
             return fila.map(function (dato) { return '"' + String(dato).replace(/"/g, '""') + '"'; }).join(',');
