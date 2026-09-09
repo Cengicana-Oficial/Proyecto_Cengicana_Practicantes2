@@ -440,7 +440,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                 </button>
                 <ul class="dropdown-menu dropdown-menu-right">
                     <li><a href="<?php echo cengi_dbi_html($urlExportCursos . '&format=pdf'); ?>" download><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
-                    <li><a href="<?php echo cengi_dbi_html($urlExportCursos . '&format=excel'); ?>"><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
+                    <li><a href="<?php echo cengi_dbi_html($urlExportCursos . '&format=excel'); ?>" download><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
                 </ul>
             </div>
         </div>
@@ -493,7 +493,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                 </button>
                 <ul class="dropdown-menu dropdown-menu-right">
                     <li><a href="<?php echo cengi_dbi_html($urlExportParticipantes . '&format=pdf'); ?>" download><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
-                    <li><a href="<?php echo cengi_dbi_html($urlExportParticipantes . '&format=excel'); ?>"><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
+                    <li><a href="<?php echo cengi_dbi_html($urlExportParticipantes . '&format=excel'); ?>" download><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
                 </ul>
             </div>
         </form>
@@ -818,13 +818,15 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
             var exportBase = 'exportardashboardingenio.php?' + $.param({ingenio_id: currentIngenioId, vista: 'curso_participantes', curso_id: Number(course.id)});
             $courseExportPdf
                 .attr('href', exportBase + '&format=pdf')
-                .attr('download', 'participantes_curso_' + Number(course.id) + '_ingenio_' + currentIngenioId + '.pdf');
-            $courseExportExcel.attr('href', exportBase + '&format=excel');
+                .attr('download', '');
+            $courseExportExcel
+                .attr('href', exportBase + '&format=excel')
+                .attr('download', '');
             $courseExportGroup.removeAttr('hidden');
         } else {
             $courseExportGroup.attr('hidden', true);
             $courseExportPdf.attr('href', '#').removeAttr('download');
-            $courseExportExcel.attr('href', '#');
+            $courseExportExcel.attr('href', '#').removeAttr('download');
         }
 
         $courseLoading.attr('hidden', true);
@@ -843,7 +845,7 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
         $courseZipButton.attr('hidden', true).attr('href', '#');
         $courseExportGroup.attr('hidden', true);
         $courseExportPdf.attr('href', '#').removeAttr('download');
-        $courseExportExcel.attr('href', '#');
+        $courseExportExcel.attr('href', '#').removeAttr('download');
         $courseLoading.removeAttr('hidden');
         courseRequest = $.ajax({url: 'dashboard_ingenio.php', data: {curso_detalle_id: cursoId, ingenio_id: currentIngenioId}, dataType: 'json', cache: false})
             .done(renderCourseDetail).fail(function (xhr, status) {
