@@ -54,7 +54,7 @@ if ($contenido === '') {
         .grid td{padding:10px 12px;border:1px solid #dfe3e5}.grid td:first-child{width:34%;font-weight:bold;background:#f5f7f4}
         .note{margin-top:24px;padding:13px;border:1px solid #dfe3e5;background:#f7f8f8;color:#6f777d}
     </style></head><body>
-        <div class="head"><h1>' . documento_pdf_e($titulo) . '</h1><div class="sub">SIGELAB · Laboratorio Agroindustrial</div></div>
+        <div class="head"><h1>' . documento_pdf_e($titulo) . '</h1><div class="sub">CENGILABS · Laboratorio Agroindustrial</div></div>
         <table class="grid">
             <tr><td>Documento</td><td>DOC-' . str_pad((string) (int) $documento['id_documento'], 4, '0', STR_PAD_LEFT) . '</td></tr>
             <tr><td>Tipo</td><td>' . documento_pdf_e($tipo) . '</td></tr>

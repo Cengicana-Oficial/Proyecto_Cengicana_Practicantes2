@@ -170,6 +170,15 @@ function lab_is_technician(): bool
     return $roleId === 3 || strpos($role, 'tecnico') !== false;
 }
 
+/**
+ * Rol "analista" de laboratorio. Se resuelve por nombre de rol normalizado
+ * (misma estrategia que lab_is_technician) para no depender de un rol_id fijo.
+ */
+function lab_is_analyst(): bool
+{
+    return strpos(lab_normalized_role(), 'analista') !== false;
+}
+
 function lab_can_view_error_forms(): bool
 {
     return lab_can('laboratorio.formularios_erroneos.ver') || lab_can('laboratorio.consolidacion.ver') || lab_is_technician();

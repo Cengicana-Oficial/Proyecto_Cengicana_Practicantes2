@@ -2,6 +2,10 @@
 require_once __DIR__ . '/../../includes/auth.php';
 lab_require_analysis_access('suelos.fosforo');
 
+// El rol "analista" no debe ver la grafica de curva de calibracion/validacion.
+// La tabla de captura y la tabla de la curva se conservan para todos los roles.
+$labHideCalibrationChart = function_exists('lab_is_analyst') && lab_is_analyst();
+
 $doc_elemento  = 'Fosforo';
 $doc_tipo      = 'Suelos';
 $doc_codigo    = 'LAB-FS-042';
@@ -27,7 +31,7 @@ $resultado = $resultado ?? [];
     <title>Fosforo en Suelos</title>
     <link rel="stylesheet" href="../../styles/formularios.css">
 </head>
-<body>
+<body<?= $labHideCalibrationChart ? ' data-lab-hide-calibration-chart="1"' : '' ?>>
 <div class="page-wrap">
 
     <a href="../../view/labc_index.php" class="back-link">&larr; Volver</a>
@@ -43,14 +47,14 @@ $resultado = $resultado ?? [];
 
         <?php include '../../components/encabezado_doc.php'; ?>
 
-        <form method="POST" action="" data-lab-shared-rows="1">
+        <form method="POST" action="" data-lab-shared-rows="1" data-lab-row-types="1">
             <div class="form-body">
 
                 <div class="section-title">Datos de analisis</div>
                 <div class="field-group">
                     <div class="field">
-                        <label for="abs_blanco">Absorbancia blanco</label>
-                        <input type="number" step="any" name="abs_blanco" id="abs_blanco" value="0.00" required>
+                        <label for="abs_blanco">Blanco</label>
+                        <input type="number" step="any" name="abs_blanco" id="abs_blanco" value="0.00" data-lab-single="1" required>
                     </div>
                     <div class="field">
                         <label for="absorbancia">Absorbancia muestra</label>
@@ -106,9 +110,7 @@ $resultado = $resultado ?? [];
             <strong>CONTROL</strong>
             <input type="hidden" name="control_numero_laboratorio" value="CONTROL">
             <input type="hidden" name="control" value="0.00">
-        </td>
-        <td>
-            <input type="number" step="any" name="control_abs_blanco" aria-label="Absorbancia blanco del control" value="0.00" required>
+            <input type="hidden" name="control_abs_blanco" value="0.00">
         </td>
         <td>
             <input type="number" step="any" name="control_absorbancia" aria-label="Absorbancia muestra del control" required>
@@ -143,7 +145,11 @@ $resultado = $resultado ?? [];
             return;
         }
 
-        tbody.insertBefore(row, tbody.firstChild);
+        // La fila de "Blanco" (control compartido por lote) debe quedar primera;
+        // el CONTROL se coloca justo despues de ella si existe.
+        const firstBlanco = tbody.querySelector('tr.lab-data-row input[name="numero_laboratorio[]"][value^="__shared__"]');
+        const blancoRow = firstBlanco ? firstBlanco.closest('tr') : null;
+        tbody.insertBefore(row, blancoRow ? blancoRow.nextSibling : tbody.firstChild);
         renumberRows(tbody);
     }
 

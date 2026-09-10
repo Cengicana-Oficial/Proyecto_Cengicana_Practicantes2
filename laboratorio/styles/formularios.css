@@ -786,6 +786,159 @@ h3 {
   border-radius: var(--radius-xl);
 }
 
+/* Encabezado del conjunto: icono + titulo + descripcion, con contador a la derecha. */
+.revision-dataset-head {
+  align-items: flex-start;
+}
+
+.revision-dataset-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.revision-dataset-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-xl);
+  background: var(--green-50);
+  border: 1px solid var(--green-100);
+  color: var(--green-700);
+  font-size: 22px;
+}
+
+.revision-dataset-desc {
+  margin: 2px 0 0;
+  color: var(--text-mute);
+  font-size: var(--font-size-xs);
+}
+
+.revision-dataset-meta {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0.3rem 0.7rem;
+  color: var(--green-800);
+  font-size: 11px;
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: 0.04em;
+  background: var(--green-50);
+  border: 1px solid var(--green-100);
+  border-radius: var(--radius-pill);
+}
+
+/* Matriz compartida por todas las muestras: campos en columnas, filas en renglones. */
+.revision-matrix-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--green-100);
+  border-radius: var(--radius-2xl);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.revision-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-xs);
+}
+
+.revision-matrix th,
+.revision-matrix td {
+  padding: 0.65rem 0.9rem;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--green-100);
+}
+
+.revision-matrix thead th {
+  color: var(--text-mute);
+  font-size: 10.5px;
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  background: var(--green-50);
+  border-bottom: 1px solid var(--green-100);
+}
+
+.revision-matrix-rowhead {
+  width: 64px;
+  color: var(--green-800);
+  font-weight: var(--font-weight-extrabold);
+  background: rgba(200, 219, 168, 0.24);
+}
+
+.revision-matrix tbody td {
+  color: var(--text-main);
+  font-weight: var(--font-weight-semibold);
+}
+
+.revision-matrix tbody tr:nth-child(even) td {
+  background: rgba(248, 250, 245, 0.7);
+}
+
+.revision-matrix th.is-result,
+.revision-matrix td.is-result {
+  border-left: 1px solid var(--green-100);
+}
+
+.revision-matrix thead th.is-result {
+  color: var(--teal-600);
+}
+
+.revision-matrix tbody td.is-result {
+  color: var(--green-900);
+  font-weight: var(--font-weight-extrabold);
+}
+
+.revision-matrix tbody tr:last-child th,
+.revision-matrix tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Columna de acciones por fila (aprobar / rechazar la tupla).
+   Los botones reutilizan las clases del sistema (icon-button + row-button
+   success/danger); aqui solo se ajusta el tamano del icono y el estado activo. */
+.revision-matrix .revision-matrix-actions-col {
+  width: 96px;
+  border-left: 1px solid var(--green-100);
+}
+
+.revision-matrix .revision-row-actions {
+  display: inline-flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.revision-matrix .revision-row-btn .material-symbols-outlined {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.revision-matrix .revision-row-btn.success[aria-pressed="true"] {
+  --btn-bg: var(--teal-100);
+  --btn-border: var(--teal-300);
+  --btn-fg: var(--teal-800);
+}
+
+.revision-matrix .revision-row-btn.danger[aria-pressed="true"] {
+  --btn-bg: var(--tertiary-100);
+  --btn-border: var(--tertiary-300);
+  --btn-fg: var(--tertiary-700);
+}
+
+.revision-matrix tbody tr.is-fila-aprobada td {
+  background: var(--teal-50);
+}
+
+.revision-matrix tbody tr.is-fila-rechazada td {
+  background: var(--tertiary-50);
+}
+
 .revision-dataset {
   display: grid;
   gap: var(--space-3);

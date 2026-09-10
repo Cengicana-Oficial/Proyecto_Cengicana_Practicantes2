@@ -356,9 +356,22 @@
     }
   }
 
+  function firstRealLoteValue(select) {
+    const option = Array.from(select.options).find((opt) => opt.value
+      && opt.value.indexOf('__rowtype__:') !== 0
+      && opt.value.indexOf('__shared__:') !== 0);
+    return option ? option.value : '';
+  }
+
   function laboratorioKey(row) {
     const lote = getLoteSelect(row)?.value || '';
-    const numero = row.querySelector('select[name="numero_laboratorio[]"]')?.value || '';
+    const numeroControl = row.querySelector('[name="numero_laboratorio[]"]');
+    const numero = numeroControl ? (numeroControl.value || '') : '';
+    // Las filas marcadas como "Blanco"/"Control" (numero __shared__:*) no
+    // participan en la deteccion de numero de laboratorio duplicado.
+    if (numero.indexOf('__shared__:') === 0) {
+      return '';
+    }
     return lote && numero ? `${lote}||${numero}` : '';
   }
 
@@ -641,8 +654,17 @@
     `;
   }
 
+  function calibrationChartHidden() {
+    const body = document.body;
+    return !!(body && body.dataset && body.dataset.labHideCalibrationChart === '1');
+  }
+
   function attachCalibrationChart(table) {
     if (table.dataset.calibrationChartReady === '1') {
+      return;
+    }
+
+    if (calibrationChartHidden()) {
       return;
     }
 
@@ -776,6 +798,7 @@
     groupId,
     specialOptions,
     rowDefinitions,
+    rowTypesEnabled,
     fixedLaboratorioLabel,
     fixedLaboratorioValue,
     onLoteChange,
@@ -795,6 +818,18 @@
     loteSelect.required = true;
     loteSelect.dataset.labLoteSelect = '1';
     fillLoteOptions(loteSelect, lotes, selectedLote, loteLabels || {});
+    if (rowTypesEnabled && !fixedLaboratorioLabel) {
+      if (loteSelect.options[0] && loteSelect.options[0].value === '') {
+        loteSelect.options[0].textContent = 'Lote';
+      }
+      loteSelect.dataset.realLote = selectedLote || '';
+      [['blanco', 'Blanco'], ['control', 'Control']].forEach(([type, label]) => {
+        const option = document.createElement('option');
+        option.value = `__rowtype__:${type}`;
+        option.textContent = label;
+        loteSelect.appendChild(option);
+      });
+    }
     loteCell.appendChild(loteSelect);
 
     let loteHiddenInput = null;
@@ -832,11 +867,34 @@
       labSelect = document.createElement('select');
       labSelect.name = 'numero_laboratorio[]';
       fillLaboratorioOptions(labSelect, muestras, loteSelect.value, selectedLaboratorio || '', specialOptions, muestrasUsadas);
+      if (rowTypesEnabled && labSelect.options[0] && labSelect.options[0].value === '') {
+        labSelect.options[0].textContent = 'Lote';
+      }
       labCell.appendChild(labSelect);
     }
     row.appendChild(labCell);
 
     loteSelect.addEventListener('change', () => {
+      // Opciones "Blanco"/"Control" del dropdown de la columna Lote: no cambian
+      // el lote real, solo conmutan el dropdown de "Numero de laboratorio" al
+      // valor __shared__ correspondiente y devuelven el select al lote real.
+      if (rowTypesEnabled && loteSelect.value.indexOf('__rowtype__:') === 0) {
+        const rowType = loteSelect.value.slice('__rowtype__:'.length);
+        const target = rowType === 'control'
+          ? '__shared__:control'
+          : ((specialOptions.find((opt) => opt.value !== '__shared__:control') || {}).value || '__shared__:abs_blanco');
+        if (labSelect) {
+          labSelect.value = target;
+          labSelect.dispatchEvent(new Event('change'));
+        }
+        loteSelect.value = loteSelect.dataset.realLote || firstRealLoteValue(loteSelect);
+        return;
+      }
+
+      if (rowTypesEnabled && loteSelect.value.indexOf('__shared__:') !== 0) {
+        loteSelect.dataset.realLote = loteSelect.value;
+      }
+
       if (loteHiddenInput) {
         loteHiddenInput.value = loteLabels?.[loteSelect.value] || '';
       }
@@ -852,8 +910,51 @@
       updateLaboratorioAvailability(row.parentElement);
     });
 
+    const rowTypeSharedNames = rowTypesEnabled
+      ? specialOptions
+          .filter((opt) => opt.value.indexOf('__shared__:') === 0 && opt.value !== '__shared__:control')
+          .map((opt) => opt.value.slice('__shared__:'.length))
+      : [];
+
+    // Conmuta que campo de la primera celda de datos esta activo segun el
+    // tipo de fila elegido en "Numero de laboratorio":
+    //   - "Blanco" (__shared__:abs_blanco) -> input abs_blanco[] editable
+    //   - "Control" (__shared__:control)   -> sin campo editable (solo marca)
+    //   - "Lote" / numero real             -> input absorbancia[] editable
+    function applyRowType() {
+      if (!rowTypesEnabled || Boolean(fixedLaboratorioLabel)) {
+        return;
+      }
+
+      const numeroControl = row.querySelector('[name="numero_laboratorio[]"]');
+      const numeroValue = numeroControl ? (numeroControl.value || '') : '';
+      const isShared = numeroValue.indexOf('__shared__:') === 0;
+      const sharedKey = isShared ? numeroValue.slice('__shared__:'.length) : '';
+
+      row.querySelectorAll('[data-row-type-shared]').forEach((input) => {
+        if (input.dataset.rowTypeShared === sharedKey) {
+          input.type = 'number';
+          input.required = true;
+        } else {
+          input.type = 'hidden';
+          input.required = false;
+          input.value = '';
+        }
+      });
+
+      const absInput = row.querySelector('[data-base-name="absorbancia"]');
+      if (absInput) {
+        absInput.type = isShared ? 'hidden' : 'number';
+        absInput.required = !isShared;
+        if (isShared) {
+          absInput.value = '';
+        }
+      }
+    }
+
     if (labSelect) {
       labSelect.addEventListener('change', () => {
+        applyRowType();
         updateLaboratorioAvailability(row.parentElement);
       });
     }
@@ -881,6 +982,27 @@
       }
       row.appendChild(cell);
     });
+
+    // Filas con dropdown de tipo: agrega los inputs compartidos (p. ej.
+    // abs_blanco[]) ocultos en la primera celda de datos para mantener
+    // alineados los arreglos POST sin importar el orden de las filas.
+    if (rowTypesEnabled && !Boolean(fixedLaboratorioLabel) && rowTypeSharedNames.length) {
+      const cells = row.querySelectorAll('td');
+      const firstDataCell = cells[3] || cells[cells.length - 1] || row;
+      rowTypeSharedNames.forEach((name) => {
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = `${name}[]`;
+        hidden.value = '';
+        hidden.step = 'any';
+        hidden.dataset.baseName = name;
+        hidden.dataset.rowIndex = String(rowIndex);
+        hidden.dataset.rowTypeShared = name;
+        firstDataCell.appendChild(hidden);
+      });
+    }
+
+    applyRowType();
 
     const actionCell = document.createElement('td');
     const removeButton = document.createElement('button');
@@ -933,7 +1055,22 @@
       label: getControlLabel(control),
       template: control.cloneNode(true),
     }));
-    const laboratorioSpecialOptions = [];
+    // Dropdown de tipo de fila (Lote / Blanco / Control) en las columnas
+    // "Lote" y "Numero de laboratorio". Se activa solo cuando el formulario
+    // lo pide explicitamente (data-lab-row-types="1") y existen campos
+    // compartidos por lote (data-lab-single="1"), hoy solo suelos.fosforo.
+    const rowTypesEnabled = form.dataset.labRowTypes === '1'
+      && useSharedRows
+      && sharedDefinitions.length > 0;
+    const laboratorioSpecialOptions = rowTypesEnabled
+      ? [
+          ...sharedDefinitions.map((definition) => ({
+            value: `__shared__:${definition.name}`,
+            label: definition.label,
+          })),
+          { value: '__shared__:control', label: 'Control' },
+        ]
+      : [];
     const fixedSharedRows = useSharedRows ? sharedRowDefinitions(sharedDefinitions) : [];
     const columnDefinitions = definitions;
 
@@ -989,6 +1126,7 @@
           groupId,
           specialOptions: laboratorioSpecialOptions,
           rowDefinitions: [sharedRow.definition],
+          rowTypesEnabled,
           fixedLaboratorioLabel: sharedRow.label,
           fixedLaboratorioValue: sharedRow.value,
           onLoteChange: replaceLoteGroup,
@@ -998,7 +1136,7 @@
       laboratorioValues(
         captureState.muestras,
         selectedLote,
-        laboratorioSpecialOptions,
+        [],
         captureState.muestrasUsadas
       ).forEach((numeroLaboratorio) => {
         rows.push(createRow({
@@ -1014,6 +1152,7 @@
           groupId,
           specialOptions: laboratorioSpecialOptions,
           rowDefinitions: definitions,
+          rowTypesEnabled,
           onLoteChange: replaceLoteGroup,
         }));
       });
@@ -1073,6 +1212,7 @@
         groupId: lastRow?.dataset.loteGroup || '',
         specialOptions: laboratorioSpecialOptions,
         rowDefinitions: definitions,
+        rowTypesEnabled,
         onLoteChange: replaceLoteGroup,
       }));
       reindexRows(tbody);

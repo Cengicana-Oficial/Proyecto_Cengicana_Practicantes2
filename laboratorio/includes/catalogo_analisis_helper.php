@@ -449,8 +449,35 @@ if (!function_exists('labCatalogoAnalisisGuardar')) {
             throw new InvalidArgumentException('El nombre del análisis no puede estar vacío.');
         }
 
+        $metodo = trim((string) ($metadatos['metodo'] ?? '')) ?: null;
+        $norma = trim((string) ($metadatos['norma'] ?? '')) ?: null;
+        $equipoDefault = trim((string) ($metadatos['equipo_default'] ?? '')) ?: null;
+        $unidad = trim((string) ($metadatos['unidad'] ?? '')) ?: null;
+        $limiteMin = $metadatos['limite_min'] ?? null;
+        $limiteMax = $metadatos['limite_max'] ?? null;
+        $tiempoEstimado = $metadatos['tiempo_estimado_min'] ?? null;
+
         if ($idTipo === null || $idTipo <= 0) {
-            throw new InvalidArgumentException('La creación de nuevos tipos de análisis todavía está pendiente.');
+            $stmt = $conexion->prepare("
+                INSERT INTO tipo_analisis
+                    (id_tipo_muestra, nombre, activo, metodo, norma, equipo_default, unidad,
+                     limite_min, limite_max, tiempo_estimado_min)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([
+                $idTipoMuestra,
+                $nombre,
+                $activo,
+                $metodo,
+                $norma,
+                $equipoDefault,
+                $unidad,
+                $limiteMin,
+                $limiteMax,
+                $tiempoEstimado,
+            ]);
+
+            return (int) $conexion->lastInsertId();
         }
 
         $stmt = $conexion->prepare("
@@ -464,13 +491,13 @@ if (!function_exists('labCatalogoAnalisisGuardar')) {
             $idTipoMuestra,
             $nombre,
             $activo,
-            trim((string) ($metadatos['metodo'] ?? '')) ?: null,
-            trim((string) ($metadatos['norma'] ?? '')) ?: null,
-            trim((string) ($metadatos['equipo_default'] ?? '')) ?: null,
-            trim((string) ($metadatos['unidad'] ?? '')) ?: null,
-            $metadatos['limite_min'] ?? null,
-            $metadatos['limite_max'] ?? null,
-            $metadatos['tiempo_estimado_min'] ?? null,
+            $metodo,
+            $norma,
+            $equipoDefault,
+            $unidad,
+            $limiteMin,
+            $limiteMax,
+            $tiempoEstimado,
             $idTipo,
         ]);
 

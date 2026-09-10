@@ -2,6 +2,7 @@
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/includes/catalogo_analisis_helper.php';
+require_once __DIR__ . '/includes/catalogo_campos_muestra_helper.php';
 require_once __DIR__ . '/includes/shell_sidebar.php';
 
 lab_require_permission('laboratorio.catalogo_analisis.ver');
@@ -70,17 +71,60 @@ $errorMensaje = '';
 $schemaMensaje = '';
 $msg = trim((string) ($_GET['msg'] ?? ''));
 $mensajes = [
+    'created' => 'El análisis se creó correctamente.',
     'updated' => 'El análisis se actualizó correctamente.',
     'deleted' => 'El análisis se desactivó correctamente.',
     'activated' => 'El análisis se reactivó correctamente.',
+    'campo_created' => 'El campo se creó correctamente.',
+    'campo_updated' => 'El campo se actualizó correctamente.',
+    'campo_deleted' => 'El campo se eliminó correctamente.',
 ];
 $mensaje = $mensajes[$msg] ?? '';
+
+$tabsValidos = ['analisis', 'campos'];
+$tab = in_array((string) ($_GET['tab'] ?? ''), $tabsValidos, true) ? (string) $_GET['tab'] : 'analisis';
 
 if (empty($_SESSION['catalogo_analisis_csrf'])) {
     $_SESSION['catalogo_analisis_csrf'] = bin2hex(random_bytes(32));
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['seccion'] ?? 'analisis') === 'campos') {
+    lab_require_permission('laboratorio.analisis.editar');
+    $tab = 'campos';
+    $campoTipoSeleccionado = (int) ($_POST['id_tipo_muestra'] ?? 0);
+    try {
+        $token = (string) ($_POST['csrf_token'] ?? '');
+        if (!hash_equals((string) $_SESSION['catalogo_analisis_csrf'], $token)) {
+            throw new RuntimeException('La sesión del editor expiró. Recarga la página e inténtalo nuevamente.');
+        }
+
+        $accion = (string) ($_POST['accion'] ?? 'guardar');
+        if ($accion === 'eliminar') {
+            labCamposMuestraEliminar($conexion, (int) ($_POST['id_campo'] ?? 0));
+            header('Location: catalogo_analisis.php?tab=campos&tipo=' . $campoTipoSeleccionado . '&msg=campo_deleted');
+            exit;
+        }
+
+        $idCampo = (int) ($_POST['id_campo'] ?? 0);
+        $esNuevo = $idCampo <= 0;
+        labCamposMuestraGuardar($conexion, $esNuevo ? null : $idCampo, $campoTipoSeleccionado, [
+            'nombre' => $_POST['nombre'] ?? '',
+            'etiqueta' => $_POST['etiqueta'] ?? '',
+            'tipo_dato' => $_POST['tipo_dato'] ?? 'texto',
+            'unidad' => $_POST['unidad'] ?? '',
+            'obligatorio' => isset($_POST['obligatorio']),
+            'orden' => $_POST['orden'] ?? '0',
+            'activo' => isset($_POST['activo']),
+            'opciones' => $_POST['opciones'] ?? '',
+        ]);
+        header('Location: catalogo_analisis.php?tab=campos&tipo=' . $campoTipoSeleccionado . '&msg=' . ($esNuevo ? 'campo_created' : 'campo_updated'));
+        exit;
+    } catch (Throwable $e) {
+        $errorMensaje = $e->getMessage();
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['seccion'] ?? 'analisis') !== 'campos') {
     lab_require_permission('laboratorio.analisis.editar');
     try {
         $token = (string) ($_POST['csrf_token'] ?? '');
@@ -92,7 +136,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $idTipoMuestra = (int) ($_POST['id_tipo_muestra'] ?? 0);
         $nombre = trim((string) ($_POST['nombre'] ?? ''));
         $activo = isset($_POST['activo']) ? 1 : 0;
-        if ($idTipo <= 0 || $idTipoMuestra <= 0 || $nombre === '') {
+        $esNuevoAnalisis = $idTipo <= 0;
+        if ($idTipoMuestra <= 0 || $nombre === '') {
             throw new RuntimeException('Completa el tipo de muestra y el nombre antes de guardar.');
         }
 
@@ -118,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('El tiempo estimado debe ser un número entero positivo.');
         }
 
-        labCatalogoAnalisisGuardar($conexion, $idTipo, $idTipoMuestra, $nombre, $activo, [
+        labCatalogoAnalisisGuardar($conexion, $esNuevoAnalisis ? null : $idTipo, $idTipoMuestra, $nombre, $activo, [
             'metodo' => $_POST['metodo'] ?? '',
             'norma' => $_POST['norma'] ?? '',
             'equipo_default' => $_POST['equipo_default'] ?? '',
@@ -127,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'limite_max' => $limiteMax,
             'tiempo_estimado_min' => $tiempo,
         ]);
-        header('Location: catalogo_analisis.php?msg=updated');
+        header('Location: catalogo_analisis.php?msg=' . ($esNuevoAnalisis ? 'created' : 'updated'));
         exit;
     } catch (Throwable $e) {
         $errorMensaje = $e->getMessage();
@@ -136,12 +181,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 try {
     labCatalogoAnalisisAsegurarEsquema($conexion);
+    labCamposMuestraAsegurarEsquema($conexion);
     $tiposMuestra = labCatalogoAnalisisTipoMuestraOptions($conexion);
     $filas = labCatalogoAnalisisFilas($conexion, false);
 } catch (Throwable $e) {
     $schemaMensaje = $e->getMessage();
     $tiposMuestra = [];
     $filas = [];
+}
+
+$camposTiposDato = labCamposMuestraTiposDato();
+$campoTipoIds = array_map(static fn(array $tipo): int => (int) $tipo['id_tipo'], $tiposMuestra);
+$campoTipoActual = (int) ($_GET['tipo'] ?? ($campoTipoSeleccionado ?? 0));
+if ($campoTipoActual <= 0 || !in_array($campoTipoActual, $campoTipoIds, true)) {
+    $campoTipoActual = $campoTipoIds[0] ?? 0;
+}
+
+$campos = [];
+$camposJs = [];
+if ($tab === 'campos' && $campoTipoActual > 0 && $schemaMensaje === '') {
+    try {
+        $campos = labCamposMuestraListar($conexion, $campoTipoActual);
+    } catch (Throwable $e) {
+        $schemaMensaje = $e->getMessage();
+        $campos = [];
+    }
+    foreach ($campos as $campo) {
+        $camposJs[(int) $campo['id_campo']] = [
+            'id_campo' => (int) $campo['id_campo'],
+            'nombre' => (string) $campo['nombre'],
+            'etiqueta' => (string) $campo['etiqueta'],
+            'tipo_dato' => (string) $campo['tipo_dato'],
+            'unidad' => (string) ($campo['unidad'] ?? ''),
+            'obligatorio' => (int) ($campo['obligatorio'] ?? 0) === 1,
+            'orden' => (int) ($campo['orden'] ?? 0),
+            'activo' => (int) ($campo['activo'] ?? 1) === 1,
+            'opciones' => implode("\n", labCamposMuestraDecodificarOpciones($campo['opciones'] ?? '')),
+        ];
+    }
 }
 
 $catalogoJs = [];
@@ -174,10 +251,10 @@ foreach ($filas as $fila) {
 <?php lab_shell_open('catalogo_analisis.php', 'Control de análisis', 'Catálogo maestro de métodos, equipos y límites'); ?>
     <div class="analysis-control-page">
         <nav class="analysis-control-tabs" aria-label="Secciones del catálogo">
-            <button type="button" class="analysis-control-tab is-active">Análisis</button>
+            <a href="catalogo_analisis.php?tab=analisis" class="analysis-control-tab<?= $tab === 'analisis' ? ' is-active' : '' ?>"<?= $tab === 'analisis' ? ' aria-current="page"' : '' ?>>Análisis</a>
             <button type="button" class="analysis-control-tab" disabled title="Catálogo pendiente de integración">Equipos</button>
             <button type="button" class="analysis-control-tab" disabled title="Catálogo pendiente de integración">Métodos analíticos</button>
-            <button type="button" class="analysis-control-tab" disabled title="Configuración pendiente de integración">Campos por tipo de muestra</button>
+            <a href="catalogo_analisis.php?tab=campos" class="analysis-control-tab<?= $tab === 'campos' ? ' is-active' : '' ?>"<?= $tab === 'campos' ? ' aria-current="page"' : '' ?>>Campos por tipo de muestra</a>
             <button type="button" class="analysis-control-tab" disabled title="Auditoría pendiente de integración">Auditoría</button>
         </nav>
 
@@ -191,6 +268,7 @@ foreach ($filas as $fila) {
             <div class="analysis-control-message is-warning"><?= catalogoAnalisisSvg('info') ?><span><?= catalogoAnalisisE($schemaMensaje) ?></span></div>
         <?php endif; ?>
 
+        <?php if ($tab === 'analisis'): ?>
         <section class="analysis-control-alert">
             <?= catalogoAnalisisSvg('info') ?>
             <div><strong>Catálogo maestro:</strong> cada análisis vincula método, equipo por defecto, unidad y rango esperado. Estos datos permiten centralizar la configuración técnica sin modificar cada formulario individual.</div>
@@ -214,6 +292,9 @@ foreach ($filas as $fila) {
                             <?php endforeach; ?>
                         </select>
                     </label>
+                    <?php if ($canEdit): ?>
+                        <button type="button" class="analysis-control-button is-primary" data-new-analysis><?= catalogoAnalisisSvg('guardar') ?> Nuevo análisis</button>
+                    <?php endif; ?>
                 </div>
             </header>
 
@@ -257,6 +338,89 @@ foreach ($filas as $fila) {
                 </table>
             </div>
         </section>
+        <?php endif; ?>
+
+        <?php if ($tab === 'campos'): ?>
+        <section class="analysis-control-alert">
+            <?= catalogoAnalisisSvg('info') ?>
+            <div><strong>Campos por tipo de muestra:</strong> define los datos adicionales que se solicitan para cada tipo de muestra (por ejemplo profundidad, variedad o textura). El <em>nombre técnico</em> identifica el campo internamente y no puede repetirse dentro del mismo tipo de muestra.</div>
+        </section>
+
+        <section class="analysis-control-card">
+            <header class="analysis-control-toolbar">
+                <h2>Campos personalizados</h2>
+                <div class="analysis-control-filters">
+                    <label>
+                        <span class="sr-only">Tipo de muestra</span>
+                        <select id="campoTypeSelect"<?= empty($tiposMuestra) ? ' disabled' : '' ?>>
+                            <?php if (empty($tiposMuestra)): ?>
+                                <option value="0">Sin tipos de muestra</option>
+                            <?php else: ?>
+                                <?php foreach ($tiposMuestra as $tipo): ?>
+                                    <option value="<?= (int) $tipo['id_tipo'] ?>"<?= (int) $tipo['id_tipo'] === $campoTipoActual ? ' selected' : '' ?>>
+                                        <?= catalogoAnalisisE($tipo['nombre'] !== '' ? $tipo['nombre'] : $tipo['label']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </select>
+                    </label>
+                    <?php if ($canEdit && !empty($tiposMuestra)): ?>
+                        <button type="button" class="analysis-control-button is-primary" data-new-campo><?= catalogoAnalisisSvg('guardar') ?> Nuevo campo</button>
+                    <?php endif; ?>
+                </div>
+            </header>
+
+            <div class="analysis-control-table-wrap">
+                <table class="analysis-control-table">
+                    <thead><tr><th>Orden</th><th>Etiqueta</th><th>Nombre técnico</th><th>Tipo de dato</th><th>Unidad</th><th>Obligatorio</th><th>Estado</th><th><span class="sr-only">Acciones</span></th></tr></thead>
+                    <tbody>
+                        <?php if (empty($tiposMuestra)): ?>
+                            <tr class="analysis-control-empty"><td colspan="8">No hay tipos de muestra registrados. Crea primero un tipo de muestra en su catálogo.</td></tr>
+                        <?php elseif (empty($campos)): ?>
+                            <tr class="analysis-control-empty"><td colspan="8">Este tipo de muestra todavía no tiene campos personalizados.</td></tr>
+                        <?php else: ?>
+                            <?php foreach ($campos as $campo): ?>
+                                <?php $campoActivo = (int) ($campo['activo'] ?? 1) === 1; ?>
+                                <tr class="analysis-control-row<?= $campoActivo ? '' : ' is-inactive' ?>">
+                                    <td class="analysis-control-mono"><?= (int) $campo['orden'] ?></td>
+                                    <td>
+                                        <strong><?= catalogoAnalisisE($campo['etiqueta']) ?></strong>
+                                        <?php if ((string) $campo['tipo_dato'] === 'lista'): ?>
+                                            <small><?= catalogoAnalisisE(implode(' · ', labCamposMuestraDecodificarOpciones($campo['opciones'] ?? ''))) ?></small>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="analysis-control-mono"><?= catalogoAnalisisE($campo['nombre']) ?></td>
+                                    <td><span class="analysis-control-chip"><?= catalogoAnalisisE(labCamposMuestraTipoDatoLabel((string) $campo['tipo_dato'])) ?></span></td>
+                                    <td class="analysis-control-mono"><?= catalogoAnalisisE(($campo['unidad'] ?? '') !== '' ? $campo['unidad'] : '—') ?></td>
+                                    <td><?= (int) ($campo['obligatorio'] ?? 0) === 1 ? 'Sí' : 'No' ?></td>
+                                    <td>
+                                        <?php if ($campoActivo): ?>
+                                            Activo
+                                        <?php else: ?>
+                                            <span class="analysis-control-inactive">Inactivo</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="analysis-control-actions">
+                                        <?php if ($canEdit): ?>
+                                            <button type="button" class="analysis-control-button" data-edit-campo="<?= (int) $campo['id_campo'] ?>"><?= catalogoAnalisisSvg('editar') ?> Editar</button>
+                                            <form method="post" class="analysis-control-inline-form" onsubmit="return confirm('¿Eliminar definitivamente este campo personalizado?');">
+                                                <input type="hidden" name="seccion" value="campos">
+                                                <input type="hidden" name="accion" value="eliminar">
+                                                <input type="hidden" name="csrf_token" value="<?= catalogoAnalisisE($_SESSION['catalogo_analisis_csrf']) ?>">
+                                                <input type="hidden" name="id_tipo_muestra" value="<?= $campoTipoActual ?>">
+                                                <input type="hidden" name="id_campo" value="<?= (int) $campo['id_campo'] ?>">
+                                                <button type="submit" class="analysis-control-button"><?= catalogoAnalisisSvg('cerrar') ?> Eliminar</button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <?php endif; ?>
     </div>
 
     <?php if ($canEdit): ?>
@@ -326,6 +490,68 @@ foreach ($filas as $fila) {
         </div>
     <?php endif; ?>
 
+    <?php if ($canEdit && $tab === 'campos' && !empty($tiposMuestra)): ?>
+        <div class="analysis-control-modal" id="campoModal" hidden>
+            <div class="analysis-control-dialog" role="dialog" aria-modal="true" aria-labelledby="campoModalTitle">
+                <header class="analysis-control-modal-head">
+                    <h2 id="campoModalTitle">Nuevo campo</h2>
+                    <button type="button" class="analysis-control-close" data-close-campo aria-label="Cerrar"><?= catalogoAnalisisSvg('cerrar') ?></button>
+                </header>
+                <form method="post" id="campoForm">
+                    <input type="hidden" name="seccion" value="campos">
+                    <input type="hidden" name="accion" value="guardar">
+                    <input type="hidden" name="csrf_token" value="<?= catalogoAnalisisE($_SESSION['catalogo_analisis_csrf']) ?>">
+                    <input type="hidden" name="id_tipo_muestra" value="<?= $campoTipoActual ?>">
+                    <input type="hidden" name="id_campo" id="campoId">
+                    <div class="analysis-control-modal-body">
+                        <div class="analysis-control-form-grid">
+                            <label class="analysis-control-field">
+                                <span>Etiqueta visible</span>
+                                <input type="text" name="etiqueta" id="campoEtiqueta" maxlength="150" required placeholder="Ej. Profundidad de muestreo">
+                            </label>
+                            <label class="analysis-control-field">
+                                <span>Nombre técnico</span>
+                                <input type="text" name="nombre" id="campoNombre" maxlength="80" placeholder="Se genera desde la etiqueta" pattern="[A-Za-z][A-Za-z0-9_]*">
+                            </label>
+                            <label class="analysis-control-field">
+                                <span>Tipo de dato</span>
+                                <select name="tipo_dato" id="campoTipoDato" required>
+                                    <?php foreach ($camposTiposDato as $clave => $etiquetaTipo): ?>
+                                        <option value="<?= catalogoAnalisisE($clave) ?>"><?= catalogoAnalisisE($etiquetaTipo) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </label>
+                            <label class="analysis-control-field">
+                                <span>Unidad (opcional)</span>
+                                <input type="text" name="unidad" id="campoUnidad" maxlength="40" placeholder="Ej. cm">
+                            </label>
+                            <label class="analysis-control-field">
+                                <span>Orden</span>
+                                <input type="number" name="orden" id="campoOrden" min="0" step="1" value="0">
+                            </label>
+                            <label class="analysis-control-field analysis-control-field-wide" id="campoOpcionesWrap" hidden>
+                                <span>Opciones de la lista (una por línea)</span>
+                                <textarea name="opciones" id="campoOpciones" rows="4" placeholder="Opción 1&#10;Opción 2"></textarea>
+                            </label>
+                            <label class="analysis-control-check">
+                                <input type="checkbox" name="obligatorio" id="campoObligatorio" value="1">
+                                <span><strong>Campo obligatorio</strong><small>Debe completarse al registrar la muestra.</small></span>
+                            </label>
+                            <label class="analysis-control-check">
+                                <input type="checkbox" name="activo" id="campoActivo" value="1" checked>
+                                <span><strong>Campo activo</strong><small>Visible en los formularios de este tipo de muestra.</small></span>
+                            </label>
+                        </div>
+                    </div>
+                    <footer class="analysis-control-modal-foot">
+                        <button type="button" class="analysis-control-button" data-close-campo>Cancelar</button>
+                        <button type="submit" class="analysis-control-button is-primary"><?= catalogoAnalisisSvg('guardar') ?> Guardar campo</button>
+                    </footer>
+                </form>
+            </div>
+        </div>
+    <?php endif; ?>
+
 <?php lab_shell_content_close(); ?>
 <script>
 (function () {
@@ -358,20 +584,26 @@ foreach ($filas as $fila) {
     }
 
     function openEditor(id) {
-        if (!modal || !catalog[id]) return;
-        var item = catalog[id];
-        setValue('analysisId', item.id_tipo);
-        setValue('analysisSampleType', item.id_tipo_muestra);
-        setValue('analysisName', item.nombre);
-        setValue('analysisMethod', item.metodo);
-        setValue('analysisStandard', item.norma);
-        setValue('analysisEquipment', item.equipo_default);
-        setValue('analysisUnit', item.unidad);
-        setValue('analysisMin', item.limite_min);
-        setValue('analysisMax', item.limite_max);
-        setValue('analysisTime', item.tiempo_estimado_min);
-        document.getElementById('analysisActive').checked = !!item.activo;
-        document.getElementById('analysisModalTitle').textContent = 'Editar análisis — ' + item.nombre;
+        if (!modal) return;
+        var item = id ? catalog[id] : null;
+        if (id && !item) return;
+        setValue('analysisId', item ? item.id_tipo : '');
+        if (item) {
+            setValue('analysisSampleType', item.id_tipo_muestra);
+        } else {
+            var sampleType = document.getElementById('analysisSampleType');
+            if (sampleType) sampleType.selectedIndex = 0;
+        }
+        setValue('analysisName', item ? item.nombre : '');
+        setValue('analysisMethod', item ? item.metodo : '');
+        setValue('analysisStandard', item ? item.norma : '');
+        setValue('analysisEquipment', item ? item.equipo_default : '');
+        setValue('analysisUnit', item ? item.unidad : '');
+        setValue('analysisMin', item ? item.limite_min : '');
+        setValue('analysisMax', item ? item.limite_max : '');
+        setValue('analysisTime', item ? item.tiempo_estimado_min : '');
+        document.getElementById('analysisActive').checked = item ? !!item.activo : true;
+        document.getElementById('analysisModalTitle').textContent = item ? ('Editar análisis — ' + item.nombre) : 'Nuevo análisis';
         modal.hidden = false;
         document.body.classList.add('analysis-control-modal-open');
         document.getElementById('analysisName').focus();
@@ -386,12 +618,72 @@ foreach ($filas as $fila) {
     if (filter) filter.addEventListener('change', applyFilters);
     if (search) search.addEventListener('input', applyFilters);
     document.addEventListener('click', function (event) {
+        if (event.target.closest('[data-new-analysis]')) openEditor(null);
         var edit = event.target.closest('[data-edit-analysis]');
         if (edit) openEditor(edit.dataset.editAnalysis);
         if (event.target.closest('[data-close-analysis]') || event.target === modal) closeEditor();
     });
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape' && modal && !modal.hidden) closeEditor();
+    });
+
+    // ---- Campos por tipo de muestra -----------------------------------
+    var campoSelect = document.getElementById('campoTypeSelect');
+    if (campoSelect) {
+        campoSelect.addEventListener('change', function () {
+            window.location.href = 'catalogo_analisis.php?tab=campos&tipo=' + encodeURIComponent(campoSelect.value);
+        });
+    }
+
+    var campoModal = document.getElementById('campoModal');
+    var campoCatalog = <?= json_encode($camposJs, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+    function toggleCampoOpciones() {
+        var tipo = document.getElementById('campoTipoDato');
+        var wrap = document.getElementById('campoOpcionesWrap');
+        var field = document.getElementById('campoOpciones');
+        if (!tipo || !wrap) return;
+        var esLista = tipo.value === 'lista';
+        wrap.hidden = !esLista;
+        if (field) field.required = esLista;
+    }
+
+    function openCampoEditor(id) {
+        if (!campoModal) return;
+        var item = id ? campoCatalog[id] : null;
+        setValue('campoId', item ? item.id_campo : '');
+        setValue('campoEtiqueta', item ? item.etiqueta : '');
+        setValue('campoNombre', item ? item.nombre : '');
+        setValue('campoTipoDato', item ? item.tipo_dato : 'texto');
+        setValue('campoUnidad', item ? item.unidad : '');
+        setValue('campoOrden', item ? item.orden : '0');
+        setValue('campoOpciones', item ? item.opciones : '');
+        document.getElementById('campoObligatorio').checked = item ? !!item.obligatorio : false;
+        document.getElementById('campoActivo').checked = item ? !!item.activo : true;
+        document.getElementById('campoModalTitle').textContent = item ? ('Editar campo — ' + item.etiqueta) : 'Nuevo campo';
+        toggleCampoOpciones();
+        campoModal.hidden = false;
+        document.body.classList.add('analysis-control-modal-open');
+        document.getElementById('campoEtiqueta').focus();
+    }
+
+    function closeCampoEditor() {
+        if (!campoModal) return;
+        campoModal.hidden = true;
+        document.body.classList.remove('analysis-control-modal-open');
+    }
+
+    var campoTipoDato = document.getElementById('campoTipoDato');
+    if (campoTipoDato) campoTipoDato.addEventListener('change', toggleCampoOpciones);
+
+    document.addEventListener('click', function (event) {
+        if (event.target.closest('[data-new-campo]')) openCampoEditor(null);
+        var editCampo = event.target.closest('[data-edit-campo]');
+        if (editCampo) openCampoEditor(editCampo.dataset.editCampo);
+        if (event.target.closest('[data-close-campo]') || event.target === campoModal) closeCampoEditor();
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && campoModal && !campoModal.hidden) closeCampoEditor();
     });
 })();
 </script>

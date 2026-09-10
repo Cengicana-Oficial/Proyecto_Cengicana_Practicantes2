@@ -45,6 +45,8 @@
 
 .analysis-control-tab {
   position: relative;
+  display: inline-flex;
+  align-items: center;
   min-height: 38px;
   padding: 0 15px;
   border: 0;
@@ -54,7 +56,12 @@
   font-size: 11px;
   font-weight: 650;
   white-space: nowrap;
+  text-decoration: none;
   cursor: pointer;
+}
+
+a.analysis-control-tab:hover {
+  color: var(--analysis-green-deep);
 }
 
 .analysis-control-tab::after {
@@ -431,6 +438,32 @@
 .analysis-control-field input,
 .analysis-control-field select {
   padding: 0 10px;
+}
+
+.analysis-control-field-wide {
+  grid-column: 1 / -1;
+}
+
+.analysis-control-field textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 8px 10px;
+  border: 1px solid #ccd2d5;
+  border-radius: 7px;
+  color: var(--analysis-ink);
+  background: #fff;
+  font: inherit;
+  font-size: 11.5px;
+  resize: vertical;
+}
+
+.analysis-control-field textarea:focus {
+  border-color: var(--analysis-green);
+  outline: 3px solid rgba(115, 188, 37, 0.14);
+}
+
+.analysis-control-inline-form {
+  display: inline;
 }
 
 .analysis-control-check {

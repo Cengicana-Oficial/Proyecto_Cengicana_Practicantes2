@@ -87,6 +87,118 @@ function revisionCamposLista(array $tabla, array $fila): array
     ];
 }
 
+/**
+ * Convierte una tabla de datos del formulario en una matriz lista para render,
+ * con el mismo formato para todas las muestras: cada campo capturado es una
+ * columna y cada fila registrada es un renglon. Las columnas de resultado se
+ * ubican al final. Solo se incluyen columnas que tengan al menos un dato real.
+ * Siempre se antepone la columna "Numero de laboratorio".
+ */
+function revisionMatrizTabla(array $tabla, string $numeroLaboratorio = ''): array
+{
+    $pk = $tabla['primary_key'] ?? null;
+    $ocultos = [
+        $pk,
+        'id_formulario',
+        'id_encabezado',
+        'numero_laboratorio',
+        'numero_muestra',
+        'no_lab',
+        'lote',
+        'codigo_lote',
+    ];
+
+    $filas = array_values($tabla['filas'] ?? []);
+    $totalFilas = count($filas);
+
+    $capturadas = [];
+    $resultado = [];
+
+    foreach (($tabla['columnas'] ?? []) as $columna) {
+        $nombre = (string) ($columna['Field'] ?? '');
+        if ($nombre === '' || in_array($nombre, $ocultos, true)) {
+            continue;
+        }
+
+        $valores = [];
+        $tieneDato = false;
+        foreach ($filas as $fila) {
+            $valor = (is_array($fila) && array_key_exists($nombre, $fila))
+                ? revisionFormatoValor($fila[$nombre])
+                : '-';
+            if ($valor !== '-') {
+                $tieneDato = true;
+            }
+            $valores[] = $valor === '-' ? '—' : $valor;
+        }
+
+        if (!$tieneDato) {
+            continue;
+        }
+
+        $esResultado = labFormularioRevisionPrincipalCampoOrden($nombre) < 9;
+        $columnaDef = [
+            'etiqueta' => labFormularioRevisionEtiquetaCampo($nombre),
+            'tipo' => $esResultado ? 'resultado' : 'capturado',
+            'valores' => $valores,
+        ];
+
+        if ($esResultado) {
+            $resultado[] = $columnaDef;
+        } else {
+            $capturadas[] = $columnaDef;
+        }
+    }
+
+    $vacio = ($capturadas === [] && $resultado === []) || $totalFilas === 0;
+
+    // Columna fija de numero de laboratorio, siempre como primera columna.
+    $numeroLaboratorio = trim($numeroLaboratorio);
+    $valoresLaboratorio = [];
+    foreach ($filas as $fila) {
+        $valor = (is_array($fila) && array_key_exists('numero_laboratorio', $fila))
+            ? revisionFormatoValor($fila['numero_laboratorio'])
+            : '-';
+        if ($valor === '-') {
+            $valor = $numeroLaboratorio !== '' ? $numeroLaboratorio : '—';
+        }
+        $valoresLaboratorio[] = $valor;
+    }
+
+    $columnaLaboratorio = [
+        'etiqueta' => 'Numero de laboratorio',
+        'tipo' => 'capturado',
+        'valores' => $valoresLaboratorio,
+    ];
+
+    // Numero de laboratorio, luego capturas y resultados al final.
+    $columnas = array_merge([$columnaLaboratorio], $capturadas, $resultado);
+
+    $filasMatriz = [];
+    for ($i = 0; $i < $totalFilas; $i++) {
+        $celdas = [];
+        foreach ($columnas as $columnaDef) {
+            $celdas[] = [
+                'valor' => $columnaDef['valores'][$i] ?? '—',
+                'tipo' => $columnaDef['tipo'],
+            ];
+        }
+        $filasMatriz[] = [
+            'numero' => $i + 1,
+            'celdas' => $celdas,
+        ];
+    }
+
+    return [
+        'total_filas' => $totalFilas,
+        'vacio' => $vacio,
+        'columnas' => array_map(static function (array $columnaDef): array {
+            return ['etiqueta' => $columnaDef['etiqueta'], 'tipo' => $columnaDef['tipo']];
+        }, $columnas),
+        'filas' => $filasMatriz,
+    ];
+}
+
 $formulariosRevision = $formulariosRevision ?? [];
 $puedeAprobarRevision = (bool) ($puedeAprobarRevision ?? false);
 $puedeGuardarErrores = (bool) ($puedeGuardarErrores ?? false);
@@ -98,7 +210,7 @@ $subtituloRevision = 'Lote ' . $codigoLoteRevision
     . ' - ' . ($resumenRango['fin'] ?? '-');
 
 lab_shell_head('Revision de formulario', $subtituloRevision, [
-    '../styles/formularios.css?v=2',
+    '../styles/formularios.css?v=7',
     '../css/revision_shell.css?v=1',
 ]);
 lab_shell_open('validacion_tecnica_view.php');
@@ -239,58 +351,60 @@ lab_shell_open('validacion_tecnica_view.php');
                                                             <?php if (empty($tablasFormulario)): ?>
                                                                 <div class="alerta">No se encontraron datos detallados enlazados a este formulario.</div>
                                                             <?php else: ?>
+                                                                <?php $numeroLaboratorioFormulario = (string) ($formulario['numero_laboratorio'] ?? $numeroLaboratorio); ?>
                                                                 <?php foreach ($tablasFormulario as $tabla): ?>
+                                                                    <?php $matriz = revisionMatrizTabla($tabla, $numeroLaboratorioFormulario); ?>
+                                                                    <?php $tablaClave = (string) ($tabla['tabla'] ?? 'datos'); ?>
                                                                     <div class="revision-dataset">
                                                                         <div class="revision-dataset-head">
-                                                                            <div class="section-title"><?= eRevision(labelRevision($tabla['tabla'] ?? 'Datos')) ?></div>
-                                                                            <span class="revision-dataset-meta"><?= count($tabla['filas'] ?? []) ?> fila(s)</span>
+                                                                            <div class="revision-dataset-title">
+                                                                                <span class="revision-dataset-icon material-symbols-outlined" aria-hidden="true">science</span>
+                                                                                <div>
+                                                                                    <div class="section-title"><?= eRevision(labelRevision($tabla['tabla'] ?? 'Datos')) ?></div>
+                                                                                    <p class="revision-dataset-desc">Datos capturados y resultados del análisis.</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <span class="revision-dataset-meta"><?= (int) $matriz['total_filas'] ?> fila(s)</span>
                                                                         </div>
-                                                                        <div class="revision-row-list">
-                                                                            <?php foreach (($tabla['filas'] ?? []) as $index => $fila): ?>
-                                                                                <?php $camposFila = revisionCamposLista($tabla, $fila); ?>
-                                                                                <section class="revision-row-block">
-                                                                                    <?php if (count($tabla['filas'] ?? []) > 1): ?>
-                                                                                        <div class="revision-row-head">
-                                                                                            <span class="revision-row-badge">Fila <?= $index + 1 ?></span>
-                                                                                        </div>
-                                                                                    <?php endif; ?>
-
-                                                                                    <div class="revision-row-grid">
-                                                                                        <div class="revision-list-group">
-                                                                                            <div class="revision-list-title">Datos capturados</div>
-                                                                                            <?php if (empty($camposFila['capturados'])): ?>
-                                                                                                <div class="revision-empty-list">Sin datos capturados visibles.</div>
-                                                                                            <?php else: ?>
-                                                                                                <dl class="revision-parameter-list">
-                                                                                                    <?php foreach ($camposFila['capturados'] as $campo): ?>
-                                                                                                        <div class="revision-parameter-item">
-                                                                                                            <dt><?= eRevision($campo['etiqueta']) ?></dt>
-                                                                                                            <dd><?= eRevision($campo['valor']) ?></dd>
-                                                                                                        </div>
-                                                                                                    <?php endforeach; ?>
-                                                                                                </dl>
-                                                                                            <?php endif; ?>
-                                                                                        </div>
-
-                                                                                        <div class="revision-list-group">
-                                                                                            <div class="revision-list-title">Resultados calculados</div>
-                                                                                            <?php if (empty($camposFila['resultados'])): ?>
-                                                                                                <div class="revision-empty-list">Sin resultados calculados visibles.</div>
-                                                                                            <?php else: ?>
-                                                                                                <dl class="revision-parameter-list">
-                                                                                                    <?php foreach ($camposFila['resultados'] as $campo): ?>
-                                                                                                        <div class="revision-parameter-item is-result">
-                                                                                                            <dt><?= eRevision($campo['etiqueta']) ?></dt>
-                                                                                                            <dd><?= eRevision($campo['valor']) ?></dd>
-                                                                                                        </div>
-                                                                                                    <?php endforeach; ?>
-                                                                                                </dl>
-                                                                                            <?php endif; ?>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </section>
-                                                                            <?php endforeach; ?>
-                                                                        </div>
+                                                                        <?php if ($matriz['vacio']): ?>
+                                                                            <div class="revision-empty-list">Sin datos capturados visibles para este conjunto.</div>
+                                                                        <?php else: ?>
+                                                                            <div class="revision-matrix-wrap cengi-table-wrap">
+                                                                                <table class="revision-matrix">
+                                                                                    <thead>
+                                                                                        <tr>
+                                                                                            <th scope="col" class="revision-matrix-rowhead">Fila</th>
+                                                                                            <?php foreach ($matriz['columnas'] as $columna): ?>
+                                                                                                <th scope="col" class="<?= $columna['tipo'] === 'resultado' ? 'is-result' : '' ?>"><?= eRevision($columna['etiqueta']) ?></th>
+                                                                                            <?php endforeach; ?>
+                                                                                            <th scope="col" class="revision-matrix-actions-col">Acciones</th>
+                                                                                        </tr>
+                                                                                    </thead>
+                                                                                    <tbody>
+                                                                                        <?php foreach ($matriz['filas'] as $filaMatriz): ?>
+                                                                                            <?php $filaEstadoName = 'revision_fila_estado[' . $idFormulario . '][' . $tablaClave . '][' . (int) $filaMatriz['numero'] . ']'; ?>
+                                                                                            <tr data-revision-fila>
+                                                                                                <th scope="row" class="revision-matrix-rowhead"><?= (int) $filaMatriz['numero'] ?></th>
+                                                                                                <?php foreach ($filaMatriz['celdas'] as $celda): ?>
+                                                                                                    <td class="<?= $celda['tipo'] === 'resultado' ? 'is-result' : '' ?>"><?= eRevision($celda['valor']) ?></td>
+                                                                                                <?php endforeach; ?>
+                                                                                                <td class="revision-matrix-actions-col">
+                                                                                                    <div class="revision-row-actions">
+                                                                                                        <input type="hidden" name="<?= eRevision($filaEstadoName) ?>" value="" data-revision-fila-estado>
+                                                                                                        <button type="button" class="icon-button row-button success revision-row-btn" data-revision-fila-approve aria-pressed="false" aria-label="Aprobar fila" title="Aprobar fila">
+                                                                                                            <span class="material-symbols-outlined" aria-hidden="true">check</span>
+                                                                                                        </button>
+                                                                                                        <button type="button" class="icon-button row-button danger revision-row-btn" data-revision-fila-reject aria-pressed="false" aria-label="Rechazar fila" title="Rechazar fila">
+                                                                                                            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                                                                                                        </button>
+                                                                                                    </div>
+                                                                                                </td>
+                                                                                            </tr>
+                                                                                        <?php endforeach; ?>
+                                                                                    </tbody>
+                                                                                </table>
+                                                                            </div>
+                                                                        <?php endif; ?>
                                                                     </div>
                                                                 <?php endforeach; ?>
                                                             <?php endif; ?>
@@ -380,6 +494,31 @@ lab_shell_open('validacion_tecnica_view.php');
             }
         });
     }
+
+    Array.from(document.querySelectorAll('[data-revision-fila]')).forEach((row) => {
+        const input = row.querySelector('[data-revision-fila-estado]');
+        const approve = row.querySelector('[data-revision-fila-approve]');
+        const reject = row.querySelector('[data-revision-fila-reject]');
+
+        if (!input || !approve || !reject) {
+            return;
+        }
+
+        function apply(estado) {
+            input.value = estado;
+            approve.setAttribute('aria-pressed', estado === 'aprobada' ? 'true' : 'false');
+            reject.setAttribute('aria-pressed', estado === 'rechazada' ? 'true' : 'false');
+            row.classList.toggle('is-fila-aprobada', estado === 'aprobada');
+            row.classList.toggle('is-fila-rechazada', estado === 'rechazada');
+        }
+
+        approve.addEventListener('click', () => {
+            apply(input.value === 'aprobada' ? '' : 'aprobada');
+        });
+        reject.addEventListener('click', () => {
+            apply(input.value === 'rechazada' ? '' : 'rechazada');
+        });
+    });
 })();
 </script>
 <?php lab_shell_close(); ?>

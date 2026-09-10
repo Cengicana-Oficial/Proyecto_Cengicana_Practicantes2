@@ -229,7 +229,7 @@ if (!function_exists('lab_shell_open')) {
     <a class="cengi-brand" href="<?= htmlspecialchars($base, ENT_QUOTES, 'UTF-8') ?>index.php">
         <div class="cengi-brand-mark"><span class="material-symbols-outlined">experiment</span></div>
         <div class="cengi-brand-copy">
-            <strong>SIGELAB</strong>
+            <strong>CENGILABS</strong>
             <small>Lab. Agroindustrial</small>
         </div>
     </a>
@@ -255,6 +255,10 @@ if (!function_exists('lab_shell_open')) {
     </nav>
 
     <div class="cengi-sidebar-foot">
+        <a href="<?= htmlspecialchars($base . '../login/Menu.php', ENT_QUOTES, 'UTF-8') ?>" class="cengi-nav-item">
+            <span class="material-symbols-outlined">home</span>
+            <span>Menú principal</span>
+        </a>
         <a href="<?= htmlspecialchars(lab_logout_url(), ENT_QUOTES, 'UTF-8') ?>" class="cengi-nav-item cengi-logout-link">
             <span class="material-symbols-outlined">logout</span>
             <span>Cerrar sesion</span>
