@@ -15,6 +15,7 @@ ob_start();
 require_once __DIR__ . '/revisar_permisos.php';
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/classes/export_helpers.php';
+require_once __DIR__ . '/vendor/autoload.php';
 
 cengi_require_ver_participantes('participantes.php');
 
@@ -114,6 +115,99 @@ function cengi_export_numero($valor, $porcentaje = false)
     return $porcentaje ? $numero . '%' : $numero;
 }
 
+function cengi_part_export_enviar_xlsx(array $encabezados, array $filas, $tituloHoja, $nombreArchivoBase, array $anchosColumnas = [])
+{
+    $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+    $spreadsheet->getProperties()
+        ->setCreator('CENGICANA')
+        ->setLastModifiedBy('CENGICANA')
+        ->setTitle($tituloHoja)
+        ->setSubject($tituloHoja)
+        ->setDescription('Reporte generado por cengicursos')
+        ->setCategory('Reporte');
+
+    $hoja = $spreadsheet->getActiveSheet();
+    $tituloLimpio = str_replace(['*', ':', '/', '\\', '?', '[', ']'], ' ', (string) $tituloHoja);
+    $tituloLimpio = trim(preg_replace('/\s+/u', ' ', $tituloLimpio));
+    $tituloLimpio = function_exists('mb_substr')
+        ? mb_substr($tituloLimpio, 0, 31, 'UTF-8')
+        : substr($tituloLimpio, 0, 31);
+    $hoja->setTitle($tituloLimpio !== '' ? $tituloLimpio : 'Participantes');
+
+    $totalColumnas = max(1, count($encabezados));
+    $ultimaColumna = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($totalColumnas);
+
+    foreach (array_values($encabezados) as $indice => $titulo) {
+        $columna = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($indice + 1);
+        $hoja->setCellValueExplicit($columna . '1', (string) $titulo, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        $hoja->getColumnDimension($columna)->setWidth((float) ($anchosColumnas[$indice] ?? 22));
+    }
+
+    $filaExcel = 2;
+    foreach ($filas as $datosFila) {
+        foreach (array_values($datosFila) as $indice => $valor) {
+            $columna = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($indice + 1);
+            $hoja->setCellValueExplicit($columna . $filaExcel, (string) $valor, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        }
+        $filaExcel++;
+    }
+
+    $hoja->getStyle('A1:' . $ultimaColumna . '1')->applyFromArray([
+        'font' => ['bold' => true],
+        'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+    ]);
+    if ($filaExcel > 2) {
+        $hoja->getStyle('A1:' . $ultimaColumna . ($filaExcel - 1))->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'color' => ['rgb' => 'CCCCCC'],
+                ],
+            ],
+        ]);
+        $hoja->getAutoFilter()->setRange('A1:' . $ultimaColumna . ($filaExcel - 1));
+    }
+    $hoja->freezePane('A2');
+
+    ob_start();
+    (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet))->save('php://output');
+    $xlsxBytes = ob_get_clean();
+    if (!is_string($xlsxBytes) || strncmp($xlsxBytes, "PK\x03\x04", 4) !== 0) {
+        throw new RuntimeException('No se pudo generar un archivo de Excel valido.');
+    }
+
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    if (function_exists('header_remove')) {
+        header_remove('Content-Type');
+        header_remove('Content-Disposition');
+        header_remove('Content-Length');
+        header_remove('Content-Encoding');
+    }
+    @ini_set('zlib.output_compression', '0');
+
+    $nombreArchivo = cengi_export_nombre_archivo($nombreArchivoBase . '.xlsx', 'participantes.xlsx');
+    $nombreAscii = function_exists('iconv')
+        ? iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $nombreArchivo)
+        : $nombreArchivo;
+    $nombreAscii = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string) $nombreAscii);
+    if ($nombreAscii === '') {
+        $nombreAscii = 'participantes.xlsx';
+    }
+
+    http_response_code(200);
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', true);
+    header("Content-Disposition: attachment; filename=\"{$nombreAscii}\"; filename*=UTF-8''" . rawurlencode($nombreArchivo), true);
+    header('Content-Transfer-Encoding: binary', true);
+    header('Content-Length: ' . strlen($xlsxBytes), true);
+    header('Cache-Control: no-store, no-cache, must-revalidate', true);
+    header('Pragma: no-cache', true);
+    header('X-Content-Type-Options: nosniff', true);
+    echo $xlsxBytes;
+    exit;
+}
+
 $encabezados = ['Código', 'Curso', 'Participante', 'CUI', 'Ingenio', 'Correo electrónico', 'Grado académico', 'Teléfono', 'Puesto', 'Área', 'Estado', 'Asistencia', 'Pre-evaluación', 'Post-evaluación'];
 $filasExportacion = [];
 foreach ($participantes as $fila) {
@@ -129,7 +223,7 @@ foreach ($participantes as $fila) {
 $nombreArchivoBase = 'participantes_' . $codigoCurso . '_' . preg_replace('/[^a-zA-Z0-9_.-]/', '_', $curso['nombre_cursos']);
 
 if ($formato === 'excel') {
-    cengi_export_enviar_excel(
+    cengi_part_export_enviar_xlsx(
         $encabezados,
         $filasExportacion,
         'Participantes ' . $curso['nombre_cursos'],

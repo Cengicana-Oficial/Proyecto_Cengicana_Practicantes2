@@ -264,8 +264,8 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                     <span class="glyphicon glyphicon-download-alt"></span> Descargar listado <span class="caret"></span>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-right">
-                    <li><a href="<?php echo cengi_part_html($urlExportacion . '&format=pdf'); ?>"><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
-                    <li><a href="<?php echo cengi_part_html($urlExportacion . '&format=excel'); ?>"><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
+                    <li><a href="<?php echo cengi_part_html($urlExportacion . '&format=pdf'); ?>" download><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
+                    <li><a href="<?php echo cengi_part_html($urlExportacion . '&format=excel'); ?>" download><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
                 </ul>
             </div>
         </div>
