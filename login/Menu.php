@@ -107,7 +107,10 @@ function menu_modulo_meta($nombre)
             $ruta .= '&estado=aprobado';
         }
     } elseif ($modulo === 'servicio tecnico' && $esSuperadmin) {
-        $ruta = '../Pruebas/public/admin/dashboard_servicio.php';
+        // No existe dashboard_servicio.php en el repo; se reutiliza el
+        // dashboard unificado del modulo Pruebas (mismo que "Solicitud de
+        // visitas") hasta que exista una vista propia de servicio tecnico.
+        $ruta = '../Pruebas/public/admin/dashboard_unificado.php';
         $icono = 'build';
     } elseif ($modulo === 'ensayos' && $esSuperadmin) {
         $ruta = '../Pruebas/public/admin/dashboard_ensayos.php';

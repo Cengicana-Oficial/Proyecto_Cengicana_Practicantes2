@@ -55,6 +55,15 @@ RUN if [ -f cengicursos/composer.json ]; then \
         cd cengicursos && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \
     fi
 
+# Modulo "Solicitud de visitas" / "Servicio tecnico" (carpeta Pruebas/):
+# depende de phpmailer/phpdotenv y Pruebas/vendor no se versiona ni entra al
+# contexto de build (.dockerignore: **/vendor). Pruebas/config/conexion.php
+# hace require '../vendor/autoload.php', asi que sin este paso el modulo
+# revienta con "failed to open stream".
+RUN if [ -f Pruebas/composer.json ]; then \
+        cd Pruebas && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \
+    fi
+
 RUN chown -R www-data:www-data /var/www/html
 
 # Nota: este chown solo afecta el contenido copiado dentro de la imagen. Los

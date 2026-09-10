@@ -15,7 +15,15 @@ services:
       - ./deploy/env/login.env:/var/www/html/login/.env:ro
       - ./deploy/env/cengicursos.env:/var/www/html/cengicursos/.env:ro
       - ./deploy/env/laboratorio.env:/var/www/html/laboratorio/.env:ro
+      - ./deploy/env/visitas.env:/var/www/html/Pruebas/.env:ro
       - ./uploads:/var/www/html/uploads
+      # Adjuntos que suben modulos que no escriben bajo /var/www/html/uploads:
+      # cartas/listados de "Solicitud de visitas" (Pruebas/) y adjuntos de
+      # "Solicitudes internas" (sistema_de_solicitudes/). Sin estos bind mounts
+      # los archivos viven solo en la capa del contenedor y se pierden al
+      # recrearlo. entrypoint.sh corrige la propiedad/permisos en cada arranque.
+      - ./uploads/pruebas:/var/www/html/Pruebas/uploads
+      - ./uploads/solicitudes-internas:/var/www/html/sistema_de_solicitudes/uploads
     depends_on:
       - mysql
 

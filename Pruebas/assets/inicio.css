@@ -113,22 +113,22 @@
 .card:hover::after {
     opacity: 1;
 }
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 
-/* ===== COLORES CENGICAÑA ===== */
+/* ===== COLORES CENGICAÑA (misma paleta que login/, cengicursos/, laboratorio/) ===== */
 :root {
     --primary-green: #73BC25;
-    --primary-green-dark: #4f8f18;
+    --primary-green-dark: #5a9a1c;
 
-    --bg-page: #f5f7f1;
+    --bg-page: #f4f8f0;
     --bg-table: #ffffff;
 
-    --text-dark: #24310f;
+    --text-dark: #24362b;
     --text-mid: #5f6b55;
     --text-light: #8a9480;
 
-    --border-soft: #e6ecd9;
+    --border-soft: #d7e6cf;
     --border-row: #eef3e8;
 
     --radius-card: 16px;
@@ -144,7 +144,7 @@
 }
 
 body {
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   background: var(--bg-page);
   color: var(--text-dark);
   min-height: 100vh;
@@ -271,17 +271,17 @@ tbody tr:hover {
 }
 
 .estado-select.status-approved {
-  background: #2e7d32;
+  background: var(--primary-green);
   color: white;
 }
 
 .estado-select.status-pending {
-  background: #f57c00;
-  color: white;
+  background: var(--amarillo);
+  color: #1a2e0a;
 }
 
 .estado-select.status-rejected {
-  background: #c62828;
+  background: var(--naranja);
   color: white;
 }
 
@@ -297,7 +297,7 @@ tbody tr:hover {
 }
 
 .btn-pdf {
-  background: linear-gradient(135deg, #73BC25, #4f8f18);
+  background: linear-gradient(135deg, #73BC25, #5a9a1c);
   color: white;
   border: none;
   padding: 8px 14px;
@@ -314,7 +314,7 @@ tbody tr:hover {
 }
 
 .btn-mail {
-  background: #2e7d32;
+  background: var(--primary-green);
   color: white;
 }
 
@@ -391,7 +391,7 @@ tbody tr:hover {
 .area-text{
     font-size: 12px;
     font-weight: 500;
-    color: #334155;
+    color: var(--text-dark);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -421,7 +421,7 @@ tbody tr:hover {
 }
 
 .btn-delete { background: #ef4444; color: white; }
-.btn-change { background: #2563eb; color: white; }
+.btn-change { background: var(--primary-green); color: white; }
 .btn-add { background: var(--primary-green); color: white; }
 
 .area-add-row{
@@ -434,19 +434,19 @@ tbody tr:hover {
 
 .area-add-row .area-text{
     font-weight: 600;
-    color: #64748b;
+    color: var(--text-mid);
 }
 .btn-logout {
     display: inline-block;   /* 🔥 importante */
     width: auto;             /* 🔥 evita que sea gigante */
     
     padding: 8px 14px;
-    background: #c62828;
-    color: white;
+    background: var(--amarillo);
+    color: #24310f;
     border-radius: 6px;
     text-decoration: none;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
 
     margin-top: auto;        /* lo baja */
     margin-bottom: 0.5px;     /* lo sube un poco */
@@ -454,7 +454,7 @@ tbody tr:hover {
 }
 
 .btn-logout:hover {
-    background: #b71c1c;
+    background: #ffd633;
 }
 
 .sidebar {
@@ -506,7 +506,7 @@ body {
 }
 
 .btn-edit {
-    background: #2563eb;
+    background: var(--primary-green);
     color: white;
 }
 
@@ -555,7 +555,7 @@ body {
 .modal-content-area h3 {
     font-size: 22px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--text-dark);
     margin-bottom: 24px;
     border-left: 5px solid var(--primary-green);
     padding-left: 12px;
@@ -566,7 +566,7 @@ body {
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: #475569;
+    color: var(--text-mid);
     margin-bottom: 8px;
 }
 
@@ -588,7 +588,7 @@ body {
     outline: none;
     border-color: var(--primary-green);
     background: #ffffff;
-    box-shadow: 0 0 0 4px rgba(27, 94, 32, 0.08);
+    box-shadow: 0 0 0 4px rgba(115, 188, 37, 0.12);
 }
 
 /* botones */
@@ -601,7 +601,7 @@ body {
 
 .btn-cancelar {
     background: #e2e8f0;
-    color: #334155;
+    color: var(--text-dark);
     border: none;
     padding: 11px 18px;
     border-radius: 12px;
@@ -616,7 +616,7 @@ body {
 }
 
 .btn-guardar {
-    background: linear-gradient(135deg, #73BC25, #4f8f18);
+    background: linear-gradient(135deg, #73BC25, #5a9a1c);
     color: #fff;
     border: none;
     padding: 11px 22px;
@@ -625,12 +625,12 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: .25s;
-    box-shadow: 0 8px 18px rgba(27,94,32,.18);
+    box-shadow: 0 8px 18px rgba(115,188,37,.20);
 }
 
 .btn-guardar:hover {
     transform: translateY(-2px);
-    box-shadow: 0 12px 22px rgba(27,94,32,.22);
+    box-shadow: 0 12px 22px rgba(115,188,37,.26);
 }
 
 /* cerrar X */
@@ -641,7 +641,7 @@ body {
     background: none;
     border: none;
     font-size: 26px;
-    color: #64748b;
+    color: var(--text-mid);
     cursor: pointer;
     transition: .2s;
 }
@@ -684,7 +684,7 @@ body {
 .form-card h3 {
     font-size: 20px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--text-dark);
     margin-bottom: 22px;
     border-left: 5px solid var(--primary-green);
     padding-left: 12px;
@@ -704,7 +704,7 @@ body {
 .form-group label {
     font-size: 13px;
     font-weight: 600;
-    color: #475569;
+    color: var(--text-mid);
     margin-bottom: 8px;
 }
 
@@ -721,7 +721,7 @@ body {
     outline: none;
     border-color: var(--primary-green);
     background: #fff;
-    box-shadow: 0 0 0 4px rgba(27, 94, 32, 0.08);
+    box-shadow: 0 0 0 4px rgba(115, 188, 37, 0.12);
 }
 
 .form-buttons {
@@ -732,7 +732,7 @@ body {
 }
 
 .btn-save {
-    background: linear-gradient(135deg, #73BC25, #4f8f18);
+    background: linear-gradient(135deg, #73BC25, #5a9a1c);
     color: white;
     border: none;
     padding: 12px 24px;
@@ -741,13 +741,13 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.25s ease;
-    box-shadow: 0 8px 18px rgba(27,94,32,.18);
+    box-shadow: 0 8px 18px rgba(115,188,37,.20);
     margin: 18px 0 28px 0;
 }
 
 .btn-save:hover {
     transform: translateY(-2px);
-    box-shadow: 0 12px 22px rgba(27,94,32,.22);
+    box-shadow: 0 12px 22px rgba(115,188,37,.26);
 }
 
 /* =========================

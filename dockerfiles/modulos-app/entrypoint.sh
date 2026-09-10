@@ -14,10 +14,15 @@ set -e
 # baje privilegios a www-data), asi que puede corregir la propiedad/permisos
 # del volumen montado en cada arranque, sin depender de como haya quedado
 # configurado el directorio en el host.
-if [ -d /var/www/html/uploads ]; then
-    chown -R www-data:www-data /var/www/html/uploads 2>/dev/null || true
-    find /var/www/html/uploads -type d -exec chmod 775 {} + 2>/dev/null || true
-    find /var/www/html/uploads -type f -exec chmod 664 {} + 2>/dev/null || true
-fi
+for dir in \
+    /var/www/html/uploads \
+    /var/www/html/Pruebas/uploads \
+    /var/www/html/sistema_de_solicitudes/uploads
+do
+    [ -d "$dir" ] || continue
+    chown -R www-data:www-data "$dir" 2>/dev/null || true
+    find "$dir" -type d -exec chmod 775 {} + 2>/dev/null || true
+    find "$dir" -type f -exec chmod 664 {} + 2>/dev/null || true
+done
 
 exec docker-php-entrypoint "$@"
