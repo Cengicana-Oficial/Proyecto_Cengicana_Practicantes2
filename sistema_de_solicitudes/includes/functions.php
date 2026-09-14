@@ -310,19 +310,6 @@ function received_scope_sql(array $user, string $alias = 's'): array
     return ['1 = 0', []];
 }
 
-function management_scope_sql(array $user, string $alias = 's'): array
-{
-    if (is_superadmin($user)) {
-        return ['1 = 1', []];
-    }
-
-    if (!empty($user['programa_id']) && can_manage_requests($user)) {
-        return ["{$alias}.programa_destino_id = ?", [(int) $user['programa_id']]];
-    }
-
-    return ['1 = 0', []];
-}
-
 function fetch_module_users(PDO $menuPdo, PDO $pdo, array $user): array
 {
     $moduleIds = module_ids($menuPdo);

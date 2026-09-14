@@ -90,7 +90,46 @@ function updatePermissionPanels() {
   });
 }
 
+function initSidebarToggle() {
+  const sidebar = document.getElementById('appSidebar');
+  const toggle = document.getElementById('sidebarToggle');
+  const nav = document.getElementById('sidebarNav');
+  if (!sidebar || !toggle) return;
+
+  function closeMenu() {
+    sidebar.classList.remove('is-open');
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+
+  toggle.addEventListener('click', () => {
+    const willOpen = !sidebar.classList.contains('is-open');
+    sidebar.classList.toggle('is-open', willOpen);
+    toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  });
+
+  document.addEventListener('click', (event) => {
+    if (sidebar.classList.contains('is-open')
+      && !sidebar.contains(event.target)
+      && event.target !== toggle
+      && !toggle.contains(event.target)) {
+      closeMenu();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeMenu();
+  });
+
+  if (nav) {
+    nav.addEventListener('click', (event) => {
+      if (event.target.closest('a')) closeMenu();
+    });
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  initSidebarToggle();
+
   const tipo = document.getElementById('tipo');
   if (tipo) {
     tipo.addEventListener('change', updateTipoForm);

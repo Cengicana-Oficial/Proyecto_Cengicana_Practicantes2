@@ -30,8 +30,6 @@ $moduleIds = module_ids($menuPdo);
 $moduleId = $moduleIds[0] ?? null;
 
 $programs = $pdo->query('SELECT * FROM programas WHERE activo = 1 ORDER BY nombre')->fetchAll();
-$dbNameStmt = $pdo->query('SELECT DATABASE()');
-$solicitudesDbName = (string) $dbNameStmt->fetchColumn();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -489,7 +487,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 [$visibleWhere, $visibleParams] = request_scope_sql($user);
 [$sentWhere, $sentParams] = sent_scope_sql($user);
 [$receivedWhere, $receivedParams] = received_scope_sql($user);
-[$managementWhere, $managementParams] = management_scope_sql($user);
 
 $statsStmt = $pdo->prepare(
     "SELECT
@@ -559,26 +556,6 @@ foreach ($programs as $program) {
     }
 }
 
-$managementSql = "
-    SELECT s.*, u.nombre AS solicitante, po.nombre AS programa_origen, pd.nombre AS programa_destino
-    FROM solicitudes s
-    INNER JOIN {$solicitudesDbName}.programas po ON po.id = s.programa_origen_id
-    LEFT JOIN {$solicitudesDbName}.programas pd ON pd.id = s.programa_destino_id
-    INNER JOIN {$menuDbName}.usuarios u ON u.id = s.solicitante_id
-    WHERE {$managementWhere}
-";
-$managementQueryParams = $managementParams;
-
-if ($destinationFilter > 0) {
-    $managementSql .= ' AND s.programa_destino_id = ?';
-    $managementQueryParams[] = $destinationFilter;
-}
-
-$managementSql .= ' ORDER BY s.creado_en DESC';
-$managementStmt = $pdo->prepare($managementSql);
-$managementStmt->execute($managementQueryParams);
-$managementRequests = $managementStmt->fetchAll();
-
 $users = can_view_users($user) ? fetch_module_users($menuPdo, $pdo, $user) : [];
 $rolesStmt = is_superadmin($user)
     ? $menuPdo->query('SELECT id, nombre_rol FROM roles ORDER BY nombre_rol')
@@ -623,7 +600,27 @@ if ($view === 'detalle' && isset($_GET['id'])) {
     }
 }
 
-$active = static fn(string $name): string => $view === $name ? 'active' : '';
+$active = static fn(string $name): string => $view === $name ? 'is-active' : '';
+
+$sidebarTitles = [
+    'panel' => ['Panel', 'Resumen de solicitudes visibles para tu usuario'],
+    'mis' => ['Enviadas', 'Solicitudes que has enviado'],
+    'recibidas' => ['Recibidas', 'Solicitudes recibidas por tu programa'],
+    'usuarios' => ['Usuarios', 'Usuarios del modulo'],
+    'programas' => ['Programas', 'Programas y direcciones'],
+    'nueva' => ['Nueva solicitud', 'Registra una nueva solicitud'],
+    'detalle' => ['Detalle de solicitud', 'Seguimiento de la solicitud'],
+];
+[$topbarTitle, $topbarSub] = $sidebarTitles[$view] ?? ['Sistema de solicitudes', 'CENGICANA'];
+
+$userInitials = '';
+foreach (preg_split('/\s+/', trim((string) $user['nombre']), -1, PREG_SPLIT_NO_EMPTY) as $namePart) {
+    $userInitials .= mb_strtoupper(mb_substr($namePart, 0, 1, 'UTF-8'), 'UTF-8');
+    if (mb_strlen($userInitials, 'UTF-8') >= 2) {
+        break;
+    }
+}
+$userInitials = $userInitials !== '' ? $userInitials : 'U';
 ?>
 <!doctype html>
 <html lang="es">
@@ -639,33 +636,82 @@ $active = static fn(string $name): string => $view === $name ? 'active' : '';
 </head>
 <body>
 <div class="app" data-manual-permission-roles="[]">
-    <nav class="nav">
-        <a class="nav-logo" href="index.php?view=panel">
-            <span class="nav-logo-icon"><i class="ti ti-hexagon-letter-c"></i></span>
-            <span>CENGICANA · Solicitudes</span>
+    <aside class="sidebar" id="appSidebar">
+        <a class="sidebar-brand" href="index.php?view=panel">
+            <span class="sidebar-brand-mark"><i class="ti ti-hexagon-letter-c"></i></span>
+            <span class="sidebar-brand-copy">
+                <strong>CENGICANA</strong>
+                <small>Solicitudes</small>
+            </span>
         </a>
-        <div class="nav-tabs">
-            <a class="nav-tab <?= e($active('panel')) ?>" href="index.php?view=panel">Panel</a>
-            <a class="nav-tab <?= e($active('mis')) ?>" href="index.php?view=mis">Enviadas</a>
-            <?php if (can_view_received_requests($user)): ?>
-                <a class="nav-tab <?= e($active('recibidas')) ?>" href="index.php?view=recibidas">Recibidas</a>
+
+        <nav class="sidebar-nav" id="sidebarNav">
+            <div class="sidebar-nav-group">
+                <div class="sidebar-nav-label">Solicitudes</div>
+                <a href="index.php?view=panel" class="sidebar-nav-item <?= e($active('panel')) ?>">
+                    <i class="ti ti-layout-dashboard"></i><span>Panel</span>
+                </a>
+                <a href="index.php?view=mis" class="sidebar-nav-item <?= e($active('mis')) ?>">
+                    <i class="ti ti-send"></i><span>Enviadas</span>
+                </a>
+                <?php if (can_view_received_requests($user)): ?>
+                    <a href="index.php?view=recibidas" class="sidebar-nav-item <?= e($active('recibidas')) ?>">
+                        <i class="ti ti-inbox"></i><span>Recibidas</span>
+                    </a>
+                <?php endif; ?>
+                <?php if (can_create_requests($user)): ?>
+                    <a href="index.php?view=nueva" class="sidebar-nav-item <?= e($active('nueva')) ?>">
+                        <i class="ti ti-plus"></i><span>Nueva solicitud</span>
+                    </a>
+                <?php endif; ?>
+            </div>
+
+            <?php if (can_view_users($user) || can_view_programs($user)): ?>
+                <div class="sidebar-nav-group">
+                    <div class="sidebar-nav-label">Administracion</div>
+                    <?php if (can_view_users($user)): ?>
+                        <a href="index.php?view=usuarios" class="sidebar-nav-item <?= e($active('usuarios')) ?>">
+                            <i class="ti ti-users"></i><span>Usuarios</span>
+                        </a>
+                    <?php endif; ?>
+                    <?php if (can_view_programs($user)): ?>
+                        <a href="index.php?view=programas" class="sidebar-nav-item <?= e($active('programas')) ?>">
+                            <i class="ti ti-building"></i><span>Programas</span>
+                        </a>
+                    <?php endif; ?>
+                </div>
             <?php endif; ?>
-            <?php if (can_manage_requests($user)): ?>
-                <a class="nav-tab <?= e($active('gestion')) ?>" href="index.php?view=gestion">Gestion</a>
-            <?php endif; ?>
-            <?php if (can_create_requests($user)): ?>
-                <a class="nav-tab <?= e($active('nueva')) ?>" href="index.php?view=nueva">Nueva solicitud</a>
-            <?php endif; ?>
-            <?php if (can_view_users($user)): ?>
-                <a class="nav-tab <?= e($active('usuarios')) ?>" href="index.php?view=usuarios">Usuarios</a>
-            <?php endif; ?>
-            <?php if (can_view_programs($user)): ?>
-                <a class="nav-tab <?= e($active('programas')) ?>" href="index.php?view=programas">Programas</a>
-            <?php endif; ?>
+        </nav>
+
+        <div class="sidebar-foot">
+            <a href="../login/Menu.php" class="sidebar-nav-item sidebar-menu-link">
+                <i class="ti ti-home"></i><span>Menu principal</span>
+            </a>
+            <a href="index.php?logout=1" class="sidebar-nav-item sidebar-logout-link">
+                <i class="ti ti-logout-2"></i><span>Cerrar sesion</span>
+            </a>
         </div>
-        <div class="nav-user"><i class="ti ti-user-circle"></i><?= e($user['nombre']) ?> · <?= e($user['nombre_rol']) ?></div>
-        <a class="nav-logout" href="index.php?logout=1"><i class="ti ti-logout-2"></i>Cerrar sesion</a>
-    </nav>
+    </aside>
+
+    <header class="topbar">
+        <button type="button" class="menu-toggle" id="sidebarToggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="appSidebar">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="topbar-titles">
+            <div class="topbar-title"><?= e($topbarTitle) ?></div>
+            <div class="topbar-sub"><?= e($topbarSub) ?></div>
+        </div>
+        <div class="topbar-right">
+            <span class="topbar-pill"><?= e($user['nombre_rol']) ?></span>
+            <div class="topbar-userbox">
+                <div class="topbar-avatar"><?= e($userInitials) ?></div>
+                <div class="topbar-userbox-copy">
+                    <div class="topbar-userbox-name"><?= e($user['nombre']) ?></div>
+                    <div class="topbar-userbox-role"><?= e($user['nombre_rol']) ?></div>
+                </div>
+            </div>
+        </div>
+    </header>
 
     <main class="container">
         <?php if ($message): ?><div class="alert"><?= e($message) ?></div><?php endif; ?>
@@ -693,7 +739,7 @@ $active = static fn(string $name): string => $view === $name ? 'active' : '';
             <div class="section-sub">Cada usuario ve las solicitudes que llegan a su programa. El superadmin ve todas.</div>
             <section class="programs-grid">
                 <?php foreach ($programCounts as $program): ?>
-                    <a class="program-card card" href="index.php?view=<?= can_manage_requests($user) ? 'gestion' : 'recibidas' ?>&programa_destino=<?= (int) $program['id'] ?>">
+                    <a class="program-card card" href="index.php?view=recibidas&programa_destino=<?= (int) $program['id'] ?>">
                         <div class="program-card-icon"><i class="ti ti-building"></i></div>
                         <div class="program-card-name"><?= e($program['nombre']) ?></div>
                         <div class="program-card-count"><?= (int) $program['total'] ?> solicitudes</div>
@@ -729,11 +775,15 @@ $active = static fn(string $name): string => $view === $name ? 'active' : '';
         <?php if ($view === 'recibidas'): ?>
             <div class="section-header">
                 <div>
-                    <div class="section-title">Solicitudes recibidas</div>
+                    <div class="section-title">Solicitudes recibidas<?= $selectedDestination ? ' · ' . e($selectedDestination['nombre']) : '' ?></div>
                     <div class="section-sub">
-                        <?= is_superadmin($user)
-                            ? 'Vista general de solicitudes recibidas por los programas.'
-                            : 'Aqui aparecen las solicitudes que llegaron a tu programa asignado.' ?>
+                        <?php if ($selectedDestination): ?>
+                            Mostrando solicitudes recibidas por este programa.
+                        <?php elseif (is_superadmin($user)): ?>
+                            Vista general de solicitudes recibidas por los programas.
+                        <?php else: ?>
+                            Aqui aparecen las solicitudes que llegaron a tu programa asignado.
+                        <?php endif; ?>
                     </div>
                 </div>
                 <?php if ($selectedDestination): ?>
@@ -748,28 +798,6 @@ $active = static fn(string $name): string => $view === $name ? 'active' : '';
                 <button class="filter-chip" onclick="setStatusFilter(this,'tabla-recibidas','completado')">Completado</button>
             </div>
             <?php render_table($receivedRequests, 'tabla-recibidas', $user, true); ?>
-        <?php endif; ?>
-
-        <?php if ($view === 'gestion'): ?>
-            <div class="section-header">
-                <div>
-                    <div class="section-title">Gestion de solicitudes<?= $selectedDestination ? ' · ' . e($selectedDestination['nombre']) : '' ?></div>
-                    <div class="section-sub">
-                        <?= $selectedDestination ? 'Mostrando solicitudes recibidas por este programa.' : 'Aqui solo se gestionan solicitudes que llegaron a tu programa.' ?>
-                    </div>
-                </div>
-                <?php if ($selectedDestination): ?>
-                    <a class="btn-outline" href="index.php?view=panel">Volver a programas</a>
-                <?php endif; ?>
-            </div>
-            <div class="filters">
-                <div class="search-box"><input class="form-control" id="buscar-gestion" oninput="filterRows('buscar-gestion','tabla-gestion')" placeholder="Buscar solicitud..."></div>
-                <button class="filter-chip active" onclick="setStatusFilter(this,'tabla-gestion','todas')">Todas</button>
-                <button class="filter-chip" onclick="setStatusFilter(this,'tabla-gestion','recibido')">Recibido</button>
-                <button class="filter-chip" onclick="setStatusFilter(this,'tabla-gestion','proceso')">En proceso</button>
-                <button class="filter-chip" onclick="setStatusFilter(this,'tabla-gestion','completado')">Completado</button>
-            </div>
-            <?php render_table($managementRequests, 'tabla-gestion', $user, true); ?>
         <?php endif; ?>
 
         <?php if ($view === 'usuarios'): ?>
@@ -1122,7 +1150,7 @@ $active = static fn(string $name): string => $view === $name ? 'active' : '';
                         <div class="section-title"><?= e($detail['codigo']) ?> · <?= e($detail['titulo']) ?></div>
                         <div class="section-sub"><?= badge_tipo($detail['tipo']) ?> <?= badge_estado($detail['estado']) ?> <?= badge_prioridad($detail['prioridad']) ?></div>
                     </div>
-                    <a class="btn-outline" href="index.php?view=<?= can_manage_request($user, $detail) ? 'gestion' : 'mis' ?>">Volver</a>
+                    <a class="btn-outline" href="index.php?view=<?= can_manage_request($user, $detail) ? 'recibidas' : 'mis' ?>">Volver</a>
                 </div>
                 <section class="form-card">
                     <div class="detail-grid">
