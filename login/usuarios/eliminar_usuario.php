@@ -66,6 +66,10 @@ function user_scope_config($scope)
             'module_names' => ['laboratorio'],
             'return_url' => '../../laboratorio/index.php',
         ],
+        'solicitudes' => [
+            'module_names' => ['solicitudes internas'],
+            'return_url' => '../../sistema_de_solicitudes/index.php?view=usuarios',
+        ],
     ];
 
     return $configs[$scope] ?? null;

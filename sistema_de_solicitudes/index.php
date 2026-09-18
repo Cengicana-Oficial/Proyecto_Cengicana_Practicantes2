@@ -27,7 +27,6 @@ $view = $_GET['view'] ?? 'panel';
 $message = $_GET['message'] ?? '';
 $error = '';
 $moduleIds = module_ids($menuPdo);
-$moduleId = $moduleIds[0] ?? null;
 
 $programs = $pdo->query('SELECT * FROM programas WHERE activo = 1 ORDER BY nombre')->fetchAll();
 
@@ -98,180 +97,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        if ($action === 'crear_usuario') {
+        if ($action === 'actualizar_programa_usuario') {
             if (!can_manage_users($user)) {
-                throw new RuntimeException('No tienes permiso para crear usuarios.');
-            }
-
-            if ($moduleId === null) {
-                throw new RuntimeException('El modulo Sistema de solicitudes no esta registrado en la base principal.');
-            }
-
-            $name = trim($_POST['nombre'] ?? '');
-            $email = trim($_POST['correo'] ?? '');
-            $password = trim($_POST['password'] ?? '');
-            $roleId = (int) ($_POST['rol_id'] ?? 0);
-            $ingenioId = (int) ($_POST['ingenio_id'] ?? 0);
-            $programId = (int) ($_POST['programa_id'] ?? 0);
-
-            if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || $password === '' || $roleId <= 0 || $ingenioId <= 0) {
-                throw new RuntimeException('Completa nombre, correo, contrasena, rol e ingenio.');
-            }
-
-            $roleStmt = $menuPdo->prepare('SELECT id, nombre_rol FROM roles WHERE id = ?');
-            $roleStmt->execute([$roleId]);
-            $role = $roleStmt->fetch();
-            if (!$role) {
-                throw new RuntimeException('El rol seleccionado no existe.');
-            }
-
-            $newIsSuperadmin = role_is_superadmin((string) $role['nombre_rol']);
-            if ($newIsSuperadmin && !is_superadmin($user)) {
-                throw new RuntimeException('Solo el superadmin puede crear otro superadmin.');
-            }
-
-            if (!$newIsSuperadmin && $programId <= 0) {
-                throw new RuntimeException('Selecciona el programa para el usuario.');
-            }
-
-            $checkStmt = $menuPdo->prepare('SELECT id FROM usuarios WHERE correo = ?');
-            $checkStmt->execute([$email]);
-            if ($checkStmt->fetchColumn()) {
-                throw new RuntimeException('Ya existe un usuario con ese correo.');
-            }
-
-            $menuPdo->beginTransaction();
-            $pdo->beginTransaction();
-
-            $insertUser = $menuPdo->prepare(
-                'INSERT INTO usuarios (nombre, correo, contrasena, rol_id, ingenio_id, es_superadmin)
-                 VALUES (?, ?, ?, ?, ?, ?)'
-            );
-            $insertUser->execute([
-                $name,
-                $email,
-                password_hash($password, PASSWORD_DEFAULT),
-                $roleId,
-                $ingenioId,
-                $newIsSuperadmin ? 1 : 0,
-            ]);
-
-            $newUserId = (int) $menuPdo->lastInsertId();
-
-            $insertModule = $menuPdo->prepare(
-                'INSERT INTO usuario_modulo (usuario_id, modulo_id) VALUES (?, ?)'
-            );
-            $insertModule->execute([$newUserId, $moduleId]);
-
-            if ($programId > 0) {
-                $insertProgram = $pdo->prepare(
-                    'INSERT INTO usuario_programa (usuario_id, programa_id) VALUES (?, ?)'
-                );
-                $insertProgram->execute([$newUserId, $programId]);
-            }
-
-            $pdo->commit();
-            $menuPdo->commit();
-
-            header('Location: index.php?view=usuarios&message=' . urlencode('Usuario creado correctamente.'));
-            exit;
-        }
-
-        if ($action === 'actualizar_usuario') {
-            if (!can_manage_users($user)) {
-                throw new RuntimeException('No tienes permiso para modificar usuarios.');
-            }
-
-            if ($moduleId === null) {
-                throw new RuntimeException('El modulo Sistema de solicitudes no esta registrado en la base principal.');
+                throw new RuntimeException('No tienes permiso para modificar el programa de un usuario.');
             }
 
             $userId = (int) ($_POST['usuario_id'] ?? 0);
-            $name = trim($_POST['nombre'] ?? '');
-            $email = trim($_POST['correo'] ?? '');
-            $password = trim($_POST['password'] ?? '');
-            $roleId = (int) ($_POST['rol_id'] ?? 0);
-            $ingenioId = (int) ($_POST['ingenio_id'] ?? 0);
             $programId = (int) ($_POST['programa_id'] ?? 0);
-            $assignModule = isset($_POST['asignado_modulo']) ? 1 : 0;
 
-            if ($userId <= 0 || $name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || $roleId <= 0 || $ingenioId <= 0) {
-                throw new RuntimeException('Completa los datos obligatorios del usuario.');
+            if ($userId <= 0) {
+                throw new RuntimeException('Usuario no valido.');
             }
 
-            $targetStmt = $menuPdo->prepare(
-                'SELECT u.id, u.es_superadmin, r.nombre_rol
-                 FROM usuarios u
-                 INNER JOIN roles r ON r.id = u.rol_id
-                 WHERE u.id = ?'
-            );
-            $targetStmt->execute([$userId]);
-            $target = $targetStmt->fetch();
-            if (!$target) {
-                throw new RuntimeException('Usuario no encontrado.');
+            if ($moduleIds) {
+                $moduleCheckStmt = $menuPdo->prepare(
+                    'SELECT COUNT(*) FROM usuario_modulo WHERE usuario_id = ? AND modulo_id IN (' . implode(',', array_fill(0, count($moduleIds), '?')) . ')'
+                );
+                $moduleCheckStmt->execute(array_merge([$userId], $moduleIds));
+                if ((int) $moduleCheckStmt->fetchColumn() === 0) {
+                    throw new RuntimeException('El usuario no pertenece a este modulo.');
+                }
             }
 
-            if ((int) $user['id'] === $userId && !$assignModule && !is_superadmin($user)) {
-                throw new RuntimeException('No puedes quitarte el acceso al modulo actual.');
-            }
-
-            if ((int) $target['es_superadmin'] === 1 && !is_superadmin($user)) {
-                throw new RuntimeException('Solo el superadmin puede editar otro superadmin.');
-            }
-
-            $roleStmt = $menuPdo->prepare('SELECT id, nombre_rol FROM roles WHERE id = ?');
-            $roleStmt->execute([$roleId]);
-            $role = $roleStmt->fetch();
-            if (!$role) {
-                throw new RuntimeException('El rol seleccionado no existe.');
-            }
-
-            $newIsSuperadmin = role_is_superadmin((string) $role['nombre_rol']);
-            if ($newIsSuperadmin && !is_superadmin($user)) {
-                throw new RuntimeException('Solo el superadmin puede asignar el rol superadmin.');
-            }
-
-            if ($assignModule && !$newIsSuperadmin && $programId <= 0) {
-                throw new RuntimeException('Selecciona el programa para el usuario.');
-            }
-
-            $checkStmt = $menuPdo->prepare('SELECT id FROM usuarios WHERE correo = ? AND id <> ?');
-            $checkStmt->execute([$email, $userId]);
-            if ($checkStmt->fetchColumn()) {
-                throw new RuntimeException('Ya existe otro usuario con ese correo.');
-            }
-
-            $menuPdo->beginTransaction();
-            $pdo->beginTransaction();
-
-            $sql = 'UPDATE usuarios SET nombre = ?, correo = ?, rol_id = ?, ingenio_id = ?, es_superadmin = ?';
-            $params = [$name, $email, $roleId, $ingenioId, $newIsSuperadmin ? 1 : 0];
-            if ($password !== '') {
-                $sql .= ', contrasena = ?';
-                $params[] = password_hash($password, PASSWORD_DEFAULT);
-            }
-            $sql .= ' WHERE id = ?';
-            $params[] = $userId;
-
-            $menuPdo->prepare($sql)->execute($params);
-
-            $moduleCheckStmt = $menuPdo->prepare(
-                'SELECT COUNT(*) FROM usuario_modulo WHERE usuario_id = ? AND modulo_id = ?'
-            );
-            $moduleCheckStmt->execute([$userId, $moduleId]);
-            $hasModule = (int) $moduleCheckStmt->fetchColumn() > 0;
-
-            if ($assignModule && !$hasModule) {
-                $menuPdo->prepare('INSERT INTO usuario_modulo (usuario_id, modulo_id) VALUES (?, ?)')
-                    ->execute([$userId, $moduleId]);
-            }
-
-            if (!$assignModule && $hasModule) {
-                $menuPdo->prepare('DELETE FROM usuario_modulo WHERE usuario_id = ? AND modulo_id = ?')
-                    ->execute([$userId, $moduleId]);
-            }
-
-            if ($assignModule && $programId > 0) {
+            if ($programId > 0) {
                 $pdo->prepare(
                     'INSERT INTO usuario_programa (usuario_id, programa_id)
                      VALUES (?, ?)
@@ -281,50 +129,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('DELETE FROM usuario_programa WHERE usuario_id = ?')->execute([$userId]);
             }
 
-            $pdo->commit();
-            $menuPdo->commit();
-
-            header('Location: index.php?view=usuarios&message=' . urlencode('Usuario actualizado correctamente.'));
+            header('Location: index.php?view=usuarios&message=' . urlencode('Programa actualizado correctamente.'));
             exit;
         }
 
-        if ($action === 'eliminar_usuario') {
+        if ($action === 'agregar_usuario_modulo') {
             if (!can_manage_users($user)) {
-                throw new RuntimeException('No tienes permiso para eliminar usuarios.');
+                throw new RuntimeException('No tienes permiso para agregar usuarios a este modulo.');
+            }
+
+            if (!$moduleIds) {
+                throw new RuntimeException('El modulo Solicitudes Internas no esta registrado en la base principal.');
             }
 
             $userId = (int) ($_POST['usuario_id'] ?? 0);
+            $programId = (int) ($_POST['programa_id'] ?? 0);
+
             if ($userId <= 0) {
-                throw new RuntimeException('Usuario no valido.');
+                throw new RuntimeException('Selecciona un usuario existente.');
             }
 
-            if ((int) $user['id'] === $userId) {
-                throw new RuntimeException('No puedes eliminar tu propio usuario.');
+            $existsStmt = $menuPdo->prepare('SELECT id FROM usuarios WHERE id = ?');
+            $existsStmt->execute([$userId]);
+            if (!$existsStmt->fetchColumn()) {
+                throw new RuntimeException('El usuario seleccionado no existe.');
             }
 
-            $targetStmt = $menuPdo->prepare('SELECT es_superadmin FROM usuarios WHERE id = ?');
-            $targetStmt->execute([$userId]);
-            $target = $targetStmt->fetch();
-            if (!$target) {
-                throw new RuntimeException('Usuario no encontrado.');
+            $insertModule = $menuPdo->prepare('INSERT IGNORE INTO usuario_modulo (usuario_id, modulo_id) VALUES (?, ?)');
+            foreach ($moduleIds as $moduleIdToAssign) {
+                $insertModule->execute([$userId, $moduleIdToAssign]);
             }
 
-            if ((int) $target['es_superadmin'] === 1) {
-                throw new RuntimeException('No se puede eliminar un superadmin desde este modulo.');
+            if ($programId > 0) {
+                $pdo->prepare(
+                    'INSERT INTO usuario_programa (usuario_id, programa_id)
+                     VALUES (?, ?)
+                     ON DUPLICATE KEY UPDATE programa_id = VALUES(programa_id)'
+                )->execute([$userId, $programId]);
             }
 
-            $menuPdo->beginTransaction();
-            $pdo->beginTransaction();
-
-            $menuPdo->prepare('DELETE FROM usuario_modulo WHERE usuario_id = ? AND modulo_id IN (' . implode(',', array_fill(0, count($moduleIds), '?')) . ')')
-                ->execute(array_merge([$userId], $moduleIds));
-            $pdo->prepare('DELETE FROM usuario_programa WHERE usuario_id = ?')->execute([$userId]);
-            $menuPdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$userId]);
-
-            $pdo->commit();
-            $menuPdo->commit();
-
-            header('Location: index.php?view=usuarios&message=' . urlencode('Usuario eliminado correctamente.'));
+            header('Location: index.php?view=usuarios&message=' . urlencode('Usuario agregado al modulo correctamente.'));
             exit;
         }
 
@@ -556,12 +400,38 @@ foreach ($programs as $program) {
     }
 }
 
+// La tabla usuario_programa vive en la base local de este modulo y no es
+// visible para login/usuarios/eliminar_usuario.php, por lo que puede quedar
+// con registros huerfanos cuando un usuario se elimina o pierde el modulo
+// desde el modulo central. Se limpia antes de listar usuarios.
+if ($moduleIds) {
+    $moduleOrphanPlaceholders = implode(',', array_fill(0, count($moduleIds), '?'));
+    $pdo->prepare(
+        "DELETE up FROM usuario_programa up
+         WHERE NOT EXISTS (
+             SELECT 1 FROM {$menuDbName}.usuario_modulo um
+             WHERE um.usuario_id = up.usuario_id
+               AND um.modulo_id IN ({$moduleOrphanPlaceholders})
+         )"
+    )->execute($moduleIds);
+}
+
 $users = can_view_users($user) ? fetch_module_users($menuPdo, $pdo, $user) : [];
-$rolesStmt = is_superadmin($user)
-    ? $menuPdo->query('SELECT id, nombre_rol FROM roles ORDER BY nombre_rol')
-    : $menuPdo->query("SELECT id, nombre_rol FROM roles WHERE LOWER(nombre_rol) <> 'superadmin' ORDER BY nombre_rol");
-$roles = $rolesStmt->fetchAll();
-$ingenios = $menuPdo->query('SELECT id, nombre_ingenio FROM ingenios ORDER BY nombre_ingenio')->fetchAll();
+
+$availableUsers = [];
+if (can_manage_users($user) && $moduleIds) {
+    $availablePlaceholders = implode(',', array_fill(0, count($moduleIds), '?'));
+    $availableStmt = $menuPdo->prepare(
+        "SELECT id, nombre, correo
+         FROM usuarios
+         WHERE id NOT IN (
+             SELECT usuario_id FROM usuario_modulo WHERE modulo_id IN ({$availablePlaceholders})
+         )
+         ORDER BY nombre"
+    );
+    $availableStmt->execute($moduleIds);
+    $availableUsers = $availableStmt->fetchAll();
+}
 
 $detail = null;
 $followUps = [];
@@ -813,42 +683,34 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
 
                 <?php if (can_manage_users($user)): ?>
                     <form class="form-card" method="post">
-                        <input type="hidden" name="action" value="crear_usuario">
+                        <input type="hidden" name="action" value="agregar_usuario_modulo">
                         <div class="form-grid">
-                            <div class="form-group">
-                                <label class="form-label" for="usuario_nombre">Nombre <span class="req">*</span></label>
-                                <input class="form-control" id="usuario_nombre" name="nombre" required>
+                            <div class="form-group user-search">
+                                <label class="form-label" for="agregar_usuario_buscar">Usuario existente en la plataforma <span class="req">*</span></label>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="agregar_usuario_buscar"
+                                    placeholder="Buscar por nombre o correo..."
+                                    autocomplete="off"
+                                    data-users="<?= e(json_encode(array_map(
+                                        static fn(array $u): array => ['id' => (int) $u['id'], 'label' => $u['nombre'] . ' — ' . $u['correo']],
+                                        $availableUsers
+                                    ), JSON_UNESCAPED_UNICODE)) ?>"
+                                    <?= !$availableUsers ? 'disabled' : '' ?>
+                                >
+                                <input type="hidden" id="agregar_usuario_id" name="usuario_id" required>
+                                <div class="user-search-results" id="agregar_usuario_resultados" hidden></div>
+                                <?php if ($availableUsers): ?>
+                                    <div class="form-hint">Escribe para ver las 5 mejores coincidencias.</div>
+                                <?php else: ?>
+                                    <div class="form-hint">No hay usuarios de la plataforma disponibles para agregar (ya estan todos en este modulo).</div>
+                                <?php endif; ?>
                             </div>
                             <div class="form-group">
-                                <label class="form-label" for="usuario_correo">Correo <span class="req">*</span></label>
-                                <input class="form-control" id="usuario_correo" type="email" name="correo" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="usuario_password">Contrasena <span class="req">*</span></label>
-                                <input class="form-control" id="usuario_password" type="password" name="password" required>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="usuario_rol">Rol <span class="req">*</span></label>
-                                <select class="form-control" id="usuario_rol" name="rol_id" required>
-                                    <option value="">Seleccionar...</option>
-                                    <?php foreach ($roles as $role): ?>
-                                        <option value="<?= (int) $role['id'] ?>"><?= e(role_label((string) $role['nombre_rol'])) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="usuario_ingenio">Ingenio <span class="req">*</span></label>
-                                <select class="form-control" id="usuario_ingenio" name="ingenio_id" required>
-                                    <option value="">Seleccionar...</option>
-                                    <?php foreach ($ingenios as $ingenio): ?>
-                                        <option value="<?= (int) $ingenio['id'] ?>"><?= e($ingenio['nombre_ingenio']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group form-full">
-                                <label class="form-label" for="usuario_programa">Programa asignado</label>
-                                <select class="form-control" id="usuario_programa" name="programa_id">
-                                    <option value="">Seleccionar programa...</option>
+                                <label class="form-label" for="agregar_usuario_programa">Programa asignado</label>
+                                <select class="form-control" id="agregar_usuario_programa" name="programa_id">
+                                    <option value="">Sin programa</option>
                                     <?php foreach ($programs as $program): ?>
                                         <option value="<?= (int) $program['id'] ?>"><?= e($program['nombre']) ?></option>
                                     <?php endforeach; ?>
@@ -857,7 +719,11 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                             </div>
                         </div>
                         <div class="actions">
-                            <button class="btn-primary" type="submit"><i class="ti ti-user-plus"></i>Crear usuario</button>
+                            <button class="btn-primary" type="submit"><i class="ti ti-user-plus"></i>Agregar al modulo</button>
+                        </div>
+                        <div class="form-hint" style="margin-top:10px;">
+                            ¿La persona todavia no existe en la plataforma?
+                            <a href="../login/usuarios/crear_usuario.php?scope=solicitudes">Crear usuario nuevo</a>.
                         </div>
                     </form>
                 <?php endif; ?>
@@ -873,60 +739,27 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                                 <th>Ingenio</th>
                                 <th>Programa</th>
                                 <th>Modulo</th>
-                                <th>Contrasena</th>
                                 <?php if (can_manage_users($user)): ?><th>Acciones</th><?php endif; ?>
                             </tr>
                             </thead>
                             <tbody>
+                            <?php if (!$users): ?>
+                                <tr><td colspan="<?= can_manage_users($user) ? 7 : 6 ?>">No hay usuarios para mostrar.</td></tr>
+                            <?php endif; ?>
                             <?php foreach ($users as $userItem): ?>
-                                <?php $formId = 'usuario-form-' . (int) $userItem['id']; ?>
+                                <?php $formId = 'usuario-programa-form-' . (int) $userItem['id']; ?>
                                 <tr>
                                     <td>
                                         <?php if (can_manage_users($user)): ?><form id="<?= e($formId) ?>" method="post"></form><?php endif; ?>
+                                        <?= e($userItem['nombre']) ?>
+                                    </td>
+                                    <td><?= e($userItem['correo']) ?></td>
+                                    <td><?= e(role_label((string) $userItem['nombre_rol'])) ?></td>
+                                    <td><?= e($userItem['ingenio'] ?: 'Sin ingenio') ?></td>
+                                    <td>
                                         <?php if (can_manage_users($user)): ?>
-                                            <input form="<?= e($formId) ?>" type="hidden" name="action" value="actualizar_usuario">
+                                            <input form="<?= e($formId) ?>" type="hidden" name="action" value="actualizar_programa_usuario">
                                             <input form="<?= e($formId) ?>" type="hidden" name="usuario_id" value="<?= (int) $userItem['id'] ?>">
-                                            <input form="<?= e($formId) ?>" class="form-control table-input" name="nombre" value="<?= e($userItem['nombre']) ?>">
-                                        <?php else: ?>
-                                            <?= e($userItem['nombre']) ?>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if (can_manage_users($user)): ?>
-                                            <input form="<?= e($formId) ?>" class="form-control table-input" type="email" name="correo" value="<?= e($userItem['correo']) ?>">
-                                        <?php else: ?>
-                                            <?= e($userItem['correo']) ?>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if (can_manage_users($user)): ?>
-                                            <select form="<?= e($formId) ?>" class="form-control table-input" name="rol_id">
-                                                <?php foreach ($roles as $role): ?>
-                                                    <option value="<?= (int) $role['id'] ?>" <?= (int) $userItem['rol_id'] === (int) $role['id'] ? 'selected' : '' ?>>
-                                                        <?= e(role_label((string) $role['nombre_rol'])) ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        <?php else: ?>
-                                            <?= e(role_label((string) $userItem['nombre_rol'])) ?>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if (can_manage_users($user)): ?>
-                                            <select form="<?= e($formId) ?>" class="form-control table-input" name="ingenio_id">
-                                                <option value="">Seleccionar...</option>
-                                                <?php foreach ($ingenios as $ingenio): ?>
-                                                    <option value="<?= (int) $ingenio['id'] ?>" <?= (int) ($userItem['ingenio_id'] ?? 0) === (int) $ingenio['id'] ? 'selected' : '' ?>>
-                                                        <?= e($ingenio['nombre_ingenio']) ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        <?php else: ?>
-                                            <?= e($userItem['ingenio'] ?: 'Sin ingenio') ?>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if (can_manage_users($user)): ?>
                                             <select form="<?= e($formId) ?>" class="form-control table-input" name="programa_id">
                                                 <option value="">Sin programa</option>
                                                 <?php foreach ($programs as $program): ?>
@@ -939,32 +772,15 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                                             <?= e($userItem['programa'] ?: 'Sin programa') ?>
                                         <?php endif; ?>
                                     </td>
-                                    <td>
-                                        <?php if (can_manage_users($user)): ?>
-                                            <label class="permission-option">
-                                                <input form="<?= e($formId) ?>" type="checkbox" name="asignado_modulo" <?= (int) $userItem['tiene_modulo'] === 1 ? 'checked' : '' ?>>
-                                                <span>Asignado</span>
-                                            </label>
-                                        <?php else: ?>
-                                            <?= (int) $userItem['tiene_modulo'] === 1 ? 'Asignado' : 'No asignado' ?>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if (can_manage_users($user)): ?>
-                                            <input form="<?= e($formId) ?>" class="form-control table-input" type="password" name="password" placeholder="Sin cambio">
-                                        <?php else: ?>
-                                            Protegida
-                                        <?php endif; ?>
-                                    </td>
+                                    <td><?= (int) $userItem['tiene_modulo'] === 1 ? 'Asignado' : 'No asignado' ?></td>
                                     <?php if (can_manage_users($user)): ?>
                                         <td>
                                             <div class="actions" style="justify-content:flex-start">
-                                                <button form="<?= e($formId) ?>" class="btn-primary btn-sm" type="submit"><i class="ti ti-device-floppy"></i>Guardar</button>
-                                                <form method="post" onsubmit="return confirm('Se eliminara este usuario. Continuar?');">
-                                                    <input type="hidden" name="action" value="eliminar_usuario">
-                                                    <input type="hidden" name="usuario_id" value="<?= (int) $userItem['id'] ?>">
-                                                    <button class="btn-outline btn-sm" type="submit">Eliminar</button>
-                                                </form>
+                                                <button form="<?= e($formId) ?>" class="btn-primary btn-sm" type="submit"><i class="ti ti-device-floppy"></i>Guardar programa</button>
+                                                <a class="btn-outline btn-sm" href="../login/usuarios/editar_usuario.php?id=<?= (int) $userItem['id'] ?>&scope=solicitudes">Editar</a>
+                                                <?php if (strtolower((string) $userItem['nombre_rol']) !== 'superadmin' && (int) $userItem['id'] !== (int) $user['id']): ?>
+                                                    <a class="btn-outline btn-sm" href="../login/usuarios/eliminar_usuario.php?id=<?= (int) $userItem['id'] ?>&scope=solicitudes" onclick="return confirm('Se eliminara este usuario. Continuar?');">Eliminar</a>
+                                                <?php endif; ?>
                                             </div>
                                         </td>
                                     <?php endif; ?>

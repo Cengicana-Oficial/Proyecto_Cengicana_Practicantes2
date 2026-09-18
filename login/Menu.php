@@ -90,6 +90,9 @@ function menu_modulo_meta($nombre)
     } elseif (in_array($modulo, ['laboratorio', 'laboratorios'], true)) {
         $ruta = '../laboratorio/index.php';
         $icono = 'science';
+    } elseif ($modulo === 'comites, transferencia y comunicacion') {
+        $ruta = '../comites/index.php';
+        $icono = 'diversity_3';
     } elseif ($modulo === 'solicitudes internas') {
         $ruta = '../sistema_de_solicitudes/index.php';
         $icono = 'assignment';

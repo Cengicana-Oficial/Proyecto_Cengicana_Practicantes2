@@ -90,6 +90,108 @@ function updatePermissionPanels() {
   });
 }
 
+function initUserSearch() {
+  const input = document.getElementById('agregar_usuario_buscar');
+  const hidden = document.getElementById('agregar_usuario_id');
+  const results = document.getElementById('agregar_usuario_resultados');
+  if (!input || !hidden || !results) return;
+
+  let users = [];
+  try {
+    users = JSON.parse(input.dataset.users || '[]');
+  } catch (e) {
+    users = [];
+  }
+
+  const MAX_MATCHES = 5;
+
+  function closeResults() {
+    results.hidden = true;
+    results.innerHTML = '';
+  }
+
+  function selectUser(user) {
+    hidden.value = String(user.id);
+    input.value = user.label;
+    closeResults();
+  }
+
+  function renderMatches(query) {
+    const normalized = query.trim().toLowerCase();
+    if (normalized === '') {
+      closeResults();
+      return;
+    }
+
+    const matches = users
+      .filter((u) => u.label.toLowerCase().includes(normalized))
+      .slice(0, MAX_MATCHES);
+
+    results.innerHTML = '';
+
+    if (matches.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'user-search-empty';
+      empty.textContent = 'Sin coincidencias.';
+      results.appendChild(empty);
+    } else {
+      matches.forEach((u) => {
+        const item = document.createElement('div');
+        item.className = 'user-search-item';
+        item.tabIndex = 0;
+        item.textContent = u.label;
+        item.addEventListener('click', () => selectUser(u));
+        item.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            selectUser(u);
+          }
+        });
+        results.appendChild(item);
+      });
+    }
+
+    results.hidden = false;
+  }
+
+  input.addEventListener('input', () => {
+    hidden.value = '';
+    renderMatches(input.value);
+  });
+
+  input.addEventListener('focus', () => {
+    if (input.value.trim() !== '' && hidden.value === '') {
+      renderMatches(input.value);
+    }
+  });
+
+  document.addEventListener('click', (event) => {
+    if (event.target !== input && !results.contains(event.target)) {
+      closeResults();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeResults();
+  });
+
+  const form = input.closest('form');
+  if (form) {
+    form.addEventListener('submit', (event) => {
+      if (!hidden.value) {
+        event.preventDefault();
+        closeResults();
+        input.focus();
+        input.setCustomValidity('Selecciona un usuario de la lista de coincidencias.');
+        input.reportValidity();
+      } else {
+        input.setCustomValidity('');
+      }
+    });
+    input.addEventListener('input', () => input.setCustomValidity(''));
+  }
+}
+
 function initSidebarToggle() {
   const sidebar = document.getElementById('appSidebar');
   const toggle = document.getElementById('sidebarToggle');
@@ -129,6 +231,7 @@ function initSidebarToggle() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initSidebarToggle();
+  initUserSearch();
 
   const tipo = document.getElementById('tipo');
   if (tipo) {

@@ -1,2 +1,3 @@
 /vendor/
 /storage/login_attempts.json
+/storage/password_reset_attempts.json

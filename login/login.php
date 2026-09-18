@@ -86,6 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Credenciales incorrectas";
     }
 }
+
+$resetExitoso = isset($_GET['reset']) && $_GET['reset'] === 'ok';
 ?>
 
 <!DOCTYPE html>
@@ -115,6 +117,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         <?php endif; ?>
 
+        <?php if($resetExitoso): ?>
+            <div class="error-msg">
+                Tu contraseña fue restablecida correctamente. Ya puedes iniciar sesión.
+            </div>
+        <?php endif; ?>
+
         <form method="POST" class="login-form">
 
             <label>Correo electrónico</label>
@@ -138,6 +146,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </button>
 
         </form>
+
+        <p style="text-align:center; margin-top:16px;">
+            <a href="forgot_password.php" style="color: var(--verde-oscuro); text-decoration: none; font-size: 14px;">¿Olvidaste tu contraseña?</a>
+        </p>
     </div>
 
 </div>
