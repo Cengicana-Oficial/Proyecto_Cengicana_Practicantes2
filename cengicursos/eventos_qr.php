@@ -211,6 +211,65 @@ if (($_GET['accion'] ?? '') === 'enlace_escaneo') {
     exit;
 }
 
+if (($_GET['accion'] ?? '') === 'exportar_participantes') {
+    if (!$puedeGestionar) {
+        http_response_code(403);
+        exit('No tienes permiso para exportar este listado.');
+    }
+
+    $eventoId = (int) ($_GET['evento_id'] ?? 0);
+    if ($eventoId <= 0) {
+        http_response_code(400);
+        exit('Evento no válido.');
+    }
+
+    $stmtEvento = $db->prepare('SELECT id, nombre, modalidad_pago FROM eventos WHERE id = ?');
+    $stmtEvento->execute([$eventoId]);
+    $evento = $stmtEvento->fetch(PDO::FETCH_ASSOC);
+    if (!$evento) {
+        http_response_code(404);
+        exit('El evento no existe.');
+    }
+
+    $stmt = $db->prepare("
+        SELECT ep.id, ep.nombre_invitado AS nombre, ep.cui_invitado AS cui,
+               COALESCE(NULLIF(p.correo_participantes, ''), NULLIF(ep.correo_invitado, '')) AS correo,
+               COALESCE(ip.nombre_ingenios, ie.nombre_ingenios, 'Invitado externo') AS ingenio,
+               ep.codigo_qr, ep.pagado, ep.ingreso_en
+        FROM evento_participantes ep
+        LEFT JOIN participantes p ON p.id = ep.participante_id
+        LEFT JOIN ingenios ip ON ip.id = p.ingenio_id
+        LEFT JOIN ingenios ie ON ie.id = ep.ingenio_id
+        WHERE ep.evento_id = ?
+        ORDER BY ep.nombre_invitado, ep.id
+    ");
+    $stmt->execute([$eventoId]);
+    $participantes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $eventoPagado = cengi_evt_modalidad_evento($db, $eventoId) === 'Pagado';
+    $encabezados = ['Participante', 'CUI', 'Ingenio', 'Correo', 'Código QR', 'Pago', 'Ingreso'];
+    $filas = [];
+    foreach ($participantes as $participante) {
+        $filas[] = [
+            $participante['nombre'] ?? '',
+            $participante['cui'] ?? '',
+            $participante['ingenio'] ?? 'Invitado externo',
+            $participante['correo'] ?? '',
+            $participante['codigo_qr'] ?? '',
+            $eventoPagado ? ((int) ($participante['pagado'] ?? 0) ? 'Pagado' : 'No pagado') : 'No aplica',
+            $participante['ingreso_en'] ?? 'Sin ingreso',
+        ];
+    }
+
+    cengi_export_enviar_excel(
+        $encabezados,
+        $filas,
+        'Listado de participantes - ' . $evento['nombre'],
+        'participantes-evento-' . $eventoId,
+        [32, 18, 26, 28, 22, 18, 18]
+    );
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $accion = trim((string) ($_POST['accion'] ?? ''));
     if ($accion === 'crear_evento' && $puedeGestionar) {
@@ -1090,19 +1149,13 @@ $ejemploParticipante = $db->query("
 
     $('#evpDescargar').on('click', function () {
         if (!eventoActual) return;
-        var eventoPagado = !!(eventoActual && eventoActual.modalidad_pago === 'Pagado');
-        var filas = [['Participante', 'CUI', 'Ingenio', 'Correo', 'Código QR', 'Pago', 'Ingreso']].concat(participantes.map(function (p) {
-            var pago = eventoPagado ? (Number(p.pagado) ? 'Pagado' : 'No pagado') : 'No aplica';
-            return [p.nombre, p.cui || '', p.ingenio, p.correo || '', p.codigo_qr, pago, p.ingreso_en || 'Sin ingreso'];
-        }));
-        var csv = '\uFEFF' + filas.map(function (fila) {
-            return fila.map(function (dato) { return '"' + String(dato).replace(/"/g, '""') + '"'; }).join(',');
-        }).join('\r\n');
+        var url = 'eventos_qr.php?accion=exportar_participantes&evento_id=' + encodeURIComponent(String(eventoActual.id));
         var enlace = document.createElement('a');
-        enlace.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
-        enlace.download = 'participantes-evento-' + eventoActual.id + '.csv';
+        enlace.href = url;
+        enlace.download = 'participantes-evento-' + eventoActual.id + '.xls';
+        document.body.appendChild(enlace);
         enlace.click();
-        URL.revokeObjectURL(enlace.href);
+        document.body.removeChild(enlace);
     });
 
     $('#qrDescargar').on('click', function () {
