@@ -13,6 +13,9 @@ cengi_require_carga_participantes("participantes.php");
 $db = conectar();
 $userID = cengi_usuario_actual_id();
 $cursoID = (int) ($_POST['curso'] ?? 0);
+$esAdmin = cengi_ve_todo_por_rol_o_ingenio();
+$ingenioActualID = cengi_ingenio_id_actual();
+$nombreIngenioActual = cengi_ingenio_nombre_actual();
 
 function cengi_carga_error($mensaje)
 {
@@ -105,6 +108,24 @@ try {
         $cursoID <= 0
     ) {
         cengi_carga_error('Debes seleccionar un curso antes de cargar el archivo.');
+    }
+
+    if (!$esAdmin) {
+        $stmtCursoVisible = $db->prepare("
+            SELECT c.id
+            FROM cursos c
+            WHERE c.id = ?
+              AND EXISTS (
+                  SELECT 1 FROM asignaciones ax
+                  INNER JOIN participantes px ON px.id = ax.participantes_id
+                  WHERE ax.cursos_id = c.id AND px.ingenio_id = ?
+              )
+            LIMIT 1
+        ");
+        $stmtCursoVisible->execute([$cursoID, $ingenioActualID]);
+        if (!$stmtCursoVisible->fetchColumn()) {
+            cengi_carga_error('El curso no está disponible para este usuario.');
+        }
     }
 
     if (
@@ -252,19 +273,27 @@ try {
             continue;
         }
 
-        $claveIngenio = mb_strtolower($ingenioNombre);
-        if (array_key_exists($claveIngenio, $cacheIngenios)) {
-            $ingenioID = $cacheIngenios[$claveIngenio];
+        if (!$esAdmin) {
+            if (cengi_texto_normalizado($ingenioNombre) !== cengi_texto_normalizado($nombreIngenioActual)) {
+                $advertencias[] = "Linea {$lineaReal}: se omitio porque el ingenio \"{$ingenioNombre}\" no corresponde al ingenio asignado a este usuario.";
+                continue;
+            }
+            $ingenioID = $ingenioActualID;
         } else {
-            $stmtBuscarIngenio->execute([$ingenioNombre]);
-            $ingenioID = $stmtBuscarIngenio->fetchColumn();
-            $ingenioID = $ingenioID !== false ? (int) $ingenioID : 0;
-            $cacheIngenios[$claveIngenio] = $ingenioID;
-        }
+            $claveIngenio = mb_strtolower($ingenioNombre);
+            if (array_key_exists($claveIngenio, $cacheIngenios)) {
+                $ingenioID = $cacheIngenios[$claveIngenio];
+            } else {
+                $stmtBuscarIngenio->execute([$ingenioNombre]);
+                $ingenioID = $stmtBuscarIngenio->fetchColumn();
+                $ingenioID = $ingenioID !== false ? (int) $ingenioID : 0;
+                $cacheIngenios[$claveIngenio] = $ingenioID;
+            }
 
-        if ($ingenioID <= 0) {
-            $advertencias[] = "Linea {$lineaReal}: se omitio porque el ingenio \"{$ingenioNombre}\" no coincide con ningun ingenio registrado.";
-            continue;
+            if ($ingenioID <= 0) {
+                $advertencias[] = "Linea {$lineaReal}: se omitio porque el ingenio \"{$ingenioNombre}\" no coincide con ningun ingenio registrado.";
+                continue;
+            }
         }
 
         if ($cui === '') {
@@ -324,6 +353,10 @@ try {
         }
 
         $procesados++;
+    }
+
+    if ($procesados === 0) {
+        throw new RuntimeException('No se pudo procesar ninguna fila válida del archivo. Revisa el formato y el ingenio del archivo.');
     }
 
     $db->commit();

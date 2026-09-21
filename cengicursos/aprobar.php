@@ -53,6 +53,48 @@ function cengi_password_temporal_estudiante(array $solicitud)
     return substr(hash('sha256', (string) ($solicitud['correo'] ?? '') . microtime(true)), 0, 10);
 }
 
+function cengi_asegurar_ingenio_en_menu(mysqli $conexionUsuarios, $ingenioId, $nombreIngenio = '')
+{
+    $ingenioId = (int) $ingenioId;
+
+    if ($ingenioId > 0) {
+        $stmtExiste = $conexionUsuarios->prepare("SELECT id FROM ingenios WHERE id = ? LIMIT 1");
+        $stmtExiste->bind_param('i', $ingenioId);
+        $stmtExiste->execute();
+        $resultado = $stmtExiste->get_result();
+        $fila = $resultado ? $resultado->fetch_assoc() : null;
+
+        if ($fila) {
+            return (int) $fila['id'];
+        }
+    }
+
+    $nombre = trim((string) $nombreIngenio);
+    if ($nombre === '') {
+        $nombre = 'Ingenio sin nombre';
+    }
+
+    $stmtPorNombre = $conexionUsuarios->prepare(
+        "SELECT id FROM ingenios WHERE LOWER(nombre_ingenio) = LOWER(?) LIMIT 1"
+    );
+    $stmtPorNombre->bind_param('s', $nombre);
+    $stmtPorNombre->execute();
+    $resultadoNombre = $stmtPorNombre->get_result();
+    $filaNombre = $resultadoNombre ? $resultadoNombre->fetch_assoc() : null;
+
+    if ($filaNombre) {
+        return (int) $filaNombre['id'];
+    }
+
+    $stmtInsert = $conexionUsuarios->prepare(
+        "INSERT INTO ingenios (nombre_ingenio, estado) VALUES (?, 1)"
+    );
+    $stmtInsert->bind_param('s', $nombre);
+    $stmtInsert->execute();
+
+    return (int) $conexionUsuarios->insert_id;
+}
+
 function cengi_crear_o_asociar_usuario_estudiante(array $solicitud)
 {
     $correo = trim((string) ($solicitud['correo'] ?? ''));
@@ -85,7 +127,11 @@ function cengi_crear_o_asociar_usuario_estudiante(array $solicitud)
         $nombre = trim((string) ($solicitud['nombre_participante'] ?? ''));
         $contrasenaHash = password_hash(cengi_password_temporal_estudiante($solicitud), PASSWORD_DEFAULT);
         $rolId = (int) $rolEstudiante['id'];
-        $ingenioId = isset($solicitud['ingenio_id']) ? (int) $solicitud['ingenio_id'] : null;
+        $ingenioId = cengi_asegurar_ingenio_en_menu(
+            $conexionUsuarios,
+            $solicitud['ingenio_id'] ?? null,
+            $solicitud['nombre_ingenios'] ?? ($solicitud['nombre_ingenio'] ?? '')
+        );
         $esSuperadmin = 0;
 
         $stmtInsertUsuario = $conexionUsuarios->prepare("
