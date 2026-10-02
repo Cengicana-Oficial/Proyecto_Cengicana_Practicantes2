@@ -115,8 +115,9 @@ if (($_GET['accion'] ?? '') === 'listar_participantes') {
     }
     $stmt = $db->prepare("
         SELECT ep.id, ep.nombre_invitado AS nombre, ep.cui_invitado AS cui,
-               ep.codigo_qr, ep.ingreso_en, ep.pagado, ep.ingenio_id,
-               COALESCE(ip.nombre_ingenios, ie.nombre_ingenios, 'Invitado externo') AS ingenio,
+               ep.codigo_qr, ep.ingreso_en, ep.pagado, ep.ingenio_id, ep.recibo_pago,
+               ep.telefono_invitado AS telefono, ep.pago_boleta, ep.pago_banco, ep.pago_fecha, ep.pago_monto,
+               COALESCE(ip.nombre_ingenios, ie.nombre_ingenios, NULLIF(ep.institucion_invitado, ''), 'Invitado externo') AS ingenio,
                COALESCE(NULLIF(p.correo_participantes, ''), NULLIF(ep.correo_invitado, '')) AS correo
         FROM evento_participantes ep
         LEFT JOIN participantes p ON p.id = ep.participante_id
@@ -234,7 +235,8 @@ if (($_GET['accion'] ?? '') === 'exportar_participantes') {
     $stmt = $db->prepare("
         SELECT ep.id, ep.nombre_invitado AS nombre, ep.cui_invitado AS cui,
                COALESCE(NULLIF(p.correo_participantes, ''), NULLIF(ep.correo_invitado, '')) AS correo,
-               COALESCE(ip.nombre_ingenios, ie.nombre_ingenios, 'Invitado externo') AS ingenio,
+               COALESCE(ip.nombre_ingenios, ie.nombre_ingenios, NULLIF(ep.institucion_invitado, ''), 'Invitado externo') AS ingenio,
+               ep.telefono_invitado AS telefono, ep.pago_boleta, ep.pago_banco, ep.pago_fecha, ep.pago_monto,
                ep.codigo_qr, ep.pagado, ep.ingreso_en
         FROM evento_participantes ep
         LEFT JOIN participantes p ON p.id = ep.participante_id
@@ -247,7 +249,7 @@ if (($_GET['accion'] ?? '') === 'exportar_participantes') {
     $participantes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $eventoPagado = cengi_evt_modalidad_evento($db, $eventoId) === 'Pagado';
-    $encabezados = ['Participante', 'CUI', 'Ingenio', 'Correo', 'Código QR', 'Pago', 'Ingreso'];
+    $encabezados = ['Participante', 'CUI', 'Ingenio', 'Correo', 'Teléfono', 'Código QR', 'Pago', 'Boleta', 'Banco', 'Fecha del pago', 'Monto pagado', 'Ingreso'];
     $filas = [];
     foreach ($participantes as $participante) {
         $filas[] = [
@@ -255,8 +257,13 @@ if (($_GET['accion'] ?? '') === 'exportar_participantes') {
             $participante['cui'] ?? '',
             $participante['ingenio'] ?? 'Invitado externo',
             $participante['correo'] ?? '',
+            $participante['telefono'] ?? '',
             $participante['codigo_qr'] ?? '',
             $eventoPagado ? ((int) ($participante['pagado'] ?? 0) ? 'Pagado' : 'No pagado') : 'No aplica',
+            $participante['pago_boleta'] ?? '',
+            $participante['pago_banco'] ?? '',
+            $participante['pago_fecha'] ?? '',
+            $participante['pago_monto'] ?? '',
             $participante['ingreso_en'] ?? 'Sin ingreso',
         ];
     }
@@ -272,19 +279,115 @@ if (($_GET['accion'] ?? '') === 'exportar_participantes') {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $accion = trim((string) ($_POST['accion'] ?? ''));
-    if ($accion === 'crear_evento' && $puedeGestionar) {
+    if (($accion === 'crear_evento' || $accion === 'guardar_evento') && $puedeGestionar) {
+        // Nuevo evento y "Editar evento" (prototipo SIGEC v29, ppEvGuardarEvento).
+        $eventoEditarId = (int) ($_POST['evento_id'] ?? 0);
         $nombre = trim((string) ($_POST['nombre'] ?? ''));
         $tipo = trim((string) ($_POST['tipo'] ?? 'Capacitación'));
         $modalidadPago = cengi_evento_modalidad_pago($_POST['modalidad_pago'] ?? 'Gratuito');
         $costo = $modalidadPago === 'Pagado' ? max(0, (float) ($_POST['costo'] ?? 0)) : 0;
-        $fecha = trim((string) ($_POST['fecha'] ?? '')) ?: null;
-        if ($nombre !== '' && ($modalidadPago === 'Gratuito' || $costo > 0)) {
-            $stmt = $db->prepare("INSERT INTO eventos (nombre, tipo, modalidad_pago, costo, fecha, estado, creado_por) VALUES (?, ?, ?, ?, ?, 'Planificado', ?)");
-            $stmt->execute([$nombre, $tipo, $modalidadPago, $costo, $fecha, cengi_usuario_actual_id()]);
-            $mensaje = 'Evento creado correctamente.';
-        } else {
-            $mensaje = $modalidadPago === 'Pagado' ? 'Ingresa un costo mayor que cero para el evento pagado.' : 'Escribe el nombre del evento.';
+        $fecha = trim((string) ($_POST['fecha'] ?? ''));
+        $hora = mb_substr(trim((string) ($_POST['hora'] ?? '')), 0, 40, 'UTF-8');
+        $lugar = mb_substr(trim((string) ($_POST['lugar'] ?? '')), 0, 255, 'UTF-8');
+        $cupo = max(0, (int) ($_POST['cupo'] ?? 0));
+        $descripcion = trim((string) ($_POST['descripcion'] ?? ''));
+        $color = preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($_POST['color'] ?? '')) ? strtoupper($_POST['color']) : '#2F6B12';
+        $estado = in_array($_POST['estado'] ?? '', CENGI_EVT_ESTADOS, true) ? $_POST['estado'] : 'Planificado';
+        $enColaboracion = !empty($_POST['en_colaboracion']) ? 1 : 0;
+        $colabModalidad = isset(CENGI_EVT_COLAB_MODALIDADES[(int) ($_POST['colab_modalidad'] ?? 0)]) ? (int) $_POST['colab_modalidad'] : 2;
+        $colabFinancia = isset(CENGI_EVT_COLAB_FINANCIA[$_POST['colab_financia'] ?? '']) ? $_POST['colab_financia'] : 'empresa';
+
+        // Empresas aliadas: filas del formulario (aliado_id vacio = nueva), sin nombre se ignoran.
+        $aliadosForm = [];
+        foreach ((array) ($_POST['aliado_nombre'] ?? []) as $k => $aliadoNombre) {
+            $aliadoNombre = mb_substr(trim((string) $aliadoNombre), 0, 255, 'UTF-8');
+            if ($aliadoNombre === '') {
+                continue;
+            }
+            $aliadosForm[] = [
+                'id' => (int) (($_POST['aliado_id'] ?? [])[$k] ?? 0),
+                'nombre' => $aliadoNombre,
+                'contacto' => mb_substr(trim((string) (($_POST['aliado_contacto'] ?? [])[$k] ?? '')), 0, 255, 'UTF-8'),
+                'correo' => mb_substr(trim((string) (($_POST['aliado_correo'] ?? [])[$k] ?? '')), 0, 255, 'UTF-8'),
+            ];
+        }
+
+        $errores = [];
+        if (mb_strlen($nombre, 'UTF-8') < 3) {
+            $errores[] = 'Escribe el nombre del evento.';
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+            $errores[] = 'Indica la fecha.';
+        }
+        if ($lugar === '') {
+            $errores[] = 'Indica el lugar.';
+        }
+        if ($enColaboracion && !$aliadosForm) {
+            $errores[] = 'Agrega al menos una empresa aliada o desmarca “Evento en colaboración”.';
+        }
+        // Si la empresa aliada o CENGICAÑA cubren el costo, el evento es gratuito para los participantes.
+        if ($enColaboracion && $colabFinancia !== 'compartido') {
+            $modalidadPago = 'Gratuito';
+            $costo = 0;
+        }
+        if ($modalidadPago === 'Pagado' && !($costo > 0)) {
+            $errores[] = 'Un evento pagado necesita costo nacional mayor que 0.';
+        }
+
+        if ($errores) {
+            $mensaje = implode(' ', $errores);
             $mensajeTipo = 'error';
+        } else {
+            try {
+                $db->beginTransaction();
+                $valores = [$nombre, $tipo, $modalidadPago, $costo, $fecha, $hora ?: null, $lugar, $cupo > 0 ? $cupo : null, $descripcion !== '' ? $descripcion : null, $color,
+                    $enColaboracion, $enColaboracion ? $colabModalidad : null, $enColaboracion ? $colabFinancia : null];
+                if ($eventoEditarId > 0) {
+                    $stmt = $db->prepare('UPDATE eventos SET nombre = ?, tipo = ?, modalidad_pago = ?, costo = ?, fecha = ?, hora = ?, lugar = ?, cupo = ?, descripcion = ?, color = ?,
+                        en_colaboracion = ?, colab_modalidad = ?, colab_financia = ?, estado = ? WHERE id = ?');
+                    $stmt->execute(array_merge($valores, [$estado, $eventoEditarId]));
+                    $eventoGuardadoId = $eventoEditarId;
+                } else {
+                    $stmt = $db->prepare("INSERT INTO eventos (nombre, tipo, modalidad_pago, costo, fecha, hora, lugar, cupo, descripcion, color,
+                        en_colaboracion, colab_modalidad, colab_financia, estado, creado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Planificado', ?)");
+                    $stmt->execute(array_merge($valores, [cengi_usuario_actual_id()]));
+                    $eventoGuardadoId = (int) $db->lastInsertId();
+                }
+
+                // Sincroniza las empresas aliadas: actualiza las existentes, agrega las nuevas
+                // (cada una con su token de encuesta) y quita las que se eliminaron del formulario.
+                $conservar = [];
+                $stmtExistentes = $db->prepare('SELECT id FROM evento_aliados WHERE evento_id = ?');
+                $stmtExistentes->execute([$eventoGuardadoId]);
+                $existentes = array_map('intval', $stmtExistentes->fetchAll(PDO::FETCH_COLUMN));
+                $actualizarAliado = $db->prepare('UPDATE evento_aliados SET nombre = ?, contacto = ?, correo = ?, orden = ? WHERE id = ? AND evento_id = ?');
+                $insertarAliado = $db->prepare('INSERT INTO evento_aliados (evento_id, nombre, contacto, correo, token, orden) VALUES (?, ?, ?, ?, ?, ?)');
+                foreach ($enColaboracion ? $aliadosForm : [] as $orden => $a) {
+                    if (in_array($a['id'], $existentes, true)) {
+                        $actualizarAliado->execute([$a['nombre'], $a['contacto'] ?: null, $a['correo'] ?: null, $orden, $a['id'], $eventoGuardadoId]);
+                        $conservar[] = $a['id'];
+                    } else {
+                        $insertarAliado->execute([$eventoGuardadoId, $a['nombre'], $a['contacto'] ?: null, $a['correo'] ?: null, cengi_evento_token(), $orden]);
+                        $conservar[] = (int) $db->lastInsertId();
+                    }
+                }
+                if ($enColaboracion) {
+                    $marcadores = $conservar ? implode(',', array_fill(0, count($conservar), '?')) : '0';
+                    $db->prepare("DELETE FROM evento_aliados WHERE evento_id = ? AND id NOT IN ({$marcadores})")->execute(array_merge([$eventoGuardadoId], $conservar));
+                }
+                // Si el evento deja de ser en colaboracion, las empresas y sus respuestas se conservan
+                // (ocultas) por si se vuelve a marcar.
+
+                $db->commit();
+                $mensaje = $eventoEditarId > 0 ? 'Evento actualizado.' : 'Evento creado — comparte el link de inscripción.';
+            } catch (PDOException $e) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                error_log('No fue posible guardar el evento: ' . $e->getMessage());
+                $mensaje = 'No fue posible guardar el evento.';
+                $mensajeTipo = 'error';
+            }
         }
     } elseif ($accion === 'registrar_participante' && $puedeGestionar) {
         $eventoId = (int) ($_POST['evento_id'] ?? 0);
@@ -560,9 +663,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $eventos = $db->query("
     SELECT e.*,
       (SELECT COUNT(*) FROM evento_participantes ep WHERE ep.evento_id = e.id) AS registrados,
-      (SELECT COUNT(*) FROM evento_participantes ep WHERE ep.evento_id = e.id AND ep.ingreso_en IS NOT NULL) AS ingresos
+      (SELECT COUNT(*) FROM evento_participantes ep WHERE ep.evento_id = e.id AND ep.ingreso_en IS NOT NULL) AS ingresos,
+      (SELECT COUNT(*) FROM evento_participantes ep WHERE ep.evento_id = e.id AND ep.pagado = 1) AS pagados,
+      (SELECT COUNT(*) FROM evento_participantes ep WHERE ep.evento_id = e.id AND ep.pagado = 0 AND ep.recibo_pago IS NOT NULL AND ep.recibo_pago <> '') AS por_validar
     FROM eventos e ORDER BY e.fecha DESC, e.id DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
+
+// Datos para "Editar evento" (se pasan al JS de la pagina) y empresas aliadas por evento.
+$aliadosPorEvento = [];
+foreach ($db->query('SELECT id, evento_id, nombre, contacto, correo FROM evento_aliados ORDER BY evento_id, orden, id')->fetchAll(PDO::FETCH_ASSOC) as $aliadoFila) {
+    $aliadosPorEvento[(int) $aliadoFila['evento_id']][] = ['id' => (int) $aliadoFila['id'], 'nombre' => $aliadoFila['nombre'], 'contacto' => (string) $aliadoFila['contacto'], 'correo' => (string) $aliadoFila['correo']];
+}
+$eventosEdicion = [];
+foreach ($eventos as $eventoFila) {
+    $eventosEdicion[(int) $eventoFila['id']] = [
+        'id' => (int) $eventoFila['id'], 'nombre' => $eventoFila['nombre'], 'tipo' => $eventoFila['tipo'], 'fecha' => (string) $eventoFila['fecha'],
+        'hora' => (string) $eventoFila['hora'], 'lugar' => (string) $eventoFila['lugar'], 'cupo' => $eventoFila['cupo'] !== null ? (int) $eventoFila['cupo'] : '',
+        'modalidad_pago' => $eventoFila['modalidad_pago'], 'costo' => (float) $eventoFila['costo'], 'descripcion' => (string) $eventoFila['descripcion'],
+        'color' => (string) ($eventoFila['color'] ?: '#2F6B12'), 'estado' => $eventoFila['estado'], 'registrados' => (int) $eventoFila['registrados'],
+        'en_colaboracion' => (int) $eventoFila['en_colaboracion'], 'colab_modalidad' => (int) ($eventoFila['colab_modalidad'] ?: 2),
+        'colab_financia' => (string) ($eventoFila['colab_financia'] ?: 'empresa'), 'aliados' => $aliadosPorEvento[(int) $eventoFila['id']] ?? [],
+    ];
+}
 
 // Catalogo de ingenios para el <select> "Ingenio" del formulario de registro
 // individual de participantes (opcion vacia = "Invitado externo").
@@ -580,17 +702,432 @@ $eventosPagados = (int) ($estadisticasEventos['pagados'] ?? 0);
 $eventosGratuitos = (int) ($estadisticasEventos['gratuitos'] ?? 0);
 $porcentajeGratuitos = $totalEventos > 0 ? (int) round(($eventosGratuitos / $totalEventos) * 100) : 0;
 
-$ejemploParticipante = $db->query("
-    SELECT ep.nombre_invitado AS nombre, ep.codigo_qr, e.nombre AS evento,
-           COALESCE(i.nombre_ingenios, 'Invitado externo') AS ingenio
-    FROM evento_participantes ep INNER JOIN eventos e ON e.id = ep.evento_id
-    LEFT JOIN participantes p ON p.id = ep.participante_id
-    LEFT JOIN ingenios i ON i.id = p.ingenio_id
-    ORDER BY e.fecha DESC, ep.id DESC LIMIT 1
-")->fetch(PDO::FETCH_ASSOC) ?: [];
+// Resumen de cobros de eventos pagados (KPIs "Comprobantes por validar" y "Cobrado en eventos").
+// Se deriva de evento_participantes.pagado / recibo_pago y eventos.costo; el esquema no guarda
+// montos por participante, asi que el importe se calcula como costo del evento x participantes.
+$resumenCobros = $db->query("
+    SELECT
+      COALESCE(SUM(CASE WHEN ep.pagado = 0 AND ep.recibo_pago IS NOT NULL AND ep.recibo_pago <> '' THEN 1 ELSE 0 END), 0) AS por_validar,
+      COALESCE(SUM(CASE WHEN ep.pagado = 1 THEN e.costo ELSE 0 END), 0) AS cobrado,
+      COALESCE(SUM(CASE WHEN ep.pagado = 0 THEN e.costo ELSE 0 END), 0) AS pendiente
+    FROM evento_participantes ep
+    INNER JOIN eventos e ON e.id = ep.evento_id
+    WHERE e.modalidad_pago = 'Pagado'
+")->fetch(PDO::FETCH_ASSOC) ?: ['por_validar' => 0, 'cobrado' => 0, 'pendiente' => 0];
+$comprobantesPorValidar = (int) $resumenCobros['por_validar'];
+$cobradoEventos = (float) $resumenCobros['cobrado'];
+$pendienteEventos = (float) $resumenCobros['pendiente'];
+$eventosProximos = 0;
+$participantesConQr = 0;
+$ingresosRegistrados = 0;
+foreach ($eventos as $eventoFila) {
+    if (!in_array($eventoFila['estado'], ['Finalizado', 'Cancelado'], true)) {
+        $eventosProximos++;
+    }
+    $participantesConQr += (int) $eventoFila['registrados'];
+    $ingresosRegistrados += (int) $eventoFila['ingresos'];
+}
+
+/* Fecha corta como en el prototipo: "31 jul 2026". */
+function cengi_evt_fecha_corta($fecha)
+{
+    $meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    $ts = $fecha ? strtotime((string) $fecha) : false;
+    if ($ts === false) {
+        return '—';
+    }
+    return date('d', $ts) . ' ' . $meses[(int) date('n', $ts) - 1] . ' ' . date('Y', $ts);
+}
+
+/* Icono SVG de trazo (mismos paths del prototipo) para los botones de accion. */
+function cengi_evt_icono($paths)
+{
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' . $paths . '</svg>';
+}
+
+function cengi_evt_fmt_q($valor)
+{
+    return 'Q' . number_format((float) $valor, 0, '.', ',');
+}
 ?>
 <html lang="es">
 <?php include('head.php'); ?>
+<style>
+/* Control QR de eventos: estilos de la vista del prototipo SIGEC v29 (aviso, KPIs con detalle,
+   barra de filtros, tabla con botones de icono y resumen del modal de participantes). Van aqui
+   porque dependen solo de esta pagina; las variables (--cengi-*) vienen de css/proyecto.css. */
+.cengi-eventos-qr-page .cengi-ev-intro { margin-bottom: 16px; }
+.cengi-eventos-qr-page .cengi-ev-intro > svg { width: 15px; height: 15px; flex: none; margin-top: 1px; }
+.cengi-eventos-qr-page .cengi-kpi-icon svg { width: 16px; height: 16px; }
+.cengi-eventos-qr-page .cengi-kpi-delta { margin-top: 8px; font-size: 11px; font-weight: 500; color: #4B5A45; }
+
+.cengi-eventos-qr-page .cengi-ev-section {
+    margin-bottom: 18px;
+    border: 1px solid var(--cengi-border);
+    border-radius: var(--cengi-radius);
+    background: var(--cengi-surface);
+    box-shadow: var(--cengi-shadow);
+    overflow: hidden;
+}
+.cengi-eventos-qr-page .cengi-ev-section-body { padding: 14px 18px; }
+.cengi-eventos-qr-page .cengi-ev-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.cengi-eventos-qr-page .cengi-ev-toolbar-group { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.cengi-eventos-qr-page .cengi-ev-new svg { width: 14px; height: 14px; stroke-width: 2.2; vertical-align: -2px; }
+.cengi-eventos-qr-page .cengi-ev-search,
+.cengi-eventos-qr-page .cengi-ev-filter {
+    width: auto;
+    height: auto;
+    padding: 8px 10px;
+    border: 1px solid var(--cengi-border);
+    border-radius: 8px;
+    box-shadow: none;
+    background-color: #fff;
+    color: var(--cengi-ink);
+    font-size: 12.5px;
+}
+.cengi-eventos-qr-page .cengi-ev-search {
+    min-width: 300px;
+    padding-left: 34px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23A3AAA0' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='M21 21l-4.35-4.35'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 10px center;
+}
+.cengi-eventos-qr-page .cengi-participants-toolbar .cengi-ev-filter { flex: 0 0 auto; }
+
+.cengi-eventos-qr-page .cengi-events-table { font-size: 12.5px; }
+.cengi-eventos-qr-page .cengi-events-table > thead > tr > th {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--cengi-border);
+    background: #FAFBF8;
+    color: #4B5A45;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.cengi-eventos-qr-page .cengi-events-table > tbody > tr > td { padding: 11px 12px; border-top: 0; border-bottom: 1px solid var(--cengi-border); }
+.cengi-eventos-qr-page .cengi-events-table > tbody > tr.cengi-ev-row:hover { background: #FAFBF6; }
+.cengi-eventos-qr-page .cengi-ev-name { min-width: 150px; font-weight: 700; }
+.cengi-eventos-qr-page .cengi-ev-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: underline;
+    text-decoration-color: #CFD5CB;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+.cengi-eventos-qr-page .cengi-ev-link:hover { color: #3E7A12; text-decoration-color: var(--cengi-primary); }
+.cengi-eventos-qr-page .cengi-ev-sub { margin-top: 2px; color: #4B5A45; font-size: 10.5px; font-weight: 400; line-height: 1.35; }
+.cengi-eventos-qr-page .cengi-ev-num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cengi-eventos-qr-page .cengi-ev-asistencia { font-size: 12px; }
+.cengi-eventos-qr-page .cengi-ev-progress { width: 90px; height: 6px; margin-top: 4px; }
+.cengi-eventos-qr-page .cengi-ev-empty { padding: 24px !important; color: #4B5A45; text-align: center; }
+.cengi-eventos-qr-page .cengi-ev-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 3px;
+    padding: 2px 7px;
+    border-radius: 100px;
+    background: #FFE9D9;
+    color: #B34E00;
+    font-size: 10px;
+    font-weight: 700;
+}
+.cengi-eventos-qr-page .cengi-status-badge.is-waiting { border-color: #F6D3B8; background: #FFE9D9; color: #B34E00; }
+
+.cengi-eventos-qr-page .cengi-ev-acc { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; width: 106px; }
+.cengi-eventos-qr-page .cengi-ev-acc-form { display: contents; }
+.cengi-eventos-qr-page .cengi-ev-acc-col { display: flex; flex-direction: column; gap: 5px; }
+.cengi-eventos-qr-page .cengi-ev-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 31px;
+    height: 31px;
+    min-width: 31px;
+    padding: 0;
+    border: 1px solid var(--cengi-border);
+    border-radius: 7px;
+    background: #fff;
+    color: #4B5A45;
+    cursor: pointer;
+}
+.cengi-eventos-qr-page .cengi-ev-icon-btn:hover,
+.cengi-eventos-qr-page .cengi-ev-icon-btn:focus { background: #F2F4EF; color: var(--cengi-ink); }
+.cengi-eventos-qr-page .cengi-ev-icon-btn svg { width: 14px; height: 14px; }
+.cengi-eventos-qr-page .cengi-ev-icon-btn.is-danger { color: #B23223; }
+.cengi-eventos-qr-page .cengi-ev-icon-btn.is-solid { border-color: #2F6B12; background: #2F6B12; color: #fff; }
+.cengi-eventos-qr-page .cengi-ev-icon-btn.is-solid:hover,
+.cengi-eventos-qr-page .cengi-ev-icon-btn.is-solid:focus { background: #3E7A12; color: #fff; }
+
+/* Modal de participantes */
+.cengi-eventos-qr-page .cengi-ev-strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 22px 12px; }
+.cengi-eventos-qr-page .cengi-ev-strip:empty { display: none; }
+.cengi-eventos-qr-page .cengi-ev-mini-stat {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 130px;
+    padding: 10px 16px;
+    border: 1px solid var(--cengi-border);
+    border-radius: 9px;
+    background: #fff;
+}
+.cengi-eventos-qr-page .cengi-ev-mini-stat .ms-label { color: #4B5A45; font-size: 11.5px; }
+.cengi-eventos-qr-page .cengi-ev-mini-stat .ms-val { font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700; color: var(--cengi-ink); }
+.cengi-eventos-qr-page .cengi-event-participants-table .cengi-avatar-sm {
+    width: 28px;
+    height: 28px;
+    background: #CED2D5;
+    color: #4B5A45;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10.5px;
+}
+.cengi-eventos-qr-page .cengi-event-participants-table .cengi-person-cell strong { font-size: 12.5px; font-weight: 600; }
+.cengi-eventos-qr-page .cengi-event-participants-table .cengi-person-cell small { font-size: 10.5px; line-height: 1.35; }
+.cengi-eventos-qr-page .cengi-event-participants-table > thead > tr > th { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: #4B5A45; white-space: nowrap; }
+.cengi-eventos-qr-page .cengi-td-ingenio { font-size: 12px; }
+.cengi-eventos-qr-page .cengi-td-pago { min-width: 160px; }
+.cengi-eventos-qr-page .cengi-mini-qr { cursor: pointer; }
+.cengi-eventos-qr-page .cengi-ev-cell-action { margin-top: 5px; }
+.cengi-eventos-qr-page .cengi-ev-cell-action .cengi-inline-entry-form { margin-top: 0; }
+.cengi-eventos-qr-page .cengi-ev-linkbtn {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #3E7A12;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+.cengi-eventos-qr-page .cengi-ev-linkbtn:hover { color: var(--cengi-primary-deep); }
+
+@media (max-width: 767px) {
+    .cengi-eventos-qr-page .cengi-ev-search { min-width: 0; flex: 1 1 200px; }
+    .cengi-eventos-qr-page .cengi-ev-toolbar-group { flex: 1 1 100%; }
+    .cengi-eventos-qr-page .cengi-td-pago { order: 3; flex: 1 1 auto; min-width: 0; padding-left: 39px !important; }
+    .cengi-eventos-qr-page .cengi-ev-acc-col { flex-direction: row; }
+    .cengi-eventos-qr-page .cengi-ev-strip { padding: 0 14px 12px; }
+}
+/* Pestañas, Editar evento, Difusión, Encuestas e informe (prototipo SIGEC v29: .tabs, .ee-*, .df-*, .inf-*). */
+.cengi-eventos-qr-page .cengi-ev-tabs { display: flex; gap: 4px; padding: 2px 18px 0; border-bottom: 1px solid var(--cengi-border); }
+.cengi-eventos-qr-page .cengi-ev-tab { margin-right: 18px; padding: 11px 4px; border: 0; border-bottom: 2px solid transparent; background: none; color: #4B5A45; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.cengi-eventos-qr-page .cengi-ev-tab.active { color: #3E7A12; border-bottom-color: var(--cengi-primary); }
+.cengi-eventos-qr-page .cengi-ev-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--cengi-border); }
+.cengi-eventos-qr-page .cengi-ev-section-head h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--cengi-ink); }
+.cengi-eventos-qr-page .cengi-ev-hint { margin-top: 3px; color: #4B5A45; font-size: 11.5px; }
+.cengi-eventos-qr-page .cengi-ev-opt { color: #8B9488; font-weight: 400; }
+.cengi-eventos-qr-page .cengi-ev-check { display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer; }
+.cengi-eventos-qr-page .cengi-ev-check input { margin: 0; }
+.cengi-eventos-qr-page .cengi-ev-color { height: 38px; padding: 3px; }
+.cengi-eventos-qr-page .cengi-ev-form-msg { display: none; margin-top: 14px; padding: 10px 13px; border-radius: 9px; font-size: 11.5px; line-height: 1.5; }
+.cengi-eventos-qr-page .cengi-ev-form-msg.is-err { display: block; border: 1px solid #F3C6C0; background: #FBE3E0; color: #8E2419; }
+.cengi-eventos-qr-page .cengi-ev-form-msg.is-warn { border: 1px solid #F4E5AC; background: #FFF6DA; color: #7A5D00; }
+.cengi-eventos-qr-page .cengi-ev-modal-xl { width: 1100px; max-width: calc(100% - 20px); }
+.cengi-eventos-qr-page .cengi-ev-modal-informe { width: 900px; max-width: calc(100% - 20px); }
+/* Con la barra lateral visible, los modales anchos se centran en el espacio a su derecha. */
+@media (min-width: 1025px) {
+    .cengi-eventos-qr-page .cengi-ev-modal-xl { --ancho: min(1100px, calc(100vw - var(--cengi-sidebar-width) - 48px)); }
+    .cengi-eventos-qr-page .cengi-ev-modal-informe { --ancho: min(900px, calc(100vw - var(--cengi-sidebar-width) - 48px)); }
+    .cengi-eventos-qr-page .cengi-ev-modal-xl,
+    .cengi-eventos-qr-page .cengi-ev-modal-informe { width: var(--ancho); max-width: none; margin-left: calc(var(--cengi-sidebar-width) + (100vw - var(--cengi-sidebar-width) - var(--ancho)) / 2); }
+}
+.cengi-eventos-qr-page .cengi-ev-chip-ok { padding: 4px 9px; border-radius: 100px; background: #EAF6DD; color: #3E7A12; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.cengi-eventos-qr-page .cengi-ev-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 100px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.cengi-eventos-qr-page .cengi-ev-badge i { width: 6px; height: 6px; border-radius: 50%; }
+.cengi-eventos-qr-page .cengi-ev-badge.b-activo { background: #EAF6DD; color: #3E7A12; } .cengi-eventos-qr-page .cengi-ev-badge.b-activo i { background: #73BC25; }
+.cengi-eventos-qr-page .cengi-ev-badge.b-planificacion { background: #FFF6DA; color: #8A6600; } .cengi-eventos-qr-page .cengi-ev-badge.b-planificacion i { background: #FFCC00; }
+.cengi-eventos-qr-page .cengi-ev-badge.b-espera { background: #FFE9D9; color: #B34E00; } .cengi-eventos-qr-page .cengi-ev-badge.b-espera i { background: #FF6B00; }
+.cengi-eventos-qr-page .evf-colab { display: grid; grid-template-columns: 1.3fr 1fr 1.2fr auto; gap: 6px; margin-bottom: 6px; align-items: center; }
+.cengi-eventos-qr-page .ee-card { margin-bottom: 14px; padding: 14px 16px; border: 1px solid var(--cengi-border); border-radius: 12px; background: #fff; }
+.cengi-eventos-qr-page .ee-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; font-size: 13px; }
+.cengi-eventos-qr-page .ee-fila { display: flex; justify-content: space-between; gap: 14px; padding: 10px 0; border-top: 1px solid var(--cengi-border); font-size: 12.5px; }
+.cengi-eventos-qr-page .ee-acc { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 6px; }
+.cengi-eventos-qr-page .ee-link { display: flex; gap: 6px; margin-top: 6px; }
+.cengi-eventos-qr-page .ee-link input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--cengi-border); border-radius: 6px; background: #FAFBF8; font-size: 11px; }
+.cengi-eventos-qr-page .ca-acc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cengi-eventos-qr-page .ca-sub { margin: 12px 0 4px; color: #4B5A45; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.cengi-eventos-qr-page .ca-firma { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; padding: 6px 10px; border: 1px solid #CFE9B3; border-radius: 8px; background: #EAF6DD; font-size: 12px; }
+.cengi-eventos-qr-page .pp-doc { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 14px; border: 1.5px dashed var(--cengi-border); border-radius: 9px; font-size: 12px; }
+.cengi-eventos-qr-page .pp-doc.over { border-color: var(--cengi-primary); background: #F4FBEC; }
+.cengi-eventos-qr-page .pp-doc .nm { font-weight: 600; }
+.cengi-eventos-qr-page .pp-doc .meta { color: #4B5A45; font-size: 11px; }
+.cengi-eventos-qr-page .pp-doc .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.cengi-eventos-qr-page .df-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+.cengi-eventos-qr-page .df-kpis > div { padding: 9px 12px; border: 1px solid var(--cengi-border); border-radius: 10px; background: #fff; }
+.cengi-eventos-qr-page .df-kpis span { display: block; color: #4B5A45; font-size: 10.5px; }
+.cengi-eventos-qr-page .df-kpis b { font-size: 17px; }
+.cengi-eventos-qr-page .df-2 { display: grid; grid-template-columns: .9fr 1.1fr; align-items: start; gap: 14px; }
+.cengi-eventos-qr-page .df-flyer { display: flex; align-items: center; justify-content: center; min-height: 120px; overflow: hidden; border: 1px solid var(--cengi-border); border-radius: 10px; background: #F4F6F1; }
+.cengi-eventos-qr-page .df-flyer img { display: block; max-width: 100%; max-height: 260px; object-fit: contain; }
+.cengi-eventos-qr-page .df-bit { display: flex; flex-direction: column; margin-left: 78px; border-left: 2px solid var(--cengi-border); }
+.cengi-eventos-qr-page .df-bit-f { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 7px 0 7px 14px; font-size: 12.5px; }
+.cengi-eventos-qr-page .df-bit-f::before { content: ""; position: absolute; left: -6px; top: 12px; width: 10px; height: 10px; border: 2px solid #fff; border-radius: 50%; background: var(--cengi-primary); }
+.cengi-eventos-qr-page .df-bit-d { position: absolute; left: -74px; top: 8px; width: 56px; color: #4B5A45; font-size: 11px; font-weight: 600; text-align: right; }
+.cengi-eventos-qr-page .inf-doc { max-width: 800px; margin: 0 auto; padding: 26px 30px; border: 1px solid #E1E5DD; background: #fff; color: #1C2517; font-family: Arial, Helvetica, sans-serif; font-size: 12px; }
+.cengi-eventos-qr-page .inf-head { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 3px solid; }
+.cengi-eventos-qr-page .inf-k { color: #5B6459; font-size: 10px; font-weight: 700; letter-spacing: .14em; }
+.cengi-eventos-qr-page .inf-t { margin-top: 3px; font-size: 22px; font-weight: 800; }
+.cengi-eventos-qr-page .inf-s { margin-top: 3px; color: #5B6459; font-size: 11.5px; }
+.cengi-eventos-qr-page .inf-sec { margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #E1E5DD; color: #0F2A1C; font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.cengi-eventos-qr-page .inf-ul { margin: 0; padding-left: 18px; line-height: 1.6; }
+.cengi-eventos-qr-page .inf-ul li { margin-bottom: 3px; }
+.cengi-eventos-qr-page .inf-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 12px; }
+.cengi-eventos-qr-page .inf-kpi { padding: 8px 10px; border: 1px solid #E1E5DD; border-radius: 8px; }
+.cengi-eventos-qr-page .inf-kpi .v { font-size: 18px; font-weight: 800; }
+.cengi-eventos-qr-page .inf-kpi .l { color: #5B6459; font-size: 10px; }
+.cengi-eventos-qr-page .inf-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.cengi-eventos-qr-page .inf-sub { margin-bottom: 8px; color: #5B6459; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.cengi-eventos-qr-page .inf-dist { display: grid; grid-template-columns: 34px 1fr 24px; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 11.5px; }
+.cengi-eventos-qr-page .inf-dist b { text-align: right; }
+.cengi-eventos-qr-page .inf-muted { color: #6B7468; font-size: 11px; }
+.cengi-eventos-qr-page .inf-tema { margin-bottom: 8px; }
+.cengi-eventos-qr-page .inf-tema-h { display: flex; justify-content: space-between; font-size: 12px; }
+.cengi-eventos-qr-page .inf-tema-h span { padding: 0 8px; border-radius: 100px; background: #EDF0EA; font-weight: 700; }
+.cengi-eventos-qr-page .inf-cita { margin: 3px 0 0 8px; padding-left: 6px; border-left: 2px solid #DDE3D8; color: #3A4236; font-size: 11px; font-style: italic; }
+.cengi-eventos-qr-page .inf-grp { margin-bottom: 10px; }
+.cengi-eventos-qr-page .inf-grp-h { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+.cengi-eventos-qr-page .inf-item { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 11.5px; }
+.cengi-eventos-qr-page .inf-item span { flex: 1; }
+.cengi-eventos-qr-page .inf-item b { min-width: 26px; text-align: right; }
+.cengi-eventos-qr-page .inf-pie { margin-top: 18px; padding-top: 6px; border-top: 1px solid #E1E5DD; color: #8B9488; font-size: 10px; text-align: right; }
+.cengi-ev-toast { position: fixed; z-index: 2000; right: 20px; bottom: 20px; max-width: 360px; padding: 11px 16px; border-radius: 10px; background: #1E2A1A; color: #fff; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.18); opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; }
+.cengi-ev-toast.is-visible { opacity: 1; transform: none; }
+.cengi-ev-toast.is-error { background: #8E2419; }
+@media (max-width: 767px) {
+    .cengi-eventos-qr-page .df-2, .cengi-eventos-qr-page .inf-2 { grid-template-columns: 1fr; }
+    .cengi-eventos-qr-page .df-kpis { grid-template-columns: 1fr 1fr; }
+    .cengi-eventos-qr-page .inf-kpis { grid-template-columns: repeat(2, 1fr); }
+    .cengi-eventos-qr-page .evf-colab { grid-template-columns: 1fr auto; }
+    .cengi-eventos-qr-page .ee-fila { flex-direction: column; }
+    .cengi-eventos-qr-page .ee-acc { align-items: flex-start; }
+}
+
+/* ===== Responsive de la pagina ===== */
+/* El contenedor general usa width:100% + margen de la barra lateral y se desbordaba
+   horizontalmente; con width:auto ocupa solo el espacio a la derecha de la barra. */
+.cengi-eventos-qr-page .container { width: auto; }
+.cengi-eventos-qr-page .cengi-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.cengi-eventos-qr-page .cengi-ev-tabs { overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.cengi-eventos-qr-page .cengi-ev-tab { flex: none; }
+
+/* Anchos medianos: los encabezados y la asistencia pueden partirse en dos lineas para que
+   la tabla quepa sin desplazamiento horizontal. */
+@media (min-width: 940.02px) and (max-width: 1440px) {
+    .cengi-eventos-qr-page .cengi-events-table > thead > tr > th { white-space: normal; vertical-align: bottom; }
+    .cengi-eventos-qr-page .cengi-events-table .cengi-ev-asistencia { white-space: normal; }
+    .cengi-eventos-qr-page .cengi-events-table .cengi-ev-name { min-width: 130px; }
+    .cengi-eventos-qr-page .cengi-events-table > tbody > tr > td { padding-left: 9px; padding-right: 9px; }
+}
+
+@media (max-width: 1024px) {
+    .cengi-eventos-qr-page .cengi-topbar { padding: 8px 18px; }
+    .cengi-eventos-qr-page .container { padding: 20px 18px 48px; }
+}
+
+@media (max-width: 900px) {
+    /* Encabezado: el titulo ya no se aplasta palabra por palabra. */
+    .cengi-eventos-qr-page .cengi-topbar { gap: 10px; padding: 8px 14px; }
+    .cengi-eventos-qr-page .cengi-topbar-title { font-size: 16px; line-height: 1.2; }
+    .cengi-eventos-qr-page .cengi-topbar-sub { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .cengi-eventos-qr-page .cengi-topbar-right .cengi-pill,
+    .cengi-eventos-qr-page .cengi-userbox-u1,
+    .cengi-eventos-qr-page .cengi-userbox-u2 { display: none; }
+    .cengi-eventos-qr-page .container { padding: 14px 12px 40px; }
+    .cengi-eventos-qr-page .cengi-ev-intro { font-size: 12px; }
+
+    /* Indicadores en dos columnas */
+    .cengi-eventos-qr-page .cengi-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .cengi-eventos-qr-page .cengi-kpi { padding: 12px 12px 14px; }
+    .cengi-eventos-qr-page .cengi-kpi-icon { width: 30px; height: 30px; margin-bottom: 8px; }
+    .cengi-eventos-qr-page .cengi-kpi-val { font-size: 22px; }
+    .cengi-eventos-qr-page .cengi-kpi-label { font-size: 11.5px; line-height: 1.3; }
+    .cengi-eventos-qr-page .cengi-kpi-delta { font-size: 10.5px; }
+
+    /* Barra: buscador a todo el ancho; filtro y "Nuevo evento" en la misma fila */
+    .cengi-eventos-qr-page .cengi-ev-tabs { padding: 2px 12px 0; }
+    .cengi-eventos-qr-page .cengi-ev-tab { margin-right: 12px; }
+    .cengi-eventos-qr-page .cengi-ev-section-body { padding: 12px; }
+    .cengi-eventos-qr-page .cengi-ev-toolbar-group { display: contents; }
+    .cengi-eventos-qr-page .cengi-ev-search { flex: 1 1 100%; min-width: 0; }
+    .cengi-eventos-qr-page .cengi-ev-toolbar .cengi-ev-filter { flex: 1 1 auto; min-width: 0; }
+    .cengi-eventos-qr-page .cengi-ev-new { flex: 0 0 auto; }
+    .cengi-eventos-qr-page .cengi-ev-section-head { flex-direction: column; padding: 12px; }
+
+    /* Modales: ocupan el ancho de la pantalla */
+    .cengi-eventos-qr-page .cengi-ev-modal .modal-dialog { width: auto; margin: 8px; }
+    .cengi-eventos-qr-page .cengi-ev-modal .modal-body { padding: 14px; }
+    .cengi-eventos-qr-page .cengi-ev-modal .modal-footer { display: flex; flex-wrap: wrap; gap: 8px; }
+    .cengi-eventos-qr-page .cengi-ev-modal .modal-footer > .btn { flex: 1 1 auto; margin: 0; }
+    .cengi-eventos-qr-page .cengi-ev-modal .cengi-form-grid { grid-template-columns: 1fr; }
+    .cengi-eventos-qr-page .ee-card { padding: 12px; }
+    .cengi-eventos-qr-page .ee-h { flex-wrap: wrap; }
+    .cengi-eventos-qr-page .df-bit { margin-left: 64px; }
+    .cengi-eventos-qr-page .df-bit-d { left: -62px; width: 48px; }
+    .cengi-eventos-qr-page #eiBodyInf { padding: 8px; }
+    .cengi-eventos-qr-page .inf-doc { padding: 16px 14px; }
+    .cengi-eventos-qr-page .inf-head { flex-direction: column-reverse; gap: 8px; }
+    .cengi-eventos-qr-page .inf-head img { align-self: flex-start; height: 34px !important; }
+    .cengi-eventos-qr-page .inf-t { font-size: 18px; }
+    .cengi-eventos-qr-page .inf-item { flex-wrap: wrap; }
+
+    /* Modal de participantes: resumen compacto y tarjetas sin bordes sobrantes */
+    .cengi-eventos-qr-page .cengi-ev-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 0 12px 10px; }
+    .cengi-eventos-qr-page .cengi-ev-mini-stat { min-width: 0; padding: 7px 9px; }
+    .cengi-eventos-qr-page .cengi-ev-mini-stat .ms-label { font-size: 10.5px; }
+    .cengi-eventos-qr-page .cengi-ev-mini-stat .ms-val { font-size: 15px; }
+    .cengi-eventos-qr-page .cengi-event-participants-table > tbody > tr > td { border-top: 0 !important; border-bottom: 0 !important; }
+    .cengi-eventos-qr-page .cengi-event-participants-table .cengi-td-qr { border-top: 1px dashed #e4e9e1 !important; }
+    .cengi-eventos-qr-page .cengi-event-participants-table .cengi-td-participante { flex: 1 1 calc(100% - 52px); }
+}
+
+/* Tablas de eventos y de evaluacion como tarjetas: en telefono/tablet y tambien cuando la
+   barra lateral esta visible pero el espacio restante no alcanza para la tabla completa. */
+@media (max-width: 940px), (min-width: 1024.02px) and (max-width: 1200px) {
+    .cengi-eventos-qr-page .cengi-events-table,
+    .cengi-eventos-qr-page .cengi-events-table > tbody { display: block; width: 100%; }
+    .cengi-eventos-qr-page .cengi-events-table > thead { display: none; }
+    .cengi-eventos-qr-page .cengi-events-table > tbody > tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 12px; padding: 14px; border-bottom: 1px solid var(--cengi-border); }
+    .cengi-eventos-qr-page .cengi-events-table > tbody > tr:last-child { border-bottom: 0; }
+    .cengi-eventos-qr-page .cengi-events-table > tbody > tr[style*="display: none"] { display: none !important; }
+    .cengi-eventos-qr-page .cengi-events-table > tbody > tr > td { display: block; min-width: 0; padding: 0 !important; border: 0 !important; }
+    .cengi-eventos-qr-page .cengi-events-table > tbody > tr > td[colspan] { grid-column: 1 / -1; padding: 16px 0 !important; }
+    .cengi-eventos-qr-page .cengi-events-table .cengi-ev-name { min-width: 0; font-size: 14px; }
+    /* Tarjeta de evento: nombre y estado / fecha y acceso / registrados y pagos / asistencia / acciones */
+    .cengi-eventos-qr-page #tablaEventos > tr.cengi-ev-row { grid-template-areas: "nombre estado" "fecha acceso" "reg pagos" "asist asist" "acc acc"; }
+    .cengi-eventos-qr-page #tablaEventos .cengi-ev-name { grid-area: nombre; }
+    .cengi-eventos-qr-page #tablaEventos .ev-td-estado { grid-area: estado; justify-self: end; align-self: start; }
+    .cengi-eventos-qr-page #tablaEventos .ev-td-fecha { grid-area: fecha; }
+    .cengi-eventos-qr-page #tablaEventos .ev-td-acceso { grid-area: acceso; justify-self: end; text-align: right; }
+    .cengi-eventos-qr-page #tablaEventos .ev-td-dato[data-label="Registrados"] { grid-area: reg; }
+    .cengi-eventos-qr-page #tablaEventos .ev-td-dato[data-label="Pagos"] { grid-area: pagos; }
+    .cengi-eventos-qr-page #tablaEventos .ev-td-asist { grid-area: asist; }
+    .cengi-eventos-qr-page #tablaEventos .ev-td-acc { grid-area: acc; }
+    .cengi-eventos-qr-page .cengi-events-table .ev-td-dato::before { content: attr(data-label); display: block; margin-bottom: 3px; color: #4B5A45; font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+    .cengi-eventos-qr-page .cengi-events-table .ev-td-asist { grid-column: 1 / -1; }
+    .cengi-eventos-qr-page .cengi-events-table .cengi-ev-progress { width: 100%; }
+    .cengi-eventos-qr-page .cengi-events-table .ev-td-acc { grid-column: 1 / -1; padding-top: 10px !important; border-top: 1px dashed var(--cengi-border) !important; }
+    .cengi-eventos-qr-page .cengi-events-table .cengi-ev-acc { width: auto; justify-content: flex-start; gap: 8px; }
+    .cengi-eventos-qr-page .cengi-events-table .cengi-ev-icon-btn { width: 38px; height: 38px; min-width: 38px; }
+    .cengi-eventos-qr-page .cengi-eval-table .cengi-ev-name { grid-column: 1 / -1; }
+    .cengi-eventos-qr-page .cengi-eval-table .ev-td-acc { display: flex !important; gap: 8px; text-align: left !important; }
+    .cengi-eventos-qr-page .cengi-eval-table .ev-td-acc .btn { flex: 1; }
+
+}
+
+@media (max-width: 360px) {
+    .cengi-eventos-qr-page .cengi-kpi-grid { grid-template-columns: 1fr; }
+}
+</style>
 <body class="cengi-canvas cengi-eventos-qr-page">
 <?php menu_render(); ?>
 <div class="container">
@@ -607,113 +1144,147 @@ $ejemploParticipante = $db->query("
         </div>
     <?php endif; ?>
 
-    <div class="cengi-kpi-grid cengi-event-stats" aria-label="Estadísticas de eventos por modalidad de pago">
+    <div class="cengi-notice cengi-ev-intro">
+        <?php echo cengi_evt_icono('<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>'); ?>
+        <div><b>Evento gratuito:</b> al inscribirse se genera el QR de ingreso. <b>Evento pagado:</b> la persona se inscribe y adjunta su comprobante (se abre con “Ver recibo” en <b>Ver participantes</b>) → el equipo <b>marca el pago como recibido</b> y el QR de ingreso queda listo para el gafete y el registro en la entrada.</div>
+    </div>
+
+    <div class="cengi-kpi-grid cengi-event-stats" id="evKpis" aria-label="Indicadores de eventos">
         <div class="cengi-kpi">
             <div class="cengi-kpi-bar" style="background:var(--cengi-primary);"></div>
-            <div class="cengi-kpi-icon"><span class="glyphicon glyphicon-calendar"></span></div>
-            <div class="cengi-kpi-val"><?php echo $totalEventos; ?></div>
-            <div class="cengi-kpi-label">Eventos registrados</div>
+            <div class="cengi-kpi-icon" style="background:#EAF6DD;color:var(--cengi-primary);"><?php echo cengi_evt_icono('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v5M16 2v5"/>'); ?></div>
+            <div class="cengi-kpi-val"><?php echo (int) $eventosProximos; ?></div>
+            <div class="cengi-kpi-label">Eventos próximos o en curso</div>
+            <div class="cengi-kpi-delta"><?php echo (int) $eventosPagados; ?> pagados · <?php echo (int) $eventosGratuitos; ?> gratuitos</div>
         </div>
         <div class="cengi-kpi">
-            <div class="cengi-kpi-bar" style="background:#73BC25;"></div>
-            <div class="cengi-kpi-icon" style="background:#EAF6DD;color:#326B00;"><span class="glyphicon glyphicon-gift"></span></div>
-            <div class="cengi-kpi-val"><?php echo $eventosGratuitos; ?></div>
-            <div class="cengi-kpi-label">Eventos gratuitos</div>
+            <div class="cengi-kpi-bar" style="background:<?php echo $comprobantesPorValidar > 0 ? 'var(--cengi-naranja)' : '#CED2D5'; ?>;"></div>
+            <div class="cengi-kpi-icon" style="background:<?php echo $comprobantesPorValidar > 0 ? '#FFE9D9' : '#EDEFEA'; ?>;color:<?php echo $comprobantesPorValidar > 0 ? 'var(--cengi-naranja)' : '#5B6459'; ?>;"><?php echo cengi_evt_icono('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>'); ?></div>
+            <div class="cengi-kpi-val"><?php echo (int) $comprobantesPorValidar; ?></div>
+            <div class="cengi-kpi-label">Comprobantes por validar</div>
+            <div class="cengi-kpi-delta">Depósitos y transferencias</div>
         </div>
         <div class="cengi-kpi">
-            <div class="cengi-kpi-bar" style="background:var(--cengi-amarillo);"></div>
-            <div class="cengi-kpi-icon" style="background:#FFF6DA;color:#8A6600;"><span class="glyphicon glyphicon-usd"></span></div>
-            <div class="cengi-kpi-val"><?php echo $eventosPagados; ?></div>
-            <div class="cengi-kpi-label">Eventos pagados</div>
+            <div class="cengi-kpi-bar" style="background:#3E7A12;"></div>
+            <div class="cengi-kpi-icon" style="background:#EAF6DD;color:#3E7A12;"><?php echo cengi_evt_icono('<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/>'); ?></div>
+            <div class="cengi-kpi-val"><?php echo cengi_evt_html(cengi_evt_fmt_q($cobradoEventos)); ?></div>
+            <div class="cengi-kpi-label">Cobrado en eventos</div>
+            <div class="cengi-kpi-delta">Pendiente: <?php echo cengi_evt_html(cengi_evt_fmt_q($pendienteEventos)); ?></div>
         </div>
         <div class="cengi-kpi">
-            <div class="cengi-kpi-bar" style="background:var(--cengi-naranja);"></div>
-            <div class="cengi-kpi-icon" style="background:#FFE9D9;color:#B34E00;"><span class="glyphicon glyphicon-stats"></span></div>
-            <div class="cengi-kpi-val"><?php echo $porcentajeGratuitos; ?>%</div>
-            <div class="cengi-kpi-label">Proporción de eventos gratuitos</div>
+            <div class="cengi-kpi-bar" style="background:#3E7A12;"></div>
+            <div class="cengi-kpi-icon" style="background:#EAF6DD;color:#3E7A12;"><?php echo cengi_evt_icono('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM18 18h3v3"/>'); ?></div>
+            <div class="cengi-kpi-val"><?php echo (int) $participantesConQr; ?></div>
+            <div class="cengi-kpi-label">Participantes con QR</div>
+            <div class="cengi-kpi-delta"><?php echo (int) $ingresosRegistrados; ?> ingresos registrados</div>
         </div>
     </div>
 
-    <div class="cengi-two-col">
-        <div>
-            <div class="panel panel-success cengi-event-card">
-                <div class="panel-heading cengi-event-heading">
-                    <div>
-                        <h3 class="panel-title">Eventos con control QR</h3>
-                        <small>Seminarios y talleres con registro de ingreso por código QR</small>
-                    </div>
-                    <?php if ($puedeGestionar): ?>
-                        <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#evtModal"><span class="glyphicon glyphicon-plus"></span> Nuevo evento</button>
-                    <?php endif; ?>
+    <div class="cengi-ev-section">
+        <div class="cengi-ev-tabs" role="tablist">
+            <button type="button" class="cengi-ev-tab active" data-evtab="eventos" role="tab">Eventos</button>
+            <button type="button" class="cengi-ev-tab" data-evtab="evaluacion" role="tab">Evaluación de eventos</button>
+        </div>
+        <div class="cengi-ev-section-body">
+            <div class="cengi-ev-toolbar">
+                <div class="cengi-ev-toolbar-group">
+                    <input type="search" class="form-control cengi-ev-search" id="evBuscar" placeholder="Buscar evento por nombre o tipo..." aria-label="Buscar evento">
+                    <select class="form-control cengi-ev-filter" id="evEstadoF" aria-label="Estado">
+                        <option value="">Todos los estados</option>
+                        <option value="Planificado">Planificado</option>
+                        <option value="En curso">En curso</option>
+                        <option value="Finalizado">Finalizado</option>
+                        <option value="Cancelado">Cancelado</option>
+                    </select>
                 </div>
-                <div class="panel-body cengi-event-table-body">
-                    <div class="cengi-table-wrap">
-                        <table class="table cengi-events-table">
-                            <thead><tr><th>Evento</th><th>Fecha</th><th>Acceso</th><th>Registrados</th><th>Ingresos QR</th><th>% Asistencia</th><th>Estado</th><th></th></tr></thead>
-                            <tbody>
-                            <?php if (!$eventos): ?><tr><td colspan="8" class="text-center cengi-empty-cell">No hay eventos registrados todavía.</td></tr><?php endif; ?>
-                            <?php foreach ($eventos as $evt): ?>
-                                <?php $pct = (int) $evt['registrados'] > 0 ? round(((int) $evt['ingresos'] / (int) $evt['registrados']) * 100) : 0; ?>
-                                <tr>
-                                    <td><strong><?php echo cengi_evt_html($evt['nombre']); ?></strong><br><small class="text-muted"><?php echo cengi_evt_html($evt['tipo']); ?></small></td>
-                                    <td><?php echo cengi_evt_html($evt['fecha'] ?: '—'); ?></td>
-                                    <td>
-                                        <span class="cengi-payment-badge <?php echo $evt['modalidad_pago'] === 'Pagado' ? 'is-paid' : 'is-free'; ?>">
-                                            <?php echo cengi_evt_html($evt['modalidad_pago']); ?>
-                                        </span>
-                                        <?php if ($evt['modalidad_pago'] === 'Pagado'): ?><small class="cengi-event-cost">Q <?php echo number_format((float) $evt['costo'], 2); ?></small><?php endif; ?>
-                                    </td>
-                                    <td><?php echo (int) $evt['registrados']; ?></td>
-                                    <td><?php echo (int) $evt['ingresos']; ?></td>
-                                    <td><div class="cengi-event-progress"><div class="cengi-progress-track"><div class="cengi-progress-fill" style="width:<?php echo (int) $pct; ?>%;"></div></div><span><?php echo (int) $pct; ?>%</span></div></td>
-                                    <td><span class="cengi-status-badge <?php echo cengi_evt_estado_badge($evt['estado']); ?>"><i></i><?php echo cengi_evt_html($evt['estado']); ?></span></td>
-                                    <td>
-                                        <button type="button" class="btn btn-default btn-sm cengi-view-participants" onclick="cengiEvtAbrirParticipantes(<?php echo (int) $evt['id']; ?>)">Ver participantes</button>
-                                        <?php if ($puedeGestionar): ?>
-                                        <button type="button" class="btn btn-default btn-sm" title="Copiar enlace público de inscripción" onclick="cengiEvtEnlaceInscripcion(<?php echo (int) $evt['id']; ?>)"><span class="glyphicon glyphicon-link"></span></button>
-                                        <button type="button" class="btn btn-default btn-sm" title="Enlace de escaneo en la entrada" onclick="cengiEvtEnlaceEscaneo(<?php echo (int) $evt['id']; ?>)"><span class="glyphicon glyphicon-camera"></span></button>
-                                        <form method="POST" class="cengi-inline-entry-form" data-evento-nombre="<?php echo cengi_evt_html($evt['nombre']); ?>" onsubmit="return cengiEvtConfirmarEliminarEvento(this);">
-                                            <input type="hidden" name="accion" value="eliminar_evento">
-                                            <input type="hidden" name="evento_id" value="<?php echo (int) $evt['id']; ?>">
-                                            <button type="submit" class="btn btn-danger btn-sm" title="Eliminar evento"><span class="glyphicon glyphicon-trash"></span></button>
-                                        </form>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="panel panel-success cengi-event-card">
-                <div class="panel-heading"><h3 class="panel-title">Flujo de registro por QR</h3></div>
-                <div class="panel-body">
-                    <div class="cengi-rail">
-                        <div class="cengi-rail-step is-done"><div class="cengi-rail-dot">1</div><div class="cengi-rail-label">Participante se registra</div></div>
-                        <div class="cengi-rail-step is-done"><div class="cengi-rail-line"></div><div class="cengi-rail-dot">2</div><div class="cengi-rail-label">Sistema genera QR</div></div>
-                        <div class="cengi-rail-step is-done"><div class="cengi-rail-line"></div><div class="cengi-rail-dot">3</div><div class="cengi-rail-label">QR en gafete</div></div>
-                        <div class="cengi-rail-step is-now"><div class="cengi-rail-line"></div><div class="cengi-rail-dot">4</div><div class="cengi-rail-label">Ingreso escaneando QR</div></div>
-                        <div class="cengi-rail-step"><div class="cengi-rail-line"></div><div class="cengi-rail-dot">5</div><div class="cengi-rail-label">Registro automático</div></div>
-                    </div>
-                    <div class="cengi-notice cengi-qr-notice"><span class="glyphicon glyphicon-info-sign"></span><span>Cada participante recibe un QR único y escaneable. En “Ver participantes” puedes abrirlo, descargarlo o marcar manualmente su ingreso.</span></div>
-                </div>
+                <?php if ($puedeGestionar): ?>
+                    <button type="button" class="btn btn-primary btn-sm cengi-ev-new" onclick="cengiEvtAbrirEvento()"><?php echo cengi_evt_icono('<path d="M12 5v14M5 12h14"/>'); ?> Nuevo evento</button>
+                <?php endif; ?>
             </div>
         </div>
+    </div>
 
-        <div class="panel panel-success cengi-event-card">
-            <div class="panel-heading"><h3 class="panel-title">Gafete de ejemplo</h3></div>
-            <div class="panel-body cengi-example-badge-wrap">
-                <div class="cengi-badge-card">
-                    <div class="bc-top"><div class="cengi-badge-eyebrow">CENGICAÑA · Evento técnico</div><div class="cengi-badge-event"><?php echo cengi_evt_html($ejemploParticipante['evento'] ?? 'Sin eventos registrados'); ?></div></div>
-                    <div class="bc-body">
-                        <div class="cengi-badge-name"><?php echo cengi_evt_html($ejemploParticipante['nombre'] ?? 'Nombre del participante'); ?></div>
-                        <div class="cengi-badge-company"><?php echo cengi_evt_html($ejemploParticipante['ingenio'] ?? 'Ingenio / institución'); ?></div>
-                        <div class="cengi-qr-box" id="cengiQrEjemplo" data-codigo="<?php echo cengi_evt_html($ejemploParticipante['codigo_qr'] ?? 'EVT-' . date('Y') . '-0000'); ?>"></div>
-                        <div class="mono cengi-badge-code"><?php echo cengi_evt_html($ejemploParticipante['codigo_qr'] ?? 'EVT-' . date('Y') . '-0000'); ?></div>
-                    </div>
-                </div>
+    <div class="cengi-ev-section" id="evPanelEventos">
+        <div class="cengi-table-wrap">
+            <table class="table cengi-events-table">
+                <thead><tr><th>Evento</th><th>Fecha</th><th>Acceso</th><th>Registrados</th><th>Pagos</th><th>Ingresos QR / asistencia</th><th>Estado</th><th></th></tr></thead>
+                <tbody id="tablaEventos">
+                <?php if (!$eventos): ?><tr><td colspan="8" class="cengi-ev-empty">No hay eventos registrados todavía.</td></tr><?php endif; ?>
+                <?php foreach ($eventos as $evt): ?>
+                    <?php
+                    $registradosEvt = (int) $evt['registrados'];
+                    $ingresosEvt = (int) $evt['ingresos'];
+                    $pct = $registradosEvt > 0 ? (int) round(($ingresosEvt / $registradosEvt) * 100) : 0;
+                    $esPagadoEvt = $evt['modalidad_pago'] === 'Pagado';
+                    $aliadosEvt = $evt['en_colaboracion'] ? ($aliadosPorEvento[(int) $evt['id']] ?? []) : [];
+                    ?>
+                    <tr class="cengi-ev-row" data-estado="<?php echo cengi_evt_html($evt['estado']); ?>" data-buscar="<?php echo cengi_evt_html(mb_strtolower($evt['nombre'] . ' ' . $evt['tipo'] . ' ' . $evt['lugar'], 'UTF-8')); ?>">
+                        <td class="cengi-ev-name"><button type="button" class="cengi-ev-link" onclick="cengiEvtAbrirParticipantes(<?php echo (int) $evt['id']; ?>)"><?php echo cengi_evt_html($evt['nombre']); ?></button><div class="cengi-ev-sub"><?php echo cengi_evt_html($evt['tipo'] . (trim((string) $evt['lugar']) !== '' ? ' · ' . $evt['lugar'] : '')); ?></div></td>
+                        <td class="cengi-ev-num ev-td-fecha"><?php echo cengi_evt_html(cengi_evt_fecha_corta($evt['fecha'])); ?><?php if (trim((string) $evt['hora']) !== ''): ?><div class="cengi-ev-sub"><?php echo cengi_evt_html($evt['hora']); ?></div><?php endif; ?></td>
+                        <td class="ev-td-acceso">
+                            <?php if ($aliadosEvt): ?>
+                                <div style="margin-bottom:3px;"><span class="cengi-status-badge is-active"><i></i>Colaboración</span></div>
+                                <div class="cengi-ev-sub"><?php echo cengi_evt_html($aliadosEvt[0]['nombre']); ?> · Modalidad <?php echo (int) $evt['colab_modalidad']; ?></div>
+                                <?php if ($evt['colab_financia'] !== 'compartido'): ?><div class="cengi-ev-sub">Gratis para participantes</div><?php endif; ?>
+                            <?php endif; ?>
+                            <?php if (!$aliadosEvt || $evt['colab_financia'] === 'compartido'): ?>
+                            <span class="cengi-status-badge <?php echo $esPagadoEvt ? 'is-waiting' : 'is-active'; ?>"><i></i><?php echo cengi_evt_html($evt['modalidad_pago']); ?></span>
+                            <?php if ($esPagadoEvt): ?><div class="cengi-ev-sub"><?php echo cengi_evt_html(cengi_evt_fmt_q($evt['costo'])); ?></div><?php endif; ?>
+                            <?php endif; ?>
+                        </td>
+                        <td class="cengi-ev-num ev-td-dato" data-label="Registrados"><strong><?php echo $registradosEvt; ?></strong><span class="cengi-ev-sub"> / <?php echo $evt['cupo'] ? (int) $evt['cupo'] : '—'; ?></span></td>
+                        <td class="cengi-ev-num ev-td-dato" data-label="Pagos">
+                            <?php if ($esPagadoEvt): ?>
+                                <?php echo (int) $evt['pagados']; ?> pagados
+                                <?php if ((int) $evt['por_validar'] > 0): ?><div><span class="cengi-ev-chip"><?php echo (int) $evt['por_validar']; ?> por validar</span></div><?php endif; ?>
+                            <?php else: ?>
+                                <span class="cengi-ev-sub">No aplica</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="ev-td-dato ev-td-asist" data-label="Ingresos QR / asistencia">
+                            <div class="cengi-ev-num cengi-ev-asistencia"><b><?php echo $ingresosEvt; ?></b> de <?php echo $registradosEvt; ?> registrados · <?php echo $pct; ?>%</div>
+                            <div class="cengi-progress-track cengi-ev-progress"><div class="cengi-progress-fill" style="width:<?php echo $pct; ?>%;"></div></div>
+                        </td>
+                        <td class="ev-td-estado"><span class="cengi-status-badge <?php echo cengi_evt_estado_badge($evt['estado']); ?>"><i></i><?php echo cengi_evt_html($evt['estado']); ?></span></td>
+                        <td class="ev-td-acc">
+                            <div class="cengi-ev-acc">
+                                <?php if ($puedeGestionar): ?>
+                                <button type="button" class="cengi-ev-icon-btn" title="Link de inscripción" aria-label="Link de inscripción" onclick="cengiEvtEnlaceInscripcion(<?php echo (int) $evt['id']; ?>)"><?php echo cengi_evt_icono('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>'); ?></button>
+                                <button type="button" class="cengi-ev-icon-btn" title="Enlace de escaneo en la entrada" aria-label="Enlace de escaneo en la entrada" onclick="cengiEvtEnlaceEscaneo(<?php echo (int) $evt['id']; ?>)"><?php echo cengi_evt_icono('<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>'); ?></button>
+                                <button type="button" class="cengi-ev-icon-btn" title="Difusión: material y canales" aria-label="Difusión: material y canales" onclick="cengiEvtDifusion(<?php echo (int) $evt['id']; ?>)"><?php echo cengi_evt_icono('<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/>'); ?></button>
+                                <?php endif; ?>
+                                <button type="button" class="cengi-ev-icon-btn" title="Encuestas y evaluación" aria-label="Encuestas y evaluación" onclick="cengiEvtEncuestas(<?php echo (int) $evt['id']; ?>)"><?php echo cengi_evt_icono('<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>'); ?></button>
+                                <button type="button" class="cengi-ev-icon-btn" title="Ver participantes" aria-label="Ver participantes" onclick="cengiEvtAbrirParticipantes(<?php echo (int) $evt['id']; ?>)"><?php echo cengi_evt_icono('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'); ?></button>
+                                <?php if ($puedeGestionar): ?>
+                                <button type="button" class="cengi-ev-icon-btn" title="Editar evento" aria-label="Editar evento" onclick="cengiEvtAbrirEvento(<?php echo (int) $evt['id']; ?>)"><?php echo cengi_evt_icono('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'); ?></button>
+                                <form method="POST" class="cengi-ev-acc-form" data-evento-nombre="<?php echo cengi_evt_html($evt['nombre']); ?>" onsubmit="return cengiEvtConfirmarEliminarEvento(this);">
+                                    <input type="hidden" name="accion" value="eliminar_evento">
+                                    <input type="hidden" name="evento_id" value="<?php echo (int) $evt['id']; ?>">
+                                    <button type="submit" class="cengi-ev-icon-btn is-danger" title="Eliminar evento" aria-label="Eliminar evento"><?php echo cengi_evt_icono('<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>'); ?></button>
+                                </form>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <tr id="evSinResultados" style="display:none;"><td colspan="8" class="cengi-ev-empty">No hay eventos con esos filtros.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="evPanelEvaluacion" style="display:none;">
+        <div class="cengi-kpi-grid cengi-event-stats" id="evEvalKpis"></div>
+        <div class="cengi-ev-section">
+            <div class="cengi-ev-section-head">
+                <div><h3>Evaluación de eventos</h3><div class="cengi-ev-hint">Percepción de participantes y evaluación de las empresas aliadas en eventos de colaboración. Abre el informe para ver temas, fortalezas y recomendaciones.</div></div>
+                <a class="btn btn-default btn-sm" href="eventos_gestion.php?accion=exportar_consolidado">Descargar consolidado</a>
+            </div>
+            <div class="cengi-table-wrap">
+                <table class="table cengi-events-table cengi-eval-table">
+                    <thead><tr><th>Evento</th><th>Asistentes</th><th>Percepción de participantes</th><th>Tema de mejora principal</th><th>Colaboración (empresas aliadas)</th><th></th></tr></thead>
+                    <tbody id="tablaEvEval"><tr><td colspan="6" class="cengi-ev-empty">Cargando…</td></tr></tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -725,18 +1296,20 @@ $ejemploParticipante = $db->query("
             <div class="modal-header cengi-participants-modal-head">
                 <button class="close" type="button" data-dismiss="modal" aria-hidden="true">&times;</button>
                 <h4 class="modal-title" id="evpTitulo">Participantes del evento</h4>
-                <div class="cengi-modal-hint">Registro individual de participantes y código QR</div>
+                <div class="cengi-modal-hint" id="evpSub">Registro de participantes, pagos y código QR</div>
             </div>
             <div class="modal-body cengi-participants-modal-body">
                 <div class="cengi-participants-toolbar">
-                    <input type="search" id="evpBuscar" class="form-control cengi-participant-search" placeholder="Buscar participante, ingenio o código QR…">
-                    <button type="button" class="btn btn-default btn-sm" id="evpDescargar"><span class="glyphicon glyphicon-download-alt"></span> Descargar listado</button>
+                    <input type="search" id="evpBuscar" class="form-control cengi-participant-search" placeholder="Buscar participante, CUI, correo, institución o código QR...">
+                    <select id="evpFiltro" class="form-control cengi-ev-filter" aria-label="Filtro"></select>
+                    <button type="button" class="btn btn-default btn-sm" id="evpDescargar">Descargar listado</button>
                     <?php if ($puedeGestionar): ?>
-                    <button type="button" class="btn btn-default btn-sm" id="evpEnviarGafetes" disabled><span class="glyphicon glyphicon-envelope"></span> Enviar gafete <span id="evpSeleccionCount">(0)</span></button>
-                    <button type="button" class="btn btn-default btn-sm" id="evpMostrarCargaMasiva"><span class="glyphicon glyphicon-upload"></span> Carga masiva</button>
-                    <button type="button" class="btn btn-primary btn-sm" id="evpMostrarRegistro"><span class="glyphicon glyphicon-plus"></span> Registrar participante</button>
+                    <button type="button" class="btn btn-default btn-sm" id="evpEnviarGafetes" disabled>Enviar gafete <span id="evpSeleccionCount">(0)</span></button>
+                    <button type="button" class="btn btn-default btn-sm" id="evpMostrarCargaMasiva">Carga masiva</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="evpMostrarRegistro">+ Registrar participante</button>
                     <?php endif; ?>
                 </div>
+                <div class="cengi-ev-strip" id="evpResumen"></div>
 
                 <?php if ($puedeGestionar): ?>
                 <div id="evpGafetesFeedback" style="display:none;"></div>
@@ -790,7 +1363,7 @@ $ejemploParticipante = $db->query("
                     <table class="table cengi-event-participants-table">
                         <thead><tr>
                             <?php if ($puedeGestionar): ?><th class="cengi-participant-check-col"><input type="checkbox" id="evpSeleccionarTodos" title="Seleccionar todos"></th><?php endif; ?>
-                            <th>Participante</th><th>Ingenio</th><th>Correo</th><th>Código QR</th><th>Pago</th><th>Ingreso</th><th></th>
+                            <th>Participante</th><th>Institución</th><th>Pago</th><th>Código QR</th><th>Ingreso</th><th></th>
                         </tr></thead>
                         <tbody id="tablaEventoParticipantes"></tbody>
                     </table>
@@ -862,24 +1435,81 @@ $ejemploParticipante = $db->query("
 <?php endif; ?>
 
 <?php if ($puedeGestionar): ?>
-<div class="modal fade" id="evtModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog"><div class="modal-content"><form method="POST">
-        <div class="modal-header"><button class="close" type="button" data-dismiss="modal" aria-hidden="true">&times;</button><h4 class="modal-title">Nuevo evento</h4></div>
+<div class="modal fade cengi-ev-modal" id="evtModal" tabindex="-1" role="dialog" aria-hidden="true" aria-labelledby="evfTitulo">
+    <div class="modal-dialog"><div class="modal-content"><form method="POST" id="evfForm" novalidate>
+        <div class="modal-header"><button class="close" type="button" data-dismiss="modal" aria-label="Cerrar">&times;</button><h4 class="modal-title" id="evfTitulo">Nuevo evento</h4><div class="cengi-modal-hint">Datos que ve el participante en el link de inscripción</div></div>
         <div class="modal-body">
-            <input type="hidden" name="accion" value="crear_evento">
+            <input type="hidden" name="accion" value="guardar_evento">
+            <input type="hidden" name="evento_id" id="evfId" value="">
             <div class="cengi-form-grid">
-                <div class="form-group cengi-form-full"><label class="control-label">Nombre del evento</label><input type="text" name="nombre" class="form-control" required></div>
-                <div class="form-group"><label class="control-label">Tipo</label><select name="tipo" class="form-control"><option>Capacitación</option><option>Seminario</option><option>Taller</option><option>Evento técnico</option><option>Feria</option></select></div>
-                <div class="form-group"><label class="control-label">Fecha</label><input type="date" name="fecha" class="form-control"></div>
-                <div class="form-group"><label class="control-label">Modalidad de acceso</label><select name="modalidad_pago" id="evtModalidadPago" class="form-control"><option value="Gratuito">Gratuito</option><option value="Pagado">Pagado</option></select></div>
-                <div class="form-group" id="evtCostoGrupo" style="display:none;"><label class="control-label">Costo (Q)</label><input type="number" name="costo" id="evtCosto" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+                <div class="form-group cengi-form-full"><label class="control-label" for="evfNombre">Nombre del evento</label><input type="text" name="nombre" id="evfNombre" class="form-control" maxlength="255" placeholder="Ej. DRONTECH"></div>
+                <div class="form-group"><label class="control-label" for="evfTipo">Tipo</label><select name="tipo" id="evfTipo" class="form-control"><?php foreach (CENGI_EVT_TIPOS as $tipoOpcion): ?><option><?php echo cengi_evt_html($tipoOpcion); ?></option><?php endforeach; ?></select></div>
+                <div class="form-group"><label class="control-label" for="evfFecha">Fecha</label><input type="date" name="fecha" id="evfFecha" class="form-control"></div>
+                <div class="form-group"><label class="control-label" for="evfHora">Horario</label><input type="text" name="hora" id="evfHora" class="form-control" maxlength="40" placeholder="8:00–13:00"></div>
+                <div class="form-group"><label class="control-label" for="evfLugar">Lugar</label><input type="text" name="lugar" id="evfLugar" class="form-control" maxlength="255" placeholder="Auditorio CENGICAÑA"></div>
+                <div class="form-group"><label class="control-label" for="evtModalidadPago">Acceso</label><select name="modalidad_pago" id="evtModalidadPago" class="form-control"><option value="Gratuito">Gratuito</option><option value="Pagado">Pagado</option></select></div>
+                <div class="form-group"><label class="control-label" for="evfCupo">Cupo</label><input type="number" name="cupo" id="evfCupo" class="form-control" min="1" placeholder="150"></div>
+                <div class="form-group" id="evtCostoGrupo" style="display:none;"><label class="control-label" for="evtCosto">Costo nacional (Q)</label><input type="number" name="costo" id="evtCosto" class="form-control" min="0" step="0.01" inputmode="decimal" placeholder="300"></div>
+                <div class="form-group" id="evfEstadoGrupo" style="display:none;"><label class="control-label" for="evfEstado">Estado</label><select name="estado" id="evfEstado" class="form-control"><?php foreach (CENGI_EVT_ESTADOS as $estadoOpcion): ?><option><?php echo cengi_evt_html($estadoOpcion); ?></option><?php endforeach; ?></select></div>
+                <div class="form-group"><label class="control-label" for="evfColor">Color del evento</label><input type="color" name="color" id="evfColor" class="form-control cengi-ev-color" value="#2F6B12"></div>
+                <div class="form-group cengi-form-full">
+                    <label class="cengi-ev-check" style="font-weight:600;"><input type="checkbox" name="en_colaboracion" id="evfColab" value="1"> Evento en colaboración con empresas aliadas</label>
+                    <div id="evfColabBox" style="margin-top:8px;">
+                        <div class="cengi-form-grid" style="margin-bottom:8px;">
+                            <div class="form-group"><label class="control-label" for="evfColabMod">Modalidad de colaboración</label><select name="colab_modalidad" id="evfColabMod" class="form-control"><?php foreach (CENGI_EVT_COLAB_MODALIDADES as $modNum => $modTexto): ?><option value="<?php echo (int) $modNum; ?>"><?php echo (int) $modNum . ' · ' . cengi_evt_html($modTexto); ?></option><?php endforeach; ?></select></div>
+                            <div class="form-group"><label class="control-label" for="evfColabFin">¿Quién cubre el costo?</label><select name="colab_financia" id="evfColabFin" class="form-control"><?php foreach (CENGI_EVT_COLAB_FINANCIA as $finClave => $finTexto): ?><option value="<?php echo cengi_evt_html($finClave); ?>"><?php echo cengi_evt_html($finTexto); ?></option><?php endforeach; ?></select></div>
+                            <div class="form-group cengi-form-full"><div class="cengi-ev-sub" id="evfColabNota"></div></div>
+                        </div>
+                        <div id="evfColabLista"></div>
+                        <button type="button" class="btn btn-default btn-sm" id="evfColabAgregar">+ Agregar empresa aliada</button>
+                        <div class="cengi-ev-sub" style="margin-top:4px;">A cada empresa se le genera un enlace para la encuesta de colaboración.</div>
+                    </div>
+                </div>
+                <div class="form-group cengi-form-full"><label class="control-label" for="evfDesc">Descripción corta</label><textarea name="descripcion" id="evfDesc" class="form-control" rows="3" placeholder="Lo que verá el participante en el formulario"></textarea></div>
             </div>
+            <div class="cengi-ev-form-msg" id="evfMsg" role="alert"></div>
         </div>
-        <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Guardar</button></div>
+        <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Guardar evento</button></div>
     </form></div></div>
 </div>
 <?php endif; ?>
+
+<div class="modal fade cengi-ev-modal" id="modalDifusion" tabindex="-1" role="dialog" aria-hidden="true" aria-labelledby="dfTitulo">
+    <div class="modal-dialog cengi-ev-modal-xl"><div class="modal-content">
+        <div class="modal-header"><button class="close" type="button" data-dismiss="modal" aria-label="Cerrar">&times;</button><h4 class="modal-title" id="dfTitulo">Difusión</h4><div class="cengi-modal-hint" id="dfSub"></div></div>
+        <div class="modal-body" id="dfBody"></div>
+        <div class="modal-footer"><button type="button" class="btn btn-primary" data-dismiss="modal">Listo</button></div>
+    </div></div>
+</div>
+
+<div class="modal fade cengi-ev-modal" id="modalEvEncuestas" tabindex="-1" role="dialog" aria-hidden="true" aria-labelledby="eeTitulo">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+        <div class="modal-header"><button class="close" type="button" data-dismiss="modal" aria-label="Cerrar">&times;</button><h4 class="modal-title" id="eeTitulo">Encuestas</h4><div class="cengi-modal-hint" id="eeSub"></div></div>
+        <div class="modal-body" id="eeBody"></div>
+        <div class="modal-footer" id="eeFoot"></div>
+    </div></div>
+</div>
+
+<div class="modal fade cengi-ev-modal" id="modalEvInforme" tabindex="-1" role="dialog" aria-hidden="true" aria-labelledby="eiTituloInf">
+    <div class="modal-dialog cengi-ev-modal-informe"><div class="modal-content">
+        <div class="modal-header"><button class="close" type="button" data-dismiss="modal" aria-label="Cerrar">&times;</button><h4 class="modal-title" id="eiTituloInf">Informe</h4></div>
+        <div class="modal-body" id="eiBodyInf" style="background:#F4F6F1;"></div>
+        <div class="modal-footer"><a class="btn btn-default" id="eiDescargar" href="#">Descargar respuestas</a><button type="button" class="btn btn-primary" id="eiImprimir">Imprimir / guardar PDF</button></div>
+    </div></div>
+</div>
 <script src="js/qrcode-generator.js"></script>
+<script>
+window.CENGI_EVT = <?php echo json_encode([
+    'puedeGestionar' => $puedeGestionar,
+    'eventos' => $eventosEdicion,
+    'colabItems' => CENGI_EVT_COLAB_ITEMS,
+    'colabGrupos' => CENGI_EVT_COLAB_GRUPOS,
+    'canales' => CENGI_EVT_DIF_CANALES,
+    'usuario' => (string) ($_SESSION['usuario'] ?? ''),
+    'hoy' => date('Y-m-d'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+</script>
+<script src="js/eventos_gestion.js"></script>
 <script>
 (function () {
     'use strict';
@@ -888,6 +1518,9 @@ $ejemploParticipante = $db->query("
     var qrActual = '';
     var puedeGestionar = <?php echo $puedeGestionar ? 'true' : 'false'; ?>;
     var seleccionados = {};
+    var ICONO_QR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3z"/></svg>';
+    var ICONO_EDITAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+    var ICONO_ELIMINAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>';
 
     function escapeHtml(valor) {
         return $('<div>').text(valor == null ? '' : String(valor)).html();
@@ -929,51 +1562,136 @@ $ejemploParticipante = $db->query("
         }
     }
 
-    function renderParticipantes() {
+    var MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+    function fechaCorta(iso) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+        if (!m) return '—';
+        return m[3] + ' ' + MESES_CORTOS[Number(m[2]) - 1] + ' ' + m[1];
+    }
+
+    function formatoQ(valor) {
+        return 'Q' + Math.round(Number(valor) || 0).toLocaleString('es-GT');
+    }
+
+    function esEventoPagadoActual() {
+        return !!(eventoActual && eventoActual.modalidad_pago === 'Pagado');
+    }
+
+    // Pago de un participante: 'pagado' | 'por-validar' (subio recibo, aun sin marcar pagado) | 'no-pagado'.
+    function estadoPagoParticipante(p) {
+        if (Number(p.pagado)) return 'pagado';
+        return p.recibo_pago ? 'por-validar' : 'no-pagado';
+    }
+
+    function encabezadoEvento() {
+        if (!eventoActual) return;
+        var acceso = esEventoPagadoActual() ? 'Pagado ' + formatoQ(eventoActual.costo) : 'Gratuito';
+        $('#evpSub').text([eventoActual.tipo, fechaCorta(eventoActual.fecha), acceso, 'Registro individual de participantes y código QR'].filter(Boolean).join(' · '));
+        var opciones = '<option value="todos">Todos</option>';
+        if (esEventoPagadoActual()) {
+            opciones += '<option value="no-pagado">No pagado</option><option value="por-validar">Comprobante por validar</option><option value="pagado">Pagado</option>';
+        }
+        opciones += '<option value="ingreso">Con ingreso</option><option value="sin-ingreso">Sin ingreso</option>';
+        $('#evpFiltro').html(opciones);
+    }
+
+    function participantesFiltrados() {
         var busqueda = ($('#evpBuscar').val() || '').toLowerCase().trim();
-        var filtrados = participantes.filter(function (p) {
-            return !busqueda || [p.nombre, p.ingenio, p.codigo_qr, p.cui, p.correo].join(' ').toLowerCase().indexOf(busqueda) !== -1;
+        var filtro = $('#evpFiltro').val() || 'todos';
+        return participantes.filter(function (p) {
+            var pasa = filtro === 'todos'
+                || (filtro === 'ingreso' && !!p.ingreso_en)
+                || (filtro === 'sin-ingreso' && !p.ingreso_en)
+                || estadoPagoParticipante(p) === filtro;
+            return pasa && (!busqueda || [p.nombre, p.ingenio, p.codigo_qr, p.cui, p.correo, p.telefono, p.pago_boleta].join(' ').toLowerCase().indexOf(busqueda) !== -1);
         });
+    }
+
+    function renderResumen() {
+        var esPagado = esEventoPagadoActual();
+        var porValidar = 0, pagados = 0, noPagados = 0, ingresos = 0;
+        participantes.forEach(function (p) {
+            var e = estadoPagoParticipante(p);
+            if (e === 'pagado') pagados++; else if (e === 'por-validar') porValidar++; else noPagados++;
+            if (p.ingreso_en) ingresos++;
+        });
+        var stats = [['Registrados', participantes.length, '']];
+        if (esPagado) {
+            stats.push(['Por validar', porValidar, porValidar ? '#B34E00' : '']);
+            stats.push(['Pagados', pagados, '#3E7A12']);
+            stats.push(['No pagados', noPagados, noPagados ? '#B23223' : '']);
+        }
+        stats.push(['Con QR', participantes.length, '']);
+        stats.push(['Ingresos', ingresos, '#3E7A12']);
+        $('#evpResumen').html(stats.map(function (s) {
+            return '<div class="cengi-ev-mini-stat"><span class="ms-label">' + escapeHtml(s[0]) + '</span><span class="ms-val"' + (s[2] ? ' style="color:' + s[2] + ';"' : '') + '>' + escapeHtml(s[1]) + '</span></div>';
+        }).join(''));
+    }
+
+    function renderParticipantes() {
+        var busqueda = ($('#evpBuscar').val() || '').trim();
+        var filtrados = participantesFiltrados();
         $('#evpCargando').hide();
         $('#evpVacio').toggle(filtrados.length === 0).text(participantes.length === 0
-            ? 'Todavía no hay participantes registrados en este evento.'
-            : 'No se encontraron participantes con esa búsqueda.');
+            ? 'Aún no hay participantes. Comparte el link de inscripción o registra uno.'
+            : (busqueda ? 'Nadie coincide con “' + busqueda + '”.' : 'No hay participantes con ese filtro.'));
         $('#evpTablaWrap').toggle(filtrados.length > 0);
+        renderResumen();
 
+        var esEventoPagado = esEventoPagadoActual();
         $('#tablaEventoParticipantes').html(filtrados.map(function (p) {
             var indice = participantes.indexOf(p);
+            var estadoPago = estadoPagoParticipante(p);
             var ingreso = p.ingreso_en
                 ? '<span class="cengi-status-badge is-active"><i></i>Ingresó</span><small class="cengi-entry-time">' + escapeHtml(p.ingreso_en) + '</small>'
-                : '<span class="cengi-status-badge is-neutral"><i></i>Sin ingreso</span>';
-            var esEventoPagado = !!(eventoActual && eventoActual.modalidad_pago === 'Pagado');
+                : '<span class="cengi-status-badge is-finished"><i></i>Sin ingreso</span>';
             var pagoBadge = !esEventoPagado
-                ? '<span class="cengi-status-badge is-neutral" title="El evento es gratuito"><i></i>No aplica</span>'
-                : (Number(p.pagado)
+                ? '<span class="cengi-status-badge is-finished" title="El evento es gratuito"><i></i>Gratuito</span>'
+                : (estadoPago === 'pagado'
                     ? '<span class="cengi-status-badge is-active"><i></i>Pagado</span>'
-                    : '<span class="cengi-status-badge is-rejected"><i></i>No pagado</span>');
-            var pagoToggle = (esEventoPagado && puedeGestionar)
-                ? '<form method="POST" class="cengi-inline-entry-form"><input type="hidden" name="accion" value="marcar_pago"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><input type="hidden" name="pagado" value="' + (Number(p.pagado) ? 0 : 1) + '"><button type="submit" class="btn btn-default btn-xs">' + (Number(p.pagado) ? 'Marcar no pagado' : 'Marcar pagado') + '</button></form>'
+                    : (estadoPago === 'por-validar'
+                        ? '<span class="cengi-status-badge is-waiting"><i></i>Comprobante por validar</span>'
+                        : '<span class="cengi-status-badge is-rejected"><i></i>No pagado</span>'));
+            var pagoAccion = '';
+            if (esEventoPagado && puedeGestionar) {
+                var formPago = function (valor, clase, texto) {
+                    return '<div class="cengi-ev-cell-action"><form method="POST" class="cengi-inline-entry-form"><input type="hidden" name="accion" value="marcar_pago"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><input type="hidden" name="pagado" value="' + valor + '"><button type="submit" class="' + clase + '">' + texto + '</button></form></div>';
+                };
+                pagoAccion = estadoPago === 'pagado'
+                    ? formPago(0, 'cengi-ev-linkbtn', 'Marcar no pagado')
+                    : (estadoPago === 'por-validar'
+                        ? formPago(1, 'btn btn-primary btn-sm', 'Validar pago')
+                        : formPago(1, 'btn btn-default btn-sm', 'Marcar pagado'));
+            }
+            // Enlace al recibo de pago subido por el participante en el formulario publico
+            // (cengicursos/inscripcion_evento.php); solo existe para eventos pagados.
+            // Datos del comprobante que la persona escribio en el formulario publico.
+            var datosPago = (esEventoPagado && (p.pago_boleta || p.pago_monto))
+                ? '<div class="cengi-ev-sub">' + [p.pago_boleta ? 'Boleta ' + escapeHtml(p.pago_boleta) : '', p.pago_monto ? escapeHtml(formatoQ(p.pago_monto)) : '', p.pago_fecha ? escapeHtml(fechaCorta(p.pago_fecha)) : '', p.pago_banco ? escapeHtml(p.pago_banco) : ''].filter(Boolean).join(' · ') + '</div>'
+                : '';
+            var reciboEnlace = (esEventoPagado && p.recibo_pago)
+                ? '<div class="cengi-ev-cell-action"><a href="' + escapeHtml(p.recibo_pago) + '" target="_blank" rel="noopener" class="cengi-ev-linkbtn">Ver recibo</a></div>'
                 : '';
             var marcar = (!p.ingreso_en && puedeGestionar)
-                ? '<form method="POST" class="cengi-inline-entry-form"><input type="hidden" name="accion" value="marcar_ingreso"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><button type="submit" class="btn btn-success btn-xs">Marcar ingreso</button></form>'
+                ? '<form method="POST" class="cengi-inline-entry-form"><input type="hidden" name="accion" value="marcar_ingreso"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><button type="submit" class="btn btn-primary btn-sm" title="Registrar ingreso">Marcar ingreso</button></form>'
                 : '';
             var check = puedeGestionar
-                ? '<td class="cengi-td-check"><input type="checkbox" class="cengi-participant-check" data-id="' + Number(p.id) + '"' + (seleccionados[p.id] ? ' checked' : '') + '></td>'
+                ? '<td class="cengi-td-check"><input type="checkbox" class="cengi-participant-check" data-id="' + Number(p.id) + '"' + (seleccionados[p.id] ? ' checked' : '') + ' aria-label="Seleccionar"></td>'
                 : '';
             var editar = puedeGestionar
-                ? '<button type="button" class="cengi-action-btn is-edit" title="Editar participante" onclick="cengiEvtEditarParticipante(' + indice + ')"><span class="glyphicon glyphicon-pencil"></span></button>'
+                ? '<button type="button" class="cengi-ev-icon-btn" title="Editar" aria-label="Editar participante" onclick="cengiEvtEditarParticipante(' + indice + ')">' + ICONO_EDITAR + '</button>'
                 : '';
             var eliminar = puedeGestionar
-                ? '<form method="POST" class="cengi-inline-entry-form" data-participante-nombre="' + escapeHtml(p.nombre) + '" onsubmit="return cengiEvtConfirmarEliminarParticipante(this);"><input type="hidden" name="accion" value="eliminar_participante"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><button type="submit" class="cengi-action-btn is-delete" title="Eliminar participante"><span class="glyphicon glyphicon-trash"></span></button></form>'
+                ? '<form method="POST" class="cengi-ev-acc-form" data-participante-nombre="' + escapeHtml(p.nombre) + '" onsubmit="return cengiEvtConfirmarEliminarParticipante(this);"><input type="hidden" name="accion" value="eliminar_participante"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><button type="submit" class="cengi-ev-icon-btn is-danger" title="Eliminar" aria-label="Eliminar participante">' + ICONO_ELIMINAR + '</button></form>'
                 : '';
             return '<tr>' + check +
-                '<td class="cengi-td-participante"><div class="cengi-person-cell"><span class="cengi-avatar-sm">' + escapeHtml(iniciales(p.nombre)) + '</span><span><strong>' + escapeHtml(p.nombre) + '</strong>' + (p.cui ? '<small>CUI ' + escapeHtml(p.cui) + '</small>' : '') + '</span></div></td>' +
+                '<td class="cengi-td-participante"><div class="cengi-person-cell"><span class="cengi-avatar-sm">' + escapeHtml(iniciales(p.nombre)) + '</span><span><strong>' + escapeHtml(p.nombre) + '</strong><small>' + (p.cui ? 'CUI ' + escapeHtml(p.cui) : 'Sin CUI') + '</small><small>' + (p.correo ? escapeHtml(p.correo) : 'Sin correo') + '</small>' + (p.telefono ? '<small>Tel. ' + escapeHtml(p.telefono) + '</small>' : '') + '</span></div></td>' +
                 '<td class="cengi-td-ingenio">' + escapeHtml(p.ingenio) + '</td>' +
-                '<td class="cengi-td-correo">' + (p.correo ? escapeHtml(p.correo) : '<span class="text-muted">Sin correo</span>') + '</td>' +
-                '<td class="cengi-td-qr"><div class="cengi-person-qr"><span class="cengi-mini-qr" data-codigo="' + escapeHtml(p.codigo_qr) + '"></span><span class="mono">' + escapeHtml(p.codigo_qr) + '</span></div></td>' +
-                '<td class="cengi-td-pago">' + pagoBadge + pagoToggle + '</td>' +
+                '<td class="cengi-td-pago">' + pagoBadge + datosPago + pagoAccion + reciboEnlace + '</td>' +
+                '<td class="cengi-td-qr"><div class="cengi-person-qr"><span class="cengi-mini-qr" data-codigo="' + escapeHtml(p.codigo_qr) + '" onclick="cengiEvtVerQr(' + indice + ')"></span><span class="mono">' + escapeHtml(p.codigo_qr) + '</span></div></td>' +
                 '<td class="cengi-td-ingreso">' + ingreso + marcar + '</td>' +
-                '<td class="cengi-td-acciones"><button type="button" class="cengi-action-btn is-view" title="Ver QR y gafete" onclick="cengiEvtVerQr(' + indice + ')"><span class="glyphicon glyphicon-qrcode"></span></button>' + editar + eliminar + '</td></tr>';
+                '<td class="cengi-td-acciones"><div class="cengi-ev-acc-col"><button type="button" class="cengi-ev-icon-btn is-solid" title="Ver gafete" aria-label="Ver gafete" onclick="cengiEvtVerQr(' + indice + ')">' + ICONO_QR + '</button>' + editar + eliminar + '</div></td></tr>';
         }).join(''));
         $('#tablaEventoParticipantes .cengi-mini-qr').each(function () { crearQr($(this).attr('data-codigo'), this, false); });
 
@@ -1025,6 +1743,9 @@ $ejemploParticipante = $db->query("
         participantes = [];
         seleccionados = {};
         $('#evpTitulo').text('Participantes del evento');
+        $('#evpSub').text('Registro de participantes, pagos y código QR');
+        $('#evpResumen').empty();
+        $('#evpFiltro').html('<option value="todos">Todos</option>');
         $('#evpBuscar').val('');
         $('#evpRegistroEventoId').val(eventoId);
         $('#evpCargaMasivaEventoId').val(eventoId);
@@ -1044,6 +1765,7 @@ $ejemploParticipante = $db->query("
                 participantes = respuesta.participantes || [];
                 $('#evpTitulo').text(eventoActual.nombre);
                 sincronizarControlPagoRegistro();
+                encabezadoEvento();
                 renderParticipantes();
             })
             .fail(function () {
@@ -1083,6 +1805,24 @@ $ejemploParticipante = $db->query("
     };
 
     $('#evpBuscar').on('input', renderParticipantes);
+    $('#evpFiltro').on('change', renderParticipantes);
+
+    // Filtros de la tabla de eventos (busqueda por nombre/tipo y estado), en el cliente.
+    function filtrarEventos() {
+        var texto = ($('#evBuscar').val() || '').toLowerCase().trim();
+        var estado = $('#evEstadoF').val() || '';
+        var visibles = 0;
+        $('#tablaEventos tr.cengi-ev-row').each(function () {
+            var $fila = $(this);
+            var coincide = (!estado || $fila.attr('data-estado') === estado)
+                && (!texto || ($fila.attr('data-buscar') || '').indexOf(texto) !== -1);
+            $fila.toggle(coincide);
+            if (coincide) visibles++;
+        });
+        $('#evSinResultados').toggle($('#tablaEventos tr.cengi-ev-row').length > 0 && visibles === 0);
+    }
+    $('#evBuscar').on('input', filtrarEventos);
+    $('#evEstadoF').on('change', filtrarEventos);
     $('#evpMostrarRegistro').on('click', function () { $('#evpCargaMasivaForm').slideUp(150); resetearFormularioRegistro(); $('#evpRegistroForm').slideDown(150); });
     $('#evpCancelarRegistro').on('click', function () { $('#evpRegistroForm').slideUp(150); resetearFormularioRegistro(); });
     $('#evpMostrarCargaMasiva').on('click', function () { $('#evpRegistroForm').slideUp(150); resetearFormularioRegistro(); $('#evpCargaMasivaForm').slideDown(150); });
@@ -1090,10 +1830,7 @@ $ejemploParticipante = $db->query("
 
     $(document).on('change', '#evpSeleccionarTodos', function () {
         var marcar = this.checked;
-        var busqueda = ($('#evpBuscar').val() || '').toLowerCase().trim();
-        var filtrados = participantes.filter(function (p) {
-            return !busqueda || [p.nombre, p.ingenio, p.codigo_qr, p.cui, p.correo].join(' ').toLowerCase().indexOf(busqueda) !== -1;
-        });
+        var filtrados = participantesFiltrados();
         filtrados.forEach(function (p) { seleccionados[p.id] = marcar; });
         renderParticipantes();
     });
@@ -1172,12 +1909,6 @@ $ejemploParticipante = $db->query("
     var ejemplo = document.getElementById('cengiQrEjemplo');
     if (ejemplo) crearQr(ejemplo.getAttribute('data-codigo'), ejemplo, true);
 
-    $('#evtModalidadPago').on('change', function () {
-        var esPagado = this.value === 'Pagado';
-        $('#evtCostoGrupo').toggle(esPagado);
-        $('#evtCosto').prop('required', esPagado);
-        if (!esPagado) $('#evtCosto').val('');
-    });
 
     // Enlace publico de escaneo QR (cengicursos/escanear_evento.php): el token se
     // resuelve/genera siempre en el servidor (accion=enlace_escaneo), nunca en el
