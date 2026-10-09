@@ -7,3 +7,5 @@ laboratorio/database/usuarios_menu.sql
 AUDITORIA_PROYECTO_CENGICANA.md
 .claude/
 CLAUDE.md
+# Archivos subidos por los usuarios (documentos personales, recibos): no se versionan
+uploads/
