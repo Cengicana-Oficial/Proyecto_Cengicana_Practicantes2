@@ -95,7 +95,6 @@ $suelosFisicos = labc_visible_analysis([
 
 $suelosQuimicos = labc_visible_analysis([
     ['key' => 'suelos.ph', 'href' => '../controllers/Suelos/ph_controller.php', 'label' => 'pH'],
-    ['key' => 'suelos.mo', 'href' => '../controllers/Suelos/mo_controller.php', 'label' => '%MO'],
     ['key' => 'suelos.macroscic', 'href' => '../controllers/Suelos/macroscic_controller.php', 'label' => 'Macronutrientes y CIC'],
     ['key' => 'suelos.micros', 'href' => '../controllers/Suelos/micros_controller.php', 'label' => 'Micro Nutrientes (Cu, Zn, Fe, Mn, K)'],
     ['key' => 'suelos.nitrogeno', 'href' => '../controllers/Suelos/nitrogeno_controller.php', 'label' => 'Nitrógeno'],
@@ -230,8 +229,8 @@ $tray = $activeSampleTypeId > 0
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bandeja del analista</title>
-    <link rel="stylesheet" href="../styles/base.css">
-    <link rel="stylesheet" href="../css/formularios_dashboard.css?v=1">
+    <link rel="stylesheet" href="../styles/base.css?v=20261006">
+    <link rel="stylesheet" href="../css/formularios_dashboard.css?v=20261006">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>

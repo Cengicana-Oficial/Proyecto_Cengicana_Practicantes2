@@ -127,6 +127,41 @@ function labSolicitudHistorialAsegurarEsquema(PDO $conexion): void
   }
 
   $conexion->exec($sql);
+
+  // Motivo de la edición (versionado de la recepción, igual que Identificación).
+  $columna = $conexion->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'solicitud_historial_cambios' AND COLUMN_NAME = 'motivo'");
+  if (!(int) $columna->fetchColumn()) {
+    $conexion->exec("ALTER TABLE solicitud_historial_cambios ADD COLUMN motivo VARCHAR(500) NULL AFTER resumen");
+  }
+}
+
+/**
+ * Versiones de una recepción: v1 es el registro original y cada edición guardada
+ * agrega una versión con su motivo, usuario, fecha y los campos que cambiaron.
+ */
+function labSolicitudVersiones(PDO $conexion, int $idSolicitud): array
+{
+  $stmt = $conexion->prepare('SELECT fecha_ingreso, recibido_por FROM solicitud WHERE id_solicitud = ?');
+  $stmt->execute([$idSolicitud]);
+  $registro = $stmt->fetch(PDO::FETCH_ASSOC);
+  if (!$registro) {
+    return [];
+  }
+  $versiones = [[
+    'version' => 1, 'fecha' => (string) $registro['fecha_ingreso'], 'usuario' => (string) $registro['recibido_por'],
+    'motivo' => 'Registro de la recepción', 'resumen' => '', 'cambios' => [],
+  ]];
+  $stmt = $conexion->prepare('SELECT fecha_cambio, usuario_nombre, resumen, motivo, cambios_json FROM solicitud_historial_cambios WHERE id_solicitud = ? ORDER BY fecha_cambio, id_historial');
+  $stmt->execute([$idSolicitud]);
+  foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+    $detalle = json_decode((string) $fila['cambios_json'], true);
+    $versiones[] = [
+      'version' => count($versiones) + 1, 'fecha' => (string) $fila['fecha_cambio'], 'usuario' => (string) $fila['usuario_nombre'],
+      'motivo' => trim((string) ($fila['motivo'] ?? '')) ?: 'Sin motivo registrado (edición anterior al versionado)',
+      'resumen' => (string) $fila['resumen'], 'cambios' => is_array($detalle['cambios'] ?? null) ? $detalle['cambios'] : [],
+    ];
+  }
+  return $versiones;
 }
 
 function labSolicitudObtenerSnapshot(PDO $conexion, int $idSolicitud): ?array
@@ -148,10 +183,12 @@ function labSolicitudObtenerSnapshot(PDO $conexion, int $idSolicitud): ?array
       s.firma_ingreso,
       s.firma_recibe,
       l.codigo_lote,
+      COALESCE(pl.prioridad, 'media') AS prioridad,
       tm.nombre AS tipo_muestra,
       tm.prefijo
     FROM solicitud s
     LEFT JOIN lote l ON l.id_lote = s.id_lote
+    LEFT JOIN lab_plan_lote pl ON pl.id_lote = s.id_lote
     LEFT JOIN tipo_muestra tm ON tm.id_tipo = s.id_tipo
     WHERE s.id_solicitud = ?
     LIMIT 1
@@ -183,6 +220,7 @@ function labSolicitudObtenerSnapshot(PDO $conexion, int $idSolicitud): ?array
   return [
     'tipo_muestra' => (string) ($solicitud['tipo_muestra'] ?? ''),
     'numero_lote' => (string) ($solicitud['codigo_lote'] ?? ''),
+    'prioridad' => ucfirst((string) ($solicitud['prioridad'] ?? 'media')),
     'codigo_muestreo' => (string) ($solicitud['codigo_muestreo'] ?? ''),
     'fecha_muestreo' => (string) ($solicitud['fecha_muestreo'] ?? ''),
     'numero_muestras' => (int) ($solicitud['numero_muestras'] ?? 0),
@@ -207,7 +245,8 @@ function labSolicitudCalcularCambios(array $anterior, array $nuevo): array
   $etiquetas = [
     'tipo_muestra' => 'Tipo de muestra',
     'numero_lote' => 'Numero de lote',
-    'codigo_muestreo' => 'Codigo de muestreo',
+    'prioridad' => 'Prioridad del lote',
+    'codigo_muestreo' => 'Nombre del ensayo',
     'fecha_muestreo' => 'Fecha de muestreo',
     'numero_muestras' => 'Numero de muestras',
     'institucion' => 'Cliente o institucion',
@@ -250,7 +289,8 @@ function labSolicitudRegistrarHistorialCambio(
   int $idSolicitud,
   array $anterior,
   array $nuevo,
-  array $usuario
+  array $usuario,
+  string $motivo = ''
 ): bool {
   $cambios = labSolicitudCalcularCambios($anterior, $nuevo);
   if (!$cambios) {
@@ -277,8 +317,8 @@ function labSolicitudRegistrarHistorialCambio(
   $stmt = $conexion->prepare("
     INSERT INTO solicitud_historial_cambios (
       id_solicitud, tipo_muestra, usuario_id, usuario_nombre,
-      resumen, cambios_json, ip
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      resumen, motivo, cambios_json, ip
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   ");
   $stmt->execute([
     $idSolicitud,
@@ -286,6 +326,7 @@ function labSolicitudRegistrarHistorialCambio(
     !empty($usuario['id']) ? (int) $usuario['id'] : null,
     $nombreUsuario,
     $resumen,
+    trim($motivo) !== '' ? (function_exists('mb_substr') ? mb_substr(trim($motivo), 0, 500) : substr(trim($motivo), 0, 500)) : null,
     $json,
     substr((string) ($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45) ?: null,
   ]);
@@ -311,14 +352,35 @@ function obtenerDiasCompromiso($tipoMuestra): int
   }
 }
 
-function calcularFechaEstimadaSolicitud($fechaIngreso, $tipoMuestra): string
+/**
+ * Días de entrega de una recepción: la mayor "Duración (días)" del Catálogo de análisis entre
+ * los análisis solicitados (el reporte sale cuando termina el más largo). Si ninguno tiene
+ * duración configurada, se usan los días de compromiso por tipo de muestra.
+ */
+function obtenerDiasEntregaAnalisis(?PDO $conexion, array $idsAnalisis): int
+{
+  $ids = array_values(array_unique(array_filter(array_map('intval', $idsAnalisis))));
+  if (!$conexion || !$ids) {
+    return 0;
+  }
+  try {
+    $stmt = $conexion->prepare('SELECT MAX(duracion_dias) FROM tipo_analisis WHERE id_tipo IN (' . implode(',', array_fill(0, count($ids), '?')) . ')');
+    $stmt->execute($ids);
+    return max(0, (int) $stmt->fetchColumn());
+  } catch (Throwable $e) {
+    error_log('[laboratorio][recepcion] duracion_dias: ' . $e->getMessage());
+    return 0;
+  }
+}
+
+function calcularFechaEstimadaSolicitud($fechaIngreso, $tipoMuestra, array $idsAnalisis = [], ?PDO $conexion = null): string
 {
   $fechaIngreso = trim((string) $fechaIngreso);
   if ($fechaIngreso === '') {
     return '';
   }
 
-  $diasCompromiso = obtenerDiasCompromiso($tipoMuestra);
+  $diasCompromiso = obtenerDiasEntregaAnalisis($conexion, $idsAnalisis) ?: obtenerDiasCompromiso($tipoMuestra);
   if ($diasCompromiso <= 0) {
     return '';
   }
@@ -392,33 +454,10 @@ function obtenerLote(PDO $conexion, $codigoLote)
 }
 
 /**
- * Extrae la parte correlativa de un codigo de lote. Acepta los lotes
- * historicos puramente numericos y el formato actual "PREFIJO-000".
- */
-function labSolicitudNumeroLoteDesdeCodigo($codigoLote, $prefijo): ?int
-{
-  $codigoLote = trim((string) $codigoLote);
-  $prefijo = strtoupper(trim((string) $prefijo));
-
-  if ($codigoLote === '') {
-    return null;
-  }
-
-  if (ctype_digit($codigoLote)) {
-    return (int) $codigoLote;
-  }
-
-  if ($prefijo !== '' && preg_match('/^' . preg_quote($prefijo, '/') . '-(\d+)$/i', $codigoLote, $matches)) {
-    return (int) $matches[1];
-  }
-
-  return null;
-}
-
-/**
- * Obtiene el siguiente lote a partir de la ultima solicitud registrada del
- * mismo tipo de muestra. El prefijo evita colisiones entre correlativos que
- * pueden tener el mismo numero (por ejemplo S-001 y C-001).
+ * Obtiene el siguiente lote (Lote-001, Lote-002…) del correlativo propio del
+ * tipo de muestra: Suelos, Aguas, Foliar y Caña inician cada uno en Lote-001.
+ * Como el código se repite entre tipos, el lote se identifica por id_lote.
+ * Con $bloquear reserva el número dentro de la transacción del registro.
  */
 function labSolicitudSiguienteLotePorTipo(PDO $conexion, array $tipoMuestra, bool $bloquear = false): array
 {
@@ -439,39 +478,59 @@ function labSolicitudSiguienteLotePorTipo(PDO $conexion, array $tipoMuestra, boo
     }
   }
 
-  $stmt = $conexion->prepare("
-    SELECT l.codigo_lote
-    FROM solicitud s
-    INNER JOIN lote l ON l.id_lote = s.id_lote
-    WHERE s.id_tipo = ?
-    ORDER BY s.id_solicitud DESC
+  $correlativo = labCorrelativoRecepcion($conexion, $idTipo, $bloquear);
+
+  // El correlativo sale del mayor "Lote-NNN" ya registrado para este tipo, de
+  // modo que los lotes con el formato anterior (S-001…) no lo afectan.
+  $stmtUltimo = $conexion->prepare("
+    SELECT COALESCE(MAX(CAST(SUBSTRING(l.codigo_lote, 6) AS UNSIGNED)), 0)
+      FROM lote l
+      INNER JOIN solicitud s ON s.id_lote = l.id_lote
+     WHERE s.id_tipo = ? AND l.codigo_lote LIKE 'Lote-%'
   ");
-  $stmt->execute([$idTipo]);
-
-  $ultimoNumero = 0;
-  $ultimoCodigo = '';
-  foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $codigoExistente) {
-    $numero = labSolicitudNumeroLoteDesdeCodigo($codigoExistente, $prefijo);
-    if ($numero === null) {
-      continue;
-    }
-
-    $ultimoNumero = $numero;
-    $ultimoCodigo = (string) $codigoExistente;
-    break;
-  }
-
+  $stmtUltimo->execute([$idTipo]);
+  $ultimoNumero = (int) $stmtUltimo->fetchColumn();
   $siguienteNumero = $ultimoNumero + 1;
+  $siguienteCodigo = 'Lote-' . str_pad((string) $siguienteNumero, 3, '0', STR_PAD_LEFT);
+
+  if ($bloquear) {
+    $conexion->prepare('UPDATE lab_correlativo_recepcion SET ultimo_lote = ? WHERE id_tipo = ?')->execute([$siguienteNumero, $idTipo]);
+  }
 
   return [
     'id_tipo' => $idTipo,
     'clave' => labSolicitudFormularioNormalizarTipoMuestra($tipoMuestra),
     'prefijo' => $prefijo,
-    'ultimo_codigo' => $ultimoCodigo,
     'ultimo_numero' => $ultimoNumero,
     'siguiente_numero' => $siguienteNumero,
-    'siguiente_codigo' => $prefijo . '-' . str_pad((string) $siguienteNumero, 3, '0', STR_PAD_LEFT),
+    'siguiente_codigo' => $siguienteCodigo,
+    // Vista previa del primer número de laboratorio (se confirma al registrar).
+    'siguiente_laboratorio' => (int) $correlativo['ultimo_laboratorio'] + 1,
   ];
+}
+
+/**
+ * Correlativos de recepción independientes por tipo de muestra (prototipo):
+ * el lote (S-001, S-002…) y el número de laboratorio (S-001-MM-AA…) inician
+ * en 1 para cada tipo. Se crea la fila del tipo en cero la primera vez.
+ */
+function labCorrelativoRecepcionEsquema(PDO $conexion): void
+{
+  $conexion->exec("CREATE TABLE IF NOT EXISTS lab_correlativo_recepcion (
+    id_tipo INT NOT NULL PRIMARY KEY,
+    ultimo_lote INT NOT NULL DEFAULT 0,
+    ultimo_laboratorio INT NOT NULL DEFAULT 0,
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_correlativo_recepcion_tipo FOREIGN KEY (id_tipo) REFERENCES tipo_muestra(id_tipo)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+function labCorrelativoRecepcion(PDO $conexion, int $idTipo, bool $bloquear = false): array
+{
+  $conexion->prepare('INSERT IGNORE INTO lab_correlativo_recepcion (id_tipo) VALUES (?)')->execute([$idTipo]);
+  $stmt = $conexion->prepare('SELECT ultimo_lote, ultimo_laboratorio FROM lab_correlativo_recepcion WHERE id_tipo = ?' . ($bloquear ? ' FOR UPDATE' : ''));
+  $stmt->execute([$idTipo]);
+  return $stmt->fetch(PDO::FETCH_ASSOC) ?: ['ultimo_lote' => 0, 'ultimo_laboratorio' => 0];
 }
 
 function obtenerTipoAnalisis(PDO $conexion, $idTipoMuestra, $nombreAnalisis)
@@ -517,79 +576,35 @@ function obtenerInicioLaboratorioSolicitud(PDO $conexion, $idSolicitud)
   return $numeros ? min($numeros) : null;
 }
 
-function obtenerInicioLaboratorioNuevo(PDO $conexion, $prefijo, $tipoMuestraNombre, $cantidadMuestras)
+/**
+ * Reserva el bloque de números de laboratorio de una recepción nueva. Inicia en
+ * 1 por tipo de muestra y salta cualquier bloque cuyo código ya exista
+ * (mismo prefijo, número y mes-año), para no duplicar códigos de muestra.
+ */
+function obtenerInicioLaboratorioNuevo(PDO $conexion, array $tipoMuestra, int $cantidadMuestras, string $mesAnio): int
 {
-  $stmt = $conexion->prepare("
-    SELECT ultimo_numero
-    FROM correlativo_envio_solicitud
-    WHERE prefijo = ?
-    LIMIT 1
-    FOR UPDATE
-  ");
-  $stmt->execute([strtoupper($prefijo)]);
-  $correlativo = $stmt->fetch();
+  $idTipo = (int) $tipoMuestra['id_tipo'];
+  $prefijo = strtoupper((string) $tipoMuestra['prefijo']);
+  $inicio = (int) labCorrelativoRecepcion($conexion, $idTipo, true)['ultimo_laboratorio'] + 1;
 
-  if (!$correlativo) {
-    $insert = $conexion->prepare("
-      INSERT INTO correlativo_envio_solicitud (tipo_muestra, prefijo, ultimo_numero, descripcion)
-      VALUES (?, ?, ?, ?)
-    ");
-    $insert->execute([
-      $tipoMuestraNombre,
-      strtoupper($prefijo),
-      491,
-      'Correlativo para solicitudes de ' . $tipoMuestraNombre,
-    ]);
-    $ultimoNumero = 491;
-  } else {
-    $ultimoNumero = (int) $correlativo['ultimo_numero'];
+  while (true) {
+    $codigos = [];
+    for ($n = $inicio; $n < $inicio + $cantidadMuestras; $n++) {
+      $codigos[] = construirCodigoLab($prefijo, $n, $mesAnio, max(3, strlen((string) ($inicio + $cantidadMuestras - 1))));
+    }
+    $usado = $conexion->prepare('SELECT MAX(numero_muestra) FROM muestra WHERE codigo_lab IN (' . implode(',', array_fill(0, count($codigos), '?')) . ')');
+    $usado->execute($codigos);
+    $maximo = $usado->fetchColumn();
+    if ($maximo === null || $maximo === false) {
+      break;
+    }
+    $inicio = max($inicio + 1, (int) $maximo + 1);
   }
 
-  $inicio = $ultimoNumero + 1;
-  $fin = $inicio + $cantidadMuestras - 1;
-
-  $update = $conexion->prepare("
-    UPDATE correlativo_envio_solicitud
-    SET ultimo_numero = ?
-    WHERE prefijo = ?
-  ");
-  $update->execute([$fin, strtoupper($prefijo)]);
+  $conexion->prepare('UPDATE lab_correlativo_recepcion SET ultimo_laboratorio = ? WHERE id_tipo = ?')
+    ->execute([$inicio + $cantidadMuestras - 1, $idTipo]);
 
   return $inicio;
-}
-
-function sincronizarCorrelativo(PDO $conexion, $prefijo, $ultimoNumero)
-{
-  $stmt = $conexion->prepare("
-    UPDATE correlativo_envio_solicitud
-    SET ultimo_numero = ?
-    WHERE prefijo = ?
-  ");
-  $stmt->execute([$ultimoNumero, strtoupper($prefijo)]);
-}
-
-function sincronizarCorrelativosConMuestras(PDO $conexion)
-{
-  $stmt = $conexion->query("
-    SELECT
-      UPPER(SUBSTRING_INDEX(codigo_lab, '-', 1)) AS prefijo,
-      MAX(CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(codigo_lab, '-', 2), '-', -1) AS UNSIGNED)) AS ultimo_numero
-    FROM muestra
-    WHERE codigo_lab IS NOT NULL AND codigo_lab <> ''
-    GROUP BY UPPER(SUBSTRING_INDEX(codigo_lab, '-', 1))
-  ");
-
-  $update = $conexion->prepare("
-    UPDATE correlativo_envio_solicitud
-    SET ultimo_numero = ?
-    WHERE prefijo = ?
-  ");
-
-  foreach ($stmt->fetchAll() as $row) {
-    if (!empty($row['prefijo']) && $row['ultimo_numero'] !== null) {
-      $update->execute([(int) $row['ultimo_numero'], strtoupper($row['prefijo'])]);
-    }
-  }
 }
 
 function obtenerRango(PDO $conexion, $idLote, $inicio, $fin)

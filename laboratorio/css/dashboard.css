@@ -141,7 +141,7 @@ body::before {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--lab-body-surface-strong);
-  box-shadow: 0 10px 22px rgba(35, 37, 35, 0.05);
+  box-shadow: 0 10px 22px rgba(31, 35, 38, 0.05);
   transition:
     transform 0.18s ease,
     border-color 0.18s ease,
@@ -157,8 +157,8 @@ body::before {
 
 .report-card.active {
   border-color: var(--green-400);
-  background: linear-gradient(180deg, rgba(237, 245, 238, 0.96), rgba(248, 248, 246, 0.98));
-  box-shadow: 0 16px 30px rgba(35, 37, 35, 0.1);
+  background: linear-gradient(180deg, rgba(227, 241, 211, 0.96), rgba(247, 248, 248, 0.98));
+  box-shadow: 0 16px 30px rgba(31, 35, 38, 0.1);
 }
 
 .report-card.active::after {
@@ -195,7 +195,7 @@ body::before {
 }
 
 .report-card[data-type="foliares"] .report-card-icon {
-  background: rgba(200, 211, 203, 0.56);
+  background: rgba(206, 210, 213, 0.56);
   color: var(--teal-700);
 }
 
@@ -265,7 +265,7 @@ body::before {
   min-height: 420px;
   border: 1px dashed var(--lab-body-border-soft);
   border-radius: var(--radius-xl);
-  background: rgba(247, 248, 246, 0.78);
+  background: rgba(247, 248, 248, 0.78);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
@@ -352,7 +352,7 @@ body::before {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--lab-body-surface-strong);
-  box-shadow: 0 12px 24px rgba(35, 37, 35, 0.06);
+  box-shadow: 0 12px 24px rgba(31, 35, 38, 0.06);
 }
 
 .analysis-card::before {
@@ -416,8 +416,8 @@ body::before {
   margin: 0 auto 18px;
   border-radius: var(--radius-lg);
   color: var(--green-600);
-  background: linear-gradient(180deg, rgba(248, 248, 246, 0.96), rgba(237, 245, 238, 0.92));
-  box-shadow: 0 14px 30px rgba(35, 37, 35, 0.12);
+  background: linear-gradient(180deg, rgba(247, 248, 248, 0.96), rgba(227, 241, 211, 0.92));
+  box-shadow: 0 14px 30px rgba(31, 35, 38, 0.12);
 }
 
 .empty-icon i {
@@ -454,7 +454,7 @@ body::before {
   min-height: 120px;
   border-radius: var(--radius-md);
   border: 1px solid var(--lab-body-border-soft);
-  background: rgba(247, 248, 246, 0.54);
+  background: rgba(247, 248, 248, 0.54);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 

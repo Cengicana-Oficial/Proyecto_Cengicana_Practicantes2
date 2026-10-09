@@ -110,6 +110,7 @@
   const scannerForm = document.querySelector('[data-scanner-submit]');
   const scannerValue = scannerForm ? scannerForm.querySelector('[data-scanner-value]') : null;
   let stream = null;
+  let scannerBatch = false, scannerGeneration = 0, scannerTrigger = null;
   let animationFrame = null;
 
   function setScannerStatus(message, warning) {
@@ -121,6 +122,7 @@
   }
 
   function closeScanner() {
+    scannerGeneration++;
     if (animationFrame) cancelAnimationFrame(animationFrame);
     animationFrame = null;
     if (stream) {
@@ -129,19 +131,28 @@
     }
     if (video) video.srcObject = null;
     if (modal) modal.hidden = true;
+    scannerTrigger?.focus();
   }
 
   function submitScannedValue(value) {
     value = String(value || '').trim();
     if (!value || !scannerForm || !scannerValue) return;
     closeScanner();
+    if (scannerBatch) {
+      page.dispatchEvent(new CustomEvent("ident:lectura", { detail: value }));
+      return;
+    }
     scannerValue.value = value;
     scannerForm.submit();
   }
 
-  async function openScanner() {
+  async function openScanner(event) {
+    scannerBatch = Boolean(event?.currentTarget?.hasAttribute("data-batch-camera"));
+    scannerTrigger = event?.currentTarget || null;
+    const generation = ++scannerGeneration;
     if (!modal || !video || !canvas) return;
     modal.hidden = false;
+    modal.querySelector("[data-close-scanner]")?.focus();
     setScannerStatus('Solicitando acceso a la cámara…', false);
 
     if (!('BarcodeDetector' in window)) {
@@ -154,9 +165,15 @@
     }
 
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const acquired = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      if (generation !== scannerGeneration || modal.hidden) {
+        acquired.getTracks().forEach(track => track.stop());
+        return;
+      }
+      stream = acquired;
       video.srcObject = stream;
       await video.play();
+      if (generation !== scannerGeneration || modal.hidden) return;
       setScannerStatus('Apunta la cámara al código QR o de barras…', false);
 
       let detector;
@@ -168,13 +185,14 @@
 
       const context = canvas.getContext('2d', { willReadFrequently: true });
       const scan = async function () {
-        if (!stream) return;
+        if (!stream || generation !== scannerGeneration) return;
         if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           context.drawImage(video, 0, 0, canvas.width, canvas.height);
           try {
             const codes = await detector.detect(canvas);
+            if (!stream || generation !== scannerGeneration) return;
             if (codes.length) {
               submitScannedValue(codes[0].rawValue);
               return;
@@ -183,10 +201,12 @@
             setScannerStatus('No se pudo leer el código. Mantén la cámara estable o usa el ingreso manual.', true);
           }
         }
-        animationFrame = requestAnimationFrame(scan);
+        if (stream && generation === scannerGeneration) animationFrame = requestAnimationFrame(scan);
       };
       scan();
     } catch (error) {
+      if (generation !== scannerGeneration) return;
+      if (stream) { stream.getTracks().forEach(track => track.stop()); stream = null; }
       setScannerStatus('No se pudo acceder a la cámara. Revisa el permiso del navegador o usa el ingreso manual.', true);
     }
   }
@@ -205,4 +225,5 @@
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape' && modal && !modal.hidden) closeScanner();
   });
+  window.addEventListener("pagehide", closeScanner);
 }());

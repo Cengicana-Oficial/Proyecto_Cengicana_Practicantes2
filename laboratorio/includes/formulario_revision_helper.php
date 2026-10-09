@@ -232,6 +232,7 @@ function labFormularioColumnas(string $tabla): array
 
 function labFormularioColumnasEditables(array $tabla): array
 {
+    if (($tabla['tabla'] ?? '') === 'lab_hoja_formulario') return [];
     $pk = $tabla['primary_key'] ?? null;
     $excluidas = ['id_formulario', 'id_solicitud', 'id_lote', 'created_at', 'updated_at', 'fecha_creacion'];
     $editables = [];

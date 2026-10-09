@@ -183,6 +183,17 @@ function app_bootstrap_database(PDO $pdo): void
         ) ENGINE=InnoDB"
     );
 
+    // Notificaciones: cada seguimiento es un evento; aqui se registra cuales ya leyo cada usuario.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS notificaciones_leidas (
+            usuario_id INT NOT NULL,
+            seguimiento_id INT NOT NULL,
+            leido_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (usuario_id, seguimiento_id),
+            FOREIGN KEY (seguimiento_id) REFERENCES seguimientos(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB"
+    );
+
     if ((int) $pdo->query('SELECT COUNT(*) FROM programas')->fetchColumn() === 0) {
         $pdo->exec(
             "INSERT INTO programas (id, nombre) VALUES
@@ -214,9 +225,10 @@ function app_bootstrap_menu_data(PDO $menuPdo): void
     }
 
     $permissions = [
-        'solicitudes_internas.crear' => 'Permite crear solicitudes en el modulo Solicitudes internas',
-        'solicitudes_internas.ver' => 'Permite ver las solicitudes del modulo Sistema de solicitudes',
-        'solicitudes_internas.gestionar' => 'Permite gestionar las solicitudes del modulo Sistema de solicitudes',
+        'solicitudes_internas.crear' => 'Permite crear solicitudes desde su programa y ver las que el usuario envio',
+        'solicitudes_internas.ver' => 'Permite ver las solicitudes que otros programas envian al programa del usuario',
+        'solicitudes_internas.gestionar' => 'Permite cambiar estado y dar seguimiento a las solicitudes recibidas por el programa del usuario',
+        'solicitudes_internas.ver_todas' => 'Permite ver (solo lectura) todas las solicitudes entre programas',
         'solicitudes_internas.usuarios.ver' => 'Permite ver usuarios del modulo Sistema de solicitudes',
         'solicitudes_internas.usuarios.gestionar' => 'Permite crear, editar y eliminar usuarios del modulo Sistema de solicitudes',
         'solicitudes_internas.programas.ver' => 'Permite ver programas del modulo Sistema de solicitudes',
@@ -224,11 +236,52 @@ function app_bootstrap_menu_data(PDO $menuPdo): void
     ];
 
     $stmt = $menuPdo->prepare(
-        'INSERT IGNORE INTO permisos (nombre_permiso, descripcion) VALUES (?, ?)'
+        'INSERT INTO permisos (nombre_permiso, descripcion) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE descripcion = VALUES(descripcion)'
     );
 
     foreach ($permissions as $name => $description) {
         $stmt->execute([$name, $description]);
+    }
+
+    app_bootstrap_module_roles($menuPdo);
+}
+
+/**
+ * Crea en la plataforma (login/roles/roles.php) los roles base del modulo si no
+ * existen. Solo asigna permisos al crearlos: si despues se editan desde la
+ * gestion de roles, esos cambios se respetan.
+ */
+function app_bootstrap_module_roles(PDO $menuPdo): void
+{
+    if (!app_table_exists($menuPdo, 'roles') || !app_table_exists($menuPdo, 'rol_permiso')) {
+        return;
+    }
+
+    $roles = [
+        'Jefe de programa' => ['solicitudes_internas.crear', 'solicitudes_internas.ver', 'solicitudes_internas.gestionar'],
+        'Colaborador de programa' => ['solicitudes_internas.crear'],
+        'Director' => ['solicitudes_internas.crear', 'solicitudes_internas.ver', 'solicitudes_internas.gestionar', 'solicitudes_internas.ver_todas'],
+    ];
+
+    $findRole = $menuPdo->prepare('SELECT id FROM roles WHERE nombre_rol = ? LIMIT 1');
+    $insertRole = $menuPdo->prepare('INSERT INTO roles (nombre_rol) VALUES (?)');
+    $assignPermission = $menuPdo->prepare(
+        'INSERT IGNORE INTO rol_permiso (rol_id, permiso_id)
+         SELECT ?, id FROM permisos WHERE nombre_permiso = ?'
+    );
+
+    foreach ($roles as $roleName => $rolePermissions) {
+        $findRole->execute([$roleName]);
+        if ($findRole->fetchColumn()) {
+            continue;
+        }
+
+        $insertRole->execute([$roleName]);
+        $roleId = (int) $menuPdo->lastInsertId();
+        foreach ($rolePermissions as $permission) {
+            $assignPermission->execute([$roleId, $permission]);
+        }
     }
 }
 

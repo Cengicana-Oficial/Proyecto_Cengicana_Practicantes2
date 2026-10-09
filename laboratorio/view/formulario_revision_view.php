@@ -210,8 +210,8 @@ $subtituloRevision = 'Lote ' . $codigoLoteRevision
     . ' - ' . ($resumenRango['fin'] ?? '-');
 
 lab_shell_head('Revision de formulario', $subtituloRevision, [
-    '../styles/formularios.css?v=7',
-    '../css/revision_shell.css?v=1',
+    '../styles/formularios.css?v=20261006',
+    '../css/revision_shell.css?v=20261006',
 ]);
 lab_shell_open('validacion_tecnica_view.php');
 ?>

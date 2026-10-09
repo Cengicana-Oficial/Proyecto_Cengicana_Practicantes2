@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   const DATA_SELECTOR = 'script[data-lab-table-config]';
   const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset']);
 
@@ -564,11 +564,11 @@
     ctx.clearRect(0, 0, width, height);
 
     const styles = getComputedStyle(document.documentElement);
-    const textColor = styles.getPropertyValue('--text-mute').trim() || '#61744e';
-    const axisColor = styles.getPropertyValue('--green-200').trim() || '#a8c97a';
-    const pointColor = styles.getPropertyValue('--green-600').trim() || '#24480a';
-    const trendColor = styles.getPropertyValue('--green-400').trim() || '#97c459';
-    const bgColor = styles.getPropertyValue('--green-50').trim() || '#f8fbf3';
+    const textColor = styles.getPropertyValue('--text-mute').trim() || '#636A6F';
+    const axisColor = styles.getPropertyValue('--green-200').trim() || '#ACD77C';
+    const pointColor = styles.getPropertyValue('--green-600').trim() || '#26420C';
+    const trendColor = styles.getPropertyValue('--green-400').trim() || '#73BC25';
+    const bgColor = styles.getPropertyValue('--green-50').trim() || '#F1F8E9';
 
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, width, height);
@@ -621,7 +621,7 @@
     const toX = (value) => plotLeft + ((value - xRange.min) / (xRange.max - xRange.min)) * chartWidth;
     const toY = (value) => plotBottom - ((value - yRange.min) / (yRange.max - yRange.min)) * chartHeight;
 
-    ctx.strokeStyle = 'rgba(168, 201, 122, .55)';
+    ctx.strokeStyle = 'rgba(172, 215, 124, .55)';
     for (let index = 1; index <= 3; index += 1) {
       const x = plotLeft + (chartWidth / 4) * index;
       const y = plotTop + (chartHeight / 4) * index;

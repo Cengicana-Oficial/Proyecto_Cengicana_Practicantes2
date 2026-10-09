@@ -37,8 +37,14 @@ if (!$user) {
     exit;
 }
 
+// En el menu central rige el rol de PLATAFORMA (usuarios.rol_id); cada modulo carga despues
+// su propio rol (login/config/roles_modulo.php).
 $_SESSION['es_superadmin'] = $user['es_superadmin'];
 $_SESSION['rol_id'] = $user['rol_id'];
+$stmtRolPlataforma = $conn->prepare('SELECT nombre_rol FROM roles WHERE id = ?');
+$stmtRolPlataforma->execute([(int) $user['rol_id']]);
+$_SESSION['rol'] = $_SESSION['nombre_rol'] = (string) $stmtRolPlataforma->fetchColumn();
+$_SESSION['modulo_activo'] = '';
 
 try {
     $stmtPermisos = $conn->prepare("
@@ -157,7 +163,7 @@ if ($mostrarAdministracion) {
         FROM modulos m
         LEFT JOIN usuario_modulo um ON m.id = um.modulo_id
         LEFT JOIN usuarios u ON u.id = um.usuario_id
-        LEFT JOIN roles r ON u.rol_id = r.id
+        LEFT JOIN roles r ON r.id = um.rol_id -- rol en ese modulo
         GROUP BY m.id
         ORDER BY m.nombre
     ");
@@ -171,7 +177,7 @@ if ($mostrarAdministracion) {
         FROM usuario_modulo um
         INNER JOIN modulos m ON m.id = um.modulo_id
         INNER JOIN usuarios u ON u.id = um.usuario_id
-        INNER JOIN roles r ON u.rol_id = r.id
+        LEFT JOIN roles r ON r.id = um.rol_id -- rol en ese modulo
         WHERE um.modulo_id IN (
             SELECT modulo_id
             FROM usuario_modulo
@@ -199,9 +205,10 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/Menu.css?v=20260805-2">
+    <link rel="stylesheet" href="assets/Menu.css?v=<?php echo filemtime(__DIR__ . '/assets/Menu.css'); ?>">
 </head>
 <body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
     <header class="app-header" id="appHeader">
         <div class="brand-accent"></div>
         <div class="nav-shell">
@@ -215,7 +222,7 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
             </button>
 
             <nav class="main-nav" id="mainNav" aria-label="Navegación principal">
-                <a class="nav-link is-active" href="Menu.php">
+                <a class="nav-link is-active" href="Menu.php" aria-current="page">
                     <span class="material-symbols-outlined">dashboard</span>
                     Panel general
                 </a>
@@ -232,7 +239,8 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
                             <?php if (menu_can('gestionar_usuarios')): ?>
                                 <a href="usuarios/usuarios.php"><span class="material-symbols-outlined">group</span> Usuarios</a>
                             <?php endif; ?>
-                            <?php if (menu_can('gestionar_roles')): ?>
+                            <?php // Editar roles y permisos es solo de superadmin (ver roles/_guard.php). ?>
+                            <?php if ((int) ($_SESSION['es_superadmin'] ?? 0) === 1): ?>
                                 <a href="roles/roles.php"><span class="material-symbols-outlined">admin_panel_settings</span> Roles y permisos</a>
                             <?php endif; ?>
                             <?php if (menu_can('gestionar_modulos')): ?>
@@ -293,7 +301,7 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
         </div>
     </header>
 
-    <main>
+    <main id="contenido" tabindex="-1">
         <section class="hero">
             <div class="hero-copy">
                 <span class="eyebrow">CENGICAÑA Digital</span>
@@ -316,10 +324,10 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
                     </div>
                     <div>
                         <strong><?php echo $totalUsuariosVinculados; ?></strong>
-                        <span>Usuarios vinculados</span>
+                        <span>Vínculos de usuarios</span>
                     </div>
                 </div>
-                <span class="summary-status"><i></i> Servicios operando</span>
+                <span class="summary-status"><i></i> Accesos habilitados para tu cuenta</span>
             </div>
         </section>
 
@@ -332,7 +340,15 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
                 </div>
             </div>
 
-            <div class="systems-grid">
+            <div class="systems-toolbar" id="systemsToolbar" hidden>
+                <label class="system-search" for="systemSearch">
+                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    <span class="sr-only">Buscar sistema por nombre</span>
+                    <input id="systemSearch" type="search" placeholder="Buscar un sistema…" autocomplete="off" aria-controls="systemsGrid">
+                </label>
+                <span id="systemResults" role="status" aria-live="polite"></span>
+            </div>
+            <div class="systems-grid" id="systemsGrid">
                 <?php foreach ($modulos as $modulo): ?>
                     <?php $meta = menu_modulo_meta($modulo['nombre']); ?>
                     <a class="system-card<?php echo $meta['ruta'] === '#' ? ' is-disabled' : ''; ?>"
@@ -349,6 +365,12 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
                     </a>
                 <?php endforeach; ?>
             </div>
+            <div class="systems-empty" id="systemsEmpty" <?php echo count($modulos) ? 'hidden' : ''; ?>>
+                <span class="material-symbols-outlined" aria-hidden="true">search_off</span>
+                <h3><?php echo count($modulos) ? 'No se encontraron sistemas' : 'No tienes sistemas asignados'; ?></h3>
+                <p><?php echo count($modulos) ? 'Prueba con otro nombre o limpia la búsqueda.' : 'Contacta al administrador para solicitar acceso.'; ?></p>
+                <?php if (count($modulos)): ?><button type="button" id="clearSystemSearch">Mostrar todos</button><?php endif; ?>
+            </div>
         </section>
     </main>
 
@@ -360,6 +382,6 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
         <span>Innovación al servicio de la agroindustria</span>
     </footer>
 
-    <script src="config/menu.js"></script>
+    <script src="config/menu.js?v=<?php echo filemtime(__DIR__ . '/config/menu.js'); ?>"></script>
 </body>
 </html>

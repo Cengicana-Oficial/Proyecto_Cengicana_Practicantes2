@@ -1,19 +1,19 @@
 :root {
   --signature-green: #73bc25;
-  --signature-green-dark: #5b981d;
-  --signature-green-deep: #477817;
-  --signature-green-bg: #eef8e4;
-  --signature-yellow: #d89905;
-  --signature-yellow-bg: #fff7e5;
-  --signature-blue: #2878bf;
-  --signature-blue-bg: #eaf3fb;
-  --signature-red: #bd3f3f;
-  --signature-red-bg: #fff0f0;
-  --signature-ink: #20242a;
-  --signature-muted: #747d84;
-  --signature-line: #e2e6e8;
-  --signature-soft: #f6f7f8;
-  --signature-shadow: 0 1px 2px rgba(20, 24, 20, 0.06), 0 1px 5px rgba(20, 24, 20, 0.07);
+  --signature-green-dark: #5E9B1D;
+  --signature-green-deep: #4E8418;
+  --signature-green-bg: #E3F1D3;
+  --signature-yellow: #FFCC00;
+  --signature-yellow-bg: #FFF8DB;
+  --signature-blue: #636A6F;
+  --signature-blue-bg: #EEF0F1;
+  --signature-red: #B34B00;
+  --signature-red-bg: #FFF0E6;
+  --signature-ink: #1F2326;
+  --signature-muted: #636A6F;
+  --signature-line: #E2E5E7;
+  --signature-soft: #F7F8F8;
+  --signature-shadow: 0 1px 2px rgba(31, 35, 38, 0.06), 0 1px 5px rgba(31, 35, 38, 0.07);
 }
 
 *,
@@ -62,7 +62,7 @@
   width: 100%;
   min-height: 36px;
   padding: 0 36px 0 11px;
-  border: 1px solid #ccd2d5;
+  border: 1px solid #CED2D5;
   border-radius: 7px;
   color: var(--signature-ink);
   background: #fff;
@@ -78,7 +78,7 @@
 }
 
 .signature-select-wrap select:disabled {
-  color: #969da2;
+  color: #858C91;
   background: var(--signature-soft);
   cursor: not-allowed;
 }
@@ -141,7 +141,7 @@
   flex: 1 0 104px;
   flex-direction: column;
   align-items: center;
-  color: #8f979d;
+  color: #858C91;
 }
 
 .signature-step-dot {
@@ -153,7 +153,7 @@
   height: 26px;
   border-radius: 50%;
   color: #fff;
-  background: #b8bec2;
+  background: #A9AFB3;
   box-shadow: 0 0 0 4px #fff;
   font-size: 10px;
   font-weight: 800;
@@ -170,7 +170,7 @@
   right: calc(50% + 13px);
   width: calc(100% - 26px);
   height: 2px;
-  background: #d8dcde;
+  background: #CED2D5;
 }
 
 .signature-step-name {
@@ -200,7 +200,7 @@
 }
 
 .signature-step.current .signature-step-name {
-  color: #9c720e;
+  color: #8A6E00;
   font-weight: 750;
 }
 
@@ -234,25 +234,25 @@
 }
 
 .signature-alert.is-info {
-  border-color: #c9e0f2;
-  color: #286b9f;
+  border-color: #CED2D5;
+  color: #636A6F;
   background: var(--signature-blue-bg);
 }
 
 .signature-alert.is-warning {
-  border-color: #eed89c;
-  color: #8a6712;
+  border-color: #FFCC00;
+  color: #8A6E00;
   background: var(--signature-yellow-bg);
 }
 
 .signature-alert.is-success {
-  border-color: #cce6b2;
+  border-color: #C7E4A8;
   color: var(--signature-green-deep);
   background: var(--signature-green-bg);
 }
 
 .signature-alert.is-danger {
-  border-color: #efcaca;
+  border-color: #FFD9BF;
   color: var(--signature-red);
   background: var(--signature-red-bg);
 }
@@ -270,7 +270,7 @@
 }
 
 .signature-field-label label {
-  color: #42494e;
+  color: #474D51;
   font-size: 11.5px;
   font-weight: 750;
 }
@@ -305,10 +305,10 @@
   justify-content: center;
   height: 120px;
   overflow: hidden;
-  border: 1.5px dashed #b9c0c4;
+  border: 1.5px dashed #A9AFB3;
   border-radius: 10px;
-  color: #899197;
-  background: #fbfcfc;
+  color: #858C91;
+  background: #F7F8F8;
   font-size: 12px;
   font-style: italic;
   text-align: center;
@@ -343,15 +343,15 @@
 
 .signature-pad.is-disabled {
   gap: 8px;
-  border-color: #cfd4d6;
-  color: #9aa1a6;
-  background: #f6f7f8;
+  border-color: #CED2D5;
+  color: #858C91;
+  background: #F7F8F8;
   cursor: not-allowed;
 }
 
 .signature-pad.is-signed {
   border-style: solid;
-  border-color: #afd488;
+  border-color: #ACD77C;
   color: var(--signature-green-deep);
   background: var(--signature-green-bg);
   font-style: normal;
@@ -415,13 +415,13 @@
 }
 
 .signature-button.is-ghost {
-  border-color: #d5dadd;
-  color: #596168;
+  border-color: #CED2D5;
+  color: #474D51;
   background: #fff;
 }
 
 .signature-button.is-ghost:hover:not(.is-disabled) {
-  border-color: #bcc3c7;
+  border-color: #A9AFB3;
   background: var(--signature-soft);
 }
 
@@ -450,7 +450,7 @@
   z-index: 1;
   padding: 9px 11px;
   border-bottom: 1px solid var(--signature-line);
-  color: #777f85;
+  color: #636A6F;
   background: #f7f8f8;
   font-size: 9.5px;
   font-weight: 750;
@@ -462,8 +462,8 @@
 
 .signature-table td {
   padding: 10px 11px;
-  border-bottom: 1px solid #edf0f1;
-  color: #343a3f;
+  border-bottom: 1px solid #EEF0F1;
+  color: #30353A;
   font-size: 10.5px;
   line-height: 1.3;
   vertical-align: middle;
@@ -474,7 +474,7 @@
 }
 
 .signature-table tbody tr:hover {
-  background: #fafbfb;
+  background: #F7F8F8;
 }
 
 .signature-sample {
@@ -513,7 +513,7 @@
 }
 
 .signature-status.is-review {
-  color: #906b0e;
+  color: #8A6E00;
   background: var(--signature-yellow-bg);
 }
 

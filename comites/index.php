@@ -14,6 +14,13 @@ session_start();
 require __DIR__ . '/config/database.php';
 require __DIR__ . '/includes/functions.php';
 require __DIR__ . '/includes/domain.php';
+require __DIR__ . '/includes/catalogo.php';
+require __DIR__ . '/includes/tableros.php';
+require __DIR__ . '/includes/redes.php';
+require __DIR__ . '/includes/redes-api.php';
+require __DIR__ . '/includes/usuarios.php';
+require __DIR__ . '/includes/notificaciones.php';
+$_SESSION['tableros_csrf'] ??= bin2hex(random_bytes(32));
 
 if (isset($_GET['logout'])) {
     session_destroy();
@@ -38,9 +45,11 @@ $view = $_GET['view'] ?? 'dashboard';
 // menu lateral del diseno de referencia).
 $sections = [
     'dashboard' => ['label' => 'Inicio / Dashboard', 'icon' => 'ti-layout-dashboard', 'group' => 'General'],
+    'comites' => ['label' => 'Comités', 'icon' => 'ti-affiliate', 'group' => 'Comites'],
     'contactos' => ['label' => 'Directorio de contactos', 'icon' => 'ti-users', 'group' => 'Comites'],
     'reuniones' => ['label' => 'Reuniones', 'icon' => 'ti-calendar-event', 'group' => 'Comites'],
-    'acuerdos' => ['label' => 'Acuerdos y seguimiento', 'icon' => 'ti-clipboard-list', 'group' => 'Comites'],
+    'eventos' => ['label' => 'Eventos de transferencia', 'icon' => 'ti-presentation', 'group' => 'Comites'],
+    'acuerdos' => ['label' => 'Seguimiento a próximos pasos', 'icon' => 'ti-clipboard-list', 'group' => 'Comites'],
     'documentos' => ['label' => 'Biblioteca documental para ingenios', 'icon' => 'ti-folder', 'group' => 'Documentacion'],
     'biblioteca_interna' => ['label' => 'Biblioteca documental interna', 'icon' => 'ti-folder-star', 'group' => 'Documentacion'],
     'correos' => ['label' => 'Correos y envios', 'icon' => 'ti-mail', 'group' => 'Documentacion'],
@@ -49,7 +58,8 @@ $sections = [
     'memorias' => ['label' => 'Memoria de resultados', 'icon' => 'ti-book-2', 'group' => 'Resultados'],
     'publicaciones' => ['label' => 'Redes sociales', 'icon' => 'ti-share', 'group' => 'Comunicacion'],
     'estadisticas' => ['label' => 'Estadisticas', 'icon' => 'ti-chart-pie', 'group' => 'Comunicacion'],
-    'config' => ['label' => 'Configuracion', 'icon' => 'ti-settings', 'group' => 'Comunicacion'],
+    'config' => ['label' => 'Configuracion', 'icon' => 'ti-settings', 'group' => 'Administración'],
+    'usuarios' => ['label' => 'Usuarios y programas', 'icon' => 'ti-user-cog', 'group' => 'Administración'],
 ];
 
 if (!array_key_exists($view, $sections)) {
@@ -58,8 +68,10 @@ if (!array_key_exists($view, $sections)) {
 
 // Nombre del recurso de permisos (comites.<recurso>.ver / .gestionar) por vista.
 $recursoPorVista = [
+    'comites' => 'configuracion',
     'contactos' => 'contactos',
     'reuniones' => 'reuniones',
+    'eventos' => 'eventos',
     'acuerdos' => 'acuerdos',
     'documentos' => 'documentos',
     'biblioteca_interna' => 'biblioteca_interna',
@@ -70,12 +82,15 @@ $recursoPorVista = [
     'publicaciones' => 'publicaciones',
     'estadisticas' => 'estadisticas',
     'config' => 'configuracion',
+    'usuarios' => 'usuarios',
 ];
 
 // Secciones con CRUD real implementado en esta fase.
 $seccionesImplementadas = [
+    'eventos',
+    'comites',
     'contactos', 'reuniones', 'acuerdos', 'documentos', 'biblioteca_interna',
-    'correos', 'tableros', 'informes', 'memorias', 'publicaciones', 'estadisticas', 'config',
+    'correos', 'tableros', 'informes', 'memorias', 'publicaciones', 'estadisticas', 'config', 'usuarios',
 ];
 
 $puedeVerSeccionActual = $view === 'dashboard'
@@ -83,6 +98,65 @@ $puedeVerSeccionActual = $view === 'dashboard'
     || !in_array($view, $seccionesImplementadas, true)
     || can_view_resource($user, $recursoPorVista[$view]);
 $puedeGestionarSeccionActual = isset($recursoPorVista[$view]) && can_manage_resource($user, $recursoPorVista[$view]);
+
+// Sincronizacion automatica de redes por API: la pide la pagina en segundo
+// plano cuando vence el intervalo. Se libera la sesion para no bloquear la
+// navegacion del usuario mientras se consultan las APIs.
+$_SESSION['redes_csrf'] ??= bin2hex(random_bytes(32));
+$_SESSION['usuarios_csrf'] ??= bin2hex(random_bytes(32));
+// Campanita: abrir un aviso lo marca como leido; "Marcar todas" marca los que se ven.
+$_SESSION['notif_csrf'] ??= bin2hex(random_bytes(32));
+if (isset($_GET['notif'], $_GET['ir'])) {
+    notif_marcar($pdo, $user, [(string) $_GET['notif']]);
+    $destino = (string) $_GET['ir'];
+    header('Location: ' . (preg_match('/^index\.php\?[\w=&%.\-]*$/', $destino) ? $destino : 'index.php'));
+    exit;
+}
+if (($_POST['accion'] ?? '') === 'notif_marcar_todas' && hash_equals($_SESSION['notif_csrf'], (string) ($_POST['csrf'] ?? ''))) {
+    notif_marcar($pdo, $user, array_column(notif_calcular($pdo, $user), 'clave'));
+    $volver = (string) ($_POST['volver'] ?? '');
+    header('Location: ' . (preg_match('/^\/[\w\/.\-]*index\.php(\?[\w=&%.\-+]*)?$/', $volver) ? $volver : 'index.php'));
+    exit;
+}
+
+// Consulta rapida para "Agregar usuario": avisa si el correo ya tiene cuenta.
+if ($view === 'usuarios' && isset($_GET['buscar_correo'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    if (!can_manage_resource($user, 'usuarios')) {
+        http_response_code(403);
+        echo '{}';
+        exit;
+    }
+    $correoBuscado = trim((string) $_GET['buscar_correo']);
+    try {
+        $encontrado = filter_var($correoBuscado, FILTER_VALIDATE_EMAIL) ? usuarios_buscar_correo($menuPdo, $correoBuscado) : null;
+    } catch (PDOException $e) {
+        $encontrado = null;
+    }
+    echo json_encode($encontrado ? ['existe' => true, 'nombre' => $encontrado['nombre'], 'rol' => $encontrado['nombre_rol'], 'programa' => $encontrado['programa'], 'superadmin' => (int) $encontrado['es_superadmin'] === 1] : ['existe' => false], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+if ($view === 'publicaciones' && isset($_POST['redes_auto']) && $puedeVerSeccionActual) {
+    header('Content-Type: application/json; charset=utf-8');
+    if (!hash_equals($_SESSION['redes_csrf'], (string) ($_POST['csrf'] ?? ''))) {
+        http_response_code(403);
+        echo json_encode(['ok' => false]);
+        exit;
+    }
+    session_write_close();
+    ignore_user_abort(true);
+    $resultadosRedes = redes_api_sincronizar_pendientes($pdo);
+    echo json_encode(['ok' => true, 'actualizado' => (bool) $resultadosRedes, 'resultados' => $resultadosRedes], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($view === 'acuerdos' || ($_SERVER['REQUEST_METHOD']==='POST' && str_starts_with((string)($_POST['accion'] ?? ''), 'acuerdo_'))) { require __DIR__ . '/includes/pasos-controlador.php'; }
+if ($view === 'informes' || ($_SERVER['REQUEST_METHOD']==='POST' && str_starts_with((string)($_POST['accion'] ?? ''), 'informe_'))) { require __DIR__ . '/includes/informes-controlador.php'; }
+if ($view === 'memorias' || ($_SERVER['REQUEST_METHOD']==='POST' && (str_starts_with((string)($_POST['accion'] ?? ''), 'memoria_') || str_starts_with((string)($_POST['accion'] ?? ''), 'editorial_')))) { require __DIR__ . '/includes/memorias-controlador.php'; }
+if ($view === 'biblioteca_interna' || ($_SERVER['REQUEST_METHOD']==='POST' && in_array($_POST['accion'] ?? '', ['documento_guardar','documento_eliminar','documento_revisar','carpeta_crear'], true) && ($_POST['ambito'] ?? '')==='interna')) { require __DIR__ . '/includes/interna-controlador.php'; }
+if ($view === 'documentos' || ($_SERVER['REQUEST_METHOD']==='POST' && in_array($_POST['accion'] ?? '', ['documento_guardar','documento_eliminar','documento_revisar','carpeta_crear'], true) && ($_POST['ambito'] ?? 'ingenios')!=='interna')) { require __DIR__ . '/includes/biblioteca-controlador.php'; }
+if ($view === 'contactos') { require __DIR__ . '/includes/directorio-controlador.php'; }
+if (in_array($view, ['reuniones', 'eventos'], true)) { require __DIR__ . '/includes/agenda-controlador.php'; }
 
 // Descargas de plantillas (deben salir antes de cualquier output HTML).
 if ($view === 'contactos' && ($_GET['accion'] ?? '') === 'plantilla') {
@@ -111,146 +185,36 @@ $reopenModal = null; // 'contacto' | 'reunion' | 'acuerdo'
 $reopenId = 0;
 $prefillPost = null;
 
+if ($view === 'comites') {
+    require_once __DIR__ . '/includes/directorio.php';
+    directorio_preparar($pdo);
+    $_SESSION['catalogo_csrf'] ??= bin2hex(random_bytes(32));
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && str_starts_with((string) ($_POST['accion'] ?? ''), 'grupo_')) {
+        try {
+            if (!can_manage_resource($user, 'configuracion')) {
+                throw new RuntimeException('No tienes permiso para gestionar comités.');
+            }
+            if (!hash_equals($_SESSION['catalogo_csrf'], (string) ($_POST['csrf'] ?? ''))) {
+                throw new RuntimeException('La sesión del formulario expiró. Recarga la página.');
+            }
+            catalogo_accion($pdo, $_POST, $_FILES);
+            $destino = 'index.php?view=comites&msg=' . urlencode('Cambios guardados correctamente.');
+            if (str_starts_with($_POST['accion'], 'grupo_integrante')) {
+                $destino .= '&integrantes=' . urlencode((string) $_POST['id']);
+            }
+            header('Location: ' . $destino);
+            exit;
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            $flashError = $error instanceof PDOException ? 'No se pudo guardar el cambio. Revisa los datos e inténtalo de nuevo.' : $error->getMessage();
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $accion = (string) ($_POST['accion'] ?? '');
 
     try {
-        // ---------- Contactos ----------
-        if ($accion === 'contacto_guardar') {
-            if (!can_manage_resource($user, 'contactos')) {
-                throw new RuntimeException('No tienes permiso para gestionar el directorio de contactos.');
-            }
-
-            $id = (int) ($_POST['id'] ?? 0);
-            $nombre = trim((string) ($_POST['nombre'] ?? ''));
-            $cargo = trim((string) ($_POST['cargo'] ?? ''));
-            $empresa = trim((string) ($_POST['empresa'] ?? ''));
-            $telefono = trim((string) ($_POST['telefono'] ?? ''));
-            $email = trim((string) ($_POST['email'] ?? ''));
-            $estado = ($_POST['estado'] ?? 'Activo') === 'Inactivo' ? 'Inactivo' : 'Activo';
-            $comiteIds = array_values(array_intersect(
-                is_array($_POST['comites'] ?? null) ? $_POST['comites'] : [],
-                $comiteIdsValidos
-            ));
-
-            if ($nombre === '') {
-                throw new RuntimeException('Escribe el nombre del contacto.');
-            }
-
-            if ($id > 0) {
-                $stmt = $pdo->prepare(
-                    'UPDATE contactos SET nombre = ?, cargo = ?, empresa = ?, telefono = ?, email = ?, estado = ? WHERE id = ?'
-                );
-                $stmt->execute([$nombre, $cargo ?: null, $empresa ?: null, $telefono ?: null, $email ?: null, $estado, $id]);
-            } else {
-                $stmt = $pdo->prepare(
-                    'INSERT INTO contactos (nombre, cargo, empresa, telefono, email, estado) VALUES (?, ?, ?, ?, ?, ?)'
-                );
-                $stmt->execute([$nombre, $cargo ?: null, $empresa ?: null, $telefono ?: null, $email ?: null, $estado]);
-                $id = (int) $pdo->lastInsertId();
-            }
-
-            comites_sync_contacto_comites($pdo, $id, $comiteIds);
-
-            header('Location: index.php?view=contactos&msg=' . urlencode('Contacto guardado correctamente.'));
-            exit;
-        }
-
-        if ($accion === 'contacto_eliminar') {
-            if (!can_manage_resource($user, 'contactos')) {
-                throw new RuntimeException('No tienes permiso para eliminar contactos.');
-            }
-            $id = (int) ($_POST['id'] ?? 0);
-            if ($id <= 0) {
-                throw new RuntimeException('Contacto no valido.');
-            }
-            $pdo->prepare('DELETE FROM contactos WHERE id = ?')->execute([$id]);
-
-            header('Location: index.php?view=contactos&msg=' . urlencode('Contacto eliminado.'));
-            exit;
-        }
-
-        // ---------- Reuniones ----------
-        if ($accion === 'reunion_guardar') {
-            if (!can_manage_resource($user, 'reuniones')) {
-                throw new RuntimeException('No tienes permiso para gestionar reuniones.');
-            }
-
-            $id = (int) ($_POST['id'] ?? 0);
-            $comiteId = trim((string) ($_POST['comite_id'] ?? ''));
-            $fecha = trim((string) ($_POST['fecha'] ?? '')) ?: null;
-            $realizada = ($_POST['realizada'] ?? 'realizada') === 'realizada' ? 1 : 0;
-            $temas = trim((string) ($_POST['temas'] ?? ''));
-            $proximosPasos = trim((string) ($_POST['proximos_pasos'] ?? ''));
-            $responsable = trim((string) ($_POST['responsable'] ?? ''));
-            $asistentes = array_map('intval', is_array($_POST['asistentes'] ?? null) ? $_POST['asistentes'] : []);
-            $detalleAcuerdos = is_array($_POST['acuerdos'] ?? null) ? $_POST['acuerdos'] : [];
-            $quitarArchivo = isset($_POST['quitar_ayuda_memoria']);
-
-            if (!in_array($comiteId, $comiteIdsValidos, true)) {
-                throw new RuntimeException('Selecciona un comite valido.');
-            }
-
-            $archivo = comites_guardar_archivo($_FILES['ayuda_memoria'] ?? [], 'reuniones', ['pdf', 'doc', 'docx']);
-            $avisoArchivo = '';
-            if ($archivo['error'] !== null) {
-                $avisoArchivo = ' La reunion se guardo, pero el archivo no se subio: ' . $archivo['error'];
-            }
-
-            if ($id > 0) {
-                $actualStmt = $pdo->prepare('SELECT ayuda_memoria_nombre, ayuda_memoria_ruta FROM reuniones WHERE id = ?');
-                $actualStmt->execute([$id]);
-                $actual = $actualStmt->fetch();
-                if (!$actual) {
-                    throw new RuntimeException('La reunion que intentas editar ya no existe.');
-                }
-
-                $nombreArchivo = $actual['ayuda_memoria_nombre'];
-                $rutaArchivo = $actual['ayuda_memoria_ruta'];
-                if ($archivo['ruta'] !== null) {
-                    $nombreArchivo = $archivo['nombre'];
-                    $rutaArchivo = $archivo['ruta'];
-                } elseif ($quitarArchivo) {
-                    $nombreArchivo = null;
-                    $rutaArchivo = null;
-                }
-
-                $stmt = $pdo->prepare(
-                    'UPDATE reuniones SET comite_id = ?, fecha = ?, realizada = ?, temas = ?, proximos_pasos = ?, responsable = ?,
-                        ayuda_memoria_nombre = ?, ayuda_memoria_ruta = ? WHERE id = ?'
-                );
-                $stmt->execute([$comiteId, $fecha, $realizada, $temas ?: null, $proximosPasos ?: null, $responsable ?: null, $nombreArchivo, $rutaArchivo, $id]);
-            } else {
-                $stmt = $pdo->prepare(
-                    'INSERT INTO reuniones (comite_id, fecha, realizada, temas, proximos_pasos, responsable, ayuda_memoria_nombre, ayuda_memoria_ruta)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-                );
-                $stmt->execute([$comiteId, $fecha, $realizada, $temas ?: null, $proximosPasos ?: null, $responsable ?: null, $archivo['nombre'], $archivo['ruta']]);
-                $id = (int) $pdo->lastInsertId();
-            }
-
-            comites_sync_reunion_asistentes($pdo, $id, $asistentes);
-            comites_sync_reunion_acuerdos($pdo, $id, $comiteId, $fecha, $responsable, $detalleAcuerdos);
-
-            header('Location: index.php?view=reuniones&msg=' . urlencode('Reunion guardada correctamente.' . $avisoArchivo));
-            exit;
-        }
-
-        if ($accion === 'reunion_eliminar') {
-            if (!can_manage_resource($user, 'reuniones')) {
-                throw new RuntimeException('No tienes permiso para eliminar reuniones.');
-            }
-            $id = (int) ($_POST['id'] ?? 0);
-            if ($id <= 0) {
-                throw new RuntimeException('Reunion no valida.');
-            }
-            $pdo->prepare('DELETE FROM reuniones WHERE id = ?')->execute([$id]);
-
-            header('Location: index.php?view=reuniones&msg=' . urlencode('Reunion eliminada.'));
-            exit;
-        }
-
-        // ---------- Acuerdos ----------
         if ($accion === 'acuerdo_guardar') {
             if (!can_manage_resource($user, 'acuerdos')) {
                 throw new RuntimeException('No tienes permiso para gestionar acuerdos.');
@@ -540,6 +504,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $cuerpoCorreo = trim((string) ($_POST['cuerpo'] ?? ''));
             $grupoDestino = trim((string) ($_POST['grupo_destino'] ?? 'todos'));
             $documentoIdCorreo = (int) ($_POST['documento_id'] ?? 0);
+            if ($documentoIdCorreo > 0) {
+                $bibCheck=$pdo->prepare('SELECT ambito FROM documentos WHERE id=?');
+                $bibCheck->execute([$documentoIdCorreo]);
+                if (in_array($bibCheck->fetchColumn(), ['ingenios','interna'], true)) throw new RuntimeException('Para compartir este documento usa Enviar por correo desde la biblioteca para ingenios; allí se verifica la aprobación y la versión.');
+            }
 
             if ($asuntoCorreo === '' || $cuerpoCorreo === '') {
                 throw new RuntimeException('Escribe el asunto y el cuerpo del correo.');
@@ -578,6 +547,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // ---------- Tableros ----------
+        if (in_array($accion, ['tablero_guardar','tablero_eliminar'], true) && !hash_equals($_SESSION['tableros_csrf'], (string)($_POST['csrf_tableros'] ?? ''))) { throw new RuntimeException('El formulario expiró. Recarga la página.'); }
         if ($accion === 'tablero_guardar') {
             if (!can_manage_resource($user, 'tableros')) {
                 throw new RuntimeException('No tienes permiso para gestionar tableros.');
@@ -586,11 +556,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int) ($_POST['id'] ?? 0);
             $nombreTablero = trim((string) ($_POST['nombre'] ?? ''));
             $descripcionTablero = trim((string) ($_POST['descripcion'] ?? '')) ?: null;
-            $urlTablero = trim((string) ($_POST['url'] ?? '')) ?: null;
+            $urlTablero = tableros_url((string) ($_POST['url'] ?? ''));
             $tipoTablero = trim((string) ($_POST['tipo'] ?? '')) ?: null;
             $estadoTablero = ($_POST['estado'] ?? 'Activo') === 'Inactivo' ? 'Inactivo' : 'Activo';
 
-            if ($nombreTablero === '') {
+            if ($nombreTablero === '' || mb_strlen($nombreTablero)>180 || mb_strlen((string)$tipoTablero)>80) {
                 throw new RuntimeException('Escribe el nombre del tablero.');
             }
 
@@ -855,7 +825,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $id = (int) ($_POST['id'] ?? 0);
             $fechaPublicacion = trim((string) ($_POST['fecha'] ?? '')) ?: null;
-            $plataformasValidas = ['Facebook', 'Instagram', 'LinkedIn', 'X', 'YouTube', 'TikTok', 'Sitio web', 'Otro'];
+            $plataformasValidas = array_keys(redes_plataformas());
             $plataforma = in_array($_POST['plataforma'] ?? '', $plataformasValidas, true) ? $_POST['plataforma'] : 'Otro';
             $tipoPublicacion = trim((string) ($_POST['tipo'] ?? '')) ?: null;
             $tituloPublicacion = trim((string) ($_POST['titulo'] ?? ''));
@@ -864,6 +834,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $estadoPublicacion = in_array($_POST['estado'] ?? '', $estadosPublicacionValidos, true) ? $_POST['estado'] : 'Borrador';
             $responsablePublicacion = trim((string) ($_POST['responsable'] ?? '')) ?: null;
             $urlPublicacion = trim((string) ($_POST['url'] ?? '')) ?: null;
+            $destinosPublicacion = $plataforma === 'WhatsApp' ? (trim((string) ($_POST['destinos'] ?? '')) ?: null) : null;
 
             $metricas = [];
             foreach (['alcance', 'impresiones', 'interacciones', 'reacciones', 'comentarios', 'compartidos', 'clics', 'reproducciones', 'guardados'] as $campoMetrica) {
@@ -890,24 +861,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $stmt = $pdo->prepare(
                     'UPDATE publicaciones SET fecha = ?, plataforma = ?, tipo = ?, titulo = ?, copy_texto = ?, material = ?, estado = ?,
-                        responsable = ?, url = ?, alcance = ?, impresiones = ?, interacciones = ?, reacciones = ?, comentarios = ?,
+                        responsable = ?, url = ?, destinos = ?, alcance = ?, impresiones = ?, interacciones = ?, reacciones = ?, comentarios = ?,
                         compartidos = ?, clics = ?, reproducciones = ?, guardados = ? WHERE id = ?'
                 );
                 $stmt->execute([
                     $fechaPublicacion, $plataforma, $tipoPublicacion, $tituloPublicacion, $copyTexto, $materialRuta, $estadoPublicacion,
-                    $responsablePublicacion, $urlPublicacion,
+                    $responsablePublicacion, $urlPublicacion, $destinosPublicacion,
                     $metricas['alcance'], $metricas['impresiones'], $metricas['interacciones'], $metricas['reacciones'], $metricas['comentarios'],
                     $metricas['compartidos'], $metricas['clics'], $metricas['reproducciones'], $metricas['guardados'], $id,
                 ]);
             } else {
                 $stmt = $pdo->prepare(
-                    'INSERT INTO publicaciones (fecha, plataforma, tipo, titulo, copy_texto, material, estado, responsable, url,
+                    'INSERT INTO publicaciones (fecha, plataforma, tipo, titulo, copy_texto, material, estado, responsable, url, destinos,
                         alcance, impresiones, interacciones, reacciones, comentarios, compartidos, clics, reproducciones, guardados)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute([
                     $fechaPublicacion, $plataforma, $tipoPublicacion, $tituloPublicacion, $copyTexto, $materialPublicacion['ruta'], $estadoPublicacion,
-                    $responsablePublicacion, $urlPublicacion,
+                    $responsablePublicacion, $urlPublicacion, $destinosPublicacion,
                     $metricas['alcance'], $metricas['impresiones'], $metricas['interacciones'], $metricas['reacciones'], $metricas['comentarios'],
                     $metricas['compartidos'], $metricas['clics'], $metricas['reproducciones'], $metricas['guardados'],
                 ]);
@@ -928,6 +899,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare('DELETE FROM publicaciones WHERE id = ?')->execute([$id]);
 
             header('Location: index.php?view=publicaciones&msg=' . urlencode('Publicacion eliminada.'));
+            exit;
+        }
+
+        // ---------- Usuarios y programas ----------
+        if (in_array($accion, ['usuario_guardar', 'usuario_agregar', 'programa_guardar', 'programa_estado'], true)) {
+            if (!can_manage_resource($user, 'usuarios')) {
+                throw new RuntimeException('No tienes permiso para administrar usuarios y programas.');
+            }
+            if (!hash_equals($_SESSION['usuarios_csrf'] ?? '', (string) ($_POST['csrf'] ?? ''))) {
+                throw new RuntimeException('El formulario expiró. Recarga la página.');
+            }
+            usuarios_preparar_programas($menuPdo);
+            $mensaje = match ($accion) {
+                'usuario_guardar' => usuarios_guardar($menuPdo, $user, $_POST),
+                'usuario_agregar' => usuarios_agregar($menuPdo, $user, $_POST),
+                'programa_guardar' => usuarios_programa_guardar($menuPdo, $_POST),
+                'programa_estado' => usuarios_programa_estado($menuPdo, (int) ($_POST['programa_id'] ?? 0)),
+            };
+            if (in_array($accion, ['usuario_agregar', 'usuario_guardar'], true)) {
+                // Lleva a la persona en la lista, resaltada, con la confirmacion de como quedo.
+                // Por sesion y no por la URL: el mensaje puede llevar el enlace para crear la contrasena.
+                $idAsignado = $accion === 'usuario_guardar'
+                    ? (int) ($_POST['usuario_id'] ?? 0)
+                    : (int) (usuarios_buscar_correo($menuPdo, (string) ($_POST['correo'] ?? ''))['id'] ?? 0);
+                $confirmacion = usuarios_confirmacion($menuPdo, $idAsignado);
+                $_SESSION['usuarios_flash'] = $mensaje . ($confirmacion ? ' ' . $confirmacion['texto'] : '');
+                header('Location: index.php?' . http_build_query(['view' => 'usuarios', 'filtro' => 'todos', 'q' => $confirmacion['correo'] ?? '', 'resaltar' => $idAsignado]));
+                exit;
+            }
+            header('Location: index.php?view=usuarios' . ($accion === 'usuario_guardar' ? '' : '&tab=programas') . '&msg=' . urlencode($mensaje));
+            exit;
+        }
+
+        // ---------- Conexion directa por API (Meta, LinkedIn, Google Analytics) ----------
+        if (in_array($accion, ['conexion_guardar', 'conexion_probar', 'conexion_sincronizar', 'conexion_desconectar'], true)) {
+            if (!can_manage_resource($user, 'publicaciones')) {
+                throw new RuntimeException('No tienes permiso para configurar las conexiones.');
+            }
+            if (!hash_equals($_SESSION['redes_csrf'], (string) ($_POST['csrf'] ?? ''))) {
+                throw new RuntimeException('El formulario expiró. Recarga la página.');
+            }
+            $proveedorApi = (string) ($_POST['proveedor'] ?? '');
+            if (!isset(redes_api_proveedores()[$proveedorApi])) {
+                throw new RuntimeException('Servicio no válido.');
+            }
+            try {
+                $mensaje = match ($accion) {
+                    'conexion_guardar' => redes_api_guardar($pdo, $proveedorApi, $_POST, $_FILES),
+                    'conexion_probar' => redes_api_probar($pdo, $proveedorApi),
+                    'conexion_sincronizar' => redes_api_sincronizar($pdo, $proveedorApi, true) ?? 'Ya hay una sincronización en curso; intenta en un momento.',
+                    'conexion_desconectar' => redes_api_desconectar($pdo, $proveedorApi),
+                };
+            } catch (RuntimeException $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                throw new RuntimeException('No se pudo completar la operación con ' . redes_api_proveedores()[$proveedorApi]['nombre'] . ': ' . $e->getMessage());
+            }
+            header('Location: index.php?view=publicaciones&tab=conexiones&msg=' . urlencode($mensaje) . '#conexion-' . $proveedorApi);
+            exit;
+        }
+
+        // ---------- Importacion de estadisticas y sitio web (Google Analytics) ----------
+        if (in_array($accion, ['publicacion_importar', 'web_importar', 'web_guardar', 'web_eliminar'], true)) {
+            if (!can_manage_resource($user, 'publicaciones')) {
+                throw new RuntimeException('No tienes permiso para gestionar redes sociales.');
+            }
+            try {
+                if ($accion === 'publicacion_importar') {
+                    $mensaje = redes_importar_publicaciones($pdo, (string) ($_POST['plataforma'] ?? ''), $_FILES['archivo'] ?? []);
+                } elseif ($accion === 'web_importar') {
+                    $mensaje = redes_importar_web($pdo, $_FILES['archivo'] ?? []);
+                } elseif ($accion === 'web_guardar') {
+                    $mensaje = redes_guardar_web($pdo, $_POST);
+                } else {
+                    $pdo->prepare('DELETE FROM sitio_web_metricas WHERE periodo = ?')->execute([(string) ($_POST['periodo'] ?? '')]);
+                    $mensaje = 'Mes eliminado.';
+                }
+            } catch (RuntimeException $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                throw new RuntimeException('No se pudo leer el archivo. Verifica que sea la exportación original en CSV o Excel.');
+            }
+            $tabWeb = str_starts_with($accion, 'web_') ? '&tab=web' : '';
+            header('Location: index.php?view=publicaciones' . $tabWeb . '&msg=' . urlencode($mensaje));
             exit;
         }
     } catch (RuntimeException $e) {
@@ -956,7 +1011,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $reopenModal = 'memoria';
         } elseif (str_starts_with($accion, 'editorial_')) {
             $reopenModal = 'editorial';
-        } elseif (str_starts_with($accion, 'publicacion_')) {
+        } elseif ($accion === 'usuario_agregar') {
+            $reopenModal = 'usuario_agregar';
+        } elseif (str_starts_with($accion, 'publicacion_') && $accion !== 'publicacion_importar') {
             $reopenModal = 'publicacion';
         }
         $prefillPost = $_POST;
@@ -964,6 +1021,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $flashMessage = $_GET['msg'] ?? '';
+if (isset($_SESSION['usuarios_flash'])) {
+    $flashMessage = (string) $_SESSION['usuarios_flash'];
+    unset($_SESSION['usuarios_flash']);
+}
 
 /**
  * Helper generico de consulta: ejecuta un SELECT preparado y devuelve todas
@@ -1041,7 +1102,6 @@ function render_meeting_calendar(array $rows, string $mes, array $comiteNombrePo
         <div class="calendar-toolbar">
             <div>
                 <h3>Calendario de reuniones</h3>
-                <p class="section-sub" style="margin:0;">Agenda mensual de los comites.</p>
             </div>
             <div class="calendar-nav">
                 <a class="btn-outline btn-sm" href="index.php?view=reuniones&modo=calendario&mes=<?= e($mesAnterior) ?>">‹</a>
@@ -1094,6 +1154,64 @@ $stats['comites'] = (int) $pdo->query('SELECT COUNT(*) FROM comites WHERE activo
 $stats['acuerdos_completados'] = (int) $pdo->query("SELECT COUNT(*) FROM acuerdos WHERE estado = 'Completado'")->fetchColumn();
 $stats['reuniones_realizadas'] = (int) $pdo->query('SELECT COUNT(*) FROM reuniones WHERE realizada = 1')->fetchColumn();
 
+// Datos del Inicio: agenda proxima, alertas y avance. Cada bloque solo se
+// consulta si el usuario puede ver la seccion de origen.
+$dash = ['reuniones' => [], 'eventos' => [], 'acuerdos_vencidos' => 0, 'acuerdos_por_vencer' => [], 'docs_revision' => 0, 'avance_acuerdos' => 0, 'eventos_realizados' => 0, 'eventos_total' => 0];
+if ($view === 'dashboard') {
+    if (can_view_resource($user, 'reuniones')) {
+        $stmt = $pdo->query(
+            "SELECT r.id, COALESCE(r.plan_fecha, r.fecha) AS fecha, r.plan_temas, r.temas, c.nombre AS comite
+             FROM reuniones r LEFT JOIN comites c ON c.id = r.comite_id
+             WHERE r.realizada = 0 AND r.cancelada = 0 AND COALESCE(r.plan_fecha, r.fecha) >= CURDATE()
+             ORDER BY fecha ASC LIMIT 5"
+        );
+        $dash['reuniones'] = $stmt->fetchAll();
+    }
+    if (can_view_resource($user, 'eventos')) {
+        $dash['eventos'] = $pdo->query(
+            "SELECT id, nombre, COALESCE(plan_fecha, fecha) AS fecha, modalidad, lugar
+             FROM eventos_transferencia
+             WHERE realizada = 0 AND cancelada = 0 AND COALESCE(plan_fecha, fecha) >= CURDATE()
+             ORDER BY fecha ASC LIMIT 5"
+        )->fetchAll();
+        $fila = $pdo->query('SELECT COUNT(*) AS total, COALESCE(SUM(realizada), 0) AS realizados FROM eventos_transferencia WHERE cancelada = 0')->fetch();
+        $dash['eventos_total'] = (int) ($fila['total'] ?? 0);
+        $dash['eventos_realizados'] = (int) ($fila['realizados'] ?? 0);
+    }
+    if (can_view_resource($user, 'acuerdos')) {
+        $dash['acuerdos_vencidos'] = (int) $pdo->query("SELECT COUNT(*) FROM acuerdos WHERE estado IN ('Pendiente','En proceso') AND plazo IS NOT NULL AND plazo < CURDATE()")->fetchColumn();
+        $dash['acuerdos_por_vencer'] = $pdo->query(
+            "SELECT a.id, a.acuerdo, a.responsable, a.plazo, a.avance, c.nombre AS comite
+             FROM acuerdos a LEFT JOIN comites c ON c.id = a.comite_id
+             WHERE a.estado IN ('Pendiente','En proceso') AND a.plazo BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 14 DAY)
+             ORDER BY a.plazo ASC LIMIT 5"
+        )->fetchAll();
+        $dash['avance_acuerdos'] = (int) round((float) $pdo->query("SELECT COALESCE(AVG(avance), 0) FROM acuerdos WHERE estado <> 'Cancelado'")->fetchColumn());
+    }
+    if (can_view_resource($user, 'documentos') || can_view_resource($user, 'biblioteca_interna')) {
+        $dash['docs_revision'] = (int) $pdo->query("SELECT COUNT(*) FROM documentos WHERE estado = 'En revision'")->fetchColumn();
+    }
+}
+
+function dash_fecha(?string $fecha): string
+{
+    if (!$fecha) {
+        return 'Por definir';
+    }
+    $ts = strtotime($fecha);
+    $meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return $ts ? date('j', $ts) . ' ' . $meses[(int) date('n', $ts) - 1] . ' ' . date('Y', $ts) : 'Por definir';
+}
+
+function dash_dias(?string $fecha): string
+{
+    if (!$fecha) {
+        return '';
+    }
+    $dias = (int) floor((strtotime($fecha) - strtotime(date('Y-m-d'))) / 86400);
+    return $dias === 0 ? 'Hoy' : ($dias === 1 ? 'Mañana' : 'En ' . $dias . ' días');
+}
+
 $active = static fn(string $name): string => $view === $name ? 'is-active' : '';
 
 $userInitials = '';
@@ -1113,278 +1231,11 @@ foreach ($sections as $key => $section) {
 
 // ===================== Datos especificos de cada vista =====================
 
-if ($view === 'contactos' && $puedeVerSeccionActual) {
-    $q = trim((string) ($_GET['q'] ?? ''));
-    $comiteFiltro = trim((string) ($_GET['comite'] ?? 'todos'));
-
-    $sql = 'SELECT DISTINCT c.* FROM contactos c LEFT JOIN contacto_comite cc ON cc.contacto_id = c.id WHERE 1=1';
-    $params = [];
-    if ($q !== '') {
-        $sql .= ' AND (c.nombre LIKE ? OR c.cargo LIKE ? OR c.empresa LIKE ?)';
-        $like = '%' . $q . '%';
-        array_push($params, $like, $like, $like);
-    }
-    if ($comiteFiltro !== 'todos' && in_array($comiteFiltro, $comiteIdsValidos, true)) {
-        $sql .= ' AND cc.comite_id = ?';
-        $params[] = $comiteFiltro;
-    }
-    $sql .= ' ORDER BY c.nombre';
-
-    $contactos = fetch_placeholder_rows($pdo, $sql, $params);
-    $comitesPorContacto = [];
-    if ($contactos) {
-        $ids = array_column($contactos, 'id');
-        $in = implode(',', array_fill(0, count($ids), '?'));
-        $rel = fetch_placeholder_rows($pdo, "SELECT contacto_id, comite_id FROM contacto_comite WHERE contacto_id IN ({$in})", $ids);
-        foreach ($rel as $r) {
-            $comitesPorContacto[(int) $r['contacto_id']][] = $r['comite_id'];
-        }
-    }
-
-    $contactoEditar = null;
-    $editarId = (int) ($_GET['editar'] ?? 0);
-    if ($reopenModal === 'contacto' && $prefillPost) {
-        $contactoEditar = [
-            'id' => (int) ($prefillPost['id'] ?? 0),
-            'nombre' => (string) ($prefillPost['nombre'] ?? ''),
-            'cargo' => (string) ($prefillPost['cargo'] ?? ''),
-            'empresa' => (string) ($prefillPost['empresa'] ?? ''),
-            'telefono' => (string) ($prefillPost['telefono'] ?? ''),
-            'email' => (string) ($prefillPost['email'] ?? ''),
-            'estado' => (string) ($prefillPost['estado'] ?? 'Activo'),
-            'comites' => is_array($prefillPost['comites'] ?? null) ? $prefillPost['comites'] : [],
-        ];
-        $modalContactosAbierto = true;
-    } elseif ($editarId > 0 && $puedeGestionarSeccionActual) {
-        $stmt = $pdo->prepare('SELECT * FROM contactos WHERE id = ?');
-        $stmt->execute([$editarId]);
-        $row = $stmt->fetch();
-        if ($row) {
-            $contactoEditar = $row;
-            $contactoEditar['comites'] = comites_contacto_comite_ids($pdo, $editarId);
-        }
-        $modalContactosAbierto = (bool) $contactoEditar;
-    } elseif (isset($_GET['nuevo']) && $puedeGestionarSeccionActual) {
-        $contactoEditar = ['id' => 0, 'nombre' => '', 'cargo' => '', 'empresa' => '', 'telefono' => '', 'email' => '', 'estado' => 'Activo', 'comites' => []];
-        $modalContactosAbierto = true;
-    } else {
-        $modalContactosAbierto = false;
-    }
-}
-
-if ($view === 'reuniones' && $puedeVerSeccionActual) {
-    $modo = ($_GET['modo'] ?? 'lista') === 'calendario' ? 'calendario' : 'lista';
-    $comiteFiltro = trim((string) ($_GET['comite'] ?? 'todos'));
-    $mes = trim((string) ($_GET['mes'] ?? '')) ?: date('Y-m');
-    if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
-        $mes = date('Y-m');
-    }
-
-    $sql = 'SELECT r.*, (SELECT COUNT(*) FROM acuerdos a WHERE a.reunion_id = r.id) AS total_acuerdos,
-                   (SELECT COUNT(*) FROM reunion_asistentes ra WHERE ra.reunion_id = r.id) AS total_asistentes
-            FROM reuniones r WHERE 1=1';
-    $params = [];
-    if ($comiteFiltro !== 'todos' && in_array($comiteFiltro, $comiteIdsValidos, true)) {
-        $sql .= ' AND r.comite_id = ?';
-        $params[] = $comiteFiltro;
-    }
-    if ($modo === 'calendario') {
-        $sql .= ' AND r.fecha BETWEEN ? AND ?';
-        $params[] = $mes . '-01';
-        $params[] = date('Y-m-t', strtotime($mes . '-01'));
-    }
-    $sql .= ' ORDER BY r.fecha DESC, r.id DESC';
-    $reuniones = fetch_placeholder_rows($pdo, $sql, $params);
-
-    $reunionVM = null;
-    $editarId = (int) ($_GET['editar'] ?? 0);
-    if ($reopenModal === 'reunion' && $prefillPost) {
-        $reunionVM = comites_reunion_vm_from_post($prefillPost);
-        $modalReunionesAbierto = true;
-    } elseif ($editarId > 0 && $puedeGestionarSeccionActual) {
-        $stmt = $pdo->prepare('SELECT * FROM reuniones WHERE id = ?');
-        $stmt->execute([$editarId]);
-        $row = $stmt->fetch();
-        if ($row) {
-            $reunionVM = comites_reunion_vm_from_db($pdo, $row);
-        }
-        $modalReunionesAbierto = (bool) $reunionVM;
-    } elseif (isset($_GET['nuevo']) && $puedeGestionarSeccionActual) {
-        $reunionVM = [
-            'id' => 0, 'comite_id' => $comitesActivos[0]['id'] ?? '', 'fecha' => date('Y-m-d'), 'realizada' => 1,
-            'temas' => '', 'proximos_pasos' => '', 'responsable' => '', 'ayuda_memoria_nombre' => null, 'ayuda_memoria_ruta' => null,
-            'asistentes' => [], 'acuerdos' => [],
-        ];
-        $modalReunionesAbierto = true;
-    } else {
-        $modalReunionesAbierto = false;
-    }
-
-    if ($modalReunionesAbierto && $reunionVM) {
-        $contactosDisponibles = fetch_placeholder_rows($pdo, 'SELECT id, nombre, cargo FROM contactos WHERE estado = "Activo" ORDER BY nombre');
-        $comitesPorContactoDisp = [];
-        if ($contactosDisponibles) {
-            $ids = array_column($contactosDisponibles, 'id');
-            $in = implode(',', array_fill(0, count($ids), '?'));
-            $rel = fetch_placeholder_rows($pdo, "SELECT contacto_id, comite_id FROM contacto_comite WHERE contacto_id IN ({$in})", $ids);
-            foreach ($rel as $r) {
-                $comitesPorContactoDisp[(int) $r['contacto_id']][] = $r['comite_id'];
-            }
-        }
-    }
-}
-
-if ($view === 'acuerdos' && $puedeVerSeccionActual) {
-    $q = trim((string) ($_GET['q'] ?? ''));
-    $sql = 'SELECT a.*, c.nombre AS comite_nombre FROM acuerdos a LEFT JOIN comites c ON c.id = a.comite_id WHERE 1=1';
-    $params = [];
-    if ($q !== '') {
-        $sql .= ' AND (a.acuerdo LIKE ? OR a.responsable LIKE ? OR c.nombre LIKE ?)';
-        $like = '%' . $q . '%';
-        array_push($params, $like, $like, $like);
-    }
-    $sql .= ' ORDER BY a.fecha DESC, a.id DESC';
-    $acuerdos = fetch_placeholder_rows($pdo, $sql, $params);
-
-    $acuerdoEditar = null;
-    $editarId = (int) ($_GET['editar'] ?? 0);
-    if ($reopenModal === 'acuerdo' && $prefillPost) {
-        $acuerdoEditar = [
-            'id' => (int) ($prefillPost['id'] ?? 0),
-            'comite_id' => (string) ($prefillPost['comite_id'] ?? ''),
-            'fecha' => (string) ($prefillPost['fecha'] ?? date('Y-m-d')),
-            'acuerdo' => (string) ($prefillPost['acuerdo'] ?? ''),
-            'responsable' => (string) ($prefillPost['responsable'] ?? ''),
-            'plazo' => (string) ($prefillPost['plazo'] ?? ''),
-            'fecha_seguimiento' => (string) ($prefillPost['fecha_seguimiento'] ?? ''),
-            'avance' => (int) ($prefillPost['avance'] ?? 0),
-            'estado' => (string) ($prefillPost['estado'] ?? 'Pendiente'),
-        ];
-        $modalAcuerdosAbierto = true;
-    } elseif ($editarId > 0 && $puedeGestionarSeccionActual) {
-        $stmt = $pdo->prepare('SELECT * FROM acuerdos WHERE id = ?');
-        $stmt->execute([$editarId]);
-        $row = $stmt->fetch();
-        $acuerdoEditar = $row ?: null;
-        $modalAcuerdosAbierto = (bool) $acuerdoEditar;
-    } elseif (isset($_GET['nuevo']) && $puedeGestionarSeccionActual) {
-        $acuerdoEditar = [
-            'id' => 0, 'comite_id' => $comitesActivos[0]['id'] ?? '', 'fecha' => date('Y-m-d'), 'acuerdo' => '',
-            'responsable' => '', 'plazo' => '', 'fecha_seguimiento' => '', 'avance' => 0, 'estado' => 'Pendiente',
-        ];
-        $modalAcuerdosAbierto = true;
-    } else {
-        $modalAcuerdosAbierto = false;
-    }
-}
-
-if (($view === 'documentos' || $view === 'biblioteca_interna') && $puedeVerSeccionActual) {
-    $ambitoActual = $view === 'biblioteca_interna' ? 'interna' : 'ingenios';
-    $recursoActual = $view;
-    $puedeGestionarDocumentos = can_manage_resource($user, $recursoActual);
-
-    // Navegacion por carpetas: `carpeta` ausente/invalida = raiz. La raiz solo
-    // muestra tarjetas de carpeta (sin tabla de documentos ni "Nuevo
-    // documento") hasta entrar a una carpeta, igual que el prototipo JSX.
-    $carpetaIdGet = (int) ($_GET['carpeta'] ?? 0);
-    $carpetaActual = $carpetaIdGet > 0 ? comites_carpeta_obtener($pdo, $carpetaIdGet, $ambitoActual) : null;
-    $carpetaId = $carpetaActual ? (int) $carpetaActual['id'] : null;
-    $subcarpetas = comites_carpeta_hijas($pdo, $ambitoActual, $carpetaId);
-    $breadcrumbCarpetas = comites_carpeta_breadcrumb($pdo, $carpetaId);
-
-    $q = trim((string) ($_GET['q'] ?? ''));
-    $comiteFiltro = trim((string) ($_GET['comite'] ?? 'todos'));
-
-    $documentos = [];
-    if ($carpetaId !== null) {
-        $sql = 'SELECT d.*, c.nombre AS comite_nombre FROM documentos d LEFT JOIN comites c ON c.id = d.comite_id WHERE d.ambito = ? AND d.carpeta_id = ?';
-        $params = [$ambitoActual, $carpetaId];
-        if ($q !== '') {
-            $sql .= ' AND (d.titulo LIKE ? OR d.autor LIKE ?)';
-            $like = '%' . $q . '%';
-            array_push($params, $like, $like);
-        }
-        if ($comiteFiltro !== 'todos' && in_array($comiteFiltro, $comiteIdsValidos, true)) {
-            $sql .= ' AND d.comite_id = ?';
-            $params[] = $comiteFiltro;
-        }
-        $sql .= ' ORDER BY d.fecha DESC, d.id DESC';
-        $documentos = fetch_placeholder_rows($pdo, $sql, $params);
-    }
-
-    // ---- Modal: crear carpeta ----
-    $modalCarpetaAbierto = ($reopenModal === 'carpeta' && $prefillPost) || isset($_GET['nueva_carpeta']);
-    $carpetaNuevaNombre = ($reopenModal === 'carpeta' && $prefillPost) ? (string) ($prefillPost['nombre'] ?? '') : '';
-
-    // ---- Modal: editar/nuevo documento ----
-    $documentoEditar = null;
-    $editarId = (int) ($_GET['editar'] ?? 0);
-    if ($reopenModal === 'documento' && $prefillPost) {
-        $documentoEditar = [
-            'id' => (int) ($prefillPost['id'] ?? 0),
-            'tipo' => (string) ($prefillPost['tipo'] ?? 'Otro'),
-            'titulo' => (string) ($prefillPost['titulo'] ?? ''),
-            'fecha' => (string) ($prefillPost['fecha'] ?? date('Y-m-d')),
-            'comite_id' => (string) ($prefillPost['comite_id'] ?? ''),
-            'autor' => (string) ($prefillPost['autor'] ?? ''),
-            'enlace' => (string) ($prefillPost['enlace'] ?? ''),
-            'descripcion' => (string) ($prefillPost['descripcion'] ?? ''),
-            'archivo_nombre' => null,
-            'archivo_ruta' => null,
-            'estado' => (string) ($prefillPost['estado'] ?? 'En revision'),
-            'observaciones' => (string) ($prefillPost['observaciones'] ?? ''),
-            'causa_rechazo' => (string) ($prefillPost['causa_rechazo'] ?? ''),
-            'habilitado_envio' => isset($prefillPost['habilitado_envio']) ? 1 : 0,
-        ];
-        $modalDocumentoAbierto = true;
-    } elseif ($editarId > 0 && $puedeGestionarDocumentos) {
-        $stmt = $pdo->prepare('SELECT * FROM documentos WHERE id = ? AND ambito = ?');
-        $stmt->execute([$editarId, $ambitoActual]);
-        $row = $stmt->fetch();
-        if ($row) {
-            $documentoEditar = $row;
-        }
-        $modalDocumentoAbierto = (bool) $documentoEditar;
-    } elseif (isset($_GET['nuevo']) && $carpetaId !== null && $puedeGestionarDocumentos) {
-        $documentoEditar = [
-            'id' => 0, 'tipo' => 'Otro', 'titulo' => '', 'fecha' => date('Y-m-d'),
-            'comite_id' => '', 'autor' => '', 'enlace' => '', 'descripcion' => '', 'archivo_nombre' => null, 'archivo_ruta' => null,
-            'estado' => 'En revision', 'observaciones' => '', 'causa_rechazo' => '', 'habilitado_envio' => 0,
-        ];
-        $modalDocumentoAbierto = true;
-    } else {
-        $modalDocumentoAbierto = false;
-    }
-
-    // ---- Vista: ver seguimiento/historial (solo lectura, accion propia) ----
-    $documentoVerHistorial = null;
-    $historialVerId = (int) ($_GET['historial'] ?? 0);
-    if ($historialVerId > 0 && $puedeGestionarDocumentos) {
-        $stmt = $pdo->prepare('SELECT id, titulo FROM documentos WHERE id = ? AND ambito = ?');
-        $stmt->execute([$historialVerId, $ambitoActual]);
-        $documentoVerHistorial = $stmt->fetch() ?: null;
-        if ($documentoVerHistorial) {
-            $documentoVerHistorial['historial'] = comites_documento_historial($pdo, $historialVerId);
-        }
-    }
-
-    // ---- Modal: revisar (Aprobar / Observar / Rechazar) ----
-    $documentoRevisar = null;
-    $revisarId = ($reopenModal === 'documento_revisar' && $reopenId) ? (int) $reopenId : (int) ($_GET['revisar'] ?? 0);
-    if ($revisarId > 0 && $puedeGestionarDocumentos) {
-        $stmt = $pdo->prepare(
-            'SELECT d.*, c.nombre AS comite_nombre FROM documentos d LEFT JOIN comites c ON c.id = d.comite_id WHERE d.id = ? AND d.ambito = ?'
-        );
-        $stmt->execute([$revisarId, $ambitoActual]);
-        $documentoRevisar = $stmt->fetch() ?: null;
-    }
-}
-
 if ($view === 'correos' && $puedeVerSeccionActual) {
     $correos = fetch_placeholder_rows($pdo, 'SELECT * FROM correos_enviados ORDER BY enviado_en DESC LIMIT 200');
     $documentosParaCorreo = fetch_placeholder_rows(
         $pdo,
-        "SELECT id, titulo FROM documentos WHERE habilitado_envio = 1 ORDER BY fecha DESC LIMIT 100"
+        "SELECT id, titulo FROM documentos WHERE habilitado_envio = 1 AND ambito = 'ingenios' ORDER BY fecha DESC LIMIT 100"
     );
     // Preselecciona el documento cuando se llega desde el icono "Enviar por
     // correo" de la biblioteca documental (?documento_id=), o al reabrir el
@@ -1429,120 +1280,57 @@ if ($view === 'tableros' && $puedeVerSeccionActual) {
     }
 }
 
-if ($view === 'informes' && $puedeVerSeccionActual) {
-    $informes = fetch_placeholder_rows($pdo, 'SELECT * FROM informes_cuatrimestrales ORDER BY fecha DESC, id DESC');
-
-    $informeEditar = null;
-    $informeSoportes = [];
-    $editarId = (int) ($_GET['editar'] ?? 0);
-    if ($reopenModal === 'informe' && $prefillPost) {
-        $informeEditar = [
-            'id' => (int) ($prefillPost['id'] ?? 0),
-            'periodo' => (string) ($prefillPost['periodo'] ?? ''),
-            'area' => (string) ($prefillPost['area'] ?? ''),
-            'evaluacion' => (string) ($prefillPost['evaluacion'] ?? 'En revision'),
-            'observaciones' => (string) ($prefillPost['observaciones'] ?? ''),
-            'fecha' => (string) ($prefillPost['fecha'] ?? date('Y-m-d')),
-            'plan_operativo_nombre' => null, 'plan_operativo_ruta' => null, 'informe_nombre' => null, 'informe_ruta' => null,
-        ];
-        $modalInformesAbierto = true;
-    } elseif ($editarId > 0 && $puedeGestionarSeccionActual) {
-        $stmt = $pdo->prepare('SELECT * FROM informes_cuatrimestrales WHERE id = ?');
-        $stmt->execute([$editarId]);
-        $informeEditar = $stmt->fetch() ?: null;
-        if ($informeEditar) {
-            $informeSoportes = comites_informe_soportes($pdo, $editarId);
-        }
-        $modalInformesAbierto = (bool) $informeEditar;
-    } elseif (isset($_GET['nuevo']) && $puedeGestionarSeccionActual) {
-        $informeEditar = [
-            'id' => 0, 'periodo' => '', 'area' => '', 'evaluacion' => 'En revision', 'observaciones' => '', 'fecha' => date('Y-m-d'),
-            'plan_operativo_nombre' => null, 'plan_operativo_ruta' => null, 'informe_nombre' => null, 'informe_ruta' => null,
-        ];
-        $modalInformesAbierto = true;
-    } else {
-        $modalInformesAbierto = false;
-    }
-}
-
-if ($view === 'memorias' && $puedeVerSeccionActual) {
-    $memorias = fetch_placeholder_rows(
-        $pdo,
-        'SELECT m.*, ce.nombre AS revisor_nombre FROM memorias_resultados m LEFT JOIN comite_editorial ce ON ce.id = m.revisor_id ORDER BY m.id DESC'
-    );
-    $editorialMiembros = fetch_placeholder_rows($pdo, 'SELECT * FROM comite_editorial ORDER BY nombre');
-    $editorialActivos = array_values(array_filter($editorialMiembros, static fn(array $r): bool => $r['estado'] === 'Activo'));
-
-    $memoriaEditar = null;
-    $memoriaTrack = [];
-    $editarId = (int) ($_GET['editar'] ?? 0);
-    if ($reopenModal === 'memoria' && $prefillPost) {
-        $memoriaEditar = [
-            'id' => (int) ($prefillPost['id'] ?? 0),
-            'numero_memoria' => (string) ($prefillPost['numero_memoria'] ?? ''),
-            'titulo' => (string) ($prefillPost['titulo'] ?? ''),
-            'autor' => (string) ($prefillPost['autor'] ?? ''),
-            'autor_email' => (string) ($prefillPost['autor_email'] ?? ''),
-            'fecha' => (string) ($prefillPost['fecha'] ?? date('Y-m-d')),
-            'revisor_id' => (int) ($prefillPost['revisor_id'] ?? 0),
-            'estado' => (string) ($prefillPost['estado'] ?? 'Recibida'),
-            'observaciones_revisor' => (string) ($prefillPost['observaciones_revisor'] ?? ''),
-            'archivo_nombre' => null, 'archivo_ruta' => null,
-        ];
-        $modalMemoriasAbierto = true;
-    } elseif ($editarId > 0 && $puedeGestionarSeccionActual) {
-        $stmt = $pdo->prepare('SELECT * FROM memorias_resultados WHERE id = ?');
-        $stmt->execute([$editarId]);
-        $memoriaEditar = $stmt->fetch() ?: null;
-        if ($memoriaEditar) {
-            $memoriaTrack = comites_memoria_track($pdo, $editarId);
-        }
-        $modalMemoriasAbierto = (bool) $memoriaEditar;
-    } elseif (isset($_GET['nuevo']) && $puedeGestionarSeccionActual) {
-        $memoriaEditar = [
-            'id' => 0, 'numero_memoria' => '', 'titulo' => '', 'autor' => '', 'autor_email' => '', 'fecha' => date('Y-m-d'),
-            'revisor_id' => 0, 'estado' => 'Recibida', 'observaciones_revisor' => '', 'archivo_nombre' => null, 'archivo_ruta' => null,
-        ];
-        $modalMemoriasAbierto = true;
-    } else {
-        $modalMemoriasAbierto = false;
-    }
-
-    $editorialEditar = null;
-    $editarEditorialId = (int) ($_GET['editar_editorial'] ?? 0);
-    if ($reopenModal === 'editorial' && $prefillPost) {
-        $editorialEditar = [
-            'id' => (int) ($prefillPost['id'] ?? 0),
-            'nombre' => (string) ($prefillPost['nombre'] ?? ''),
-            'cargo' => (string) ($prefillPost['cargo'] ?? ''),
-            'email' => (string) ($prefillPost['email'] ?? ''),
-            'estado' => (string) ($prefillPost['estado'] ?? 'Activo'),
-        ];
-        $modalEditorialAbierto = true;
-    } elseif ($editarEditorialId > 0 && $puedeGestionarSeccionActual) {
-        $stmt = $pdo->prepare('SELECT * FROM comite_editorial WHERE id = ?');
-        $stmt->execute([$editarEditorialId]);
-        $editorialEditar = $stmt->fetch() ?: null;
-        $modalEditorialAbierto = (bool) $editorialEditar;
-    } elseif (isset($_GET['nuevo_editorial']) && $puedeGestionarSeccionActual) {
-        $editorialEditar = ['id' => 0, 'nombre' => '', 'cargo' => '', 'email' => '', 'estado' => 'Activo'];
-        $modalEditorialAbierto = true;
-    } else {
-        $modalEditorialAbierto = false;
-    }
-}
-
 if ($view === 'publicaciones' && $puedeVerSeccionActual) {
+    $redesTab = in_array($_GET['tab'] ?? '', ['web', 'conexiones'], true) ? (string) $_GET['tab'] : 'publicaciones';
+    if ($redesTab === 'conexiones' && !$puedeGestionarSeccionActual) {
+        $redesTab = 'publicaciones';
+    }
+    $redesConexiones = redes_api_conexiones($pdo);
+    $redesAutoPendiente = redes_api_hay_pendientes($redesConexiones);
     $q = trim((string) ($_GET['q'] ?? ''));
-    $sql = 'SELECT * FROM publicaciones WHERE 1=1';
+    $filtroPlataforma = array_key_exists($_GET['plataforma'] ?? '', redes_plataformas()) ? (string) $_GET['plataforma'] : '';
+    $filtroMes = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', (string) ($_GET['mes'] ?? '')) ? (string) $_GET['mes'] : '';
+    $where = ' WHERE 1=1';
     $params = [];
     if ($q !== '') {
-        $sql .= ' AND (titulo LIKE ? OR plataforma LIKE ? OR tipo LIKE ?)';
+        $where .= ' AND (titulo LIKE ? OR plataforma LIKE ? OR tipo LIKE ? OR destinos LIKE ?)';
         $like = '%' . $q . '%';
-        array_push($params, $like, $like, $like);
+        array_push($params, $like, $like, $like, $like);
     }
-    $sql .= ' ORDER BY fecha DESC, id DESC';
-    $publicaciones = fetch_placeholder_rows($pdo, $sql, $params);
+    if ($filtroPlataforma !== '') {
+        $where .= ' AND plataforma = ?';
+        $params[] = $filtroPlataforma;
+    }
+    if ($filtroMes !== '') {
+        $where .= " AND DATE_FORMAT(fecha, '%Y-%m') = ?";
+        $params[] = $filtroMes;
+    }
+    $publicaciones = fetch_placeholder_rows($pdo, 'SELECT * FROM publicaciones' . $where . ' ORDER BY fecha DESC, id DESC', $params);
+    // Resumen por plataforma con los mismos filtros (excepto la plataforma, para poder comparar).
+    $paramsResumen = $params;
+    $whereResumen = $where;
+    if ($filtroPlataforma !== '') {
+        $whereResumen = str_replace(' AND plataforma = ?', '', $whereResumen);
+        array_splice($paramsResumen, array_search($filtroPlataforma, $paramsResumen, true), 1);
+    }
+    $resumenRedes = fetch_placeholder_rows(
+        $pdo,
+        'SELECT plataforma, COUNT(*) AS total, COALESCE(SUM(alcance),0) AS alcance, COALESCE(SUM(interacciones),0) AS interacciones,
+                COALESCE(SUM(clics),0) AS clics, COALESCE(SUM(compartidos),0) AS compartidos
+         FROM publicaciones' . $whereResumen . ' GROUP BY plataforma ORDER BY total DESC',
+        $paramsResumen
+    );
+    $webMetricas = fetch_placeholder_rows($pdo, 'SELECT * FROM sitio_web_metricas ORDER BY periodo DESC LIMIT 36');
+    $webEditar = null;
+    if ($redesTab === 'web' && $puedeGestionarSeccionActual && isset($_GET['web_mes'])) {
+        $webEditar = ['periodo' => date('Y-m', strtotime('first day of last month')), 'usuarios' => 0, 'nuevos_usuarios' => 0, 'sesiones' => 0, 'vistas' => 0, 'duracion_seg' => 0, 'rebote' => 0, 'sesiones_redes' => 0, 'sesiones_whatsapp' => 0, 'notas' => ''];
+        foreach ($webMetricas as $fila) {
+            if ($fila['periodo'] === $_GET['web_mes']) {
+                $webEditar = $fila;
+            }
+        }
+    }
+    $modalImportar = $puedeGestionarSeccionActual ? (string) ($_GET['importar'] ?? '') : '';
 
     $publicacionEditar = null;
     $editarId = (int) ($_GET['editar'] ?? 0);
@@ -1557,6 +1345,7 @@ if ($view === 'publicaciones' && $puedeVerSeccionActual) {
             'estado' => (string) ($prefillPost['estado'] ?? 'Borrador'),
             'responsable' => (string) ($prefillPost['responsable'] ?? ''),
             'url' => (string) ($prefillPost['url'] ?? ''),
+            'destinos' => (string) ($prefillPost['destinos'] ?? ''),
             'material' => null,
             'alcance' => (int) ($prefillPost['alcance'] ?? 0),
             'impresiones' => (int) ($prefillPost['impresiones'] ?? 0),
@@ -1577,13 +1366,53 @@ if ($view === 'publicaciones' && $puedeVerSeccionActual) {
     } elseif (isset($_GET['nuevo']) && $puedeGestionarSeccionActual) {
         $publicacionEditar = [
             'id' => 0, 'fecha' => date('Y-m-d'), 'plataforma' => 'Facebook', 'tipo' => '', 'titulo' => '', 'copy_texto' => '',
-            'estado' => 'Borrador', 'responsable' => '', 'url' => '', 'material' => null,
+            'estado' => 'Borrador', 'responsable' => '', 'url' => '', 'destinos' => '', 'material' => null,
             'alcance' => 0, 'impresiones' => 0, 'interacciones' => 0, 'reacciones' => 0, 'comentarios' => 0,
             'compartidos' => 0, 'clics' => 0, 'reproducciones' => 0, 'guardados' => 0,
         ];
         $modalPublicacionesAbierto = true;
     } else {
         $modalPublicacionesAbierto = false;
+    }
+}
+
+if ($view === 'usuarios' && $puedeVerSeccionActual) {
+    $usuariosTab = ($_GET['tab'] ?? '') === 'programas' ? 'programas' : 'usuarios';
+    $usuariosError = '';
+    try {
+        usuarios_preparar_programas($menuPdo);
+        $usuariosBusqueda = trim((string) ($_GET['q'] ?? ''));
+        $usuariosFiltro = in_array($_GET['filtro'] ?? '', ['con_acceso', 'sin_programa', 'todos'], true) ? (string) $_GET['filtro'] : 'con_acceso';
+        $usuariosRolFiltro = (int) ($_GET['rol'] ?? 0);
+        $usuariosLista = usuarios_listado($menuPdo, $usuariosBusqueda, $usuariosFiltro, $usuariosRolFiltro);
+        $usuariosRoles = usuarios_roles($menuPdo);
+        $usuariosProgramas = usuarios_programas($menuPdo);
+    } catch (PDOException $e) {
+        $usuariosError = 'No se pudo leer la lista de programas de Solicitudes internas: ' . $e->getMessage();
+        $usuariosLista = $usuariosRoles = $usuariosProgramas = [];
+        $usuariosBusqueda = '';
+        $usuariosFiltro = 'con_acceso';
+        $usuariosRolFiltro = 0;
+    }
+    $usuarioEditar = null;
+    $usuarioVer = null;
+    foreach ($usuariosLista as $fila) {
+        if ((int) $fila['id'] === (int) ($_GET['editar'] ?? 0)) {
+            $usuarioEditar = $fila;
+        }
+        if ((int) $fila['id'] === (int) ($_GET['ver'] ?? 0)) {
+            $usuarioVer = $fila + ['efectivos' => usuarios_permisos_efectivos($menuPdo, $fila)];
+        }
+    }
+    $usuarioResaltado = (int) ($_GET['resaltar'] ?? 0);
+    $programaEditar = null;
+    if (isset($_GET['programa'])) {
+        $programaEditar = ['id' => 0, 'nombre' => ''];
+        foreach ($usuariosProgramas as $p) {
+            if ((int) $p['id'] === (int) $_GET['programa']) {
+                $programaEditar = $p;
+            }
+        }
     }
 }
 
@@ -1608,6 +1437,7 @@ if ($view === 'estadisticas' && $puedeVerSeccionActual) {
         "SELECT DATE_FORMAT(enviado_en, '%Y-%m') AS mes, COUNT(*) AS total FROM correos_enviados GROUP BY mes ORDER BY mes DESC LIMIT 6"
     );
 }
+$notificaciones = notif_obtener($pdo, $user);
 ?>
 <!doctype html>
 <html lang="es">
@@ -1619,7 +1449,7 @@ if ($view === 'estadisticas' && $puedeVerSeccionActual) {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
-    <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="stylesheet" href="assets/css/styles.css?v=<?= @filemtime(__DIR__ . '/assets/css/styles.css') ?>">
 </head>
 <body>
 <div class="app">
@@ -1664,7 +1494,53 @@ if ($view === 'estadisticas' && $puedeVerSeccionActual) {
             <div class="topbar-sub">Transferencia de Tecnologia · Gestion de informacion</div>
         </div>
         <div class="topbar-right">
-            <span class="topbar-pill"><?= e($user['nombre_rol']) ?></span>
+            <div class="notif" id="notif">
+                <button type="button" class="notif-toggle" id="notifToggle" aria-haspopup="true" aria-expanded="false" aria-controls="notifPanel"
+                        aria-label="Notificaciones<?= $notificaciones['sin_leer'] ? ': ' . (int) $notificaciones['sin_leer'] . ' sin leer' : '' ?>">
+                    <i class="ti ti-bell"></i>
+                    <?php if ($notificaciones['sin_leer'] > 0): ?>
+                        <span class="notif-badge"><?= $notificaciones['sin_leer'] > 9 ? '9+' : (int) $notificaciones['sin_leer'] ?></span>
+                    <?php endif; ?>
+                </button>
+                <div class="notif-panel" id="notifPanel" hidden>
+                    <div class="notif-head">
+                        <div>
+                            <strong>Notificaciones</strong>
+                            <span><?= $notificaciones['sin_leer'] ? (int) $notificaciones['sin_leer'] . ' sin leer' : 'Estás al día' ?></span>
+                        </div>
+                        <?php if ($notificaciones['sin_leer'] > 0): ?>
+                            <form method="post">
+                                <input type="hidden" name="accion" value="notif_marcar_todas">
+                                <input type="hidden" name="csrf" value="<?= e($_SESSION['notif_csrf']) ?>">
+                                <input type="hidden" name="volver" value="<?= e((string) ($_SERVER['REQUEST_URI'] ?? '')) ?>">
+                                <button type="submit" class="notif-mark"><i class="ti ti-checks"></i>Marcar todas como leídas</button>
+                            </form>
+                        <?php endif; ?>
+                    </div>
+                    <?php if (!$notificaciones['items']): ?>
+                        <div class="notif-empty">
+                            <i class="ti ti-bell-off"></i>
+                            <span>No tienes pendientes ni avisos recientes.</span>
+                        </div>
+                    <?php else: ?>
+                        <ul class="notif-list">
+                            <?php foreach ($notificaciones['items'] as $aviso): ?>
+                                <li>
+                                    <a class="notif-item<?= $aviso['leida'] ? '' : ' is-unread' ?>" href="index.php?<?= e(http_build_query(['notif' => $aviso['clave'], 'ir' => $aviso['url']])) ?>">
+                                        <span class="notif-icon tone-<?= e($aviso['tono']) ?>"><i class="ti <?= e($aviso['icon']) ?>"></i></span>
+                                        <span class="notif-body">
+                                            <span class="notif-text"><?= e($aviso['texto']) ?></span>
+                                            <?php if ($aviso['detalle'] !== ''): ?><span class="notif-obs"><?= e($aviso['detalle']) ?></span><?php endif; ?>
+                                            <span class="notif-time"><?= e(notif_hace($aviso['fecha'])) ?></span>
+                                        </span>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <span class="topbar-pill"><?= e($user['perfil_comites'] ?? $user['nombre_rol']) ?><?= !empty($user['programa']) ? ' · ' . e($user['programa']) : '' ?></span>
             <div class="topbar-userbox">
                 <div class="topbar-avatar"><?= e($userInitials) ?></div>
                 <div class="topbar-userbox-copy">
@@ -1684,744 +1560,253 @@ if ($view === 'estadisticas' && $puedeVerSeccionActual) {
         <?php endif; ?>
 
         <?php if ($view === 'dashboard'): ?>
-            <div class="section-header">
-                <div>
-                    <div class="section-title">Panel general</div>
-                    <div class="section-sub">Resumen de comites, documentacion y comunicacion.</div>
-                </div>
-            </div>
+            <?php
+            $pctAcuerdos = $stats['acuerdos'] > 0 ? (int) round($stats['acuerdos_completados'] / $stats['acuerdos'] * 100) : 0;
+            $pctReuniones = $stats['reuniones'] > 0 ? (int) round($stats['reuniones_realizadas'] / $stats['reuniones'] * 100) : 0;
+            $pctEventos = $dash['eventos_total'] > 0 ? (int) round($dash['eventos_realizados'] / $dash['eventos_total'] * 100) : 0;
+            $primerNombre = preg_split('/\s+/', trim((string) $user['nombre']))[0] ?? '';
+            $diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+            $mesesLargos = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            $hoyTexto = $diasSemana[(int) date('w')] . ', ' . date('j') . ' de ' . $mesesLargos[(int) date('n') - 1] . ' de ' . date('Y');
 
-            <section class="stats-row">
-                <div class="stat-card"><div class="stat-icon"><i class="ti ti-users"></i></div><div><div class="stat-num"><?= $stats['contactos'] ?></div><div class="stat-label">Contactos activos</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i class="ti ti-calendar-event"></i></div><div><div class="stat-num"><?= $stats['reuniones'] ?></div><div class="stat-label">Reuniones registradas</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i class="ti ti-clipboard-list"></i></div><div><div class="stat-num"><?= $stats['acuerdos'] ?></div><div class="stat-label">Acuerdos en seguimiento</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i class="ti ti-affiliate"></i></div><div><div class="stat-num"><?= $stats['comites'] ?></div><div class="stat-label">Comites activos</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i class="ti ti-folder"></i></div><div><div class="stat-num"><?= $stats['documentos'] ?></div><div class="stat-label">Documentos · ingenios</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i class="ti ti-folder-star"></i></div><div><div class="stat-num"><?= $stats['biblioteca_interna'] ?></div><div class="stat-label">Documentos · biblioteca interna</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i class="ti ti-mail"></i></div><div><div class="stat-num"><?= $stats['correos'] ?></div><div class="stat-label">Correos enviados</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i class="ti ti-chart-bar"></i></div><div><div class="stat-num"><?= $stats['tableros'] ?></div><div class="stat-label">Tableros activos</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i class="ti ti-report"></i></div><div><div class="stat-num"><?= $stats['informes'] ?></div><div class="stat-label">Informes cuatrimestrales</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i class="ti ti-book-2"></i></div><div><div class="stat-num"><?= $stats['memorias'] ?></div><div class="stat-label">Articulos de memoria</div></div></div>
-                <div class="stat-card"><div class="stat-icon"><i class="ti ti-share"></i></div><div><div class="stat-num"><?= $stats['publicaciones'] ?></div><div class="stat-label">Publicaciones en redes</div></div></div>
+            // Flujo de trabajo del modulo: cada paso enlaza a sus secciones (solo las visibles para el usuario).
+            $flujo = [
+                ['icon' => 'ti-affiliate', 'titulo' => 'Organice los comités', 'texto' => 'Registre los comités técnicos y su directorio de contactos de ingenios e invitados.', 'vistas' => ['comites', 'contactos']],
+                ['icon' => 'ti-calendar-event', 'titulo' => 'Planifique y documente', 'texto' => 'Programe reuniones y eventos de transferencia; registre asistentes, temas y ayuda memoria.', 'vistas' => ['reuniones', 'eventos']],
+                ['icon' => 'ti-clipboard-list', 'titulo' => 'Dé seguimiento', 'texto' => 'Cada acuerdo queda con responsable, plazo y porcentaje de avance hasta completarse.', 'vistas' => ['acuerdos']],
+                ['icon' => 'ti-folder', 'titulo' => 'Comparta conocimiento', 'texto' => 'Publique documentos aprobados en las bibliotecas y envíelos por correo a los contactos.', 'vistas' => ['documentos', 'biblioteca_interna', 'correos']],
+                ['icon' => 'ti-report', 'titulo' => 'Reporte resultados', 'texto' => 'Consolide informes cuatrimestrales, la memoria de resultados y los tableros de indicadores.', 'vistas' => ['informes', 'memorias', 'tableros']],
+                ['icon' => 'ti-share', 'titulo' => 'Comunique y mida', 'texto' => 'Registre publicaciones en redes sociales y revise las estadísticas del módulo.', 'vistas' => ['publicaciones', 'estadisticas']],
+            ];
+            $puedeVer = static fn(string $v): bool => !isset($recursoPorVista[$v]) || can_view_resource($user, $recursoPorVista[$v]);
+
+            $alertas = [];
+            if ($dash['acuerdos_vencidos'] > 0) {
+                $alertas[] = ['tipo' => 'danger', 'icon' => 'ti-alert-triangle', 'texto' => $dash['acuerdos_vencidos'] . ($dash['acuerdos_vencidos'] === 1 ? ' acuerdo vencido' : ' acuerdos vencidos') . ' sin completar', 'url' => 'index.php?view=acuerdos'];
+            }
+            if (count($dash['acuerdos_por_vencer']) > 0) {
+                $alertas[] = ['tipo' => 'warning', 'icon' => 'ti-clock', 'texto' => count($dash['acuerdos_por_vencer']) . ' acuerdo(s) vencen en los próximos 14 días', 'url' => 'index.php?view=acuerdos'];
+            }
+            if ($dash['docs_revision'] > 0) {
+                $alertas[] = ['tipo' => 'info', 'icon' => 'ti-file-search', 'texto' => $dash['docs_revision'] . ' documento(s) esperan revisión', 'url' => 'index.php?view=' . (can_view_resource($user, 'documentos') ? 'documentos' : 'biblioteca_interna')];
+            }
+            ?>
+
+            <section class="dash-hero">
+                <div class="dash-hero-copy">
+                    <span class="dash-hero-date"><i class="ti ti-calendar"></i> <?= e(ucfirst($hoyTexto)) ?></span>
+                    <h1>Hola, <?= e($primerNombre) ?></h1>
+                    <p>
+                        Este módulo centraliza el trabajo de <strong>Transferencia de Tecnología</strong> de CENGICAÑA:
+                        la gestión de los comités técnicos con los ingenios, el seguimiento de sus acuerdos,
+                        la documentación que se comparte y la comunicación de resultados.
+                    </p>
+                </div>
+                <div class="dash-hero-kpis">
+                    <div><strong><?= $stats['comites'] ?></strong><span>Comités activos</span></div>
+                    <div><strong><?= $stats['contactos'] ?></strong><span>Contactos</span></div>
+                    <div><strong><?= $stats['reuniones'] ?></strong><span>Reuniones</span></div>
+                    <div><strong><?= $stats['acuerdos'] ?></strong><span>Acuerdos</span></div>
+                </div>
             </section>
 
-            <div class="dash-grid">
-                <div class="quick-card">
-                    <a class="quick-link" href="index.php?view=reuniones&nuevo=1">
-                        <span class="quick-icon"><i class="ti ti-calendar-event"></i></span>
-                        <span>
-                            <strong>Registrar reunion</strong>
-                            <small>Capture fecha, temas, asistentes y acuerdos.</small>
-                        </span>
-                    </a>
-                    <a class="quick-link" href="index.php?view=documentos">
-                        <span class="quick-icon"><i class="ti ti-upload"></i></span>
-                        <span>
-                            <strong>Agregar documento</strong>
-                            <small>Cargue archivos o registre un enlace de boletin.</small>
-                        </span>
-                    </a>
-                </div>
-                <div class="control-card">
-                    <div class="control-card-title"><i class="ti ti-gauge"></i> Control de gestion</div>
+            <?php if ($alertas): ?>
+                <section class="dash-alerts">
+                    <?php foreach ($alertas as $a): ?>
+                        <a class="dash-alert dash-alert-<?= e($a['tipo']) ?>" href="<?= e($a['url']) ?>">
+                            <i class="ti <?= e($a['icon']) ?>"></i><span><?= e($a['texto']) ?></span><i class="ti ti-chevron-right"></i>
+                        </a>
+                    <?php endforeach; ?>
+                </section>
+            <?php endif; ?>
+
+            <div class="dash-columns">
+                <section class="dash-panel">
+                    <div class="dash-panel-head">
+                        <h2><i class="ti ti-calendar-time"></i> Próximas actividades</h2>
+                        <?php if ($puedeVer('reuniones')): ?><a href="index.php?view=reuniones">Ver agenda</a><?php endif; ?>
+                    </div>
                     <?php
-                    $pctAcuerdos = $stats['acuerdos'] > 0 ? (int) round($stats['acuerdos_completados'] / $stats['acuerdos'] * 100) : 0;
-                    $pctReuniones = $stats['reuniones'] > 0 ? (int) round($stats['reuniones_realizadas'] / $stats['reuniones'] * 100) : 0;
+                    $agenda = [];
+                    foreach ($dash['reuniones'] as $r) {
+                        $agenda[] = ['fecha' => $r['fecha'], 'tipo' => 'Reunión', 'titulo' => $r['comite'] ?: 'Reunión de comité', 'detalle' => trim((string) ($r['plan_temas'] ?: $r['temas'])), 'url' => 'index.php?view=reuniones'];
+                    }
+                    foreach ($dash['eventos'] as $ev) {
+                        $agenda[] = ['fecha' => $ev['fecha'], 'tipo' => 'Evento', 'titulo' => $ev['nombre'], 'detalle' => trim($ev['modalidad'] . ($ev['lugar'] ? ' · ' . $ev['lugar'] : '')), 'url' => 'index.php?view=eventos'];
+                    }
+                    usort($agenda, static fn(array $a, array $b): int => strcmp((string) $a['fecha'], (string) $b['fecha']));
+                    $agenda = array_slice($agenda, 0, 6);
                     ?>
-                    <div class="control-metric">
-                        <div class="control-metric-label"><span>Acuerdos completados</span><span><?= $pctAcuerdos ?>%</span></div>
-                        <div class="control-bar"><div class="control-bar-fill" style="width:<?= $pctAcuerdos ?>%"></div></div>
+                    <?php if (!$agenda): ?>
+                        <div class="empty-state"><i class="ti ti-calendar-off"></i>No hay reuniones ni eventos programados próximamente.</div>
+                    <?php else: ?>
+                        <ul class="dash-list">
+                            <?php foreach ($agenda as $item): $ts = strtotime((string) $item['fecha']); ?>
+                                <li>
+                                    <a href="<?= e($item['url']) ?>">
+                                        <span class="dash-date"><strong><?= date('j', $ts) ?></strong><small><?= e(mb_substr($mesesLargos[(int) date('n', $ts) - 1], 0, 3)) ?></small></span>
+                                        <span class="dash-list-body">
+                                            <span class="dash-tag <?= $item['tipo'] === 'Evento' ? 'is-event' : '' ?>"><?= e($item['tipo']) ?></span>
+                                            <strong><?= e($item['titulo']) ?></strong>
+                                            <?php if ($item['detalle'] !== ''): ?><small><?= e(mb_strimwidth($item['detalle'], 0, 90, '…')) ?></small><?php endif; ?>
+                                        </span>
+                                        <span class="dash-when"><?= e(dash_dias($item['fecha'])) ?></span>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </section>
+
+                <section class="dash-panel">
+                    <div class="dash-panel-head">
+                        <h2><i class="ti ti-gauge"></i> Avance de la gestión</h2>
                     </div>
-                    <div class="control-metric">
-                        <div class="control-metric-label"><span>Reuniones realizadas</span><span><?= $pctReuniones ?>%</span></div>
-                        <div class="control-bar"><div class="control-bar-fill" style="width:<?= $pctReuniones ?>%"></div></div>
+                    <div class="dash-meter">
+                        <div class="dash-meter-label"><span>Acuerdos completados</span><strong><?= $pctAcuerdos ?>%</strong></div>
+                        <div class="progress-track"><div class="progress-fill" style="width:<?= $pctAcuerdos ?>%"></div></div>
+                        <small><?= $stats['acuerdos_completados'] ?> de <?= $stats['acuerdos'] ?> acuerdos</small>
                     </div>
-                </div>
+                    <div class="dash-meter">
+                        <div class="dash-meter-label"><span>Avance promedio de acuerdos</span><strong><?= $dash['avance_acuerdos'] ?>%</strong></div>
+                        <div class="progress-track"><div class="progress-fill is-secondary" style="width:<?= $dash['avance_acuerdos'] ?>%"></div></div>
+                        <small>Promedio del porcentaje reportado (sin cancelados)</small>
+                    </div>
+                    <div class="dash-meter">
+                        <div class="dash-meter-label"><span>Reuniones realizadas</span><strong><?= $pctReuniones ?>%</strong></div>
+                        <div class="progress-track"><div class="progress-fill is-accent" style="width:<?= $pctReuniones ?>%"></div></div>
+                        <small><?= $stats['reuniones_realizadas'] ?> de <?= $stats['reuniones'] ?> reuniones registradas</small>
+                    </div>
+                    <?php if ($dash['eventos_total'] > 0): ?>
+                        <div class="dash-meter">
+                            <div class="dash-meter-label"><span>Eventos de transferencia realizados</span><strong><?= $pctEventos ?>%</strong></div>
+                            <div class="progress-track"><div class="progress-fill is-orange" style="width:<?= $pctEventos ?>%"></div></div>
+                            <small><?= $dash['eventos_realizados'] ?> de <?= $dash['eventos_total'] ?> eventos (sin cancelados)</small>
+                        </div>
+                    <?php endif; ?>
+                </section>
             </div>
+
+            <?php if ($dash['acuerdos_por_vencer']): ?>
+                <section class="dash-panel dash-panel-full">
+                    <div class="dash-panel-head">
+                        <h2><i class="ti ti-hourglass"></i> Acuerdos por vencer (14 días)</h2>
+                        <a href="index.php?view=acuerdos">Ver seguimiento</a>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Acuerdo</th><th>Comité</th><th>Responsable</th><th>Plazo</th><th>Avance</th></tr></thead>
+                            <tbody>
+                                <?php foreach ($dash['acuerdos_por_vencer'] as $a): ?>
+                                    <tr>
+                                        <td class="cell-wide"><?= e(mb_strimwidth((string) $a['acuerdo'], 0, 110, '…')) ?></td>
+                                        <td><?= e($a['comite'] ?: '—') ?></td>
+                                        <td><?= e($a['responsable'] ?: '—') ?></td>
+                                        <td><?= e(dash_fecha($a['plazo'])) ?><br><small class="text-muted"><?= e(dash_dias($a['plazo'])) ?></small></td>
+                                        <td><div class="cell-progress"><div class="progress-track"><div class="progress-fill" style="width:<?= (int) $a['avance'] ?>%"></div></div><span><?= (int) $a['avance'] ?>%</span></div></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            <?php endif; ?>
+
+            <section class="dash-panel dash-panel-full">
+                <div class="dash-panel-head">
+                    <h2><i class="ti ti-route"></i> ¿Cómo funciona el módulo?</h2>
+                </div>
+                <ol class="dash-flow">
+                    <?php foreach ($flujo as $i => $paso): $vistas = array_values(array_filter($paso['vistas'], $puedeVer)); ?>
+                        <li>
+                            <span class="dash-flow-num"><?= $i + 1 ?></span>
+                            <div>
+                                <strong><i class="ti <?= e($paso['icon']) ?>"></i> <?= e($paso['titulo']) ?></strong>
+                                <p><?= e($paso['texto']) ?></p>
+                                <?php if ($vistas): ?>
+                                    <div class="dash-flow-links">
+                                        <?php foreach ($vistas as $v): ?><a href="index.php?view=<?= e($v) ?>"><?= e($sections[$v]['label']) ?></a><?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </li>
+                    <?php endforeach; ?>
+                </ol>
+            </section>
+
+            <section class="dash-panel dash-panel-full">
+                <div class="dash-panel-head">
+                    <h2><i class="ti ti-database"></i> Información registrada</h2>
+                </div>
+                <div class="dash-figures">
+                    <?php
+                    $cifras = [
+                        ['documentos', 'ti-folder', $stats['documentos'], 'Documentos para ingenios'],
+                        ['biblioteca_interna', 'ti-folder-star', $stats['biblioteca_interna'], 'Documentos internos'],
+                        ['correos', 'ti-mail', $stats['correos'], 'Correos enviados'],
+                        ['tableros', 'ti-chart-bar', $stats['tableros'], 'Tableros activos'],
+                        ['informes', 'ti-report', $stats['informes'], 'Informes cuatrimestrales'],
+                        ['memorias', 'ti-book-2', $stats['memorias'], 'Artículos de memoria'],
+                        ['publicaciones', 'ti-share', $stats['publicaciones'], 'Publicaciones en redes'],
+                    ];
+                    foreach ($cifras as [$v, $icon, $num, $label]):
+                        $tag = $puedeVer($v) ? 'a' : 'div';
+                    ?>
+                        <<?= $tag ?> class="dash-figure"<?= $tag === 'a' ? ' href="index.php?view=' . e($v) . '"' : '' ?>>
+                            <span class="quick-icon"><i class="ti <?= e($icon) ?>"></i></span>
+                            <span><strong><?= (int) $num ?></strong><small><?= e($label) ?></small></span>
+                        </<?= $tag ?>>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+
+            <?php if (can_manage_resource($user, 'reuniones') || can_manage_resource($user, 'documentos') || can_manage_resource($user, 'acuerdos')): ?>
+                <section class="dash-panel dash-panel-full">
+                    <div class="dash-panel-head"><h2><i class="ti ti-bolt"></i> Accesos rápidos</h2></div>
+                    <div class="quick-card dash-quick">
+                        <?php if (can_manage_resource($user, 'reuniones')): ?>
+                            <a class="quick-link" href="index.php?view=reuniones&nuevo=1">
+                                <span class="quick-icon"><i class="ti ti-calendar-plus"></i></span>
+                                <span><strong>Registrar reunión</strong><small>Capture fecha, temas, asistentes y acuerdos.</small></span>
+                            </a>
+                        <?php endif; ?>
+                        <?php if (can_manage_resource($user, 'acuerdos')): ?>
+                            <a class="quick-link" href="index.php?view=acuerdos">
+                                <span class="quick-icon"><i class="ti ti-checklist"></i></span>
+                                <span><strong>Actualizar acuerdos</strong><small>Reporte avance y estado de los próximos pasos.</small></span>
+                            </a>
+                        <?php endif; ?>
+                        <?php if (can_manage_resource($user, 'documentos')): ?>
+                            <a class="quick-link" href="index.php?view=documentos">
+                                <span class="quick-icon"><i class="ti ti-upload"></i></span>
+                                <span><strong>Agregar documento</strong><small>Cargue archivos o registre un enlace de boletín.</small></span>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
 
         <?php endif; ?>
 
         <?php if ($view !== 'dashboard'): ?>
-            <div class="section-header">
-                <div>
-                    <div class="section-title"><?= e($currentSection['label']) ?></div>
-                    <div class="section-sub">
-                        <?php if ($view === 'config'): ?>
-                            Catalogo de comites tecnicos utilizado por el resto del modulo.
-                        <?php elseif ($view === 'estadisticas'): ?>
-                            Indicadores agregados de gestion, documentacion y comunicacion del modulo.
-                        <?php else: ?>
-                            Alta, edicion y seguimiento en tiempo real.
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-
             <?php if (!$puedeVerSeccionActual): ?>
                 <div class="placeholder-note">
                     <i class="ti ti-lock"></i>
                     <span>No tienes permiso para ver esta seccion. Solicita acceso al administrador del modulo.</span>
                 </div>
 
+            <?php elseif ($view === 'comites'): ?>
+                <?php require __DIR__ . '/includes/catalogo-vista.php'; ?>
             <?php elseif ($view === 'contactos'): ?>
-                <div class="section-toolbar">
-                    <form class="filters-form" method="get">
-                        <input type="hidden" name="view" value="contactos">
-                        <div class="search-box">
-                            <i class="ti ti-search"></i>
-                            <input class="form-control" type="text" name="q" placeholder="Buscar por nombre, cargo o empresa..." value="<?= e($q) ?>">
-                        </div>
-                        <select class="form-control filter-select" name="comite" onchange="this.form.submit()">
-                            <option value="todos" <?= $comiteFiltro === 'todos' ? 'selected' : '' ?>>Todos los comites</option>
-                            <?php foreach ($comitesActivos as $c): ?>
-                                <option value="<?= e($c['id']) ?>" <?= $comiteFiltro === $c['id'] ? 'selected' : '' ?>><?= e($c['nombre']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <button type="submit" class="btn-outline btn-sm"><i class="ti ti-filter"></i> Filtrar</button>
-                    </form>
-                    <div class="toolbar-actions">
-                        <a class="btn-outline" href="index.php?view=contactos&accion=plantilla"><i class="ti ti-download"></i> Plantilla</a>
-                        <?php if ($puedeGestionarSeccionActual): ?>
-                            <a class="btn-primary" href="index.php?view=contactos&nuevo=1"><i class="ti ti-plus"></i> Nuevo contacto</a>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <div class="table-card">
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                            <tr>
-                                <th>Nombre</th><th>Cargo</th><th>Empresa / ingenio</th><th>Comites</th><th>Contacto</th><th>Estado</th>
-                                <?php if ($puedeGestionarSeccionActual): ?><th></th><?php endif; ?>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <?php if (!$contactos): ?>
-                                <tr><td colspan="7"><div class="empty-state"><i class="ti ti-inbox"></i>Todavia no hay contactos registrados.</div></td></tr>
-                            <?php endif; ?>
-                            <?php foreach ($contactos as $c): ?>
-                                <tr>
-                                    <td><strong><?= e($c['nombre']) ?></strong></td>
-                                    <td><?= e($c['cargo'] ?: '—') ?></td>
-                                    <td><?= e($c['empresa'] ?: '—') ?></td>
-                                    <td>
-                                        <div class="chip-list">
-                                            <?php foreach ($comitesPorContacto[(int) $c['id']] ?? [] as $cid): ?>
-                                                <span class="chip"><?= e($comiteNombrePorId[$cid] ?? $cid) ?></span>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </td>
-                                    <td><?= e($c['telefono'] ?: '—') ?><br><span class="text-muted"><?= e($c['email'] ?: '—') ?></span></td>
-                                    <td><span class="badge <?= comites_estado_badge_class($c['estado']) ?>"><?= e($c['estado']) ?></span></td>
-                                    <?php if ($puedeGestionarSeccionActual): ?>
-                                        <td class="row-actions">
-                                            <a class="icon-btn" href="index.php?view=contactos&editar=<?= (int) $c['id'] ?>" title="Editar"><i class="ti ti-edit"></i></a>
-                                            <form method="post" onsubmit="return confirm('¿Eliminar este contacto?');" style="display:inline;">
-                                                <input type="hidden" name="accion" value="contacto_eliminar">
-                                                <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
-                                                <button type="submit" class="icon-btn danger" title="Eliminar"><i class="ti ti-trash"></i></button>
-                                            </form>
-                                        </td>
-                                    <?php endif; ?>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <?php if ($modalContactosAbierto && $contactoEditar): ?>
-                    <div class="modal-backdrop is-open" data-close-href="index.php?view=contactos">
-                        <div class="modal-box" onclick="event.stopPropagation()">
-                            <div class="modal-head">
-                                <h3><?= $contactoEditar['id'] ? 'Editar contacto' : 'Nuevo contacto' ?></h3>
-                                <a class="modal-close" href="index.php?view=contactos"><i class="ti ti-x"></i></a>
-                            </div>
-                            <form method="post" class="modal-body">
-                                <input type="hidden" name="accion" value="contacto_guardar">
-                                <input type="hidden" name="id" value="<?= (int) $contactoEditar['id'] ?>">
-                                <div class="form-grid">
-                                    <label class="form-group"><span class="form-label">Nombre completo <span class="req">*</span></span>
-                                        <input class="form-control" type="text" name="nombre" required value="<?= e($contactoEditar['nombre']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Cargo</span>
-                                        <input class="form-control" type="text" name="cargo" value="<?= e($contactoEditar['cargo']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Empresa / ingenio</span>
-                                        <input class="form-control" type="text" name="empresa" value="<?= e($contactoEditar['empresa']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Telefono</span>
-                                        <input class="form-control" type="text" name="telefono" value="<?= e($contactoEditar['telefono']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Correo</span>
-                                        <input class="form-control" type="email" name="email" value="<?= e($contactoEditar['email']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Estado</span>
-                                        <select class="form-control" name="estado">
-                                            <option value="Activo" <?= $contactoEditar['estado'] === 'Activo' ? 'selected' : '' ?>>Activo</option>
-                                            <option value="Inactivo" <?= $contactoEditar['estado'] === 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
-                                        </select></label>
-                                </div>
-                                <div class="form-group form-full">
-                                    <span class="form-label">Comites</span>
-                                    <div class="pill-toggle-list">
-                                        <?php foreach ($comitesActivos as $c): ?>
-                                            <label class="pill-toggle">
-                                                <input type="checkbox" name="comites[]" value="<?= e($c['id']) ?>" <?= in_array($c['id'], $contactoEditar['comites'], true) ? 'checked' : '' ?>>
-                                                <span><?= e($c['nombre']) ?></span>
-                                            </label>
-                                        <?php endforeach; ?>
-                                    </div>
-                                </div>
-                                <div class="actions">
-                                    <a class="btn-outline" href="index.php?view=contactos">Cancelar</a>
-                                    <button type="submit" class="btn-primary"><i class="ti ti-check"></i> Guardar</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-            <?php elseif ($view === 'reuniones'): ?>
-                <div class="section-toolbar">
-                    <form class="filters-form" method="get">
-                        <input type="hidden" name="view" value="reuniones">
-                        <input type="hidden" name="modo" value="<?= e($modo) ?>">
-                        <select class="form-control filter-select" name="comite" onchange="this.form.submit()">
-                            <option value="todos" <?= $comiteFiltro === 'todos' ? 'selected' : '' ?>>Todos los comites</option>
-                            <?php foreach ($comitesActivos as $c): ?>
-                                <option value="<?= e($c['id']) ?>" <?= $comiteFiltro === $c['id'] ? 'selected' : '' ?>><?= e($c['nombre']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <a class="btn-outline btn-sm <?= $modo === 'lista' ? 'is-active' : '' ?>" href="index.php?view=reuniones&modo=lista&comite=<?= e($comiteFiltro) ?>">Lista</a>
-                        <a class="btn-outline btn-sm <?= $modo === 'calendario' ? 'is-active' : '' ?>" href="index.php?view=reuniones&modo=calendario&comite=<?= e($comiteFiltro) ?>&mes=<?= e($mes) ?>">Calendario</a>
-                    </form>
-                    <div class="toolbar-actions">
-                        <a class="btn-outline" href="index.php?view=reuniones&accion=plantilla"><i class="ti ti-file-text"></i> Plantilla Word</a>
-                        <?php if ($puedeGestionarSeccionActual): ?>
-                            <a class="btn-primary" href="index.php?view=reuniones&nuevo=1"><i class="ti ti-plus"></i> Registrar reunion</a>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <?php if ($modo === 'calendario'): ?>
-                    <?php render_meeting_calendar($reuniones, $mes, $comiteNombrePorId); ?>
-                <?php else: ?>
-                    <div class="table-card">
-                        <div class="table-wrap">
-                            <table>
-                                <thead>
-                                <tr><th>Comite / fecha</th><th>Temas / proximos pasos</th><th>Asistentes</th><th>Acuerdos</th><th>Responsable</th><?php if ($puedeGestionarSeccionActual): ?><th></th><?php endif; ?></tr>
-                                </thead>
-                                <tbody>
-                                <?php if (!$reuniones): ?>
-                                    <tr><td colspan="6"><div class="empty-state"><i class="ti ti-inbox"></i>Todavia no hay reuniones registradas.</div></td></tr>
-                                <?php endif; ?>
-                                <?php foreach ($reuniones as $r): ?>
-                                    <tr>
-                                        <td>
-                                            <strong><?= e($comiteNombrePorId[$r['comite_id']] ?? '—') ?></strong>
-                                            <div class="text-muted"><?= e((string) $r['fecha']) ?></div>
-                                            <span class="badge <?= (int) $r['realizada'] === 1 ? 'badge-completado' : 'badge-pendiente' ?>"><?= (int) $r['realizada'] === 1 ? 'Realizada' : 'Pendiente' ?></span>
-                                        </td>
-                                        <td class="cell-wide">
-                                            <?= e((string) $r['temas']) ?>
-                                            <?php if (!empty($r['proximos_pasos'])): ?><div class="text-muted">Proximos: <?= e((string) $r['proximos_pasos']) ?></div><?php endif; ?>
-                                        </td>
-                                        <td><?= (int) $r['total_asistentes'] ?></td>
-                                        <td><?= (int) $r['total_acuerdos'] ?></td>
-                                        <td><?= e($r['responsable'] ?: '—') ?></td>
-                                        <?php if ($puedeGestionarSeccionActual): ?>
-                                            <td class="row-actions">
-                                                <a class="icon-btn" href="index.php?view=reuniones&editar=<?= (int) $r['id'] ?>" title="Editar"><i class="ti ti-edit"></i></a>
-                                                <form method="post" onsubmit="return confirm('¿Eliminar esta reunion?');" style="display:inline;">
-                                                    <input type="hidden" name="accion" value="reunion_eliminar">
-                                                    <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
-                                                    <button type="submit" class="icon-btn danger" title="Eliminar"><i class="ti ti-trash"></i></button>
-                                                </form>
-                                            </td>
-                                        <?php endif; ?>
-                                    </tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($modalReunionesAbierto && $reunionVM): ?>
-                    <div class="modal-backdrop is-open" data-close-href="index.php?view=reuniones&modo=<?= e($modo) ?>">
-                        <div class="modal-box modal-wide" onclick="event.stopPropagation()">
-                            <div class="modal-head">
-                                <h3><?= $reunionVM['id'] ? 'Editar reunion' : 'Registrar reunion' ?></h3>
-                                <a class="modal-close" href="index.php?view=reuniones&modo=<?= e($modo) ?>"><i class="ti ti-x"></i></a>
-                            </div>
-                            <form method="post" class="modal-body" enctype="multipart/form-data" id="reunionForm">
-                                <input type="hidden" name="accion" value="reunion_guardar">
-                                <input type="hidden" name="id" value="<?= (int) $reunionVM['id'] ?>">
-                                <div class="form-grid form-grid-3">
-                                    <label class="form-group"><span class="form-label">Fecha</span>
-                                        <input class="form-control" type="date" name="fecha" value="<?= e((string) $reunionVM['fecha']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Comite</span>
-                                        <select class="form-control" name="comite_id" id="reunionComiteSelect">
-                                            <?php foreach ($comitesActivos as $c): ?>
-                                                <option value="<?= e($c['id']) ?>" <?= $reunionVM['comite_id'] === $c['id'] ? 'selected' : '' ?>><?= e($c['nombre']) ?></option>
-                                            <?php endforeach; ?>
-                                        </select></label>
-                                    <label class="form-group"><span class="form-label">Estado</span>
-                                        <select class="form-control" name="realizada">
-                                            <option value="realizada" <?= (int) $reunionVM['realizada'] === 1 ? 'selected' : '' ?>>Realizada</option>
-                                            <option value="pendiente" <?= (int) $reunionVM['realizada'] === 0 ? 'selected' : '' ?>>Pendiente</option>
-                                        </select></label>
-                                </div>
-                                <label class="form-group form-full"><span class="form-label">Temas tratados</span>
-                                    <textarea class="form-control" rows="3" name="temas"><?= e($reunionVM['temas']) ?></textarea></label>
-                                <label class="form-group form-full"><span class="form-label">Proximos pasos</span>
-                                    <textarea class="form-control" rows="2" name="proximos_pasos"><?= e($reunionVM['proximos_pasos']) ?></textarea>
-                                    <span class="form-hint">Estos pasos quedan registrados para facilitar el seguimiento posterior.</span></label>
-
-                                <label class="form-group form-full"><span class="form-label">Ayuda memoria / documento de la reunion</span>
-                                    <input class="form-control" type="file" name="ayuda_memoria" accept=".pdf,.doc,.docx"></label>
-                                <?php if (!empty($reunionVM['ayuda_memoria_ruta'])): ?>
-                                    <div class="file-current">
-                                        <i class="ti ti-file-text"></i>
-                                        <a href="<?= e((string) $reunionVM['ayuda_memoria_ruta']) ?>" target="_blank" rel="noopener"><?= e((string) $reunionVM['ayuda_memoria_nombre']) ?></a>
-                                        <label class="pill-toggle danger"><input type="checkbox" name="quitar_ayuda_memoria" value="1"><span>Quitar archivo</span></label>
-                                    </div>
-                                <?php endif; ?>
-
-                                <label class="form-group form-full"><span class="form-label">Responsable principal</span>
-                                    <input class="form-control" type="text" name="responsable" id="reunionResponsableInput" value="<?= e($reunionVM['responsable']) ?>"></label>
-
-                                <div class="acuerdos-editor">
-                                    <div class="acuerdos-editor-head">
-                                        <div>
-                                            <h4>Acuerdos de la reunion</h4>
-                                            <p class="form-hint">Los acuerdos registrados aqui se crean o actualizan automaticamente en "Acuerdos y seguimiento".</p>
-                                        </div>
-                                        <button type="button" class="btn-outline btn-sm" id="btnAgregarAcuerdo"><i class="ti ti-plus"></i> Agregar acuerdo</button>
-                                    </div>
-                                    <div id="acuerdosRows">
-                                        <?php if (!$reunionVM['acuerdos']): ?>
-                                            <div class="empty-state empty-state-dashed" id="acuerdosEmptyState">Aun no hay acuerdos registrados.</div>
-                                        <?php endif; ?>
-                                        <?php foreach ($reunionVM['acuerdos'] as $idx => $fila): ?>
-                                            <?php render_acuerdo_editor_row($idx, $fila, $puedeGestionarSeccionActual); ?>
-                                        <?php endforeach; ?>
-                                    </div>
-                                    <template id="acuerdoRowTemplate"><?php render_acuerdo_editor_row(null, [], true); ?></template>
-                                </div>
-
-                                <label class="form-group form-full"><span class="form-label">Asistentes del comite</span>
-                                    <div class="attendee-list" id="attendeeList">
-                                        <?php foreach ($contactosDisponibles as $c): ?>
-                                            <?php $ids = $comitesPorContactoDisp[(int) $c['id']] ?? []; ?>
-                                            <label class="attendee-item" data-comites="<?= e(implode(',', $ids)) ?>">
-                                                <input type="checkbox" name="asistentes[]" value="<?= (int) $c['id'] ?>" <?= in_array((int) $c['id'], $reunionVM['asistentes'], true) ? 'checked' : '' ?>>
-                                                <span><?= e($c['nombre']) ?><small><?= e($c['cargo'] ?: 'Contacto adicional') ?></small></span>
-                                            </label>
-                                        <?php endforeach; ?>
-                                    </div>
-                                    <span class="form-hint">Primero se muestran los contactos del comite seleccionado. Los adicionales se incorporan a la base de datos.</span>
-                                </label>
-
-                                <div class="extra-attendee-box">
-                                    <div class="form-label">Agregar asistente adicional</div>
-                                    <div class="form-grid form-grid-4">
-                                        <input class="form-control" type="text" id="extraNombre" placeholder="Nombre">
-                                        <input class="form-control" type="text" id="extraCargo" placeholder="Cargo">
-                                        <input class="form-control" type="text" id="extraEmpresa" placeholder="Empresa">
-                                        <input class="form-control" type="email" id="extraEmail" placeholder="Correo">
-                                    </div>
-                                    <button type="button" class="btn-outline btn-sm" id="btnAgregarAsistente" style="margin-top:8px;"><i class="ti ti-plus"></i> Agregar a la base de datos</button>
-                                    <div id="extraAsistenteMsg" class="form-hint"></div>
-                                </div>
-
-                                <div class="actions">
-                                    <a class="btn-outline" href="index.php?view=reuniones&modo=<?= e($modo) ?>">Cancelar</a>
-                                    <button type="submit" class="btn-primary"><i class="ti ti-check"></i> Guardar reunion</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
+                <?php require __DIR__ . '/includes/directorio-vista.php'; ?>
+            <?php elseif (in_array($view, ['reuniones', 'eventos'], true)): ?>
+                <?php require __DIR__ . '/includes/agenda-vista.php'; ?>
             <?php elseif ($view === 'acuerdos'): ?>
-                <div class="section-toolbar">
-                    <form class="filters-form" method="get">
-                        <input type="hidden" name="view" value="acuerdos">
-                        <div class="search-box">
-                            <i class="ti ti-search"></i>
-                            <input class="form-control" type="text" name="q" placeholder="Buscar acuerdo, responsable o comite..." value="<?= e($q) ?>">
-                        </div>
-                        <button type="submit" class="btn-outline btn-sm"><i class="ti ti-filter"></i> Buscar</button>
-                    </form>
-                    <div class="toolbar-actions">
-                        <?php if ($puedeGestionarSeccionActual): ?>
-                            <a class="btn-primary" href="index.php?view=acuerdos&nuevo=1"><i class="ti ti-plus"></i> Nuevo acuerdo</a>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <div class="table-card">
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                            <tr><th>Comite / fecha</th><th>Acuerdo</th><th>Responsable</th><th>Plazo</th><th>Avance</th><th>Estado</th><?php if ($puedeGestionarSeccionActual): ?><th></th><?php endif; ?></tr>
-                            </thead>
-                            <tbody>
-                            <?php if (!$acuerdos): ?>
-                                <tr><td colspan="7"><div class="empty-state"><i class="ti ti-inbox"></i>Todavia no hay acuerdos registrados.</div></td></tr>
-                            <?php endif; ?>
-                            <?php foreach ($acuerdos as $a): ?>
-                                <tr>
-                                    <td><strong><?= e($a['comite_nombre'] ?? '—') ?></strong><div class="text-muted"><?= e((string) $a['fecha']) ?></div></td>
-                                    <td class="cell-wide"><?= e($a['acuerdo']) ?></td>
-                                    <td><?= e($a['responsable'] ?: '—') ?></td>
-                                    <td><?= e((string) ($a['plazo'] ?: '—')) ?><div class="text-muted">Seguimiento: <?= e((string) ($a['fecha_seguimiento'] ?: '—')) ?></div></td>
-                                    <td class="cell-progress">
-                                        <div class="progress-track"><div class="progress-fill" style="width:<?= (int) $a['avance'] ?>%"></div></div>
-                                        <span><?= (int) $a['avance'] ?>%</span>
-                                    </td>
-                                    <td><span class="badge <?= comites_estado_badge_class($a['estado']) ?>"><?= e($a['estado']) ?></span></td>
-                                    <?php if ($puedeGestionarSeccionActual): ?>
-                                        <td class="row-actions">
-                                            <a class="icon-btn" href="index.php?view=acuerdos&editar=<?= (int) $a['id'] ?>" title="Editar"><i class="ti ti-edit"></i></a>
-                                            <form method="post" onsubmit="return confirm('¿Eliminar este acuerdo?');" style="display:inline;">
-                                                <input type="hidden" name="accion" value="acuerdo_eliminar">
-                                                <input type="hidden" name="id" value="<?= (int) $a['id'] ?>">
-                                                <button type="submit" class="icon-btn danger" title="Eliminar"><i class="ti ti-trash"></i></button>
-                                            </form>
-                                        </td>
-                                    <?php endif; ?>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <?php if ($modalAcuerdosAbierto && $acuerdoEditar): ?>
-                    <div class="modal-backdrop is-open" data-close-href="index.php?view=acuerdos">
-                        <div class="modal-box" onclick="event.stopPropagation()">
-                            <div class="modal-head">
-                                <h3><?= $acuerdoEditar['id'] ? 'Editar acuerdo' : 'Nuevo acuerdo' ?></h3>
-                                <a class="modal-close" href="index.php?view=acuerdos"><i class="ti ti-x"></i></a>
-                            </div>
-                            <form method="post" class="modal-body">
-                                <input type="hidden" name="accion" value="acuerdo_guardar">
-                                <input type="hidden" name="id" value="<?= (int) $acuerdoEditar['id'] ?>">
-                                <label class="form-group form-full"><span class="form-label">Comite</span>
-                                    <select class="form-control" name="comite_id">
-                                        <?php foreach ($comitesActivos as $c): ?>
-                                            <option value="<?= e($c['id']) ?>" <?= $acuerdoEditar['comite_id'] === $c['id'] ? 'selected' : '' ?>><?= e($c['nombre']) ?></option>
-                                        <?php endforeach; ?>
-                                    </select></label>
-                                <label class="form-group form-full"><span class="form-label">Acuerdo <span class="req">*</span></span>
-                                    <textarea class="form-control" rows="3" name="acuerdo" required><?= e($acuerdoEditar['acuerdo']) ?></textarea></label>
-                                <div class="form-grid">
-                                    <label class="form-group"><span class="form-label">Responsable</span>
-                                        <input class="form-control" type="text" name="responsable" value="<?= e($acuerdoEditar['responsable']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Fecha limite</span>
-                                        <input class="form-control" type="date" name="plazo" value="<?= e((string) $acuerdoEditar['plazo']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Fecha de seguimiento</span>
-                                        <input class="form-control" type="date" name="fecha_seguimiento" value="<?= e((string) ($acuerdoEditar['fecha_seguimiento'] ?? '')) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Avance (%)</span>
-                                        <input class="form-control" type="number" min="0" max="100" name="avance" value="<?= (int) $acuerdoEditar['avance'] ?>"></label>
-                                    <label class="form-group"><span class="form-label">Estado</span>
-                                        <select class="form-control" name="estado">
-                                            <?php foreach (['Pendiente', 'En proceso', 'Completado'] as $opt): ?>
-                                                <option value="<?= e($opt) ?>" <?= $acuerdoEditar['estado'] === $opt ? 'selected' : '' ?>><?= e($opt) ?></option>
-                                            <?php endforeach; ?>
-                                        </select></label>
-                                </div>
-                                <div class="actions">
-                                    <a class="btn-outline" href="index.php?view=acuerdos">Cancelar</a>
-                                    <button type="submit" class="btn-primary"><i class="ti ti-check"></i> Guardar</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-            <?php elseif ($view === 'documentos' || $view === 'biblioteca_interna'): ?>
-                <?php $volverHref = 'index.php?view=' . $view . ($carpetaId !== null ? '&carpeta=' . $carpetaId : ''); ?>
-                <div class="folder-breadcrumb">
-                    <a href="index.php?view=<?= e($view) ?>"><i class="ti ti-folder"></i> Biblioteca</a>
-                    <?php foreach ($breadcrumbCarpetas as $bc): ?>
-                        <span class="sep">/</span>
-                        <a href="index.php?view=<?= e($view) ?>&carpeta=<?= (int) $bc['id'] ?>"><?= e((string) $bc['nombre']) ?></a>
-                    <?php endforeach; ?>
-                </div>
-
-                <?php if ($puedeGestionarDocumentos): ?>
-                    <div class="toolbar-actions" style="margin-bottom:16px;">
-                        <a class="btn-outline btn-sm" href="<?= e($volverHref) ?>&nueva_carpeta=1"><i class="ti ti-folder-plus"></i> Nueva carpeta</a>
-                        <?php if ($carpetaId !== null): ?>
-                            <a class="btn-primary btn-sm" href="<?= e($volverHref) ?>&nuevo=1"><i class="ti ti-plus"></i> Nuevo documento</a>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($subcarpetas): ?>
-                    <div class="folder-grid">
-                        <?php foreach ($subcarpetas as $sc): ?>
-                            <a class="folder-card" href="index.php?view=<?= e($view) ?>&carpeta=<?= (int) $sc['id'] ?>">
-                                <span class="folder-card-icon"><i class="ti ti-folder"></i></span>
-                                <span>
-                                    <span class="folder-card-name"><?= e((string) $sc['nombre']) ?></span>
-                                    <span class="folder-card-count"><?= (int) $sc['total_documentos'] ?> documento(s)</span>
-                                </span>
-                            </a>
-                        <?php endforeach; ?>
-                    </div>
-                <?php elseif ($carpetaId === null): ?>
-                    <div class="empty-state-dashed" style="margin-bottom:20px;">
-                        <i class="ti ti-folder-off"></i> Todavia no hay carpetas creadas en esta biblioteca.
-                        <?php if ($puedeGestionarDocumentos): ?> Crea la primera carpeta para comenzar a cargar documentos.<?php endif; ?>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($carpetaId !== null): ?>
-                    <div class="section-toolbar">
-                        <form class="filters-form" method="get">
-                            <input type="hidden" name="view" value="<?= e($view) ?>">
-                            <input type="hidden" name="carpeta" value="<?= (int) $carpetaId ?>">
-                            <div class="search-box">
-                                <i class="ti ti-search"></i>
-                                <input class="form-control" type="text" name="q" placeholder="Buscar por titulo o autor..." value="<?= e($q) ?>">
-                            </div>
-                            <select class="form-control filter-select" name="comite" onchange="this.form.submit()">
-                                <option value="todos" <?= $comiteFiltro === 'todos' ? 'selected' : '' ?>>Todos los comites</option>
-                                <?php foreach ($comitesActivos as $c): ?>
-                                    <option value="<?= e($c['id']) ?>" <?= $comiteFiltro === $c['id'] ? 'selected' : '' ?>><?= e($c['nombre']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <button type="submit" class="btn-outline btn-sm"><i class="ti ti-filter"></i> Filtrar</button>
-                        </form>
-                    </div>
-
-                    <div class="table-card">
-                        <div class="table-wrap">
-                            <table>
-                                <thead>
-                                <tr>
-                                    <th>Titulo</th><th>Tipo</th><th>Fecha</th><th>Comite</th><th>Autor</th><th>Estado</th><th>Version</th>
-                                    <?php if ($puedeGestionarDocumentos): ?><th></th><?php endif; ?>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                <?php if (!$documentos): ?>
-                                    <tr><td colspan="8"><div class="empty-state"><i class="ti ti-inbox"></i>Todavia no hay documentos en esta carpeta.</div></td></tr>
-                                <?php endif; ?>
-                                <?php foreach ($documentos as $d): ?>
-                                    <tr>
-                                        <td>
-                                            <strong><?= e($d['titulo']) ?></strong>
-                                            <?php if (!empty($d['archivo_ruta'])): ?>
-                                                <div class="text-muted"><a href="<?= e((string) $d['archivo_ruta']) ?>" target="_blank" rel="noopener"><i class="ti ti-paperclip"></i> <?= e((string) $d['archivo_nombre']) ?></a></div>
-                                            <?php elseif (!empty($d['enlace'])): ?>
-                                                <div class="text-muted"><a href="<?= e((string) $d['enlace']) ?>" target="_blank" rel="noopener"><i class="ti ti-link"></i> Enlace externo</a></div>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td><?= e($d['tipo']) ?></td>
-                                        <td><?= e((string) ($d['fecha'] ?: '—')) ?></td>
-                                        <td><?= e($d['comite_nombre'] ?? '—') ?></td>
-                                        <td><?= e($d['autor'] ?: '—') ?></td>
-                                        <td><span class="badge <?= comites_estado_badge_class((string) $d['estado']) ?>"><?= e((string) $d['estado']) ?></span></td>
-                                        <td>v<?= (int) $d['version'] ?></td>
-                                        <?php if ($puedeGestionarDocumentos): ?>
-                                            <td class="row-actions">
-                                                <a class="icon-btn" href="<?= e($volverHref) ?>&editar=<?= (int) $d['id'] ?>" title="Editar"><i class="ti ti-edit"></i></a>
-                                                <a class="icon-btn" href="<?= e($volverHref) ?>&revisar=<?= (int) $d['id'] ?>" title="Revisar"><i class="ti ti-clipboard-check"></i></a>
-                                                <a class="icon-btn" href="<?= e($volverHref) ?>&historial=<?= (int) $d['id'] ?>" title="Ver seguimiento"><i class="ti ti-history"></i></a>
-                                                <?php if (!empty($d['archivo_ruta'])): ?>
-                                                    <a class="icon-btn" href="<?= e((string) $d['archivo_ruta']) ?>" target="_blank" rel="noopener" title="Descargar"><i class="ti ti-download"></i></a>
-                                                <?php endif; ?>
-                                                <?php if ((int) $d['habilitado_envio'] === 1): ?>
-                                                    <a class="icon-btn" href="index.php?view=correos&documento_id=<?= (int) $d['id'] ?>" title="Enviar por correo"><i class="ti ti-mail"></i></a>
-                                                <?php endif; ?>
-                                                <form method="post" onsubmit="return confirm('¿Eliminar este documento?');" style="display:inline;">
-                                                    <input type="hidden" name="accion" value="documento_eliminar">
-                                                    <input type="hidden" name="ambito" value="<?= e($ambitoActual) ?>">
-                                                    <input type="hidden" name="id" value="<?= (int) $d['id'] ?>">
-                                                    <button type="submit" class="icon-btn danger" title="Eliminar"><i class="ti ti-trash"></i></button>
-                                                </form>
-                                            </td>
-                                        <?php endif; ?>
-                                    </tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($modalCarpetaAbierto): ?>
-                    <div class="modal-backdrop is-open" data-close-href="<?= e($volverHref) ?>">
-                        <div class="modal-box" onclick="event.stopPropagation()">
-                            <div class="modal-head">
-                                <h3>Nueva carpeta</h3>
-                                <a class="modal-close" href="<?= e($volverHref) ?>"><i class="ti ti-x"></i></a>
-                            </div>
-                            <form method="post" class="modal-body">
-                                <input type="hidden" name="accion" value="carpeta_crear">
-                                <input type="hidden" name="ambito" value="<?= e($ambitoActual) ?>">
-                                <input type="hidden" name="parent_id" value="<?= $carpetaId !== null ? (int) $carpetaId : '' ?>">
-                                <label class="form-group form-full"><span class="form-label">Nombre de la carpeta <span class="req">*</span></span>
-                                    <input class="form-control" type="text" name="nombre" required value="<?= e($carpetaNuevaNombre) ?>" placeholder="Ej. Boletines 2026"></label>
-                                <div class="actions">
-                                    <a class="btn-outline" href="<?= e($volverHref) ?>">Cancelar</a>
-                                    <button type="submit" class="btn-primary"><i class="ti ti-check"></i> Crear carpeta</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($modalDocumentoAbierto && $documentoEditar): ?>
-                    <div class="modal-backdrop is-open" data-close-href="<?= e($volverHref) ?>">
-                        <div class="modal-box modal-wide" onclick="event.stopPropagation()">
-                            <div class="modal-head">
-                                <h3><?= $documentoEditar['id'] ? 'Editar documento' : 'Nuevo documento' ?></h3>
-                                <a class="modal-close" href="<?= e($volverHref) ?>"><i class="ti ti-x"></i></a>
-                            </div>
-                            <form method="post" class="modal-body" enctype="multipart/form-data">
-                                <input type="hidden" name="accion" value="documento_guardar">
-                                <input type="hidden" name="ambito" value="<?= e($ambitoActual) ?>">
-                                <input type="hidden" name="id" value="<?= (int) $documentoEditar['id'] ?>">
-                                <input type="hidden" name="carpeta_id" value="<?= $carpetaId !== null ? (int) $carpetaId : '' ?>">
-                                <div class="form-grid">
-                                    <label class="form-group"><span class="form-label">Tipo</span>
-                                        <select class="form-control" name="tipo">
-                                            <?php foreach (['Boletin', 'Memoria', 'Informe', 'Ayudamemoria', 'Presentacion', 'Fotografia', 'Video', 'Otro'] as $opt): ?>
-                                                <option value="<?= e($opt) ?>" <?= $documentoEditar['tipo'] === $opt ? 'selected' : '' ?>><?= e($opt) ?></option>
-                                            <?php endforeach; ?>
-                                        </select></label>
-                                    <label class="form-group"><span class="form-label">Fecha</span>
-                                        <input class="form-control" type="date" name="fecha" value="<?= e((string) $documentoEditar['fecha']) ?>"></label>
-                                </div>
-                                <label class="form-group form-full"><span class="form-label">Titulo <span class="req">*</span></span>
-                                    <input class="form-control" type="text" name="titulo" required value="<?= e((string) $documentoEditar['titulo']) ?>"></label>
-                                <div class="form-grid">
-                                    <label class="form-group"><span class="form-label">Comite</span>
-                                        <select class="form-control" name="comite_id">
-                                            <option value="">— Sin comite —</option>
-                                            <?php foreach ($comitesActivos as $c): ?>
-                                                <option value="<?= e($c['id']) ?>" <?= $documentoEditar['comite_id'] === $c['id'] ? 'selected' : '' ?>><?= e($c['nombre']) ?></option>
-                                            <?php endforeach; ?>
-                                        </select></label>
-                                    <label class="form-group"><span class="form-label">Autor</span>
-                                        <input class="form-control" type="text" name="autor" value="<?= e((string) $documentoEditar['autor']) ?>"></label>
-                                </div>
-                                <label class="form-group form-full"><span class="form-label">Descripcion</span>
-                                    <textarea class="form-control" rows="2" name="descripcion"><?= e((string) $documentoEditar['descripcion']) ?></textarea></label>
-
-                                <label class="form-group form-full"><span class="form-label">Archivo</span>
-                                    <input class="form-control" type="file" name="archivo" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png"></label>
-                                <?php if (!empty($documentoEditar['archivo_ruta'])): ?>
-                                    <div class="file-current"><i class="ti ti-file-text"></i>
-                                        <a href="<?= e((string) $documentoEditar['archivo_ruta']) ?>" target="_blank" rel="noopener"><?= e((string) $documentoEditar['archivo_nombre']) ?></a>
-                                        <span class="text-muted">v<?= (int) ($documentoEditar['version'] ?? 1) ?></span>
-                                    </div>
-                                <?php endif; ?>
-                                <label class="form-group form-full"><span class="form-label">O enlace externo (boletin, video, repositorio...)</span>
-                                    <input class="form-control" type="url" name="enlace" value="<?= e((string) $documentoEditar['enlace']) ?>" placeholder="https://..."></label>
-
-                                <div class="form-grid">
-                                    <label class="form-group"><span class="form-label">Estado</span>
-                                        <select class="form-control" name="estado">
-                                            <?php foreach (['En revision', 'Aprobado', 'Con observaciones', 'Rechazado', 'Publicado'] as $opt): ?>
-                                                <option value="<?= e($opt) ?>" <?= $documentoEditar['estado'] === $opt ? 'selected' : '' ?>><?= e($opt) ?></option>
-                                            <?php endforeach; ?>
-                                        </select></label>
-                                    <label class="pill-toggle" style="align-self:end;">
-                                        <input type="checkbox" name="habilitado_envio" value="1" <?= (int) ($documentoEditar['habilitado_envio'] ?? 0) === 1 ? 'checked' : '' ?>>
-                                        <span>Habilitado para envio por correo</span>
-                                    </label>
-                                </div>
-                                <label class="form-group form-full"><span class="form-label">Observaciones de la revision</span>
-                                    <textarea class="form-control" rows="2" name="observaciones"><?= e((string) $documentoEditar['observaciones']) ?></textarea></label>
-                                <label class="form-group form-full"><span class="form-label">Causa de rechazo (si aplica)</span>
-                                    <input class="form-control" type="text" name="causa_rechazo" value="<?= e((string) $documentoEditar['causa_rechazo']) ?>"></label>
-
-                                <div class="actions">
-                                    <a class="btn-outline" href="<?= e($volverHref) ?>">Cancelar</a>
-                                    <button type="submit" class="btn-primary"><i class="ti ti-check"></i> Guardar</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($documentoVerHistorial): ?>
-                    <div class="modal-backdrop is-open" data-close-href="<?= e($volverHref) ?>">
-                        <div class="modal-box" onclick="event.stopPropagation()">
-                            <div class="modal-head">
-                                <h3>Seguimiento: <?= e((string) $documentoVerHistorial['titulo']) ?></h3>
-                                <a class="modal-close" href="<?= e($volverHref) ?>"><i class="ti ti-x"></i></a>
-                            </div>
-                            <div class="modal-body">
-                                <?php if ($documentoVerHistorial['historial']): ?>
-                                    <div class="timeline">
-                                        <?php foreach ($documentoVerHistorial['historial'] as $h): ?>
-                                            <div class="timeline-item">
-                                                <div class="timeline-title"><?= e((string) $h['estado']) ?></div>
-                                                <div class="timeline-meta"><?= e((string) $h['actor']) ?> · <?= e((string) $h['fecha']) ?></div>
-                                                <?php if (!empty($h['observaciones'])): ?><div class="timeline-obs"><?= e((string) $h['observaciones']) ?></div><?php endif; ?>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="empty-state"><i class="ti ti-inbox"></i>Todavia no hay historial para este documento.</div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($documentoRevisar): ?>
-                    <div class="modal-backdrop is-open" data-close-href="<?= e($volverHref) ?>">
-                        <div class="modal-box" onclick="event.stopPropagation()">
-                            <div class="modal-head">
-                                <h3>Revisar documento</h3>
-                                <a class="modal-close" href="<?= e($volverHref) ?>"><i class="ti ti-x"></i></a>
-                            </div>
-                            <div class="modal-body">
-                                <div class="form-group form-full">
-                                    <span class="form-label">Titulo</span>
-                                    <div><?= e((string) $documentoRevisar['titulo']) ?></div>
-                                </div>
-                                <div class="form-grid">
-                                    <div class="form-group"><span class="form-label">Tipo</span><div><?= e((string) $documentoRevisar['tipo']) ?></div></div>
-                                    <div class="form-group"><span class="form-label">Comite</span><div><?= e((string) ($documentoRevisar['comite_nombre'] ?? '—')) ?></div></div>
-                                    <div class="form-group"><span class="form-label">Autor</span><div><?= e((string) ($documentoRevisar['autor'] ?: '—')) ?></div></div>
-                                    <div class="form-group"><span class="form-label">Estado actual</span>
-                                        <div><span class="badge <?= comites_estado_badge_class((string) $documentoRevisar['estado']) ?>"><?= e((string) $documentoRevisar['estado']) ?></span></div></div>
-                                </div>
-                                <?php if (!empty($documentoRevisar['archivo_ruta'])): ?>
-                                    <div class="file-current"><i class="ti ti-file-text"></i>
-                                        <a href="<?= e((string) $documentoRevisar['archivo_ruta']) ?>" target="_blank" rel="noopener"><?= e((string) $documentoRevisar['archivo_nombre']) ?></a>
-                                    </div>
-                                <?php elseif (!empty($documentoRevisar['enlace'])): ?>
-                                    <div class="file-current"><i class="ti ti-link"></i>
-                                        <a href="<?= e((string) $documentoRevisar['enlace']) ?>" target="_blank" rel="noopener">Enlace externo</a>
-                                    </div>
-                                <?php endif; ?>
-
-                                <form method="post">
-                                    <input type="hidden" name="accion" value="documento_revisar">
-                                    <input type="hidden" name="ambito" value="<?= e($ambitoActual) ?>">
-                                    <input type="hidden" name="id" value="<?= (int) $documentoRevisar['id'] ?>">
-                                    <label class="form-group form-full"><span class="form-label">Observaciones (obligatorio si rechazas)</span>
-                                        <textarea class="form-control" rows="3" name="observaciones"><?= e((string) ($prefillPost['observaciones'] ?? '')) ?></textarea></label>
-                                    <div class="actions">
-                                        <button type="submit" class="btn-outline" name="decision" value="observar"><i class="ti ti-message-circle"></i> Observar</button>
-                                        <button type="submit" class="btn-danger" name="decision" value="rechazar"><i class="ti ti-x"></i> Rechazar</button>
-                                        <button type="submit" class="btn-primary" name="decision" value="aprobar"><i class="ti ti-check"></i> Aprobar</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
+                <?php require __DIR__ . '/includes/pasos-vista.php'; ?>
+            <?php elseif ($view === 'documentos'): ?>
+                <?php require __DIR__ . '/includes/biblioteca-vista.php'; ?>
+            <?php elseif ($view === 'biblioteca_interna'): ?>
+                <?php require __DIR__ . '/includes/biblioteca-vista.php'; ?>
             <?php elseif ($view === 'correos'): ?>
                 <?php $puedeGestionarCorreos = can_manage_resource($user, 'correos'); ?>
                 <?php if ($puedeGestionarCorreos): ?>
@@ -2495,36 +1880,7 @@ if ($view === 'estadisticas' && $puedeVerSeccionActual) {
                     </div>
                 </div>
 
-                <div class="table-card">
-                    <div class="table-wrap">
-                        <table>
-                            <thead><tr><th>Nombre</th><th>Tipo</th><th>Enlace</th><th>Estado</th><?php if ($puedeGestionarSeccionActual): ?><th></th><?php endif; ?></tr></thead>
-                            <tbody>
-                            <?php if (!$tableros): ?>
-                                <tr><td colspan="5"><div class="empty-state"><i class="ti ti-inbox"></i>Todavia no hay tableros registrados.</div></td></tr>
-                            <?php endif; ?>
-                            <?php foreach ($tableros as $t): ?>
-                                <tr>
-                                    <td><strong><?= e($t['nombre']) ?></strong><?php if (!empty($t['descripcion'])): ?><div class="text-muted"><?= e((string) $t['descripcion']) ?></div><?php endif; ?></td>
-                                    <td><?= e((string) ($t['tipo'] ?: '—')) ?></td>
-                                    <td><?php if (!empty($t['url'])): ?><a href="<?= e((string) $t['url']) ?>" target="_blank" rel="noopener"><i class="ti ti-external-link"></i> Abrir</a><?php else: ?>—<?php endif; ?></td>
-                                    <td><span class="badge <?= comites_estado_badge_class((string) $t['estado']) ?>"><?= e((string) $t['estado']) ?></span></td>
-                                    <?php if ($puedeGestionarSeccionActual): ?>
-                                        <td class="row-actions">
-                                            <a class="icon-btn" href="index.php?view=tableros&editar=<?= (int) $t['id'] ?>" title="Editar"><i class="ti ti-edit"></i></a>
-                                            <form method="post" onsubmit="return confirm('¿Eliminar este tablero?');" style="display:inline;">
-                                                <input type="hidden" name="accion" value="tablero_eliminar">
-                                                <input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
-                                                <button type="submit" class="icon-btn danger" title="Eliminar"><i class="ti ti-trash"></i></button>
-                                            </form>
-                                        </td>
-                                    <?php endif; ?>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <?php require __DIR__ . '/includes/tableros-tarjetas.php'; ?>
 
                 <?php if ($modalTablerosAbierto && $tableroEditar): ?>
                     <div class="modal-backdrop is-open" data-close-href="index.php?view=tableros">
@@ -2534,15 +1890,17 @@ if ($view === 'estadisticas' && $puedeVerSeccionActual) {
                                 <a class="modal-close" href="index.php?view=tableros"><i class="ti ti-x"></i></a>
                             </div>
                             <form method="post" class="modal-body">
+                                <p class="text-muted">Pega la URL de inserción del proveedor, no el código HTML completo. En Power BI: Archivo → Insertar informe → Sitio web o portal. Cada usuario conserva sus permisos de acceso al informe.</p>
                                 <input type="hidden" name="accion" value="tablero_guardar">
+                                <input type="hidden" name="csrf_tableros" value="<?= e($_SESSION['tableros_csrf']) ?>">
                                 <input type="hidden" name="id" value="<?= (int) $tableroEditar['id'] ?>">
                                 <label class="form-group form-full"><span class="form-label">Nombre <span class="req">*</span></span>
                                     <input class="form-control" type="text" name="nombre" required value="<?= e($tableroEditar['nombre']) ?>"></label>
                                 <label class="form-group form-full"><span class="form-label">Descripcion</span>
                                     <textarea class="form-control" rows="2" name="descripcion"><?= e($tableroEditar['descripcion']) ?></textarea></label>
                                 <div class="form-grid">
-                                    <label class="form-group"><span class="form-label">Enlace embebido (Power BI, Looker, etc.)</span>
-                                        <input class="form-control" type="url" name="url" value="<?= e($tableroEditar['url']) ?>" placeholder="https://..."></label>
+                                    <label class="form-group"><span class="form-label">URL de inserción (Power BI, Looker, etc.)</span>
+                                        <input class="form-control" type="url" name="url" required maxlength="500" value="<?= e($tableroEditar['url']) ?>" placeholder="https://..."></label>
                                     <label class="form-group"><span class="form-label">Tipo</span>
                                         <input class="form-control" type="text" name="tipo" value="<?= e($tableroEditar['tipo']) ?>" placeholder="Power BI, Looker Studio..."></label>
                                     <label class="form-group"><span class="form-label">Estado</span>
@@ -2561,421 +1919,508 @@ if ($view === 'estadisticas' && $puedeVerSeccionActual) {
                 <?php endif; ?>
 
             <?php elseif ($view === 'informes'): ?>
-                <div class="section-toolbar">
-                    <div></div>
-                    <div class="toolbar-actions">
-                        <?php if ($puedeGestionarSeccionActual): ?>
-                            <a class="btn-primary" href="index.php?view=informes&nuevo=1"><i class="ti ti-plus"></i> Nuevo informe</a>
-                        <?php endif; ?>
-                    </div>
-                </div>
+                <?php require __DIR__ . '/includes/informes-vista.php'; ?>
+            <?php elseif ($view === 'memorias'): ?>
+                <?php require __DIR__ . '/includes/memorias-vista.php'; ?>
+            <?php elseif ($view === 'publicaciones'): ?>
+                <?php
+                $plataformasRedes = redes_plataformas();
+                $chipPlataforma = static function (string $nombre) use ($plataformasRedes): string {
+                    $p = $plataformasRedes[$nombre] ?? $plataformasRedes['Otro'];
+                    return '<span class="red-chip" style="--red:' . e($p['color']) . '"><i class="ti ' . e($p['icon']) . '"></i> ' . e($nombre) . '</span>';
+                };
+                $urlFiltros = static fn(array $extra = []): string => 'index.php?' . http_build_query(array_filter(['view' => 'publicaciones', 'q' => $q, 'plataforma' => $filtroPlataforma, 'mes' => $filtroMes] + $extra, static fn($v) => $v !== '' && $v !== null));
+                ?>
+                <nav class="red-tabs" aria-label="Secciones de redes sociales">
+                    <a href="index.php?view=publicaciones" class="<?= $redesTab === 'publicaciones' ? 'is-active' : '' ?>"><i class="ti ti-share"></i> Publicaciones y WhatsApp</a>
+                    <a href="index.php?view=publicaciones&tab=web" class="<?= $redesTab === 'web' ? 'is-active' : '' ?>"><i class="ti ti-world"></i> Sitio web (Google Analytics)</a>
+                    <?php if ($puedeGestionarSeccionActual): ?><a href="index.php?view=publicaciones&tab=conexiones" class="<?= $redesTab === 'conexiones' ? 'is-active' : '' ?>"><i class="ti ti-plug-connected"></i> Conexiones</a><?php endif; ?>
+                </nav>
 
-                <div class="table-card">
-                    <div class="table-wrap">
-                        <table>
-                            <thead><tr><th>Periodo</th><th>Area</th><th>Plan operativo</th><th>Informe</th><th>Evaluacion</th><th>Fecha</th><?php if ($puedeGestionarSeccionActual): ?><th></th><?php endif; ?></tr></thead>
-                            <tbody>
-                            <?php if (!$informes): ?>
-                                <tr><td colspan="7"><div class="empty-state"><i class="ti ti-inbox"></i>Todavia no hay informes cuatrimestrales registrados.</div></td></tr>
-                            <?php endif; ?>
-                            <?php foreach ($informes as $inf): ?>
-                                <tr>
-                                    <td><strong><?= e($inf['periodo']) ?></strong></td>
-                                    <td><?= e((string) ($inf['area'] ?: '—')) ?></td>
-                                    <td><?php if (!empty($inf['plan_operativo_ruta'])): ?><a href="<?= e((string) $inf['plan_operativo_ruta']) ?>" target="_blank" rel="noopener"><i class="ti ti-file-text"></i> Ver</a><?php else: ?>—<?php endif; ?></td>
-                                    <td><?php if (!empty($inf['informe_ruta'])): ?><a href="<?= e((string) $inf['informe_ruta']) ?>" target="_blank" rel="noopener"><i class="ti ti-file-text"></i> Ver</a><?php else: ?>—<?php endif; ?></td>
-                                    <td><span class="badge <?= comites_estado_badge_class((string) $inf['evaluacion']) ?>"><?= e((string) $inf['evaluacion']) ?></span></td>
-                                    <td><?= e((string) ($inf['fecha'] ?: '—')) ?></td>
-                                    <?php if ($puedeGestionarSeccionActual): ?>
-                                        <td class="row-actions">
-                                            <a class="icon-btn" href="index.php?view=informes&editar=<?= (int) $inf['id'] ?>" title="Editar"><i class="ti ti-edit"></i></a>
-                                            <form method="post" onsubmit="return confirm('¿Eliminar este informe?');" style="display:inline;">
-                                                <input type="hidden" name="accion" value="informe_eliminar">
-                                                <input type="hidden" name="id" value="<?= (int) $inf['id'] ?>">
-                                                <button type="submit" class="icon-btn danger" title="Eliminar"><i class="ti ti-trash"></i></button>
-                                            </form>
-                                        </td>
-                                    <?php endif; ?>
-                                </tr>
+                <?php
+                $conexionesActivas = array_filter($redesConexiones, static fn($c) => $c['activo']);
+                $relevantes = $redesTab === 'web' ? ['ga4'] : ($redesTab === 'publicaciones' ? ['meta', 'linkedin'] : []);
+                $estadoVisible = array_intersect_key($conexionesActivas, array_flip($relevantes));
+                ?>
+                <?php if ($estadoVisible): ?>
+                    <div class="red-sync" id="red-sync" <?= $redesAutoPendiente ? 'data-auto="1"' : '' ?> data-csrf="<?= e($_SESSION['redes_csrf']) ?>">
+                        <i class="ti ti-refresh"></i>
+                        <span class="red-sync-items">
+                            <?php foreach ($estadoVisible as $p => $c): $prov = redes_api_proveedores()[$p]; ?>
+                                <span class="<?= $c['ultimo_estado'] === 'error' ? 'is-error' : '' ?>" title="<?= e($c['ultimo_mensaje']) ?>"><i class="ti <?= e($prov['icon']) ?>"></i> <?= e($prov['nombre']) ?>: <?= $c['ultimo_estado'] === 'error' ? 'error en la última sincronización' : 'actualizado ' . e(redes_api_hace($c['minutos'])) ?></span>
                             <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <?php if ($modalInformesAbierto && $informeEditar): ?>
-                    <div class="modal-backdrop is-open" data-close-href="index.php?view=informes">
-                        <div class="modal-box modal-wide" onclick="event.stopPropagation()">
-                            <div class="modal-head">
-                                <h3><?= $informeEditar['id'] ? 'Editar informe cuatrimestral' : 'Nuevo informe cuatrimestral' ?></h3>
-                                <a class="modal-close" href="index.php?view=informes"><i class="ti ti-x"></i></a>
-                            </div>
-                            <form method="post" class="modal-body" enctype="multipart/form-data">
-                                <input type="hidden" name="accion" value="informe_guardar">
-                                <input type="hidden" name="id" value="<?= (int) $informeEditar['id'] ?>">
-                                <div class="form-grid">
-                                    <label class="form-group"><span class="form-label">Periodo <span class="req">*</span></span>
-                                        <input class="form-control" type="text" name="periodo" required value="<?= e($informeEditar['periodo']) ?>" placeholder="I cuatrimestre 2026"></label>
-                                    <label class="form-group"><span class="form-label">Area</span>
-                                        <input class="form-control" type="text" name="area" value="<?= e((string) $informeEditar['area']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Fecha</span>
-                                        <input class="form-control" type="date" name="fecha" value="<?= e((string) $informeEditar['fecha']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Evaluacion</span>
-                                        <select class="form-control" name="evaluacion">
-                                            <?php foreach (['En revision', 'Satisfactorio', 'Con observaciones', 'No satisfactorio'] as $opt): ?>
-                                                <option value="<?= e($opt) ?>" <?= $informeEditar['evaluacion'] === $opt ? 'selected' : '' ?>><?= e($opt) ?></option>
-                                            <?php endforeach; ?>
-                                        </select></label>
-                                </div>
-                                <label class="form-group form-full"><span class="form-label">Observaciones</span>
-                                    <textarea class="form-control" rows="2" name="observaciones"><?= e((string) $informeEditar['observaciones']) ?></textarea></label>
-
-                                <div class="form-grid">
-                                    <label class="form-group"><span class="form-label">Plan operativo</span>
-                                        <input class="form-control" type="file" name="plan_operativo" accept=".pdf,.doc,.docx,.xls,.xlsx"></label>
-                                    <label class="form-group"><span class="form-label">Informe</span>
-                                        <input class="form-control" type="file" name="informe" accept=".pdf,.doc,.docx"></label>
-                                </div>
-                                <?php if (!empty($informeEditar['plan_operativo_ruta']) || !empty($informeEditar['informe_ruta'])): ?>
-                                    <div class="file-current">
-                                        <?php if (!empty($informeEditar['plan_operativo_ruta'])): ?>
-                                            <span><i class="ti ti-file-text"></i> <a href="<?= e((string) $informeEditar['plan_operativo_ruta']) ?>" target="_blank" rel="noopener">Plan operativo actual</a></span>
-                                        <?php endif; ?>
-                                        <?php if (!empty($informeEditar['informe_ruta'])): ?>
-                                            <span><i class="ti ti-file-text"></i> <a href="<?= e((string) $informeEditar['informe_ruta']) ?>" target="_blank" rel="noopener">Informe actual</a></span>
-                                        <?php endif; ?>
-                                    </div>
-                                <?php endif; ?>
-
-                                <label class="form-group form-full"><span class="form-label">Soportes / evidencias adicionales</span>
-                                    <input class="form-control" type="file" name="soportes[]" multiple></label>
-                                <?php if ($informeSoportes): ?>
-                                    <div class="form-group form-full">
-                                        <span class="form-label">Soportes ya cargados</span>
-                                        <div class="pill-toggle-list">
-                                            <?php foreach ($informeSoportes as $sop): ?>
-                                                <label class="pill-toggle danger">
-                                                    <input type="checkbox" name="eliminar_soportes[]" value="<?= (int) $sop['id'] ?>">
-                                                    <span><i class="ti ti-file"></i> <?= e((string) $sop['nombre']) ?></span>
-                                                </label>
-                                            <?php endforeach; ?>
-                                        </div>
-                                        <span class="form-hint">Marca los soportes que quieras eliminar al guardar.</span>
-                                    </div>
-                                <?php endif; ?>
-
-                                <div class="actions">
-                                    <a class="btn-outline" href="index.php?view=informes">Cancelar</a>
-                                    <button type="submit" class="btn-primary"><i class="ti ti-check"></i> Guardar</button>
-                                </div>
-                            </form>
-                        </div>
+                        </span>
+                        <span class="red-sync-estado" id="red-sync-estado" hidden><i class="ti ti-loader-2"></i> Sincronizando en segundo plano…</span>
                     </div>
                 <?php endif; ?>
 
-            <?php elseif ($view === 'memorias'): ?>
-                <div class="section-toolbar">
-                    <div></div>
-                    <div class="toolbar-actions">
+                <?php if ($redesTab === 'publicaciones'): ?>
+                    <?php
+                    $totalesRedes = ['total' => 0, 'alcance' => 0, 'interacciones' => 0, 'clics' => 0];
+                    foreach ($resumenRedes as $r) {
+                        foreach ($totalesRedes as $k => $v) {
+                            $totalesRedes[$k] += (int) $r[$k];
+                        }
+                    }
+                    ?>
+                    <section class="red-resumen">
+                        <a class="red-card red-card-total <?= $filtroPlataforma === '' ? 'is-active' : '' ?>" href="<?= e($urlFiltros(['plataforma' => ''])) ?>">
+                            <span class="red-card-head"><i class="ti ti-chart-donut"></i> Todas</span>
+                            <strong><?= redes_formato($totalesRedes['total']) ?></strong><small>publicaciones</small>
+                            <span class="red-card-meta"><?= redes_formato($totalesRedes['alcance']) ?> alcance · <?= redes_formato($totalesRedes['interacciones']) ?> interacciones</span>
+                        </a>
+                        <?php foreach ($resumenRedes as $r): $p = $plataformasRedes[$r['plataforma']] ?? $plataformasRedes['Otro']; $esWa = $r['plataforma'] === 'WhatsApp'; ?>
+                            <a class="red-card <?= $filtroPlataforma === $r['plataforma'] ? 'is-active' : '' ?>" style="--red:<?= e($p['color']) ?>" href="<?= e($urlFiltros(['plataforma' => $r['plataforma']])) ?>">
+                                <span class="red-card-head"><i class="ti <?= e($p['icon']) ?>"></i> <?= e((string) $r['plataforma']) ?></span>
+                                <strong><?= redes_formato((int) $r['total']) ?></strong><small><?= $esWa ? 'envíos' : 'publicaciones' ?></small>
+                                <span class="red-card-meta">
+                                    <?php if ($esWa): ?>
+                                        <?= redes_formato((int) $r['alcance']) ?> personas · <?= redes_formato((int) $r['compartidos']) ?> reenvíos
+                                    <?php else: ?>
+                                        <?= redes_formato((int) $r['alcance']) ?> alcance · <?= redes_formato((int) $r['interacciones']) ?> interacciones
+                                    <?php endif; ?>
+                                </span>
+                            </a>
+                        <?php endforeach; ?>
+                    </section>
+
+                    <div class="section-toolbar">
+                        <form class="filters-form" method="get">
+                            <input type="hidden" name="view" value="publicaciones">
+                            <div class="search-box">
+                                <i class="ti ti-search"></i>
+                                <input class="form-control" type="text" name="q" placeholder="Buscar por título, tipo o grupo..." value="<?= e($q) ?>">
+                            </div>
+                            <select class="form-control filter-select" name="plataforma" aria-label="Plataforma" onchange="this.form.submit()">
+                                <option value="">Todas las plataformas</option>
+                                <?php foreach (array_keys($plataformasRedes) as $opt): ?><option value="<?= e($opt) ?>" <?= $filtroPlataforma === $opt ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?>
+                            </select>
+                            <input class="form-control filter-select" type="month" name="mes" value="<?= e($filtroMes) ?>" aria-label="Mes" onchange="this.form.submit()">
+                            <button type="submit" class="btn-outline btn-sm"><i class="ti ti-filter"></i> Filtrar</button>
+                            <?php if ($q !== '' || $filtroPlataforma !== '' || $filtroMes !== ''): ?><a class="btn-outline btn-sm" href="index.php?view=publicaciones">Limpiar</a><?php endif; ?>
+                        </form>
                         <?php if ($puedeGestionarSeccionActual): ?>
-                            <a class="btn-outline" href="index.php?view=memorias&nuevo_editorial=1"><i class="ti ti-users"></i> Comite editorial</a>
-                            <a class="btn-primary" href="index.php?view=memorias&nuevo=1"><i class="ti ti-plus"></i> Nueva memoria</a>
+                            <div class="toolbar-actions">
+                                <a class="btn-outline" href="<?= e($urlFiltros(['importar' => 'redes'])) ?>"><i class="ti ti-file-import"></i> Importar estadísticas</a>
+                                <a class="btn-outline" href="index.php?view=publicaciones&nuevo=1&plataforma_nueva=WhatsApp"><i class="ti ti-brand-whatsapp"></i> Registrar envío</a>
+                                <a class="btn-primary" href="index.php?view=publicaciones&nuevo=1"><i class="ti ti-plus"></i> Nueva publicación</a>
+                            </div>
                         <?php endif; ?>
                     </div>
-                </div>
 
-                <div class="table-card">
-                    <div class="table-wrap">
-                        <table>
-                            <thead><tr><th>No. memoria</th><th>Titulo</th><th>Autor</th><th>Revisor</th><th>Estado</th><th>Version</th><?php if ($puedeGestionarSeccionActual): ?><th></th><?php endif; ?></tr></thead>
-                            <tbody>
-                            <?php if (!$memorias): ?>
-                                <tr><td colspan="7"><div class="empty-state"><i class="ti ti-inbox"></i>Todavia no hay memorias registradas.</div></td></tr>
-                            <?php endif; ?>
-                            <?php foreach ($memorias as $m): ?>
-                                <tr>
-                                    <td><?= e((string) ($m['numero_memoria'] ?: '—')) ?></td>
-                                    <td>
-                                        <strong><?= e($m['titulo']) ?></strong>
-                                        <?php if (!empty($m['archivo_ruta'])): ?>
-                                            <div class="text-muted"><a href="<?= e((string) $m['archivo_ruta']) ?>" target="_blank" rel="noopener"><i class="ti ti-paperclip"></i> <?= e((string) $m['archivo_nombre']) ?></a></div>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?= e((string) ($m['autor'] ?: '—')) ?></td>
-                                    <td><?= e((string) ($m['revisor_nombre'] ?: '—')) ?></td>
-                                    <td><span class="badge <?= comites_estado_badge_class((string) $m['estado']) ?>"><?= e((string) $m['estado']) ?></span></td>
-                                    <td>v<?= (int) $m['version'] ?></td>
-                                    <?php if ($puedeGestionarSeccionActual): ?>
-                                        <td class="row-actions">
-                                            <a class="icon-btn" href="index.php?view=memorias&editar=<?= (int) $m['id'] ?>" title="Editar / revisar"><i class="ti ti-edit"></i></a>
-                                            <form method="post" onsubmit="return confirm('¿Eliminar esta memoria?');" style="display:inline;">
-                                                <input type="hidden" name="accion" value="memoria_eliminar">
-                                                <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">
-                                                <button type="submit" class="icon-btn danger" title="Eliminar"><i class="ti ti-trash"></i></button>
-                                            </form>
-                                        </td>
-                                    <?php endif; ?>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <?php if ($editorialMiembros): ?>
-                    <div class="card" style="padding:16px; margin-top:16px;">
-                        <div class="card-title"><i class="ti ti-users"></i> Comite editorial</div>
+                    <div class="table-card">
                         <div class="table-wrap">
-                            <table>
-                                <thead><tr><th>Nombre</th><th>Cargo</th><th>Correo</th><th>Estado</th><?php if ($puedeGestionarSeccionActual): ?><th></th><?php endif; ?></tr></thead>
+                            <table class="red-tabla">
+                                <thead><tr><th>Fecha</th><th>Publicación</th><th>Estado</th><th class="num">Alcance</th><th class="num">Interacciones</th><th class="num">Clics</th><th class="acc"><?= $puedeGestionarSeccionActual ? 'Acciones' : '' ?></th></tr></thead>
                                 <tbody>
-                                <?php foreach ($editorialMiembros as $ed): ?>
+                                <?php if (!$publicaciones): ?>
+                                    <tr><td colspan="7"><div class="empty-state"><i class="ti ti-inbox"></i><?= ($q !== '' || $filtroPlataforma !== '' || $filtroMes !== '') ? 'No hay publicaciones con estos filtros.' : 'Todavía no hay publicaciones registradas. Regístralas a mano o importa las estadísticas exportadas de cada red.' ?></div></td></tr>
+                                <?php endif; ?>
+                                <?php foreach ($publicaciones as $p): $esWa = $p['plataforma'] === 'WhatsApp'; ?>
                                     <tr>
-                                        <td><strong><?= e($ed['nombre']) ?></strong></td>
-                                        <td><?= e((string) ($ed['cargo'] ?: '—')) ?></td>
-                                        <td><?= e((string) ($ed['email'] ?: '—')) ?></td>
-                                        <td><span class="badge <?= comites_estado_badge_class((string) $ed['estado']) ?>"><?= e((string) $ed['estado']) ?></span></td>
-                                        <?php if ($puedeGestionarSeccionActual): ?>
-                                            <td class="row-actions">
-                                                <a class="icon-btn" href="index.php?view=memorias&editar_editorial=<?= (int) $ed['id'] ?>" title="Editar"><i class="ti ti-edit"></i></a>
-                                                <form method="post" onsubmit="return confirm('¿Eliminar este integrante?');" style="display:inline;">
-                                                    <input type="hidden" name="accion" value="editorial_eliminar">
-                                                    <input type="hidden" name="id" value="<?= (int) $ed['id'] ?>">
-                                                    <button type="submit" class="icon-btn danger" title="Eliminar"><i class="ti ti-trash"></i></button>
-                                                </form>
-                                            </td>
-                                        <?php endif; ?>
+                                        <td class="red-fecha"><?= $p['fecha'] ? e(date('d/m/Y', strtotime((string) $p['fecha']))) : '—' ?></td>
+                                        <td class="cell-wide">
+                                            <div class="red-pub">
+                                                <?= $chipPlataforma((string) $p['plataforma']) ?><?php if (!empty($p['tipo'])): ?><span class="text-muted"><?= e((string) $p['tipo']) ?></span><?php endif; ?><?php if (($p['origen'] ?? '') === 'importado'): ?><span class="red-origen" title="Métricas importadas del archivo exportado"><i class="ti ti-file-import"></i> Importado</span><?php endif; ?>
+                                            </div>
+                                            <strong><?= e($p['titulo']) ?></strong>
+                                            <?php if ($esWa && !empty($p['destinos'])): ?><div class="text-muted red-destinos"><i class="ti ti-users-group"></i> <?= e(mb_strimwidth((string) $p['destinos'], 0, 120, '…')) ?></div><?php endif; ?>
+                                        </td>
+                                        <td><span class="badge <?= comites_estado_badge_class((string) $p['estado']) ?>"><?= e((string) $p['estado']) ?></span></td>
+                                        <td class="num"><?= redes_formato((int) $p['alcance']) ?><?php if ($esWa): ?><small>personas</small><?php endif; ?></td>
+                                        <td class="num"><?= redes_formato((int) $p['interacciones']) ?><?php if ($esWa && ((int) $p['compartidos'] || (int) $p['comentarios'])): ?><small><?= (int) $p['compartidos'] ?> reenv. · <?= (int) $p['comentarios'] ?> resp.</small><?php endif; ?></td>
+                                        <td class="num"><?= redes_formato((int) $p['clics']) ?></td>
+                                        <td class="acc">
+                                            <?php if ($puedeGestionarSeccionActual || !empty($p['url'])): ?>
+                                            <details class="row-menu">
+                                                <summary><i class="ti ti-dots-vertical"></i> Acciones <i class="ti ti-chevron-down"></i></summary>
+                                                <div class="row-menu-list" role="menu">
+                                                    <?php if (!empty($p['url'])): ?><a href="<?= e((string) $p['url']) ?>" target="_blank" rel="noopener noreferrer"><i class="ti ti-external-link"></i> Ver publicación</a><?php endif; ?>
+                                                    <?php if (!empty($p['material'])): ?><a href="<?= e((string) $p['material']) ?>" target="_blank" rel="noopener"><i class="ti ti-photo"></i> Ver material</a><?php endif; ?>
+                                                    <?php if ($puedeGestionarSeccionActual): ?>
+                                                        <a href="<?= e($urlFiltros(['editar' => (int) $p['id']])) ?>"><i class="ti ti-edit"></i> Editar y actualizar métricas</a>
+                                                        <form method="post" onsubmit="return confirm('¿Eliminar esta publicación?');">
+                                                            <input type="hidden" name="accion" value="publicacion_eliminar">
+                                                            <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
+                                                            <button type="submit" class="is-danger"><i class="ti ti-trash"></i> Eliminar</button>
+                                                        </form>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </details>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                <?php endif; ?>
 
-                <?php if ($modalMemoriasAbierto && $memoriaEditar): ?>
-                    <div class="modal-backdrop is-open" data-close-href="index.php?view=memorias">
-                        <div class="modal-box modal-wide" onclick="event.stopPropagation()">
-                            <div class="modal-head">
-                                <h3><?= $memoriaEditar['id'] ? 'Editar memoria' : 'Nueva memoria' ?></h3>
-                                <a class="modal-close" href="index.php?view=memorias"><i class="ti ti-x"></i></a>
-                            </div>
-                            <form method="post" class="modal-body" enctype="multipart/form-data">
-                                <input type="hidden" name="accion" value="memoria_guardar">
-                                <input type="hidden" name="id" value="<?= (int) $memoriaEditar['id'] ?>">
-                                <div class="form-grid form-grid-3">
-                                    <label class="form-group"><span class="form-label">No. de memoria</span>
-                                        <input class="form-control" type="text" name="numero_memoria" value="<?= e((string) $memoriaEditar['numero_memoria']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Fecha</span>
-                                        <input class="form-control" type="date" name="fecha" value="<?= e((string) $memoriaEditar['fecha']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Estado</span>
-                                        <select class="form-control" name="estado">
-                                            <?php foreach (['Recibida', 'En revision', 'Aprobada', 'Rechazada', 'Publicada'] as $opt): ?>
-                                                <option value="<?= e($opt) ?>" <?= $memoriaEditar['estado'] === $opt ? 'selected' : '' ?>><?= e($opt) ?></option>
-                                            <?php endforeach; ?>
-                                        </select></label>
+                    <?php if ($modalImportar === 'redes'): ?>
+                        <div class="modal-backdrop is-open" data-close-href="<?= e($urlFiltros()) ?>">
+                            <div class="modal-box" onclick="event.stopPropagation()">
+                                <div class="modal-head">
+                                    <h3>Importar estadísticas de publicaciones</h3>
+                                    <a class="modal-close" href="<?= e($urlFiltros()) ?>"><i class="ti ti-x"></i></a>
                                 </div>
-                                <label class="form-group form-full"><span class="form-label">Titulo <span class="req">*</span></span>
-                                    <input class="form-control" type="text" name="titulo" required value="<?= e((string) $memoriaEditar['titulo']) ?>"></label>
-                                <div class="form-grid">
-                                    <label class="form-group"><span class="form-label">Autor</span>
-                                        <input class="form-control" type="text" name="autor" value="<?= e((string) $memoriaEditar['autor']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Correo del autor</span>
-                                        <input class="form-control" type="email" name="autor_email" value="<?= e((string) $memoriaEditar['autor_email']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Revisor asignado</span>
-                                        <select class="form-control" name="revisor_id">
-                                            <option value="0">— Sin asignar —</option>
-                                            <?php foreach ($editorialActivos as $ed): ?>
-                                                <option value="<?= (int) $ed['id'] ?>" <?= (int) ($memoriaEditar['revisor_id'] ?? 0) === (int) $ed['id'] ? 'selected' : '' ?>><?= e($ed['nombre']) ?></option>
-                                            <?php endforeach; ?>
+                                <form method="post" class="modal-body" enctype="multipart/form-data">
+                                    <input type="hidden" name="accion" value="publicacion_importar">
+                                    <label class="form-group"><span class="form-label">Plataforma del archivo <span class="req">*</span></span>
+                                        <select class="form-control" name="plataforma" required>
+                                            <?php foreach (redes_plataformas_importables() as $opt): ?><option value="<?= e($opt) ?>" <?= $filtroPlataforma === $opt ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?>
                                         </select></label>
-                                </div>
-                                <label class="form-group form-full"><span class="form-label">Archivo de la memoria</span>
-                                    <input class="form-control" type="file" name="archivo" accept=".pdf,.doc,.docx"></label>
-                                <?php if (!empty($memoriaEditar['archivo_ruta'])): ?>
-                                    <div class="file-current"><i class="ti ti-file-text"></i>
-                                        <a href="<?= e((string) $memoriaEditar['archivo_ruta']) ?>" target="_blank" rel="noopener"><?= e((string) $memoriaEditar['archivo_nombre']) ?></a>
-                                        <span class="text-muted">v<?= (int) ($memoriaEditar['version'] ?? 1) ?></span>
+                                    <label class="form-group"><span class="form-label">Archivo exportado (CSV, XLSX o XLS) <span class="req">*</span></span>
+                                        <input class="form-control" type="file" name="archivo" accept=".csv,.xlsx,.xls" required></label>
+                                    <div class="red-ayuda">
+                                        <strong><i class="ti ti-info-circle"></i> ¿De dónde se descarga?</strong>
+                                        <ul>
+                                            <li><b>Facebook / Instagram:</b> Meta Business Suite → Estadísticas → Contenido → <i>Exportar datos</i> (CSV).</li>
+                                            <li><b>LinkedIn:</b> Página → Análisis → Contenido → <i>Exportar</i> (XLS).</li>
+                                            <li><b>X, YouTube, TikTok:</b> la exportación de estadísticas de contenido de cada plataforma.</li>
+                                        </ul>
+                                        <p>Cada fila actualiza la publicación con el mismo enlace (o la misma fecha y título). Las que no existan se crean como publicadas.</p>
                                     </div>
-                                <?php endif; ?>
-                                <label class="form-group form-full"><span class="form-label">Observaciones del revisor</span>
-                                    <textarea class="form-control" rows="2" name="observaciones_revisor"><?= e((string) $memoriaEditar['observaciones_revisor']) ?></textarea></label>
+                                    <div class="actions">
+                                        <a class="btn-outline" href="<?= e($urlFiltros()) ?>">Cancelar</a>
+                                        <button type="submit" class="btn-primary"><i class="ti ti-file-import"></i> Importar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endif; ?>
 
-                                <?php if ($memoriaTrack): ?>
-                                    <div class="form-group form-full">
-                                        <span class="form-label">Seguimiento editorial</span>
-                                        <div class="timeline">
-                                            <?php foreach ($memoriaTrack as $tr): ?>
-                                                <div class="timeline-item">
-                                                    <div class="timeline-title"><?= e((string) $tr['etapa']) ?><?php if (!empty($tr['estado'])): ?> · <?= e((string) $tr['estado']) ?><?php endif; ?></div>
-                                                    <div class="timeline-meta"><?= e((string) $tr['fecha']) ?></div>
-                                                    <?php if (!empty($tr['observaciones'])): ?><div class="timeline-obs"><?= e((string) $tr['observaciones']) ?></div><?php endif; ?>
-                                                </div>
+                    <?php if ($modalPublicacionesAbierto && $publicacionEditar): ?>
+                        <?php
+                        if (!$publicacionEditar['id'] && isset($_GET['plataforma_nueva']) && isset($plataformasRedes[$_GET['plataforma_nueva']])) {
+                            $publicacionEditar['plataforma'] = (string) $_GET['plataforma_nueva'];
+                            $publicacionEditar['estado'] = 'Publicada';
+                        }
+                        $esWaForm = $publicacionEditar['plataforma'] === 'WhatsApp';
+                        ?>
+                        <div class="modal-backdrop is-open" data-close-href="<?= e($urlFiltros()) ?>">
+                            <div class="modal-box modal-wide" onclick="event.stopPropagation()">
+                                <div class="modal-head">
+                                    <h3><?= $publicacionEditar['id'] ? 'Editar publicación' : ($esWaForm ? 'Registrar envío por WhatsApp' : 'Nueva publicación') ?></h3>
+                                    <a class="modal-close" href="<?= e($urlFiltros()) ?>"><i class="ti ti-x"></i></a>
+                                </div>
+                                <form method="post" class="modal-body" enctype="multipart/form-data" id="red-form">
+                                    <input type="hidden" name="accion" value="publicacion_guardar">
+                                    <input type="hidden" name="id" value="<?= (int) $publicacionEditar['id'] ?>">
+                                    <div class="form-grid form-grid-3">
+                                        <label class="form-group"><span class="form-label">Fecha</span>
+                                            <input class="form-control" type="date" name="fecha" value="<?= e((string) $publicacionEditar['fecha']) ?>"></label>
+                                        <label class="form-group"><span class="form-label">Plataforma</span>
+                                            <select class="form-control" name="plataforma" id="red-plataforma">
+                                                <?php foreach (array_keys($plataformasRedes) as $opt): ?>
+                                                    <option value="<?= e($opt) ?>" <?= $publicacionEditar['plataforma'] === $opt ? 'selected' : '' ?>><?= e($opt) ?></option>
+                                                <?php endforeach; ?>
+                                            </select></label>
+                                        <label class="form-group"><span class="form-label">Tipo</span>
+                                            <input class="form-control" type="text" name="tipo" value="<?= e((string) $publicacionEditar['tipo']) ?>" placeholder="Foto, video, boletín, invitación..."></label>
+                                    </div>
+                                    <label class="form-group form-full"><span class="form-label">Título <span class="req">*</span></span>
+                                        <input class="form-control" type="text" name="titulo" required value="<?= e((string) $publicacionEditar['titulo']) ?>"></label>
+                                    <label class="form-group form-full" data-solo-whatsapp <?= $esWaForm ? '' : 'hidden' ?>><span class="form-label">Grupos, listas o contactos a los que se envió</span>
+                                        <textarea class="form-control" rows="2" name="destinos" placeholder="Ej. Grupo Técnicos de campo; Lista de difusión Ingenios; Comité de Riego"><?= e((string) ($publicacionEditar['destinos'] ?? '')) ?></textarea>
+                                        <span class="form-hint">Separe los grupos con punto y coma.</span></label>
+                                    <label class="form-group form-full"><span class="form-label">Texto / mensaje</span>
+                                        <textarea class="form-control" rows="3" name="copy_texto"><?= e((string) $publicacionEditar['copy_texto']) ?></textarea></label>
+                                    <div class="form-grid form-grid-3">
+                                        <label class="form-group"><span class="form-label">Responsable</span>
+                                            <input class="form-control" type="text" name="responsable" value="<?= e((string) $publicacionEditar['responsable']) ?>"></label>
+                                        <label class="form-group"><span class="form-label">Enlace publicado o compartido</span>
+                                            <input class="form-control" type="url" name="url" value="<?= e((string) $publicacionEditar['url']) ?>" placeholder="https://..."></label>
+                                        <label class="form-group"><span class="form-label">Estado</span>
+                                            <select class="form-control" name="estado">
+                                                <?php foreach (['Borrador', 'Programada', 'Publicada', 'Pausada'] as $opt): ?>
+                                                    <option value="<?= e($opt) ?>" <?= $publicacionEditar['estado'] === $opt ? 'selected' : '' ?>><?= e($opt) ?></option>
+                                                <?php endforeach; ?>
+                                            </select></label>
+                                    </div>
+                                    <label class="form-group form-full"><span class="form-label">Material (imagen, video o PDF)</span>
+                                        <input class="form-control" type="file" name="material" accept=".jpg,.jpeg,.png,.mp4,.pdf"></label>
+                                    <?php if (!empty($publicacionEditar['material'])): ?>
+                                        <div class="file-current"><i class="ti ti-photo"></i> <a href="<?= e((string) $publicacionEditar['material']) ?>" target="_blank" rel="noopener">Material actual</a></div>
+                                    <?php endif; ?>
+
+                                    <div class="form-group form-full red-metricas">
+                                        <span class="form-label">Métricas</span>
+                                        <div class="form-grid form-grid-4">
+                                            <?php
+                                            $metricasForm = $plataformasRedes[$publicacionEditar['plataforma']]['metricas'] ?? $plataformasRedes['Otro']['metricas'];
+                                            foreach (['alcance', 'impresiones', 'interacciones', 'reacciones', 'comentarios', 'compartidos', 'clics', 'reproducciones', 'guardados'] as $campo):
+                                            ?>
+                                                <label class="form-group" data-metrica="<?= e($campo) ?>" <?= isset($metricasForm[$campo]) ? '' : 'hidden' ?>><span class="form-label"><?= e($metricasForm[$campo] ?? ucfirst($campo)) ?></span>
+                                                    <input class="form-control" type="number" min="0" name="<?= e($campo) ?>" value="<?= (int) $publicacionEditar[$campo] ?>"></label>
                                             <?php endforeach; ?>
                                         </div>
                                     </div>
-                                <?php endif; ?>
+                                    <script type="application/json" id="red-metricas-config"><?= json_encode(array_map(static fn($p) => $p['metricas'], $plataformasRedes), JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
 
-                                <div class="actions">
-                                    <a class="btn-outline" href="index.php?view=memorias">Cancelar</a>
-                                    <button type="submit" class="btn-primary"><i class="ti ti-check"></i> Guardar</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($modalEditorialAbierto && $editorialEditar): ?>
-                    <div class="modal-backdrop is-open" data-close-href="index.php?view=memorias">
-                        <div class="modal-box" onclick="event.stopPropagation()">
-                            <div class="modal-head">
-                                <h3><?= $editorialEditar['id'] ? 'Editar integrante' : 'Nuevo integrante del comite editorial' ?></h3>
-                                <a class="modal-close" href="index.php?view=memorias"><i class="ti ti-x"></i></a>
+                                    <div class="actions">
+                                        <a class="btn-outline" href="<?= e($urlFiltros()) ?>">Cancelar</a>
+                                        <button type="submit" class="btn-primary"><i class="ti ti-check"></i> Guardar</button>
+                                    </div>
+                                </form>
                             </div>
-                            <form method="post" class="modal-body">
-                                <input type="hidden" name="accion" value="editorial_guardar">
-                                <input type="hidden" name="id" value="<?= (int) $editorialEditar['id'] ?>">
-                                <label class="form-group form-full"><span class="form-label">Nombre <span class="req">*</span></span>
-                                    <input class="form-control" type="text" name="nombre" required value="<?= e($editorialEditar['nombre']) ?>"></label>
-                                <div class="form-grid">
-                                    <label class="form-group"><span class="form-label">Cargo</span>
-                                        <input class="form-control" type="text" name="cargo" value="<?= e($editorialEditar['cargo']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Correo</span>
-                                        <input class="form-control" type="email" name="email" value="<?= e($editorialEditar['email']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Estado</span>
-                                        <select class="form-control" name="estado">
-                                            <option value="Activo" <?= $editorialEditar['estado'] === 'Activo' ? 'selected' : '' ?>>Activo</option>
-                                            <option value="Inactivo" <?= $editorialEditar['estado'] === 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
-                                        </select></label>
-                                </div>
-                                <div class="actions">
-                                    <a class="btn-outline" href="index.php?view=memorias">Cancelar</a>
-                                    <button type="submit" class="btn-primary"><i class="ti ti-check"></i> Guardar</button>
-                                </div>
-                            </form>
                         </div>
-                    </div>
-                <?php endif; ?>
+                    <?php endif; ?>
 
-            <?php elseif ($view === 'publicaciones'): ?>
-                <div class="section-toolbar">
-                    <form class="filters-form" method="get">
-                        <input type="hidden" name="view" value="publicaciones">
-                        <div class="search-box">
-                            <i class="ti ti-search"></i>
-                            <input class="form-control" type="text" name="q" placeholder="Buscar por titulo o plataforma..." value="<?= e($q) ?>">
+                <?php elseif ($redesTab === 'web'): ?>
+                    <?php
+                    $webActual = $webMetricas[0] ?? null;
+                    $webAnterior = $webMetricas[1] ?? null;
+                    $variacion = static function (string $campo) use ($webActual, $webAnterior): string {
+                        if (!$webActual || !$webAnterior || (float) $webAnterior[$campo] == 0.0) {
+                            return '';
+                        }
+                        $pct = (int) round(((float) $webActual[$campo] - (float) $webAnterior[$campo]) / (float) $webAnterior[$campo] * 100);
+                        return '<span class="red-var ' . ($pct >= 0 ? 'is-up' : 'is-down') . '"><i class="ti ti-arrow-' . ($pct >= 0 ? 'up' : 'down') . '-right"></i> ' . abs($pct) . '% vs. mes anterior</span>';
+                    };
+                    $mesTexto = static function (string $periodo): string {
+                        $meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                        return ucfirst($meses[(int) substr($periodo, 5, 2) - 1] ?? '') . ' ' . substr($periodo, 0, 4);
+                    };
+                    $maxVistas = max(1, ...array_map(static fn($w) => (int) $w['vistas'], $webMetricas ?: [['vistas' => 1]]));
+                    ?>
+                    <div class="section-toolbar">
+                        <div class="red-web-titulo">
+                            <?php if ($webActual): ?>Último mes registrado: <strong><?= e($mesTexto((string) $webActual['periodo'])) ?></strong><?php else: ?>Sin datos del sitio web todavía.<?php endif; ?>
                         </div>
-                        <button type="submit" class="btn-outline btn-sm"><i class="ti ti-filter"></i> Buscar</button>
-                    </form>
-                    <div class="toolbar-actions">
                         <?php if ($puedeGestionarSeccionActual): ?>
-                            <a class="btn-primary" href="index.php?view=publicaciones&nuevo=1"><i class="ti ti-plus"></i> Nueva publicacion</a>
+                            <div class="toolbar-actions">
+                                <a class="btn-outline" href="index.php?view=publicaciones&tab=web&importar=web"><i class="ti ti-file-import"></i> Importar de Google Analytics</a>
+                                <a class="btn-primary" href="index.php?view=publicaciones&tab=web&web_mes=nuevo"><i class="ti ti-plus"></i> Registrar mes</a>
+                            </div>
                         <?php endif; ?>
                     </div>
-                </div>
 
-                <div class="table-card">
-                    <div class="table-wrap">
-                        <table>
-                            <thead><tr><th>Fecha</th><th>Plataforma / tipo</th><th>Titulo</th><th>Estado</th><th>Alcance</th><th>Interacciones</th><?php if ($puedeGestionarSeccionActual): ?><th></th><?php endif; ?></tr></thead>
-                            <tbody>
-                            <?php if (!$publicaciones): ?>
-                                <tr><td colspan="7"><div class="empty-state"><i class="ti ti-inbox"></i>Todavia no hay publicaciones registradas.</div></td></tr>
-                            <?php endif; ?>
-                            <?php foreach ($publicaciones as $p): ?>
-                                <tr>
-                                    <td><?= e((string) ($p['fecha'] ?: '—')) ?></td>
-                                    <td><?= e((string) $p['plataforma']) ?><?php if (!empty($p['tipo'])): ?><div class="text-muted"><?= e((string) $p['tipo']) ?></div><?php endif; ?></td>
-                                    <td class="cell-wide">
-                                        <strong><?= e($p['titulo']) ?></strong>
-                                        <?php if (!empty($p['url'])): ?><div class="text-muted"><a href="<?= e((string) $p['url']) ?>" target="_blank" rel="noopener"><i class="ti ti-external-link"></i> Ver publicacion</a></div><?php endif; ?>
-                                    </td>
-                                    <td><span class="badge <?= comites_estado_badge_class((string) $p['estado']) ?>"><?= e((string) $p['estado']) ?></span></td>
-                                    <td><?= (int) $p['alcance'] ?></td>
-                                    <td><?= (int) $p['interacciones'] ?></td>
-                                    <?php if ($puedeGestionarSeccionActual): ?>
-                                        <td class="row-actions">
-                                            <a class="icon-btn" href="index.php?view=publicaciones&editar=<?= (int) $p['id'] ?>" title="Editar"><i class="ti ti-edit"></i></a>
-                                            <form method="post" onsubmit="return confirm('¿Eliminar esta publicacion?');" style="display:inline;">
-                                                <input type="hidden" name="accion" value="publicacion_eliminar">
-                                                <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
-                                                <button type="submit" class="icon-btn danger" title="Eliminar"><i class="ti ti-trash"></i></button>
-                                            </form>
-                                        </td>
-                                    <?php endif; ?>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                    <?php if ($webActual): ?>
+                        <section class="red-resumen red-resumen-web">
+                            <div class="red-card"><span class="red-card-head"><i class="ti ti-users"></i> Usuarios</span><strong><?= redes_formato((int) $webActual['usuarios']) ?></strong><small><?= redes_formato((int) $webActual['nuevos_usuarios']) ?> nuevos</small><?= $variacion('usuarios') ?></div>
+                            <div class="red-card"><span class="red-card-head"><i class="ti ti-click"></i> Sesiones</span><strong><?= redes_formato((int) $webActual['sesiones']) ?></strong><small>visitas al sitio</small><?= $variacion('sesiones') ?></div>
+                            <div class="red-card"><span class="red-card-head"><i class="ti ti-eye"></i> Vistas de página</span><strong><?= redes_formato((int) $webActual['vistas']) ?></strong><small><?= e(redes_duracion((int) $webActual['duracion_seg'])) ?> tiempo medio</small><?= $variacion('vistas') ?></div>
+                            <div class="red-card" style="--red:#25d366"><span class="red-card-head"><i class="ti ti-share"></i> Desde redes sociales</span><strong><?= redes_formato((int) $webActual['sesiones_redes']) ?></strong><small><?= (int) $webActual['sesiones'] ? round((int) $webActual['sesiones_redes'] / (int) $webActual['sesiones'] * 100) : 0 ?>% de las sesiones · <?= redes_formato((int) $webActual['sesiones_whatsapp']) ?> de WhatsApp</small><?= $variacion('sesiones_redes') ?></div>
+                        </section>
+                    <?php endif; ?>
 
-                <?php if ($modalPublicacionesAbierto && $publicacionEditar): ?>
-                    <div class="modal-backdrop is-open" data-close-href="index.php?view=publicaciones">
-                        <div class="modal-box modal-wide" onclick="event.stopPropagation()">
-                            <div class="modal-head">
-                                <h3><?= $publicacionEditar['id'] ? 'Editar publicacion' : 'Nueva publicacion' ?></h3>
-                                <a class="modal-close" href="index.php?view=publicaciones"><i class="ti ti-x"></i></a>
-                            </div>
-                            <form method="post" class="modal-body" enctype="multipart/form-data">
-                                <input type="hidden" name="accion" value="publicacion_guardar">
-                                <input type="hidden" name="id" value="<?= (int) $publicacionEditar['id'] ?>">
-                                <div class="form-grid form-grid-3">
-                                    <label class="form-group"><span class="form-label">Fecha</span>
-                                        <input class="form-control" type="date" name="fecha" value="<?= e((string) $publicacionEditar['fecha']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Plataforma</span>
-                                        <select class="form-control" name="plataforma">
-                                            <?php foreach (['Facebook', 'Instagram', 'LinkedIn', 'X', 'YouTube', 'TikTok', 'Sitio web', 'Otro'] as $opt): ?>
-                                                <option value="<?= e($opt) ?>" <?= $publicacionEditar['plataforma'] === $opt ? 'selected' : '' ?>><?= e($opt) ?></option>
-                                            <?php endforeach; ?>
-                                        </select></label>
-                                    <label class="form-group"><span class="form-label">Tipo</span>
-                                        <input class="form-control" type="text" name="tipo" value="<?= e((string) $publicacionEditar['tipo']) ?>" placeholder="Foto, video, carrusel..."></label>
-                                </div>
-                                <label class="form-group form-full"><span class="form-label">Titulo <span class="req">*</span></span>
-                                    <input class="form-control" type="text" name="titulo" required value="<?= e((string) $publicacionEditar['titulo']) ?>"></label>
-                                <label class="form-group form-full"><span class="form-label">Texto / copy</span>
-                                    <textarea class="form-control" rows="3" name="copy_texto"><?= e((string) $publicacionEditar['copy_texto']) ?></textarea></label>
-                                <div class="form-grid">
-                                    <label class="form-group"><span class="form-label">Responsable</span>
-                                        <input class="form-control" type="text" name="responsable" value="<?= e((string) $publicacionEditar['responsable']) ?>"></label>
-                                    <label class="form-group"><span class="form-label">Enlace publicado</span>
-                                        <input class="form-control" type="url" name="url" value="<?= e((string) $publicacionEditar['url']) ?>" placeholder="https://..."></label>
-                                    <label class="form-group"><span class="form-label">Estado</span>
-                                        <select class="form-control" name="estado">
-                                            <?php foreach (['Borrador', 'Programada', 'Publicada', 'Pausada'] as $opt): ?>
-                                                <option value="<?= e($opt) ?>" <?= $publicacionEditar['estado'] === $opt ? 'selected' : '' ?>><?= e($opt) ?></option>
-                                            <?php endforeach; ?>
-                                        </select></label>
-                                </div>
-                                <label class="form-group form-full"><span class="form-label">Material (imagen/video)</span>
-                                    <input class="form-control" type="file" name="material" accept=".jpg,.jpeg,.png,.mp4,.pdf"></label>
-                                <?php if (!empty($publicacionEditar['material'])): ?>
-                                    <div class="file-current"><i class="ti ti-photo"></i> <a href="<?= e((string) $publicacionEditar['material']) ?>" target="_blank" rel="noopener">Material actual</a></div>
+                    <div class="table-card">
+                        <div class="table-wrap">
+                            <table class="red-tabla">
+                                <thead><tr><th>Mes</th><th class="num">Usuarios</th><th class="num">Sesiones</th><th>Vistas de página</th><th class="num">Tiempo medio</th><th class="num">Rebote</th><th class="num">Desde redes</th><th class="num">WhatsApp</th><th class="acc"><?= $puedeGestionarSeccionActual ? 'Acciones' : '' ?></th></tr></thead>
+                                <tbody>
+                                <?php if (!$webMetricas): ?>
+                                    <tr><td colspan="9"><div class="empty-state"><i class="ti ti-world"></i>Registra el primer mes o importa el informe exportado de Google Analytics.</div></td></tr>
                                 <?php endif; ?>
-
-                                <div class="form-group form-full">
-                                    <span class="form-label">Metricas</span>
-                                    <div class="form-grid form-grid-4">
-                                        <?php foreach ([
-                                            'alcance' => 'Alcance', 'impresiones' => 'Impresiones', 'interacciones' => 'Interacciones',
-                                            'reacciones' => 'Reacciones', 'comentarios' => 'Comentarios', 'compartidos' => 'Compartidos',
-                                            'clics' => 'Clics', 'reproducciones' => 'Reproducciones', 'guardados' => 'Guardados',
-                                        ] as $campo => $etiqueta): ?>
-                                            <label class="form-group"><span class="form-label"><?= e($etiqueta) ?></span>
-                                                <input class="form-control" type="number" min="0" name="<?= e($campo) ?>" value="<?= (int) $publicacionEditar[$campo] ?>"></label>
-                                        <?php endforeach; ?>
-                                    </div>
-                                </div>
-
-                                <div class="actions">
-                                    <a class="btn-outline" href="index.php?view=publicaciones">Cancelar</a>
-                                    <button type="submit" class="btn-primary"><i class="ti ti-check"></i> Guardar</button>
-                                </div>
-                            </form>
+                                <?php foreach ($webMetricas as $w): ?>
+                                    <tr>
+                                        <td><strong><?= e($mesTexto((string) $w['periodo'])) ?></strong><?php if (!empty($w['notas'])): ?><div class="text-muted"><?= e(mb_strimwidth((string) $w['notas'], 0, 80, '…')) ?></div><?php endif; ?><div class="red-fuente"><?= e((string) ($w['fuente'] ?? '')) ?></div></td>
+                                        <td class="num"><?= redes_formato((int) $w['usuarios']) ?></td>
+                                        <td class="num"><?= redes_formato((int) $w['sesiones']) ?></td>
+                                        <td><div class="cell-progress"><div class="progress-track"><div class="progress-fill" style="width:<?= (int) round((int) $w['vistas'] / $maxVistas * 100) ?>%"></div></div><span><?= redes_formato((int) $w['vistas']) ?></span></div></td>
+                                        <td class="num"><?= e(redes_duracion((int) $w['duracion_seg'])) ?></td>
+                                        <td class="num"><?= number_format((float) $w['rebote'], 1) ?>%</td>
+                                        <td class="num"><?= redes_formato((int) $w['sesiones_redes']) ?></td>
+                                        <td class="num"><?= redes_formato((int) $w['sesiones_whatsapp']) ?></td>
+                                        <td class="acc">
+                                            <?php if ($puedeGestionarSeccionActual): ?>
+                                            <details class="row-menu">
+                                                <summary><i class="ti ti-dots-vertical"></i> Acciones <i class="ti ti-chevron-down"></i></summary>
+                                                <div class="row-menu-list" role="menu">
+                                                    <a href="index.php?view=publicaciones&tab=web&web_mes=<?= e((string) $w['periodo']) ?>"><i class="ti ti-edit"></i> Editar</a>
+                                                    <form method="post" onsubmit="return confirm('¿Eliminar los datos de este mes?');">
+                                                        <input type="hidden" name="accion" value="web_eliminar">
+                                                        <input type="hidden" name="periodo" value="<?= e((string) $w['periodo']) ?>">
+                                                        <button type="submit" class="is-danger"><i class="ti ti-trash"></i> Eliminar</button>
+                                                    </form>
+                                                </div>
+                                            </details>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
+
+                    <?php if ($modalImportar === 'web'): ?>
+                        <div class="modal-backdrop is-open" data-close-href="index.php?view=publicaciones&tab=web">
+                            <div class="modal-box" onclick="event.stopPropagation()">
+                                <div class="modal-head">
+                                    <h3>Importar desde Google Analytics</h3>
+                                    <a class="modal-close" href="index.php?view=publicaciones&tab=web"><i class="ti ti-x"></i></a>
+                                </div>
+                                <form method="post" class="modal-body" enctype="multipart/form-data">
+                                    <input type="hidden" name="accion" value="web_importar">
+                                    <label class="form-group"><span class="form-label">Informe exportado (CSV, XLSX o XLS) <span class="req">*</span></span>
+                                        <input class="form-control" type="file" name="archivo" accept=".csv,.xlsx,.xls" required></label>
+                                    <div class="red-ayuda">
+                                        <strong><i class="ti ti-info-circle"></i> Cómo exportarlo de Google Analytics 4</strong>
+                                        <ol>
+                                            <li>Abre <i>Informes → Adquisición → Adquisición de tráfico</i>.</li>
+                                            <li>Elige el rango de fechas y agrega la dimensión secundaria <b>Año y mes</b> (o <b>Fecha</b>).</li>
+                                            <li>Usa <i>Compartir este informe → Descargar archivo → CSV</i>.</li>
+                                        </ol>
+                                        <p>Se agrupa por mes: usuarios, sesiones, vistas, tiempo medio y rebote. Si el informe trae el canal o la fuente de la sesión, también se calculan las visitas desde redes sociales y desde WhatsApp. Los meses que ya existen se reemplazan.</p>
+                                    </div>
+                                    <div class="actions">
+                                        <a class="btn-outline" href="index.php?view=publicaciones&tab=web">Cancelar</a>
+                                        <button type="submit" class="btn-primary"><i class="ti ti-file-import"></i> Importar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($webEditar): ?>
+                        <div class="modal-backdrop is-open" data-close-href="index.php?view=publicaciones&tab=web">
+                            <div class="modal-box modal-wide" onclick="event.stopPropagation()">
+                                <div class="modal-head">
+                                    <h3><?= isset($webEditar['id']) ? 'Editar ' . e($mesTexto((string) $webEditar['periodo'])) : 'Registrar mes del sitio web' ?></h3>
+                                    <a class="modal-close" href="index.php?view=publicaciones&tab=web"><i class="ti ti-x"></i></a>
+                                </div>
+                                <form method="post" class="modal-body">
+                                    <input type="hidden" name="accion" value="web_guardar">
+                                    <div class="form-grid form-grid-4">
+                                        <label class="form-group"><span class="form-label">Mes <span class="req">*</span></span>
+                                            <input class="form-control" type="month" name="periodo" required value="<?= e((string) $webEditar['periodo']) ?>" <?= isset($webEditar['id']) ? 'readonly' : '' ?>></label>
+                                        <?php foreach (['usuarios' => 'Usuarios activos', 'nuevos_usuarios' => 'Usuarios nuevos', 'sesiones' => 'Sesiones', 'vistas' => 'Vistas de página', 'sesiones_redes' => 'Sesiones desde redes sociales', 'sesiones_whatsapp' => 'Sesiones desde WhatsApp'] as $campo => $etiqueta): ?>
+                                            <label class="form-group"><span class="form-label"><?= e($etiqueta) ?></span>
+                                                <input class="form-control" type="number" min="0" name="<?= e($campo) ?>" value="<?= (int) $webEditar[$campo] ?>"></label>
+                                        <?php endforeach; ?>
+                                        <label class="form-group"><span class="form-label">Rebote (%)</span>
+                                            <input class="form-control" type="number" min="0" max="100" step="0.01" name="rebote" value="<?= e((string) (float) $webEditar['rebote']) ?>"></label>
+                                    </div>
+                                    <div class="form-grid form-grid-4">
+                                        <label class="form-group"><span class="form-label">Tiempo medio (min)</span>
+                                            <input class="form-control" type="number" min="0" name="duracion_min" value="<?= intdiv((int) $webEditar['duracion_seg'], 60) ?>"></label>
+                                        <label class="form-group"><span class="form-label">Tiempo medio (seg)</span>
+                                            <input class="form-control" type="number" min="0" max="59" name="duracion_s" value="<?= (int) $webEditar['duracion_seg'] % 60 ?>"></label>
+                                    </div>
+                                    <label class="form-group form-full"><span class="form-label">Notas</span>
+                                        <textarea class="form-control" rows="2" name="notas" placeholder="Ej. Campaña del boletín de zafra, publicación del informe anual..."><?= e((string) ($webEditar['notas'] ?? '')) ?></textarea></label>
+                                    <p class="form-hint">Los datos están en Google Analytics 4 → Informes → Adquisición → Adquisición de tráfico (seleccionando el mes).</p>
+                                    <div class="actions">
+                                        <a class="btn-outline" href="index.php?view=publicaciones&tab=web">Cancelar</a>
+                                        <button type="submit" class="btn-primary"><i class="ti ti-check"></i> Guardar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php elseif ($redesTab === 'conexiones'): ?>
+                    <p class="red-con-intro">Con la conexión directa, las métricas se actualizan solas cada cierto número de horas al abrir esta sección (o con una tarea programada en el servidor). Las credenciales se guardan cifradas y nunca se vuelven a mostrar completas.</p>
+                    <div class="red-con-grid">
+                        <?php foreach (redes_api_proveedores() as $p => $prov): $c = $redesConexiones[$p]; $cfg = $c['config']; $sec = $c['secreto']; ?>
+                            <section class="red-con" id="conexion-<?= e($p) ?>" style="--red:<?= e($prov['color']) ?>">
+                                <header class="red-con-head">
+                                    <span class="red-con-icon"><i class="ti <?= e($prov['icon']) ?>"></i></span>
+                                    <div>
+                                        <h3><?= e($prov['nombre']) ?></h3>
+                                        <?php if (!$c['activo']): ?>
+                                            <span class="red-con-estado">Sin conectar</span>
+                                        <?php elseif ($c['ultimo_estado'] === 'error'): ?>
+                                            <span class="red-con-estado is-error"><i class="ti ti-alert-triangle"></i> Error <?= e(redes_api_hace($c['minutos'])) ?></span>
+                                        <?php else: ?>
+                                            <span class="red-con-estado is-ok"><i class="ti ti-circle-check"></i> Conectado · <?= $c['ultimo_sync'] ? 'sincronizado ' . e(redes_api_hace($c['minutos'])) : 'aún sin sincronizar' ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                </header>
+                                <?php if ($c['activo'] && $c['ultimo_mensaje'] !== ''): ?>
+                                    <p class="red-con-msg <?= $c['ultimo_estado'] === 'error' ? 'is-error' : '' ?>"><?= e($c['ultimo_mensaje']) ?></p>
+                                <?php endif; ?>
+
+                                <form method="post" enctype="multipart/form-data" class="red-con-form">
+                                    <input type="hidden" name="csrf" value="<?= e($_SESSION['redes_csrf']) ?>">
+                                    <input type="hidden" name="proveedor" value="<?= e($p) ?>">
+                                    <?php if ($p === 'meta'): ?>
+                                        <label class="form-group"><span class="form-label">ID de la página de Facebook <span class="req">*</span></span>
+                                            <input class="form-control" name="page_id" inputmode="numeric" value="<?= e((string) ($cfg['page_id'] ?? '')) ?>" placeholder="Ej. 104512345678901"></label>
+                                        <label class="form-group"><span class="form-label">Token de acceso de la página <span class="req">*</span></span>
+                                            <input class="form-control" type="password" name="token" autocomplete="off" placeholder="<?= !empty($sec['token']) ? e(redes_api_mascara($sec['token'])) . ' (guardado; deja vacío para conservarlo)' : 'EAAG...' ?>"></label>
+                                        <div class="form-grid">
+                                            <label class="form-group"><span class="form-label">ID de Instagram (opcional)</span>
+                                                <input class="form-control" name="ig_user_id" inputmode="numeric" value="<?= e((string) ($cfg['ig_user_id'] ?? '')) ?>" placeholder="Se detecta solo"></label>
+                                            <label class="form-group"><span class="form-label">Versión de la API</span>
+                                                <input class="form-control" name="version" value="<?= e((string) ($cfg['version'] ?? 'v23.0')) ?>"></label>
+                                        </div>
+                                    <?php elseif ($p === 'linkedin'): ?>
+                                        <label class="form-group"><span class="form-label">ID de la organización (página) <span class="req">*</span></span>
+                                            <input class="form-control" name="org_id" inputmode="numeric" value="<?= e((string) ($cfg['org_id'] ?? '')) ?>" placeholder="Número de linkedin.com/company/12345678/admin"></label>
+                                        <label class="form-group"><span class="form-label">Token de acceso <span class="req">*</span></span>
+                                            <input class="form-control" type="password" name="access_token" autocomplete="off" placeholder="<?= !empty($sec['access_token']) ? e(redes_api_mascara($sec['access_token'])) . ' (guardado)' : 'AQV...' ?>">
+                                            <?php if (!empty($cfg['token_expira'])): ?><span class="form-hint">Vence el <?= e(date('d/m/Y', strtotime($cfg['token_expira']))) ?><?= !empty($sec['refresh_token']) ? ' · se renueva solo' : '' ?>.</span><?php endif; ?></label>
+                                        <details class="red-con-mas" <?= !empty($sec['refresh_token']) ? 'open' : '' ?>>
+                                            <summary>Renovación automática del token (opcional)</summary>
+                                            <div class="form-grid">
+                                                <label class="form-group"><span class="form-label">Client ID</span>
+                                                    <input class="form-control" name="client_id" value="<?= e((string) ($cfg['client_id'] ?? '')) ?>"></label>
+                                                <label class="form-group"><span class="form-label">Client secret</span>
+                                                    <input class="form-control" type="password" name="client_secret" autocomplete="off" placeholder="<?= !empty($sec['client_secret']) ? e(redes_api_mascara($sec['client_secret'])) . ' (guardado)' : '' ?>"></label>
+                                            </div>
+                                            <label class="form-group"><span class="form-label">Refresh token</span>
+                                                <input class="form-control" type="password" name="refresh_token" autocomplete="off" placeholder="<?= !empty($sec['refresh_token']) ? e(redes_api_mascara($sec['refresh_token'])) . ' (guardado)' : '' ?>"></label>
+                                            <label class="form-group"><span class="form-label">Versión de la API (AAAAMM)</span>
+                                                <input class="form-control" name="version" value="<?= e((string) ($cfg['version'] ?? '')) ?>" placeholder="Automática: <?= e(redes_linkedin_version([])) ?>"></label>
+                                        </details>
+                                    <?php else: ?>
+                                        <label class="form-group"><span class="form-label">ID de la propiedad de GA4 <span class="req">*</span></span>
+                                            <input class="form-control" name="property_id" inputmode="numeric" value="<?= e((string) ($cfg['property_id'] ?? '')) ?>" placeholder="Ej. 412345678"></label>
+                                        <label class="form-group"><span class="form-label">Clave JSON de la cuenta de servicio <?= empty($sec['service_account']) ? '<span class="req">*</span>' : '' ?></span>
+                                            <input class="form-control" type="file" name="service_account_file" accept=".json,application/json">
+                                            <span class="form-hint"><?= !empty($cfg['client_email']) ? 'Cuenta guardada: ' . e((string) $cfg['client_email']) . '. Carga otro archivo solo para reemplazarla.' : 'El archivo .json que descargas al crear la clave.' ?></span></label>
+                                    <?php endif; ?>
+                                    <label class="form-group"><span class="form-label">Actualizar cada</span>
+                                        <select class="form-control" name="intervalo">
+                                            <?php foreach ([1 => '1 hora', 3 => '3 horas', 6 => '6 horas', 12 => '12 horas', 24 => '24 horas', 168 => '1 semana'] as $h => $txt): ?><option value="<?= $h ?>" <?= (int) ($cfg['intervalo'] ?? 6) === $h ? 'selected' : '' ?>><?= e($txt) ?></option><?php endforeach; ?>
+                                        </select></label>
+                                    <div class="red-con-acciones">
+                                        <button type="submit" name="accion" value="conexion_guardar" class="btn-primary btn-sm"><i class="ti ti-device-floppy"></i> Guardar</button>
+                                        <?php if ($c['activo']): ?>
+                                            <button type="submit" name="accion" value="conexion_probar" class="btn-outline btn-sm" formnovalidate><i class="ti ti-plug-connected"></i> Probar</button>
+                                            <button type="submit" name="accion" value="conexion_sincronizar" class="btn-outline btn-sm" formnovalidate data-sync-btn><i class="ti ti-refresh"></i> Sincronizar ahora</button>
+                                            <button type="submit" name="accion" value="conexion_desconectar" class="btn-danger btn-sm" formnovalidate onclick="return confirm('¿Eliminar esta conexión? Los datos ya sincronizados se conservan.')"><i class="ti ti-plug-x"></i> Desconectar</button>
+                                        <?php endif; ?>
+                                    </div>
+                                </form>
+
+                                <details class="red-ayuda red-con-guia">
+                                    <summary><i class="ti ti-help-circle"></i> Cómo obtener las credenciales</summary>
+                                    <?php if ($p === 'meta'): ?>
+                                        <ol>
+                                            <li>En <b>developers.facebook.com</b> crea una app de tipo <i>Empresa</i> y vincúlala al portafolio comercial de CENGICAÑA.</li>
+                                            <li>En <b>business.facebook.com → Configuración → Usuarios del sistema</b>, crea un usuario del sistema y asígnale la página (y la cuenta de Instagram).</li>
+                                            <li>Genera un token para la app con los permisos <code>pages_show_list</code>, <code>pages_read_engagement</code>, <code>read_insights</code>, <code>instagram_basic</code> e <code>instagram_manage_insights</code>. Los tokens de usuario del sistema no vencen.</li>
+                                            <li>El ID de la página está en la página de Facebook → <i>Información → Transparencia de la página</i>.</li>
+                                        </ol>
+                                        <p>Se sincronizan las publicaciones de los últimos 90 días de Facebook y de Instagram.</p>
+                                    <?php elseif ($p === 'linkedin'): ?>
+                                        <ol>
+                                            <li>En <b>linkedin.com/developers</b> crea una app asociada a la página de CENGICAÑA.</li>
+                                            <li>Solicita el producto <b>Community Management API</b>. LinkedIn revisa la solicitud, y la aprobación puede tardar varias semanas.</li>
+                                            <li>Con la app aprobada, genera un token con el permiso <code>r_organization_social</code> en <i>Herramientas → OAuth Token Generator</i>. Un administrador de la página debe autorizarlo.</li>
+                                            <li>El token dura 60 días. Si LinkedIn entrega también un <i>refresh token</i>, agrégalo junto con el Client ID y el Client secret para que se renueve solo.</li>
+                                        </ol>
+                                        <p>Se sincronizan las últimas 50 publicaciones de la página.</p>
+                                    <?php else: ?>
+                                        <ol>
+                                            <li>En <b>console.cloud.google.com</b> crea un proyecto y habilita la <b>Google Analytics Data API</b>.</li>
+                                            <li>En <i>IAM → Cuentas de servicio</i> crea una cuenta y descarga una clave en formato <b>JSON</b>.</li>
+                                            <li>En Google Analytics: <i>Administrar → Gestión del acceso a la propiedad</i>, agrega el correo de la cuenta de servicio con el rol <b>Lector</b>.</li>
+                                            <li>El ID de la propiedad está en <i>Administrar → Detalles de la propiedad</i>.</li>
+                                        </ol>
+                                        <p>Se sincronizan los últimos 13 meses: usuarios, sesiones, vistas, tiempo medio, rebote y visitas desde redes y WhatsApp.</p>
+                                    <?php endif; ?>
+                                </details>
+                            </section>
+                        <?php endforeach; ?>
+                    </div>
+                    <p class="red-con-cron"><i class="ti ti-clock"></i> Para que se actualice aunque nadie abra la sección, programa en el servidor: <code>php comites/cron/redes-sync.php</code> (por ejemplo, cada hora).</p>
                 <?php endif; ?>
+
+            <?php elseif ($view === 'usuarios'): ?>
+                <?php require __DIR__ . '/includes/usuarios-vista.php'; ?>
 
             <?php elseif ($view === 'estadisticas'): ?>
                 <section class="stats-row">
@@ -3083,10 +2528,6 @@ if ($view === 'estadisticas' && $puedeVerSeccionActual) {
                 </div>
 
             <?php elseif ($view === 'config'): ?>
-                <div class="placeholder-note">
-                    <i class="ti ti-info-circle"></i>
-                    <span>Edita el nombre visible de cada comite y activa o desactiva su uso en el resto del modulo (formularios, filtros y directorio).</span>
-                </div>
                 <div class="table-card">
                     <div class="table-wrap">
                         <table>
@@ -3157,6 +2598,6 @@ if ($view === 'estadisticas' && $puedeVerSeccionActual) {
         <?php endif; ?>
     </main>
 </div>
-<script src="assets/js/app.js"></script>
+<script src="assets/js/app.js?v=<?= @filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

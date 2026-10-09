@@ -9,7 +9,7 @@ $datos_curva = $datos_curva ?? [];
 
     <meta charset="UTF-8">
     <title>Curva de Calibración</title>
-    <link rel="stylesheet" href="../../styles/curva.css">
+    <link rel="stylesheet" href="../../styles/curva.css?v=20261006">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 </head>

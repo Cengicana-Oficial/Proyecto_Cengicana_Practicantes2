@@ -194,7 +194,7 @@ function app_bootstrap_database(PDO $pdo): void
             plazo DATE NULL,
             fecha_seguimiento DATE NULL,
             avance INT NOT NULL DEFAULT 0,
-            estado ENUM('Pendiente','En proceso','Completado') NOT NULL DEFAULT 'Pendiente',
+            estado ENUM('Pendiente','En proceso','Completado','Cancelado') NOT NULL DEFAULT 'Pendiente',
             observaciones TEXT NULL,
             creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -203,6 +203,10 @@ function app_bootstrap_database(PDO $pdo): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
 
+    $acuerdoEstado = $pdo->query("SHOW COLUMNS FROM acuerdos LIKE 'estado'")->fetch();
+    if (!str_contains((string)$acuerdoEstado['Type'], "'Cancelado'")) {
+        $pdo->exec("ALTER TABLE acuerdos MODIFY estado ENUM('Pendiente','En proceso','Completado','Cancelado') NOT NULL DEFAULT 'Pendiente'");
+    }
     // Carpetas anidadas de la biblioteca documental. `ambito` separa el arbol
     // de "documentos" (ingenios) del de "biblioteca_interna" (interna); nunca
     // se mezclan. Debe crearse antes que `documentos` porque esta ultima
@@ -404,6 +408,51 @@ function app_bootstrap_database(PDO $pdo): void
     app_ensure_column($pdo, 'acuerdos', 'fecha_seguimiento', 'fecha_seguimiento DATE NULL AFTER plazo');
     app_ensure_column($pdo, 'acuerdos', 'observaciones', 'observaciones TEXT NULL AFTER estado');
     app_ensure_column($pdo, 'documentos', 'carpeta_id', 'carpeta_id INT NULL AFTER carpeta');
+    // Redes sociales: grupos/listas de WhatsApp a los que se envio y origen del registro (manual o importado).
+    app_ensure_column($pdo, 'publicaciones', 'destinos', 'destinos TEXT NULL AFTER url');
+    app_ensure_column($pdo, 'publicaciones', 'origen', "origen VARCHAR(20) NOT NULL DEFAULT 'manual' AFTER destinos");
+    // ID de la publicacion en Meta/LinkedIn para actualizarla en cada sincronizacion por API.
+    app_ensure_column($pdo, 'publicaciones', 'externo_id', 'externo_id VARCHAR(120) NULL AFTER origen');
+    // Campanita: avisos que cada usuario ya leyo (la clave identifica el aviso y su estado).
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS notificaciones_leidas (
+            usuario_id INT NOT NULL,
+            clave VARCHAR(190) NOT NULL,
+            leido_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (usuario_id, clave)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    // Conexiones directas por API: configuracion visible y credenciales cifradas (AES-256-GCM).
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS redes_conexiones (
+            proveedor VARCHAR(20) PRIMARY KEY,
+            config_json TEXT NULL,
+            secreto TEXT NULL,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            ultimo_sync DATETIME NULL,
+            ultimo_estado VARCHAR(10) NULL,
+            ultimo_mensaje TEXT NULL,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    // Metricas mensuales del sitio web (Google Analytics 4), capturadas o importadas.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS sitio_web_metricas (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            periodo CHAR(7) NOT NULL UNIQUE,
+            usuarios INT NOT NULL DEFAULT 0,
+            nuevos_usuarios INT NOT NULL DEFAULT 0,
+            sesiones INT NOT NULL DEFAULT 0,
+            vistas INT NOT NULL DEFAULT 0,
+            duracion_seg INT NOT NULL DEFAULT 0,
+            rebote DECIMAL(5,2) NOT NULL DEFAULT 0,
+            sesiones_redes INT NOT NULL DEFAULT 0,
+            sesiones_whatsapp INT NOT NULL DEFAULT 0,
+            notas TEXT NULL,
+            fuente VARCHAR(60) NULL,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
     app_ensure_foreign_key(
         $pdo,
         'documentos',
@@ -485,6 +534,7 @@ function app_bootstrap_menu_data(PDO $menuPdo): void
     $recursos = [
         'contactos' => 'directorio de contactos',
         'reuniones' => 'reuniones de comites',
+        'eventos' => 'eventos de transferencia de tecnologia',
         'acuerdos' => 'acuerdos y seguimiento',
         'documentos' => 'biblioteca documental para ingenios',
         'biblioteca_interna' => 'biblioteca documental interna',
@@ -495,9 +545,19 @@ function app_bootstrap_menu_data(PDO $menuPdo): void
         'publicaciones' => 'redes sociales y publicaciones',
         'estadisticas' => 'estadisticas',
         'configuracion' => 'configuracion del modulo',
+        'usuarios' => 'usuarios, roles y programas',
     ];
 
-    $permissions = [];
+    $permissions = [
+        'comites.informes.revisar' => 'Revision de informes cuatrimestrales por Direccion',
+        'comites.memorias.entregar' => 'Entregar articulos propios para memoria de resultados',
+        'comites.memorias.diagramar' => 'Diagramacion de articulos y consolidado MPR',
+        'comites.memorias.aprobar_transferencia' => 'Aprobacion de version final del consolidado MPR',
+        'comites.memorias.aprobar_direccion' => 'Aprobacion de liberacion del consolidado MPR',
+        'comites.memorias.ver_todos' => 'Consultar todos los articulos de memoria de resultados',
+        'comites.documentos.revisar_transferencia' => 'Primera y segunda revision de documentos para ingenios',
+        'comites.documentos.aprobar_direccion' => 'Aprobacion final de documentos para ingenios',
+    ];
     foreach ($recursos as $recurso => $descripcion) {
         $permissions["comites.{$recurso}.ver"] = "Permite ver {$descripcion} del modulo Comites, Transferencia y Comunicacion";
         $permissions["comites.{$recurso}.gestionar"] = "Permite gestionar {$descripcion} del modulo Comites, Transferencia y Comunicacion";
@@ -509,6 +569,65 @@ function app_bootstrap_menu_data(PDO $menuPdo): void
 
     foreach ($permissions as $name => $description) {
         $stmt->execute([$name, $description]);
+    }
+
+    comites_bootstrap_roles($menuPdo, array_keys($permissions));
+}
+
+/**
+ * Permisos de Comites por rol de la plataforma. Los roles Jefe de programa,
+ * Colaborador de programa y Director son los mismos que usa Solicitudes
+ * internas; el Jefe de Transferencia y el Director General se derivan del
+ * programa asignado (ver comites_permisos_por_programa()).
+ */
+function comites_roles_definicion(array $todos): array
+{
+    $ver = static fn(array $secciones): array => array_map(static fn($s) => "comites.$s.ver", $secciones);
+    return [
+        'Superadmin' => $todos,
+        'Director' => array_merge(
+            $ver(['contactos', 'reuniones', 'eventos', 'acuerdos', 'documentos', 'biblioteca_interna', 'correos', 'tableros', 'informes', 'memorias', 'publicaciones', 'estadisticas', 'configuracion', 'usuarios']),
+            ['comites.documentos.aprobar_direccion', 'comites.informes.revisar', 'comites.memorias.aprobar_direccion', 'comites.memorias.ver_todos']
+        ),
+        'Jefe de programa' => array_merge(
+            $ver(['contactos', 'reuniones', 'eventos', 'acuerdos', 'documentos', 'biblioteca_interna', 'tableros', 'informes', 'memorias', 'estadisticas']),
+            ['comites.acuerdos.gestionar', 'comites.memorias.entregar', 'comites.memorias.ver_todos']
+        ),
+        'Colaborador de programa' => array_merge(
+            $ver(['reuniones', 'acuerdos', 'documentos', 'biblioteca_interna', 'memorias']),
+            ['comites.memorias.entregar']
+        ),
+    ];
+}
+
+/**
+ * Crea los roles que falten y les asigna los permisos de Comites solo si
+ * todavia no tienen ninguno del modulo: lo que despues se edite desde la
+ * gestion de roles de la plataforma se respeta.
+ */
+function comites_bootstrap_roles(PDO $menuPdo, array $todos): void
+{
+    if (!app_table_exists($menuPdo, 'roles') || !app_table_exists($menuPdo, 'rol_permiso')) {
+        return;
+    }
+    $buscar = $menuPdo->prepare('SELECT id FROM roles WHERE nombre_rol = ? LIMIT 1');
+    $crear = $menuPdo->prepare('INSERT INTO roles (nombre_rol) VALUES (?)');
+    $tiene = $menuPdo->prepare("SELECT COUNT(*) FROM rol_permiso rp JOIN permisos p ON p.id = rp.permiso_id WHERE rp.rol_id = ? AND p.nombre_permiso LIKE 'comites.%'");
+    $asignar = $menuPdo->prepare('INSERT IGNORE INTO rol_permiso (rol_id, permiso_id) SELECT ?, id FROM permisos WHERE nombre_permiso = ?');
+    foreach (comites_roles_definicion($todos) as $rol => $permisos) {
+        $buscar->execute([$rol]);
+        $rolId = (int) $buscar->fetchColumn();
+        if (!$rolId) {
+            $crear->execute([$rol]);
+            $rolId = (int) $menuPdo->lastInsertId();
+        }
+        $tiene->execute([$rolId]);
+        if ((int) $tiene->fetchColumn() > 0) {
+            continue;
+        }
+        foreach ($permisos as $permiso) {
+            $asignar->execute([$rolId, $permiso]);
+        }
     }
 }
 

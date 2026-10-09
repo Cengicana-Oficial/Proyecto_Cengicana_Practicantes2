@@ -25,6 +25,12 @@ if (!isset($_SESSION['id_usuario'])) {
     exit;
 }
 
+// Rol y permisos del usuario EN SIGEC (login/config/roles_modulo.php): el rol_id que se
+// envia a SIGEC es el de este modulo, no el de Cursos, Laboratorio, etc.
+require_once __DIR__ . '/config/conexion.php';
+require_once __DIR__ . '/config/roles_modulo.php';
+cengi_rm_activar_modulo(Conexion::conectar(), 'sigec');
+
 $esSuperadmin = !empty($_SESSION['es_superadmin']);
 $tienePermiso = $esSuperadmin
     || in_array('sigec.acceder', $_SESSION['user_permissions'] ?? [], true);

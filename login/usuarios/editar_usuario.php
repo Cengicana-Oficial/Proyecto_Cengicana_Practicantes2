@@ -66,7 +66,7 @@ function user_scope_config($scope)
         ],
         'laboratorio' => [
             'module_names' => ['laboratorio'],
-            'return_url' => '../../laboratorio/index.php',
+            'return_url' => '../../laboratorio/view/usuarios_view.php',
             'label' => 'Laboratorio',
         ],
         'solicitudes' => [
@@ -143,28 +143,51 @@ if ($scopeConfig) {
     $moduloIdsForzados = $modulosActualesUsuario;
 }
 
-$stmtModUser = $conn->prepare("SELECT modulo_id FROM usuario_modulo WHERE usuario_id = ?");
+// Rol por modulo (login/config/roles_modulo.php): cada modulo guarda su propio rol en
+// usuario_modulo.rol_id; usuarios.rol_id queda solo como rol de la plataforma (Menu y admin).
+require_once __DIR__ . '/_modulos_roles.php';
+$modulosPermitidos = array_map(static fn($m) => (int) $m['id'], $modulosDisponibles);
+$nombresModulos = array_column($modulosDisponibles, 'nombre', 'id');
+$rolesPorModulo = usr_roles_por_modulo($conn, $modulosDisponibles, $esSuperadmin);
+$pidePlataforma = $esSuperadmin && !$scopeConfig;
+
+$stmtModUser = $conn->prepare("SELECT modulo_id, rol_id FROM usuario_modulo WHERE usuario_id = ?");
 $stmtModUser->execute([$id]);
-$modulosUsuarioActuales = array_map('intval', $stmtModUser->fetchAll(PDO::FETCH_COLUMN));
+$actualesModulos = [];
+foreach ($stmtModUser->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+    $actualesModulos[(int) $fila['modulo_id']] = $fila['rol_id'] !== null ? (int) $fila['rol_id'] : null;
+}
 
 $destinoRegreso = $scopeConfig['return_url'] ?? 'usuarios.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nombre = trim($_POST['nombre'] ?? '');
     $correo = trim($_POST['correo'] ?? '');
-    $rolId = (int) ($_POST['rol_id'] ?? 0);
     $contrasena = trim($_POST['contrasena'] ?? '');
     $ingenioId = $_POST['ingenio_id'] !== '' ? (int) $_POST['ingenio_id'] : null;
-    $esSuperadminNuevo = $rolId === 1 ? 1 : 0;
+    // El rol de la plataforma solo lo cambia el superadmin desde la administracion general;
+    // desde un modulo se conserva el que ya tenia.
+    $rolId = $pidePlataforma ? (int) ($_POST['rol_id'] ?? 0) : (int) $usuario['rol_id'];
+    $esSuperadminNuevo = $pidePlataforma ? ($rolId === 1 ? 1 : 0) : (int) $usuario['es_superadmin'];
 
-    if ($scopeConfig || !$esSuperadmin) {
-        $moduloIdsSeleccionados = $moduloIdsForzados;
-    } else {
-        $moduloIdsSeleccionados = array_map('intval', $_POST['modulo_ids'] ?? []);
+    $modulosElegidos = [];
+    try {
+        $modulosElegidos = $esSuperadminNuevo ? [] : usr_leer_modulos_roles($_POST, $modulosPermitidos, $rolesPorModulo, $nombresModulos);
+    } catch (InvalidArgumentException $e) {
+        $error = $e->getMessage();
+    }
+    if ($rolId <= 0 && $modulosElegidos) {
+        $rolId = (int) reset($modulosElegidos);
     }
 
-    if ($nombre === '' || $correo === '' || $rolId <= 0 || $ingenioId === null) {
+    if (!empty($error)) {
+        // mensaje del selector de modulos
+    } elseif ($nombre === '' || $correo === '' || $ingenioId === null) {
         $error = "Completa los campos obligatorios.";
+    } elseif ($rolId <= 0) {
+        $error = "Elige el rol del usuario en la plataforma.";
+    } elseif (!$esSuperadminNuevo && array_diff($moduloIdsForzados, array_keys($modulosElegidos))) {
+        $error = "Elige el rol del usuario en el módulo.";
     } else {
         $check = $conn->prepare("SELECT id FROM usuarios WHERE correo = ? AND id <> ?");
         $check->execute([$correo, $id]);
@@ -172,35 +195,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($check->fetchColumn()) {
             $error = "El correo ya esta registrado por otro usuario.";
         } else {
+            $conn->beginTransaction();
             if ($contrasena !== '') {
-                $contrasenaHash = password_hash($contrasena, PASSWORD_DEFAULT);
-                $stmtUpdate = $conn->prepare("
+                $conn->prepare("
                     UPDATE usuarios
                     SET nombre = ?, correo = ?, contrasena = ?, rol_id = ?, ingenio_id = ?, es_superadmin = ?
                     WHERE id = ?
-                ");
-                $stmtUpdate->execute([$nombre, $correo, $contrasenaHash, $rolId, $ingenioId, $esSuperadminNuevo, $id]);
+                ")->execute([$nombre, $correo, password_hash($contrasena, PASSWORD_DEFAULT), $rolId, $ingenioId, $esSuperadminNuevo, $id]);
             } else {
-                $stmtUpdate = $conn->prepare("
+                $conn->prepare("
                     UPDATE usuarios
                     SET nombre = ?, correo = ?, rol_id = ?, ingenio_id = ?, es_superadmin = ?
                     WHERE id = ?
-                ");
-                $stmtUpdate->execute([$nombre, $correo, $rolId, $ingenioId, $esSuperadminNuevo, $id]);
+                ")->execute([$nombre, $correo, $rolId, $ingenioId, $esSuperadminNuevo, $id]);
             }
 
-            $conn->prepare("DELETE FROM usuario_modulo WHERE usuario_id = ?")->execute([$id]);
-
-            if (!$esSuperadminNuevo && !empty($moduloIdsSeleccionados)) {
-                $stmtModulo = $conn->prepare("
-                    INSERT INTO usuario_modulo (usuario_id, modulo_id)
-                    VALUES (?, ?)
-                ");
-
-                foreach (array_unique($moduloIdsSeleccionados) as $moduloId) {
-                    $stmtModulo->execute([$id, (int) $moduloId]);
-                }
-            }
+            // Solo se tocan los modulos que esta pantalla administra: los demas accesos
+            // del usuario (y su rol en ellos) se conservan.
+            usr_guardar_modulos_roles($conn, $id, $modulosElegidos, $modulosPermitidos);
+            $conn->commit();
 
             header("Location: {$destinoRegreso}");
             exit;
@@ -211,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usuario['correo'] = $correo;
     $usuario['rol_id'] = $rolId;
     $usuario['ingenio_id'] = $ingenioId;
-    $modulosUsuarioActuales = $moduloIdsSeleccionados;
+    $actualesModulos = array_map(static fn($d) => (int) ($d['rol_id'] ?? 0) ?: null, array_filter((array) ($_POST['modulos'] ?? []), static fn($d) => !empty($d['acceso'])));
 }
 
 if ($esSuperadmin) {
@@ -269,8 +282,9 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
             <input id="contrasena" type="password" name="contrasena" placeholder="Nueva contraseña (opcional)">
         </div>
 
+        <?php if ($pidePlataforma): ?>
         <div class="form-field">
-            <label for="rolSelect">Rol</label>
+            <label for="rolSelect">Rol en la plataforma</label>
             <select id="rolSelect" name="rol_id" required>
                 <?php foreach ($roles as $rol): ?>
                     <option value="<?= (int) $rol['id'] ?>" <?= ((int) $rol['id'] === (int) $usuario['rol_id']) ? 'selected' : '' ?>>
@@ -278,7 +292,9 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
                     </option>
                 <?php endforeach; ?>
             </select>
+            <p class="form-help">Rol para el panel principal y la administración general. Los permisos dentro de cada módulo los da el rol de ese módulo (abajo).</p>
         </div>
+        <?php endif; ?>
 
         <div class="form-field">
             <label for="ingenio_id">Ingenio asignado</label>
@@ -293,41 +309,8 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
             <p class="form-help">Mantener el ingenio correcto es necesario para que el usuario solo vea su información.</p>
         </div>
 
-        <?php if ($scopeConfig): ?>
-            <div class="form-field">
-                <label>Módulo asignado</label>
-                <div class="module-badges">
-                    <?php foreach ($modulosDisponibles as $modulo): ?>
-                        <span class="module-badge"><?= htmlspecialchars($modulo['nombre']) ?></span>
-                    <?php endforeach; ?>
-                </div>
-                <p class="form-help">Este usuario seguirá vinculado al módulo <?= htmlspecialchars($scopeConfig['label']) ?>.</p>
-            </div>
-        <?php elseif ($esSuperadmin): ?>
-            <div class="form-field" id="moduloContainer">
-                <label>Módulos asignados</label>
-                <div class="module-picker">
-                    <?php foreach ($modulosDisponibles as $modulo): ?>
-                        <?php $moduloMarcado = in_array((int) $modulo['id'], $modulosUsuarioActuales, true); ?>
-                        <label class="module-chip<?= $moduloMarcado ? ' is-checked' : '' ?>">
-                            <input type="checkbox" name="modulo_ids[]" value="<?= (int) $modulo['id'] ?>" <?= $moduloMarcado ? 'checked' : '' ?>>
-                            <span class="material-symbols-outlined">widgets</span>
-                            <?= htmlspecialchars($modulo['nombre']) ?>
-                        </label>
-                    <?php endforeach; ?>
-                </div>
-                <p class="form-help">Selecciona uno o más módulos para este usuario.</p>
-            </div>
-        <?php elseif (!empty($modulosDisponibles)): ?>
-            <div class="form-field">
-                <label>Módulo asignado</label>
-                <div class="module-badges">
-                    <?php foreach ($modulosDisponibles as $modulo): ?>
-                        <span class="module-badge"><?= htmlspecialchars($modulo['nombre']) ?></span>
-                    <?php endforeach; ?>
-                </div>
-                <p class="form-help">Como administrador de módulo, solo puedes administrar usuarios del mismo módulo.</p>
-            </div>
+        <?php if (!empty($modulosDisponibles)): ?>
+            <?php usr_render_modulos_roles($modulosDisponibles, $rolesPorModulo, $actualesModulos, $moduloIdsForzados); ?>
         <?php endif; ?>
 
         <div class="form-actions">
@@ -340,18 +323,11 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
     </form>
 </div>
 
-<?php if ($esSuperadmin && !$scopeConfig): ?>
+<?php if ($pidePlataforma): ?>
 <script>
 document.getElementById("rolSelect").addEventListener("change", function () {
     const moduloDiv = document.getElementById("moduloContainer");
-    if (!moduloDiv) return;
-    moduloDiv.style.display = this.value === "1" ? "none" : "block";
-});
-
-document.querySelectorAll(".module-chip input[type=\"checkbox\"]").forEach(function (cb) {
-    cb.addEventListener("change", function () {
-        cb.closest(".module-chip").classList.toggle("is-checked", cb.checked);
-    });
+    if (moduloDiv) moduloDiv.style.display = this.value === "1" ? "none" : "block";
 });
 </script>
 <?php endif; ?>

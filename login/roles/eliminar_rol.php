@@ -67,8 +67,9 @@ if (strtolower($rol['nombre_rol']) === 'superadmin') {
     roles_mostrar_aviso("Acción no permitida", "No se puede eliminar el rol Superadmin.");
 }
 
-$stmtUsers = $conn->prepare("SELECT id FROM usuarios WHERE rol_id = ?");
-$stmtUsers->execute([$id]);
+// Usado como rol de la plataforma o como rol en algun modulo (usuario_modulo.rol_id).
+$stmtUsers = $conn->prepare("SELECT id FROM usuarios WHERE rol_id = ? UNION SELECT usuario_id FROM usuario_modulo WHERE rol_id = ?");
+$stmtUsers->execute([$id, $id]);
 
 if ($stmtUsers->rowCount() > 0) {
     roles_mostrar_aviso(
@@ -77,18 +78,8 @@ if ($stmtUsers->rowCount() > 0) {
     );
 }
 
-try {
-    $stmtRM = $conn->prepare("SELECT * FROM rol_modulo WHERE rol_id = ?");
-    $stmtRM->execute([$id]);
-
-    if ($stmtRM->rowCount() > 0) {
-        roles_mostrar_aviso(
-            "No se puede eliminar",
-            "Este rol tiene módulos asignados. Quítalos antes de eliminarlo."
-        );
-    }
-} catch (Exception $e) {
-}
+// Los modulos del rol (rol_modulo) solo indican donde se ofrece: se borran con el rol.
+$conn->prepare("DELETE FROM rol_modulo WHERE rol_id = ?")->execute([$id]);
 
 $stmtPermisos = $conn->prepare("DELETE FROM rol_permiso WHERE rol_id = ?");
 $stmtPermisos->execute([$id]);

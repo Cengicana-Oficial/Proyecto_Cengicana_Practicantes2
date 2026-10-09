@@ -3,6 +3,7 @@ session_start();
 require_once("../config/conexion.php");
 require_once("../config/permisos_roles.php");
 require_once __DIR__ . "/_guard.php";
+require_once __DIR__ . "/_modulos_rol.php";
 
 /**
  * Muestra una página de aviso con el mismo lenguaje visual del módulo
@@ -67,13 +68,24 @@ $error = "";
 $permisos = obtener_permisos($conn);
 $gruposPermisos = agrupar_permisos($permisos);
 $permisosRol = obtener_permisos_rol($conn, $id);
+$modulos = rol_mod_listar_modulos($conn);
+$modulosRol = cengi_rm_modulos_de_rol($conn, $id);
+$nombresModulos = array_column($modulos, 'nombre', 'id');
 
 if ($_POST) {
     $nombre = trim($_POST['nombre'] ?? '');
     $permisosSeleccionados = $_POST['permisos'] ?? [];
+    $modulosRol = rol_mod_leer_post($_POST, $modulos);
+    $conflictos = rol_mod_conflictos($conn, $id, $modulosRol);
 
     if ($nombre === "") {
         $error = "El nombre no puede estar vacio";
+    } elseif ($conflictos) {
+        $partes = [];
+        foreach ($conflictos as $moduloId => $total) {
+            $partes[] = ($nombresModulos[$moduloId] ?? 'módulo #' . $moduloId) . " ({$total} usuario(s))";
+        }
+        $error = "No puedes quitar el rol de: " . implode(', ', $partes) . ". Primero cambia el rol de esos usuarios en ese módulo.";
     } else {
         $check = $conn->prepare("
             SELECT id
@@ -93,6 +105,7 @@ if ($_POST) {
             $stmt->execute([$nombre, $id]);
 
             guardar_permisos_rol($conn, $id, $permisosSeleccionados);
+            rol_mod_guardar($conn, $id, $modulosRol);
 
             header("Location: roles.php");
             exit;
@@ -135,6 +148,8 @@ if ($_POST) {
             <input id="nombre" name="nombre" value="<?= htmlspecialchars($rol['nombre_rol']) ?>" required autofocus>
         </div>
 
+        <?php rol_mod_render($modulos, $modulosRol); ?>
+
         <div class="permisos-toolbar">
             <h3>Permisos del rol</h3>
             <div class="permisos-toolbar-actions">
@@ -149,34 +164,13 @@ if ($_POST) {
             </div>
         <?php endif; ?>
 
-        <?php foreach ($gruposPermisos as $grupo => $items): ?>
-            <section class="permiso-section">
-                <div class="permiso-section-head">
-                    <div>
-                        <span class="permiso-kicker"><?= htmlspecialchars(titulo_corto_grupo_permiso($grupo)) ?></span>
-                        <h4><?= htmlspecialchars($grupo) ?></h4>
-                    </div>
-                    <span class="permiso-count"><?= count($items) ?> permisos</span>
-                </div>
-                <p class="permiso-section-copy"><?= htmlspecialchars(descripcion_grupo_permiso($grupo)) ?></p>
-                <div class="permisos-grid">
-                    <?php foreach ($items as $permiso): ?>
-                        <label class="permiso-item">
-                            <input
-                                type="checkbox"
-                                name="permisos[]"
-                                value="<?= htmlspecialchars($permiso['nombre_permiso']) ?>"
-                                <?= in_array($permiso['nombre_permiso'], $permisosRol, true) ? 'checked' : '' ?>
-                            >
-                            <span>
-                                <strong><?= htmlspecialchars(etiqueta_permiso($permiso['nombre_permiso'])) ?></strong>
-                                <small><?= htmlspecialchars($permiso['descripcion'] ?: $permiso['nombre_permiso']) ?></small>
-                            </span>
-                        </label>
-                    <?php endforeach; ?>
-                </div>
-            </section>
-        <?php endforeach; ?>
+        <?php
+        if ($_POST) {
+            // Conserva lo marcado si el formulario vuelve con error.
+            $permisosRol = array_map('strval', (array) ($_POST['permisos'] ?? []));
+        }
+        require __DIR__ . '/_permisos_form.php';
+        ?>
 
         <div class="form-actions">
             <button type="submit" class="btn-primary">
@@ -190,8 +184,9 @@ if ($_POST) {
 
 <script>
 function marcarPermisos(checked) {
+    setTimeout(() => document.dispatchEvent(new Event("permisos:cambio")));
     document.querySelectorAll('input[name="permisos[]"]').forEach(input => {
-        input.checked = checked;
+        if (input.type === "checkbox") input.checked = checked;
     });
 }
 </script>

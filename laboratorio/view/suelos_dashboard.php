@@ -216,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard de Análisis de Suelos</title>
-    <link rel="stylesheet" href="../styles/index.css">
+    <link rel="stylesheet" href="../styles/index.css?v=20261006">
     <style>
         .dashboard-container {
             max-width: 1200px;
@@ -224,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
             padding: 20px;
         }
         .lote-selector {
-            background: #f8f9fa;
+            background: #F7F8F8;
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 30px;
@@ -237,14 +237,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
         }
         .lote-selector select {
             padding: 8px 12px;
-            border: 1px solid #ddd;
+            border: 1px solid #CED2D5;
             border-radius: 4px;
             font-size: 14px;
             min-width: 200px;
         }
         .lote-selector button {
             padding: 8px 20px;
-            background: #4CAF50;
+            background: #73BC25;
             color: white;
             border: none;
             border-radius: 4px;
@@ -253,7 +253,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
             font-weight: bold;
         }
         .lote-selector button:hover {
-            background: #45a049;
+            background: #73BC25;
         }
         .analisis-grid {
             display: grid;
@@ -263,7 +263,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
         }
         .analisis-card {
             background: white;
-            border: 1px solid #ddd;
+            border: 1px solid #CED2D5;
             border-radius: 8px;
             padding: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -275,16 +275,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
         }
         .analisis-card h3 {
             margin: 0 0 10px 0;
-            color: #333;
+            color: #30353A;
             font-size: 18px;
         }
         .analisis-info {
             font-size: 13px;
-            color: #666;
+            color: #636A6F;
             margin: 10px 0;
         }
         .analisis-info strong {
-            color: #333;
+            color: #30353A;
         }
         .btn-group {
             display: flex;
@@ -296,29 +296,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 20px;
-            border-left: 4px solid #4CAF50;
+            border-left: 4px solid #73BC25;
         }
         .resumen h2 {
             margin: 0 0 10px 0;
-            color: #333;
+            color: #30353A;
         }
         .resumen p {
             margin: 5px 0;
-            color: #666;
+            color: #636A6F;
         }
         .sin-datos {
             text-align: center;
             padding: 40px;
-            color: #999;
+            color: #858C91;
             font-size: 16px;
         }
         .error-message {
-            background: #fee;
-            color: #c33;
+            background: #FFF0E6;
+            color: #FF6B00;
             padding: 15px;
             border-radius: 4px;
             margin-bottom: 20px;
-            border-left: 4px solid #c33;
+            border-left: 4px solid #FF6B00;
         }
     </style>
 </head>
@@ -377,7 +377,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
 
                 <!-- ANÁLISIS FÍSICOS -->
                 <?php if (!empty($analisisFisicos)): ?>
-                    <h2 style="margin: 30px 0 20px 0; color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px;">
+                    <h2 style="margin: 30px 0 20px 0; color: #30353A; border-bottom: 2px solid #73BC25; padding-bottom: 10px;">
                         Físicos
                     </h2>
                     <div class="analisis-grid">
@@ -395,7 +395,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET['lote'])) {
 
                 <!-- ANÁLISIS QUÍMICOS -->
                 <?php if (!empty($analisisQuimicos)): ?>
-                    <h2 style="margin: 30px 0 20px 0; color: #333; border-bottom: 2px solid #ff9800; padding-bottom: 10px;">
+                    <h2 style="margin: 30px 0 20px 0; color: #30353A; border-bottom: 2px solid #FF6B00; padding-bottom: 10px;">
                         Químicos
                     </h2>
                     <div class="analisis-grid">

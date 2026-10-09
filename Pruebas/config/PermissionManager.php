@@ -16,22 +16,12 @@ class PermissionManager {
 
         try {
             $conn = Conexion::conectarUsuariosMenu();
-            
-            // Obtenemos el rol del usuario y sus permisos asociados
-            $sql = "
-                SELECT p.nombre_permiso 
-                FROM usuarios u
-                JOIN roles r ON u.rol_id = r.id
-                JOIN rol_permiso rp ON r.id = rp.rol_id
-                JOIN permisos p ON rp.permiso_id = p.id
-                WHERE u.id = ?
-            ";
-            
-            $stmt = $conn->prepare($sql);
-            $stmt->execute([$idUsuario]);
-            $perms = $stmt->fetchAll(PDO::FETCH_COLUMN);
-            
-            $_SESSION['user_permissions'] = $perms;
+
+            // Rol y permisos del usuario EN ESTE MODULO (login/config/roles_modulo.php): la
+            // sesion es compartida, y su rol en Cursos, Laboratorio, etc. no aplica aqui.
+            require_once __DIR__ . '/../../login/config/roles_modulo.php';
+            $modulo = (($_GET['modulo'] ?? '') === 'servicio' || stripos((string) ($_SERVER['REQUEST_URI'] ?? ''), 'servicio') !== false) ? 'servicio' : 'visitas';
+            cengi_rm_activar_modulo($conn, $modulo);
         } catch (Exception $e) {
             error_log("Error cargando permisos: " . $e->getMessage());
             $_SESSION['user_permissions'] = [];

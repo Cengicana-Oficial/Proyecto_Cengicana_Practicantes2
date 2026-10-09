@@ -7,11 +7,14 @@ $sql = "
         u.id,
         u.nombre,
         u.correo,
-        r.nombre_rol,
+        COALESCE(r.nombre_rol, 'Sin rol en el módulo') AS nombre_rol,
         COALESCE(i.nombre_ingenio, 'Sin ingenio') AS ingenio,
         COALESCE(GROUP_CONCAT(DISTINCT m.nombre ORDER BY m.nombre SEPARATOR ', '), 'Sin modulo') AS modulos
     FROM usuarios u
-    INNER JOIN roles r ON r.id = u.rol_id
+    -- rol del usuario EN Solicitud de visitas (rol por modulo); el superadmin conserva el suyo
+    LEFT JOIN usuario_modulo umv ON umv.usuario_id = u.id
+        AND umv.modulo_id = (SELECT mv.id FROM modulos mv WHERE LOWER(mv.nombre) = 'solicitud de visitas' LIMIT 1)
+    LEFT JOIN roles r ON r.id = CASE WHEN u.es_superadmin = 1 THEN u.rol_id ELSE umv.rol_id END
     LEFT JOIN ingenios i ON i.id = u.ingenio_id
     LEFT JOIN usuario_modulo um ON um.usuario_id = u.id
     LEFT JOIN modulos m ON m.id = um.modulo_id

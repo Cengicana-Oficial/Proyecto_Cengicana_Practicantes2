@@ -24,7 +24,7 @@ function user_scope_config($scope)
         ],
         'laboratorio' => [
             'module_names' => ['laboratorio'],
-            'return_url' => '../../laboratorio/index.php',
+            'return_url' => '../../laboratorio/view/usuarios_view.php',
             'label' => 'Laboratorio',
         ],
         'solicitudes' => [
@@ -90,21 +90,45 @@ if ($scopeConfig) {
 
 $destinoRegreso = $scopeConfig['return_url'] ?? 'usuarios.php';
 
+// Rol por modulo (login/config/roles_modulo.php): en cada modulo solo se ofrecen sus roles y
+// los genericos. Desde la pantalla de un modulo (scope) el rol de plataforma no se pide: se usa
+// el rol del modulo.
+require_once __DIR__ . '/_modulos_roles.php';
+$modulosPermitidos = array_map(static fn($m) => (int) $m['id'], $modulosDisponibles);
+$nombresModulos = array_column($modulosDisponibles, 'nombre', 'id');
+$rolesPorModulo = usr_roles_por_modulo($conn, $modulosDisponibles, $esSuperadmin);
+$pidePlataforma = $esSuperadmin && !$scopeConfig;
+$modulosElegidos = [];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nombre = trim($_POST['nombre'] ?? '');
     $correo = trim($_POST['correo'] ?? '');
     $contrasenaPlano = trim($_POST['contrasena'] ?? '');
-    $rolId = (int) ($_POST['rol_id'] ?? 0);
+    $rolId = $pidePlataforma ? (int) ($_POST['rol_id'] ?? 0) : 0;
     $ingenioId = $_POST['ingenio_id'] !== '' ? (int) $_POST['ingenio_id'] : null;
+    $esSuperadminNuevo = $pidePlataforma && $rolId === 1 ? 1 : 0;
 
-    if ($scopeConfig || !$esSuperadmin) {
-        $moduloIdsSeleccionados = $moduloIdsForzados;
-    } else {
-        $moduloIdsSeleccionados = array_map('intval', $_POST['modulo_ids'] ?? []);
+    try {
+        $modulosElegidos = $esSuperadminNuevo ? [] : usr_leer_modulos_roles($_POST, $modulosPermitidos, $rolesPorModulo, $nombresModulos);
+    } catch (InvalidArgumentException $e) {
+        $error = $e->getMessage();
     }
+    // Sin rol de plataforma elegido: se usa el del primer modulo.
+    if (!$rolId && $modulosElegidos) {
+        $rolId = (int) reset($modulosElegidos);
+    }
+    $moduloIdsSeleccionados = array_keys($modulosElegidos);
 
-    if ($nombre === '' || $correo === '' || $contrasenaPlano === '' || $rolId <= 0 || $ingenioId === null) {
+    if (!empty($error)) {
+        // mensaje del selector de modulos
+    } elseif ($nombre === '' || $correo === '' || $contrasenaPlano === '' || $ingenioId === null) {
         $error = "Completa todos los campos obligatorios.";
+    } elseif (!$esSuperadminNuevo && !$modulosElegidos) {
+        $error = "Activa al menos un módulo y elige el rol del usuario en él.";
+    } elseif (array_diff($moduloIdsForzados, $moduloIdsSeleccionados)) {
+        $error = "Elige el rol del usuario en el módulo.";
+    } elseif ($rolId <= 0) {
+        $error = "Elige el rol del usuario en la plataforma.";
     } else {
         $check = $conn->prepare("SELECT id FROM usuarios WHERE correo = ?");
         $check->execute([$correo]);
@@ -112,7 +136,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($check->fetchColumn()) {
             $error = "El correo ya esta registrado.";
         } else {
-            $esSuperadminNuevo = $rolId === 1 ? 1 : 0;
             $contrasenaHash = password_hash($contrasenaPlano, PASSWORD_DEFAULT);
 
             $stmt = $conn->prepare("
@@ -130,18 +153,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $usuarioId = (int) $conn->lastInsertId();
 
-            if (!$esSuperadminNuevo && !empty($moduloIdsSeleccionados)) {
-                $stmtModulo = $conn->prepare("
-                    INSERT INTO usuario_modulo (usuario_id, modulo_id)
-                    VALUES (?, ?)
-                ");
-
-                foreach (array_unique($moduloIdsSeleccionados) as $moduloId) {
-                    $stmtModulo->execute([$usuarioId, (int) $moduloId]);
-                }
+            if (!$esSuperadminNuevo) {
+                usr_guardar_modulos_roles($conn, $usuarioId, $modulosElegidos, $modulosPermitidos);
             }
 
-            header("Location: {$destinoRegreso}");
+            // Laboratorio vuelve a su pantalla de Usuarios con el usuario nuevo resaltado.
+            $esLab = $scopeConfig && strtolower(trim((string) $scope)) === 'laboratorio';
+            header("Location: {$destinoRegreso}" . ($esLab ? (strpos($destinoRegreso, '?') === false ? '?' : '&') . 'creado=' . $usuarioId : ''));
             exit;
         }
     }
@@ -153,6 +171,10 @@ if ($esSuperadmin) {
     $stmtRoles = $conn->query("SELECT id, nombre_rol FROM roles WHERE id != 1 ORDER BY nombre_rol");
 }
 $roles = $stmtRoles->fetchAll(PDO::FETCH_ASSOC);
+// Al volver con error se conserva lo elegido; en un alta nueva desde un modulo, ese modulo va marcado.
+$actualesModulos = $_SERVER['REQUEST_METHOD'] === 'POST'
+    ? array_map(static fn($d) => (int) ($d['rol_id'] ?? 0) ?: null, array_filter((array) ($_POST['modulos'] ?? []), static fn($d) => !empty($d['acceso'])))
+    : [];
 
 $stmtIngenios = $conn->query("SELECT id, nombre_ingenio FROM ingenios ORDER BY nombre_ingenio");
 $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
@@ -204,8 +226,9 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
             <input id="contrasena" type="password" name="contrasena" placeholder="Contraseña" required>
         </div>
 
+        <?php if ($pidePlataforma): ?>
         <div class="form-field">
-            <label for="rolSelect">Rol</label>
+            <label for="rolSelect">Rol en la plataforma</label>
             <select id="rolSelect" name="rol_id" required>
                 <option value="">Seleccione un rol</option>
                 <?php foreach ($roles as $rol): ?>
@@ -214,7 +237,9 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
                     </option>
                 <?php endforeach; ?>
             </select>
+            <p class="form-help">Solo para el menú central y la administración de usuarios, roles y módulos. Lo que puede hacer dentro de cada módulo se define abajo, con su rol en ese módulo. “Superadmin” tiene acceso total.</p>
         </div>
+        <?php endif; ?>
 
         <div class="form-field">
             <label for="ingenio_id">Ingenio asignado</label>
@@ -229,40 +254,9 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
             <p class="form-help">Este campo es obligatorio para que los filtros por ingenio funcionen correctamente.</p>
         </div>
 
-        <?php if ($scopeConfig): ?>
-            <div class="form-field">
-                <label>Módulo asignado</label>
-                <div class="module-badges">
-                    <?php foreach ($modulosDisponibles as $modulo): ?>
-                        <span class="module-badge"><?= htmlspecialchars($modulo['nombre']) ?></span>
-                    <?php endforeach; ?>
-                </div>
-                <p class="form-help">Este usuario se guardará automáticamente en el módulo <?= htmlspecialchars($scopeConfig['label']) ?>.</p>
-            </div>
-        <?php elseif ($esSuperadmin): ?>
-            <div class="form-field" id="moduloContainer">
-                <label>Módulos asignados</label>
-                <div class="module-picker">
-                    <?php foreach ($modulosDisponibles as $modulo): ?>
-                        <label class="module-chip">
-                            <input type="checkbox" name="modulo_ids[]" value="<?= (int) $modulo['id'] ?>">
-                            <span class="material-symbols-outlined">widgets</span>
-                            <?= htmlspecialchars($modulo['nombre']) ?>
-                        </label>
-                    <?php endforeach; ?>
-                </div>
-                <p class="form-help">Selecciona uno o más módulos para este usuario.</p>
-            </div>
-        <?php elseif (!empty($modulosDisponibles)): ?>
-            <div class="form-field">
-                <label>Módulo asignado</label>
-                <div class="module-badges">
-                    <?php foreach ($modulosDisponibles as $modulo): ?>
-                        <span class="module-badge"><?= htmlspecialchars($modulo['nombre']) ?></span>
-                    <?php endforeach; ?>
-                </div>
-                <p class="form-help">Como administrador de módulo, solo puedes crear usuarios para tu propio módulo.</p>
-            </div>
+        <?php if (!empty($modulosDisponibles)): ?>
+            <?php usr_render_modulos_roles($modulosDisponibles, $rolesPorModulo, $actualesModulos, $moduloIdsForzados); ?>
+            <?php if (!$esSuperadmin && !$scopeConfig): ?><p class="form-help">Como administrador de módulo, solo puedes crear usuarios para tus módulos.</p><?php endif; ?>
         <?php endif; ?>
 
         <div class="form-actions">

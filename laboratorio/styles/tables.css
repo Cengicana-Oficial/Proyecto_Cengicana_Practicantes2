@@ -11,9 +11,9 @@
   --table-head-font-size: var(--font-size-2xs);
   --table-border: 1px solid var(--panel-border);
   --table-head-bg: linear-gradient(180deg, var(--neutral-50), var(--green-50));
-  --table-row-alt-bg: rgba(242, 243, 242, 0.72);
+  --table-row-alt-bg: rgba(238, 240, 241, 0.72);
   --table-row-hover-bg: var(--teal-50);
-  --table-row-selected-bg: rgba(237, 245, 238, 0.92);
+  --table-row-selected-bg: rgba(227, 241, 211, 0.92);
   --table-radius: var(--surface-radius-panel);
   --table-shadow: var(--surface-shadow-panel);
   --table-empty-color: var(--text-mute);

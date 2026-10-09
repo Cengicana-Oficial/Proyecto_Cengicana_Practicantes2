@@ -239,7 +239,7 @@ function comites_sync_reunion_acuerdos(PDO $pdo, int $reunionId, string $comiteI
     $existentes->execute([$reunionId]);
     $existentesIds = array_map('intval', $existentes->fetchAll(PDO::FETCH_COLUMN));
 
-    $estadosValidos = ['Pendiente', 'En proceso', 'Completado'];
+    $estadosValidos = ['Pendiente', 'En proceso', 'Completado', 'Cancelado'];
     $enviados = [];
 
     $update = $pdo->prepare(
@@ -262,6 +262,8 @@ function comites_sync_reunion_acuerdos(PDO $pdo, int $reunionId, string $comiteI
         $fechaSeguimiento = trim((string) ($fila['fecha_seguimiento'] ?? '')) ?: null;
         $avance = max(0, min(100, (int) ($fila['avance'] ?? 0)));
         $estado = in_array($fila['estado'] ?? '', $estadosValidos, true) ? $fila['estado'] : 'Pendiente';
+        if ($avance >= 100 && $estado !== 'Cancelado') $estado = 'Completado';
+        if ($estado === 'Completado') $avance = 100;
         $observaciones = trim((string) ($fila['observaciones'] ?? '')) ?: null;
         $rowId = (int) ($fila['id'] ?? 0);
 

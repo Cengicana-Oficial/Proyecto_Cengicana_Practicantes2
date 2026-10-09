@@ -29,7 +29,7 @@ $resultado = $resultado ?? [];
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fosforo en Suelos</title>
-    <link rel="stylesheet" href="../../styles/formularios.css">
+    <link rel="stylesheet" href="../../styles/formularios.css?v=20261006">
 </head>
 <body<?= $labHideCalibrationChart ? ' data-lab-hide-calibration-chart="1"' : '' ?>>
 <div class="page-wrap">

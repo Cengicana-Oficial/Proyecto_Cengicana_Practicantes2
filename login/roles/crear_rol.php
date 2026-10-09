@@ -3,12 +3,15 @@ session_start();
 require_once("../config/conexion.php");
 require_once("../config/permisos_roles.php");
 require_once __DIR__ . "/_guard.php";
+require_once __DIR__ . "/_modulos_rol.php";
 
 $conn = Conexion::conectar();
 asegurar_tablas_permisos($conn);
 
 $permisos = obtener_permisos($conn);
 $gruposPermisos = agrupar_permisos($permisos);
+$modulos = rol_mod_listar_modulos($conn);
+$modulosRol = rol_mod_leer_post($_POST, $modulos);
 $error = "";
 
 if ($_POST) {
@@ -29,6 +32,7 @@ if ($_POST) {
 
             $rolId = $conn->lastInsertId();
             guardar_permisos_rol($conn, $rolId, $permisosSeleccionados);
+            rol_mod_guardar($conn, $rolId, $modulosRol);
 
             header("Location: roles.php");
             exit;
@@ -72,6 +76,8 @@ if ($_POST) {
                    value="<?= htmlspecialchars($_POST['nombre'] ?? '') ?>" required autofocus>
         </div>
 
+        <?php rol_mod_render($modulos, $modulosRol); ?>
+
         <div class="permisos-toolbar">
             <h3>Permisos del rol</h3>
             <div class="permisos-toolbar-actions">
@@ -86,33 +92,11 @@ if ($_POST) {
             </div>
         <?php endif; ?>
 
-        <?php foreach ($gruposPermisos as $grupo => $items): ?>
-            <section class="permiso-section">
-                <div class="permiso-section-head">
-                    <div>
-                        <span class="permiso-kicker"><?= htmlspecialchars(titulo_corto_grupo_permiso($grupo)) ?></span>
-                        <h4><?= htmlspecialchars($grupo) ?></h4>
-                    </div>
-                    <span class="permiso-count"><?= count($items) ?> permisos</span>
-                </div>
-                <p class="permiso-section-copy"><?= htmlspecialchars(descripcion_grupo_permiso($grupo)) ?></p>
-                <div class="permisos-grid">
-                    <?php foreach ($items as $permiso): ?>
-                        <label class="permiso-item">
-                            <input
-                                type="checkbox"
-                                name="permisos[]"
-                                value="<?= htmlspecialchars($permiso['nombre_permiso']) ?>"
-                            >
-                            <span>
-                                <strong><?= htmlspecialchars(etiqueta_permiso($permiso['nombre_permiso'])) ?></strong>
-                                <small><?= htmlspecialchars($permiso['descripcion'] ?: $permiso['nombre_permiso']) ?></small>
-                            </span>
-                        </label>
-                    <?php endforeach; ?>
-                </div>
-            </section>
-        <?php endforeach; ?>
+        <?php
+        // Conserva lo marcado si el formulario vuelve con error.
+        $permisosRol = array_map('strval', (array) ($_POST['permisos'] ?? []));
+        require __DIR__ . '/_permisos_form.php';
+        ?>
 
         <div class="form-actions">
             <button type="submit" class="btn-primary">
@@ -126,8 +110,9 @@ if ($_POST) {
 
 <script>
 function marcarPermisos(checked) {
+    setTimeout(() => document.dispatchEvent(new Event("permisos:cambio")));
     document.querySelectorAll('input[name="permisos[]"]').forEach(input => {
-        input.checked = checked;
+        if (input.type === "checkbox") input.checked = checked;
     });
 }
 </script>

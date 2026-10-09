@@ -73,9 +73,12 @@ function sembrar_permisos_base(PDO $conn)
         'gestionar_eventos_cengi' => 'Permite crear eventos y registrar participantes con QR en Cengicursos',
         'ver_diplomas_cengi' => 'Permite ver el modulo de certificacion y diplomas de Cengicursos',
         'gestionar_diplomas_cengi' => 'Permite generar y cargar diplomas en Cengicursos',
-        'solicitudes_internas.crear' => 'Permite crear solicitudes en el modulo Solicitudes internas',
-        'solicitudes_internas.ver' => 'Permite ver las solicitudes del modulo Sistema de solicitudes',
-        'solicitudes_internas.gestionar' => 'Permite gestionar solicitudes del modulo Sistema de solicitudes',
+        'ver_pagos_cengi' => 'Permite ver los pagos de inscripcion de las convocatorias y de los eventos pagados de Cengicursos',
+        'validar_pagos_cengi' => 'Permite validar comprobantes y registrar los pagos de inscripcion y de eventos pagados en Cengicursos',
+        'solicitudes_internas.crear' => 'Permite crear solicitudes desde su programa y ver las que el usuario envio',
+        'solicitudes_internas.ver' => 'Permite ver las solicitudes que otros programas envian al programa del usuario',
+        'solicitudes_internas.gestionar' => 'Permite cambiar estado y dar seguimiento a las solicitudes recibidas por el programa del usuario',
+        'solicitudes_internas.ver_todas' => 'Permite ver (solo lectura) todas las solicitudes entre programas',
         'solicitudes_internas.usuarios.ver' => 'Permite ver usuarios del modulo Sistema de solicitudes',
         'solicitudes_internas.usuarios.gestionar' => 'Permite crear, editar y eliminar usuarios del modulo Sistema de solicitudes',
         'solicitudes_internas.programas.ver' => 'Permite ver programas del modulo Sistema de solicitudes',
@@ -132,6 +135,117 @@ function sembrar_permisos_base(PDO $conn)
     foreach ($permisos as $nombre => $descripcion) {
         $stmt->execute([$nombre, $descripcion]);
     }
+
+    // Cengilabs: los permisos vigentes y su descripción actual salen del catálogo por etapa
+    // del flujo; se insertan si faltan y se actualiza la descripción guardada.
+    $actualizar = $conn->prepare("
+        INSERT INTO permisos (nombre_permiso, descripcion) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE descripcion = VALUES(descripcion)
+    ");
+    foreach (permisos_laboratorio_catalogo() as $seccion) {
+        foreach ($seccion['permisos'] as $nombre => [, $descripcion]) {
+            $actualizar->execute([$nombre, $descripcion]);
+        }
+    }
+}
+
+/**
+ * Permisos de Cengilabs (Laboratorio) agrupados por etapa del flujo actual, en el orden en que
+ * avanza una muestra: Recepción → Identificación → Planificación → Bandeja del analista →
+ * Validación técnica → Control de calidad → Informes → Reportes. Cada permiso: [etiqueta,
+ * descripción de lo que habilita hoy en el sistema]. Es la única lista que muestran Crear rol y
+ * Editar rol para Cengilabs; los permisos que el sistema ya no consulta están en
+ * permisos_laboratorio_obsoletos() y no se ofrecen.
+ */
+function permisos_laboratorio_catalogo()
+{
+    return [
+        'recepcion' => ['titulo' => 'Recepción', 'permisos' => [
+            'laboratorio.solicitudes.crear' => ['Registrar recepciones', 'Abre Recepción para registrar boletas de muestras nuevas y ver Recepciones registradas.'],
+            'laboratorio.solicitudes.ver' => ['Consultar recepciones y boletas', 'Ver Recepciones registradas y abrir, descargar o enviar boletas, sin registrar nuevas.'],
+            'laboratorio.solicitudes.editar' => ['Editar recepciones (todos los tipos)', 'Editar recepciones de cualquier tipo de muestra; cada edición queda en el historial de versiones.'],
+            'laboratorio.solicitudes.editar.suelo' => ['Editar recepciones de Suelos', 'Editar solo recepciones de muestras de suelo.'],
+            'laboratorio.solicitudes.editar.foliar' => ['Editar recepciones Foliares', 'Editar solo recepciones de muestras foliares.'],
+            'laboratorio.solicitudes.editar.aguas' => ['Editar recepciones de Agua', 'Editar solo recepciones de muestras de agua.'],
+            'laboratorio.solicitudes.editar.cana' => ['Editar recepciones de Caña', 'Editar solo recepciones de muestras de caña.'],
+        ]],
+        'identificacion' => ['titulo' => 'Identificación de muestra', 'permisos' => [
+            'laboratorio.lotes.ver' => ['Identificar muestras e imprimir etiquetas', 'Identificación de muestra por lote (escaneo) e impresión de etiquetas con código de barras.'],
+        ]],
+        'planificacion' => ['titulo' => 'Planificación del trabajo', 'permisos' => [
+            'laboratorio.kanban.ver' => ['Ver planificación del trabajo', 'Ver los lotes, sus análisis y a quién están asignados.'],
+            'laboratorio.kanban.gestionar' => ['Asignar analistas y prioridades', 'Asignar muestras a analistas y cambiar la prioridad del lote; ve la bandeja de todos los analistas.'],
+        ]],
+        'bandeja' => ['titulo' => 'Bandeja del analista', 'permisos' => [
+            'laboratorio.formularios_pendientes.ver' => ['Usar la Bandeja del analista', 'Ver la bandeja con los análisis asignados, abrir sus hojas de trabajo (con blanco, controles y equipo del catálogo) y quitar o agregar muestras.'],
+            'laboratorio.analisis.ver' => ['Capturar resultados en hojas de trabajo', 'Guardar y enviar a validación las hojas de trabajo (se requiere junto con la Bandeja).'],
+        ]],
+        'validacion' => ['titulo' => 'Validación técnica', 'permisos' => [
+            'laboratorio.validacion_tecnica.ver' => ['Ver validación técnica', 'Ver los análisis capturados con sus cálculos, controles y rangos, y la hoja de revisión de cada formulario.'],
+            'laboratorio.validacion_tecnica.aprobar' => ['Validar o rechazar análisis', 'Aprobar los análisis, rechazarlos o devolver muestras a reanálisis, con categoría y motivo.'],
+        ]],
+        'calidad' => ['titulo' => 'Control de calidad', 'permisos' => [
+            'laboratorio.consolidacion.ver' => ['Ver control de calidad', 'Indicadores ISO/IEC 17025: tasa de rechazo, motivos, reanálisis abiertos, rechazos recientes, tasa por análisis y calibración de equipos.'],
+        ]],
+        'informes' => ['titulo' => 'Informes y firma', 'permisos' => [
+            'laboratorio.informes.ver' => ['Ver informes por lote', 'Ver el informe de cada lote (borrador y firmado) y descargarlo en Excel.'],
+            'laboratorio.firma.gestionar' => ['Aprobar y firmar informes', 'Firma del jefe de laboratorio; también puede devolver el informe al técnico.'],
+        ]],
+        'reportes' => ['titulo' => 'Reportes', 'permisos' => [
+            'laboratorio.documentos.ver' => ['Ver, descargar y enviar reportes', 'Reportes firmados en PDF: ver, descargar y enviar por correo al cliente.'],
+            'laboratorio.documentos.gestionar' => ['Seguimiento de entrega de reportes', 'La campanita le avisa de los reportes firmados que aún no se envían al cliente.'],
+        ]],
+        'historial' => ['titulo' => 'Historial', 'permisos' => [
+            'laboratorio.trazabilidad.ver' => ['Ver historial de versiones', 'Cada captura, rechazo y reanálisis por muestra y análisis, con su resultado, datos originales, motivo y responsables.'],
+        ]],
+        'catalogos' => ['titulo' => 'Catálogos', 'permisos' => [
+            'laboratorio.catalogo_analisis.ver' => ['Ver catálogo de análisis', 'Consultar análisis, métodos analíticos, equipos y su calibración, campos por tipo de muestra y auditoría.'],
+            'laboratorio.analisis.editar' => ['Editar catálogo de análisis', 'Agregar o modificar análisis (método, equipo, unidad, rango y duración en días), métodos analíticos, equipos y campos (requiere ver el catálogo).'],
+            'laboratorio.catalogo_muestras.ver' => ['Catálogo de tipos de muestra', 'Consultar y configurar los tipos de muestra.'],
+        ]],
+        'administracion' => ['titulo' => 'Administración', 'permisos' => [
+            'laboratorio.usuarios.gestionar' => ['Asignar usuarios y roles del laboratorio', 'En Roles y permisos: dar o quitar acceso al laboratorio y asignar el rol de cada usuario (no puede asignar Superadmin).'],
+        ]],
+        'anteriores' => ['titulo' => 'Pantallas anteriores (LABC)', 'permisos' => [
+            'laboratorio.labc.ver' => ['Panel LABC', 'Panel de la versión anterior con los formularios por análisis.'],
+            'laboratorio.formularios_labc.ver' => ['Formularios por análisis (LABC)', 'Formularios de captura de la versión anterior; también habilita capturar en la Bandeja.'],
+            'laboratorio.blanco_control.ver' => ['Ver blancos y controles (LABC)', 'Pantalla anterior de blancos y controles generales; en el flujo actual van dentro de cada hoja de trabajo.'],
+            'laboratorio.blanco_control.gestionar' => ['Registrar blancos y controles (LABC)', 'Crear y modificar blancos y controles en la pantalla anterior.'],
+            'laboratorio.consolidacion.aprobar' => ['Aprobar formularios (LABC)', 'Aprobar formularios en la revisión de los formularios anteriores.'],
+            'laboratorio.formularios_erroneos.ver' => ['Ver formularios con errores (LABC)', 'Ver los formularios anteriores marcados con errores para su corrección.'],
+            'laboratorio.formularios.guardar_corregidos' => ['Guardar formularios corregidos (LABC)', 'Guardar la corrección de un formulario anterior marcado con errores.'],
+            'laboratorio.formularios.guardar_errores' => ['Marcar formularios con errores (LABC)', 'Marcar un formulario anterior con errores durante la revisión.'],
+        ]],
+    ];
+}
+
+/** Permisos "laboratorio.*" que el sistema ya no consulta: no se ofrecen al crear o editar roles. */
+function permisos_laboratorio_obsoletos()
+{
+    return [
+        'laboratorio.acceder',
+        'laboratorio.analisis.crear',
+        'laboratorio.analisis.editar_finalizado',
+        'laboratorio.roles.gestionar',
+        'laboratorio.configuracion.gestionar',
+    ];
+}
+
+/** [permiso => [etiqueta, descripción]] de todos los permisos vigentes de Cengilabs. */
+function permisos_laboratorio_vigentes()
+{
+    $todos = [];
+    foreach (permisos_laboratorio_catalogo() as $seccion) {
+        $todos += $seccion['permisos'];
+    }
+    return $todos;
+}
+
+/** Descripción para mostrar: la del catálogo de Cengilabs si existe; si no, la guardada. */
+function descripcion_permiso($nombrePermiso, $descripcionGuardada = '')
+{
+    $vigentes = permisos_laboratorio_vigentes();
+    return $vigentes[$nombrePermiso][1] ?? ($descripcionGuardada ?: $nombrePermiso);
 }
 
 function obtener_permisos(PDO $conn)
@@ -166,6 +280,7 @@ function agrupar_permisos(array $permisos)
         'Permisos de solicitudes internas' => [],
         'Permisos de laboratorio' => [],
         'Permisos de SIGEC' => [],
+        'Permisos de Comités' => [],
         'Permisos de pagos' => [],
         'Permisos de usuarios y accesos' => [],
         'Permisos generales' => [],
@@ -198,6 +313,14 @@ function clasificar_grupo_permiso($nombrePermiso)
         return 'Permisos de SIGEC';
     }
 
+    if (strpos($nombre, 'comites.') === 0) {
+        return 'Permisos de Comités';
+    }
+
+    if (strpos($nombre, 'reserva_salones') !== false) {
+        return 'Permisos de visitas';
+    }
+
     if (strpos($nombre, 'pago') !== false) {
         return 'Permisos de pagos';
     }
@@ -221,6 +344,7 @@ function titulo_corto_grupo_permiso($grupo)
         'Permisos de solicitudes internas' => 'Solicitudes internas',
         'Permisos de laboratorio' => 'Cengilabs',
         'Permisos de SIGEC' => 'SIGEC',
+        'Permisos de Comités' => 'Comités',
         'Permisos de pagos' => 'Pagos',
         'Permisos de usuarios y accesos' => 'General',
         'Permisos generales' => 'General',
@@ -235,8 +359,9 @@ function descripcion_grupo_permiso($grupo)
         'Permisos de visitas' => 'Controla solicitudes, areas, correos y seguimiento del modulo de visitas.',
         'Permisos de cursos' => 'Agrupa acciones para cursos, participantes, notas, ingenios y asignaciones.',
         'Permisos de solicitudes internas' => 'Controla acceso a solicitudes, usuarios y programas del modulo Sistema de solicitudes.',
-        'Permisos de laboratorio' => 'Controla el acceso a lotes, LABC, formularios, revision y controles de laboratorio.',
+        'Permisos de laboratorio' => 'Cengilabs: permisos ordenados por etapa del flujo, de Recepción a la entrega de Reportes. Puede partir de una plantilla de rol y ajustar.',
         'Permisos de SIGEC' => 'Controla el acceso al modulo SIGEC (Sistema de Gestion de Ensayos Experimentales).',
+        'Permisos de Comités' => 'Comités, Transferencia y Comunicación: ver o gestionar cada sección del módulo y las aprobaciones de Transferencia y Dirección.',
         'Permisos de pagos' => 'Reune permisos relacionados con estados de pago y control de cobros.',
         'Permisos de usuarios y accesos' => 'Incluye gestion de usuarios, roles, modulos y acceso administrativo.',
         'Permisos generales' => 'Permisos transversales que no pertenecen a un solo modulo.',
@@ -289,9 +414,12 @@ function etiqueta_permiso($nombrePermiso)
         'gestionar_eventos_cengi' => 'Gestionar eventos y control QR',
         'ver_diplomas_cengi' => 'Ver certificacion y diplomas',
         'gestionar_diplomas_cengi' => 'Gestionar certificacion y diplomas',
-        'solicitudes_internas.crear' => 'Crear solicitudes del modulo',
-        'solicitudes_internas.ver' => 'Ver solicitudes del modulo',
-        'solicitudes_internas.gestionar' => 'Gestionar solicitudes del modulo',
+        'ver_pagos_cengi' => 'Ver pagos de inscripcion y eventos',
+        'validar_pagos_cengi' => 'Validar y registrar pagos de inscripcion y eventos (Administracion)',
+        'solicitudes_internas.crear' => 'Crear solicitudes (colaborador)',
+        'solicitudes_internas.ver' => 'Ver solicitudes recibidas por su programa (jefe)',
+        'solicitudes_internas.gestionar' => 'Gestionar solicitudes recibidas por su programa (jefe)',
+        'solicitudes_internas.ver_todas' => 'Ver todas las solicitudes entre programas, solo lectura (director)',
         'solicitudes_internas.usuarios.ver' => 'Ver usuarios del modulo',
         'solicitudes_internas.usuarios.gestionar' => 'Gestionar usuarios del modulo',
         'solicitudes_internas.programas.ver' => 'Ver programas del modulo',
@@ -336,11 +464,57 @@ function etiqueta_permiso($nombrePermiso)
         'sigec.acceder' => 'Acceder al modulo SIGEC',
     ];
 
+    $vigentesLab = permisos_laboratorio_vigentes();
+    if (isset($vigentesLab[$nombrePermiso])) {
+        return $vigentesLab[$nombrePermiso][0];
+    }
+
+    $comites = etiqueta_permiso_comites((string) $nombrePermiso);
+    if ($comites !== null) {
+        return $comites;
+    }
+
     if (isset($mapa[$nombrePermiso])) {
         return $mapa[$nombrePermiso];
     }
 
     return ucwords(str_replace('_', ' ', (string) $nombrePermiso));
+}
+
+/**
+ * Etiqueta legible de los permisos del modulo Comites ("comites.<seccion>.<accion>").
+ * Devuelve null si el permiso no es de Comites.
+ */
+function etiqueta_permiso_comites($nombrePermiso)
+{
+    if (strpos($nombrePermiso, 'comites.') !== 0) {
+        return null;
+    }
+    $especiales = [
+        'comites.documentos.revisar_transferencia' => 'Revisar documentos para ingenios (Transferencia)',
+        'comites.documentos.aprobar_direccion' => 'Aprobar documentos para ingenios (Dirección)',
+        'comites.informes.revisar' => 'Revisar informes cuatrimestrales (Dirección)',
+        'comites.memorias.entregar' => 'Entregar artículos a la memoria de resultados',
+        'comites.memorias.diagramar' => 'Diagramar la memoria de resultados',
+        'comites.memorias.aprobar_transferencia' => 'Aprobar memoria de resultados (Transferencia)',
+        'comites.memorias.aprobar_direccion' => 'Aprobar memoria de resultados (Dirección)',
+        'comites.memorias.ver_todos' => 'Ver todos los artículos de la memoria',
+    ];
+    if (isset($especiales[$nombrePermiso])) {
+        return $especiales[$nombrePermiso];
+    }
+    $secciones = [
+        'contactos' => 'directorio de contactos', 'reuniones' => 'reuniones', 'eventos' => 'eventos de transferencia',
+        'acuerdos' => 'seguimiento a próximos pasos', 'documentos' => 'biblioteca para ingenios',
+        'biblioteca_interna' => 'biblioteca interna', 'correos' => 'correos y envíos', 'tableros' => 'tableros',
+        'informes' => 'informes cuatrimestrales', 'memorias' => 'memoria de resultados', 'publicaciones' => 'redes sociales',
+        'estadisticas' => 'estadísticas', 'configuracion' => 'comités y configuración', 'usuarios' => 'usuarios y programas',
+    ];
+    $partes = explode('.', $nombrePermiso);
+    if (count($partes) === 3 && isset($secciones[$partes[1]]) && in_array($partes[2], ['ver', 'gestionar'], true)) {
+        return ($partes[2] === 'ver' ? 'Ver ' : 'Gestionar ') . $secciones[$partes[1]];
+    }
+    return null;
 }
 
 function guardar_permisos_rol(PDO $conn, $rolId, array $permisos)

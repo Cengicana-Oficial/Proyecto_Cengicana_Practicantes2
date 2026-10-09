@@ -235,7 +235,7 @@
   --btn-bg: linear-gradient(180deg, var(--green-600), var(--green-800));
   --btn-border: var(--green-600);
   --btn-fg: var(--white);
-  --btn-shadow: 0 10px 18px rgba(23, 52, 4, 0.18);
+  --btn-shadow: 0 10px 18px rgba(28, 49, 10, 0.18);
 }
 
 :where(
@@ -365,7 +365,7 @@
   --btn-bg: linear-gradient(180deg, var(--green-600), var(--green-700));
   --btn-border: var(--green-600);
   --btn-fg: var(--white);
-  --btn-shadow: 0 10px 18px rgba(59, 109, 17, 0.18);
+  --btn-shadow: 0 10px 18px rgba(58, 99, 18, 0.18);
 }
 
 .fab {
@@ -381,14 +381,14 @@
   --btn-bg: linear-gradient(180deg, var(--lab-body-surface-strong), var(--neutral-50));
   --btn-border: var(--lab-body-border-soft);
   --btn-fg: var(--green-700);
-  --btn-shadow: 0 12px 24px rgba(35, 37, 35, 0.12);
+  --btn-shadow: 0 12px 24px rgba(31, 35, 38, 0.12);
 }
 
 .fab.primary {
   --btn-bg: linear-gradient(180deg, var(--green-600), var(--green-700));
   --btn-border: var(--green-600);
   --btn-fg: var(--white);
-  --btn-shadow: 0 12px 24px rgba(59, 109, 17, 0.22);
+  --btn-shadow: 0 12px 24px rgba(58, 99, 18, 0.22);
 }
 
 .logout-btn {
@@ -417,7 +417,7 @@
   --btn-min-height: 44px;
   --btn-radius: 10px;
   --btn-fg: var(--white);
-  --btn-shadow: 0 12px 20px rgba(23, 52, 4, 0.18);
+  --btn-shadow: 0 12px 20px rgba(28, 49, 10, 0.18);
 }
 
 .action-button.primary,

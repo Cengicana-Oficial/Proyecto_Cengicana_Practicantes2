@@ -173,6 +173,10 @@ if (!function_exists('labCatalogoAnalisisAsegurarEsquema')) {
                 'limite_min' => 'DECIMAL(18,6) NULL AFTER unidad',
                 'limite_max' => 'DECIMAL(18,6) NULL AFTER limite_min',
                 'tiempo_estimado_min' => 'INT NULL AFTER limite_max',
+                // Grupo con que se muestra en Recepción (vacío = el del formato de recepción).
+                'grupo_recepcion' => 'VARCHAR(80) NULL AFTER tiempo_estimado_min',
+                // Plazo de entrega: días desde la recepción de la muestra hasta el envío del reporte.
+                'duracion_dias' => 'INT NULL AFTER grupo_recepcion',
             ];
 
             foreach ($columnas as $columna => $definicion) {
@@ -249,6 +253,8 @@ if (!function_exists('labCatalogoAnalisisFilas')) {
                 ta.limite_min,
                 ta.limite_max,
                 ta.tiempo_estimado_min,
+                ta.duracion_dias,
+                ta.grupo_recepcion,
                 tm.nombre AS nombre_muestra,
                 tm.prefijo AS prefijo_muestra
             FROM tipo_analisis ta
@@ -347,6 +353,8 @@ if (!function_exists('labCatalogoAnalisisAgrupar')) {
                 'limite_min' => $fila['limite_min'] !== null ? (float) $fila['limite_min'] : null,
                 'limite_max' => $fila['limite_max'] !== null ? (float) $fila['limite_max'] : null,
                 'tiempo_estimado_min' => $fila['tiempo_estimado_min'] !== null ? (int) $fila['tiempo_estimado_min'] : null,
+                'duracion_dias' => isset($fila['duracion_dias']) ? (int) $fila['duracion_dias'] : null,
+                'grupo_recepcion' => (string) ($fila['grupo_recepcion'] ?? ''),
                 'tipo' => labCatalogoAnalisisEtiquetaModulo($clave),
                 'tipo_plural' => labCatalogoAnalisisEtiquetaModuloPlural($clave),
             ];
@@ -391,6 +399,9 @@ if (!function_exists('labCatalogoAnalisisFormularioData')) {
                         'id_tipo' => $item['id_tipo'],
                         'nombre' => $item['nombre'],
                         'tipo' => $grupo['label'],
+                        'metodo' => $item['metodo'] ?? '',
+                        'norma' => $item['norma'] ?? '',
+                        'grupo_recepcion' => $item['grupo_recepcion'] ?? '',
                     ];
                 }, $grupo['items']),
             ];
@@ -418,6 +429,8 @@ if (!function_exists('labCatalogoAnalisisObtenerPorId')) {
                 ta.limite_min,
                 ta.limite_max,
                 ta.tiempo_estimado_min,
+                ta.duracion_dias,
+                ta.grupo_recepcion,
                 tm.nombre AS nombre_muestra,
                 tm.prefijo AS prefijo_muestra
             FROM tipo_analisis ta
@@ -456,13 +469,15 @@ if (!function_exists('labCatalogoAnalisisGuardar')) {
         $limiteMin = $metadatos['limite_min'] ?? null;
         $limiteMax = $metadatos['limite_max'] ?? null;
         $tiempoEstimado = $metadatos['tiempo_estimado_min'] ?? null;
+        $grupoRecepcion = trim((string) ($metadatos['grupo_recepcion'] ?? '')) ?: null;
+        $duracionDias = $metadatos['duracion_dias'] ?? null;
 
         if ($idTipo === null || $idTipo <= 0) {
             $stmt = $conexion->prepare("
                 INSERT INTO tipo_analisis
                     (id_tipo_muestra, nombre, activo, metodo, norma, equipo_default, unidad,
-                     limite_min, limite_max, tiempo_estimado_min)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     limite_min, limite_max, tiempo_estimado_min, grupo_recepcion, duracion_dias)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([
                 $idTipoMuestra,
@@ -475,6 +490,8 @@ if (!function_exists('labCatalogoAnalisisGuardar')) {
                 $limiteMin,
                 $limiteMax,
                 $tiempoEstimado,
+                $grupoRecepcion,
+                $duracionDias,
             ]);
 
             return (int) $conexion->lastInsertId();
@@ -484,7 +501,8 @@ if (!function_exists('labCatalogoAnalisisGuardar')) {
             UPDATE tipo_analisis
                SET id_tipo_muestra = ?, nombre = ?, activo = ?,
                    metodo = ?, norma = ?, equipo_default = ?, unidad = ?,
-                   limite_min = ?, limite_max = ?, tiempo_estimado_min = ?
+                   limite_min = ?, limite_max = ?, tiempo_estimado_min = COALESCE(?, tiempo_estimado_min),
+                   grupo_recepcion = ?, duracion_dias = ?
              WHERE id_tipo = ?
         ");
         $stmt->execute([
@@ -498,6 +516,8 @@ if (!function_exists('labCatalogoAnalisisGuardar')) {
             $limiteMin,
             $limiteMax,
             $tiempoEstimado,
+            $grupoRecepcion,
+            $duracionDias,
             $idTipo,
         ]);
 

@@ -68,8 +68,8 @@ $subtituloErrores = $detalleError
     : count($formulariosErroneos) . ' registro(s) conservados para revision';
 
 lab_shell_head('Formularios con errores', $subtituloErrores, [
-    '../styles/consolidacion.css?v=2',
-    '../css/revision_shell.css?v=1',
+    '../styles/consolidacion.css?v=20261006',
+    '../css/revision_shell.css?v=20261006',
 ]);
 lab_shell_open('validacion_tecnica_view.php');
 ?>

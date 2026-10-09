@@ -19,7 +19,7 @@
       return;
     }
     toast.textContent = msg;
-    toast.style.borderLeft = '4px solid ' + (isError ? '#c94f4f' : '#73BC25');
+    toast.style.borderLeft = '4px solid ' + (isError ? '#FF6B00' : '#73BC25');
     toast.classList.add('show');
     window.clearTimeout(toast._timer);
     toast._timer = window.setTimeout(function () {

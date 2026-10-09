@@ -21,7 +21,7 @@ if (!function_exists('lab_captura_variables_registry')) {
             ['suelos.cc', 'suelos', 'Capacidad de Campo', 'Suelos/cc_controller.php', ['Capacidad campo']],
             ['suelos.pmp', 'suelos', 'Punto de Marchitez Permanente', 'Suelos/pmp_controller.php', ['Marchitez Permanente', 'PMP']],
             ['suelos.ph', 'suelos', 'pH', 'Suelos/ph_controller.php', []],
-            ['suelos.mo', 'suelos', 'Materia organica', 'Suelos/mo_controller.php', ['%MO', 'Materia orgánica']],
+            ['suelos.mo', 'suelos', 'Materia organica', null, ['%MO', 'Materia orgánica']],
             ['suelos.macroscic', 'suelos', 'Macronutrientes y CIC', 'Suelos/macroscic_controller.php', ['Macronutrientes', 'CIC', 'CIC (capacidad de intercambio catiónico)']],
             ['suelos.potasio_intercambiable', 'suelos', 'Potasio intercambiable', null, []],
             ['suelos.micros', 'suelos', 'Micro Nutrientes (Cu, Zn, Fe, Mn, K)', 'Suelos/micros_controller.php', ['Micro Nutrientes', 'Micronutrientes']],
@@ -56,7 +56,7 @@ if (!function_exists('lab_captura_variables_registry')) {
             ['foliares.fosforo', 'foliares', 'Fosforo', 'Foliares/fosforo_controller.php', ['Fósforo', 'Fósforo foliar', 'Fosforo foliar']],
 
             ['cana.peso_seco', 'cana', 'Peso seco', 'Cana/peso_seco_controller.php', []],
-            ['cana.fibra', 'cana', 'Fibra', 'Cana/fibra_controller.php', ['Fibra bruta']],
+            ['cana.fibra', 'cana', 'Fibra', 'Cana/fibra_controller.php', ['% Fibra', 'Fibra bruta']],
             ['cana.humedad', 'cana', 'Porcentaje de Humedad', 'Cana/humedad_controller.php', ['% de Humedad', 'Humedad']],
             ['cana.brixpol', 'cana', 'Determinacion de Brix y Pol', 'Cana/brixpol_controller.php', ['Determinación de Brix y Pol', 'Brix y Pol']],
 

@@ -2,18 +2,28 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../conexion.php';
 require_once __DIR__ . '/../includes/shell_sidebar.php';
+require_once __DIR__ . '/../includes/schema_safe_helper.php';
 require_once __DIR__ . '/../models/documentos_model.php';
 
 lab_require_permission('laboratorio.documentos.ver');
 
 $pdo = Conexion::conectar();
-$panelDocumentos = lab_documentos_panel($pdo);
+lab_ensure_schema_safe(fn() => lab_documentos_esquema($pdo), 'documentos_v1');
+// Reportes: informes de resultados por lote. Las boletas de recepción se consultan en Recepción.
+$panelDocumentos = lab_documentos_panel($pdo, 'informe');
+$puedeExcelInformes = lab_can('laboratorio.informes.ver');
+$_SESSION['reportes_csrf'] ??= bin2hex(random_bytes(32));
 $historiales = [];
+$tiposMuestra = [];
 foreach ($panelDocumentos['documentos'] as $documento) {
     if ((int) ($documento['total_cambios'] ?? 0) > 0) {
         $historiales[(int) $documento['id_documento']] = lab_documentos_historial($pdo, (int) $documento['id_documento']);
     }
+    foreach (array_filter(array_map('trim', explode(',', (string) ($documento['tipo_muestra'] ?? '')))) as $tipoMuestra) {
+        $tiposMuestra[mb_strtolower($tipoMuestra, 'UTF-8')] = docs_tipo_muestra($tipoMuestra);
+    }
 }
+ksort($tiposMuestra);
 
 function docs_e($valor): string
 {
@@ -35,9 +45,16 @@ function docs_codigo(int $idDocumento): string
     return 'DOC-' . str_pad((string) $idDocumento, 4, '0', STR_PAD_LEFT);
 }
 
-function docs_tipo(string $tipo): string
+function docs_lote(array $documento): string
 {
-    return $tipo === 'boleta' ? 'Boleta de recepción' : 'Informe de resultados';
+    return trim((string) ($documento['codigo_lote'] ?? '')) ?: '—';
+}
+
+/** Tipo de muestra para mostrar: "suelos" → "Suelos". */
+function docs_tipo_muestra(string $tipo): string
+{
+    $tipo = trim($tipo);
+    return $tipo === "" ? "" : mb_convert_case($tipo, MB_CASE_TITLE, "UTF-8");
 }
 
 function docs_svg(string $icono): string
@@ -47,6 +64,9 @@ function docs_svg(string $icono): string
         'pdf' => '<path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M8.5 16.5h2.2a1.8 1.8 0 0 0 0-3.6H8.5v5.6M14 18.5v-5.6h3.5M14 15.7h2.7"/>',
         'historial' => '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
         'cerrar' => '<path d="M18 6 6 18M6 6l12 12"/>',
+        'excel' => '<path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M9 12l5 6M14 12l-5 6"/>',
+        'correo' => '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+        'ver' => '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
         'descargar' => '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
         'info' => '<circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/>',
     ];
@@ -58,10 +78,11 @@ $documentosJs = [];
 foreach ($panelDocumentos['documentos'] as $documento) {
     $idDocumento = (int) $documento['id_documento'];
     $documentosJs[$idDocumento] = [
-        'codigo' => docs_codigo($idDocumento),
-        'titulo' => trim((string) ($documento['titulo'] ?? '')) ?: docs_tipo((string) $documento['tipo_documento']),
-        'tipo' => docs_tipo((string) $documento['tipo_documento']),
+        'lote' => docs_lote($documento),
+        'tipo' => docs_tipo_muestra((string) ($documento['tipo_muestra'] ?? '')),
+        'cliente' => trim((string) ($documento['cliente'] ?? '')) ?: 'Sin institución',
         'version' => (int) ($documento['version'] ?? 1),
+        'correos' => lab_documentos_correos_lote($pdo, (int) ($documento['id_lote'] ?? 0)),
     ];
 }
 ?>
@@ -70,29 +91,31 @@ foreach ($panelDocumentos['documentos'] as $documento) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Documentos (PDF)</title>
+    <title>Reportes</title>
     <link rel="stylesheet" href="../styles/documentos_template.css?v=<?= filemtime(__DIR__ . '/../styles/documentos_template.css') ?>">
-    <link rel="stylesheet" href="../css/lab_shell.css?v=1">
+    <link rel="stylesheet" href="../css/lab_shell.css?v=20261006">
+    <link rel="stylesheet" href="../css/lab_pager.css?v=<?= filemtime(__DIR__ . '/../css/lab_pager.css') ?>">
 </head>
 <body class="cengi-canvas">
-<?php lab_shell_open('documentos_view.php', 'Documentos (PDF)', 'Repositorio y control de versiones'); ?>
+<?php lab_shell_open('documentos_view.php', 'Reportes', 'Informes de resultados por lote'); ?>
     <div class="documents-page">
         <p class="documents-intro">
-            Repositorio de los PDF generados por el sistema — boletas de recepción e informes de resultados — organizado por lote.
-            Los datos analíticos ya firmados <strong>no se editan aquí</strong>; cada corrección registrada conserva motivo, usuario y fecha.
+            Informes de resultados aprobados y firmados, identificados por <strong>número de lote</strong>: véalos o descárguelos en PDF o Excel y envíelos por correo al cliente.
+            Los datos analíticos firmados <strong>no se editan aquí</strong>; cada corrección y cada envío quedan en el historial con usuario y fecha.
+            Las boletas de recepción se consultan en <a href="solicitud_formulario.php">Recepción</a>.
         </p>
 
         <section class="documents-kpi-grid" aria-label="Resumen de documentos">
             <article class="documents-kpi">
-                <span class="documents-kpi-label">Documentos generados</span>
+                <span class="documents-kpi-label">Reportes generados</span>
                 <strong class="documents-kpi-value"><?= (int) $panelDocumentos['total'] ?></strong>
             </article>
             <article class="documents-kpi">
-                <span class="documents-kpi-label">Con corrección registrada</span>
+                <span class="documents-kpi-label">Con nueva versión</span>
                 <strong class="documents-kpi-value is-warning"><?= (int) $panelDocumentos['corregidos'] ?></strong>
             </article>
             <article class="documents-kpi">
-                <span class="documents-kpi-label">Lotes con boleta y/o informe</span>
+                <span class="documents-kpi-label">Lotes con informe</span>
                 <strong class="documents-kpi-value is-success"><?= (int) $panelDocumentos['lotes'] ?></strong>
             </article>
         </section>
@@ -100,73 +123,96 @@ foreach ($panelDocumentos['documentos'] as $documento) {
         <section class="documents-repository">
             <div class="documents-toolbar">
                 <label class="documents-filter">
-                    <span class="sr-only">Filtrar por tipo</span>
+                    <span class="sr-only">Filtrar por tipo de muestra</span>
                     <select id="documentTypeFilter">
-                        <option value="">Todo tipo de documento</option>
-                        <option value="boleta">Boleta de recepción</option>
-                        <option value="informe">Informe de resultados</option>
+                        <option value="">Todos los tipos de muestra</option>
+                        <?php foreach ($tiposMuestra as $claveTipo => $tipoMuestra): ?>
+                            <option value="<?= docs_e($claveTipo) ?>"><?= docs_e($tipoMuestra) ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </label>
                 <label class="documents-search">
                     <?= docs_svg('buscar') ?>
-                    <span class="sr-only">Buscar documentos</span>
-                    <input type="search" id="documentSearch" placeholder="Buscar por documento, lote o cliente…" autocomplete="off">
+                    <span class="sr-only">Buscar reportes</span>
+                    <input type="search" id="documentSearch" placeholder="Buscar por número de lote o cliente…" autocomplete="off">
                 </label>
             </div>
 
             <div class="documents-table-wrap">
                 <table class="documents-table">
                     <thead>
-                        <tr><th>Documento</th><th>Tipo</th><th>Lote / Cliente</th><th>Versión</th><th>Generado por</th><th>Fecha</th><th><span class="sr-only">Acciones</span></th></tr>
+                        <tr><th>Lote</th><th>Tipo de muestra</th><th>Cliente</th><th>Versión</th><th>Firmado por</th><th>Fecha</th><th>Acciones</th></tr>
                     </thead>
                     <tbody id="documentsTableBody">
                         <?php if (empty($panelDocumentos['documentos'])): ?>
                             <tr class="documents-empty-row"><td colspan="7">
                                 <?php if (!$panelDocumentos['tabla_disponible']): ?>
-                                    La tabla de documentos todavía no está disponible. Se mostrará aquí el repositorio cuando se aplique la migración del flujo documental.
+                                    La tabla de documentos todavía no está disponible. Los reportes aparecerán aquí cuando se aplique la migración del flujo documental.
                                 <?php else: ?>
-                                    Sin documentos generados aún — se crean al registrar una boleta o al generar un informe versionado.
+                                    Sin reportes todavía — se generan cuando el jefe de laboratorio aprueba y firma el informe de un lote en Informes.
                                 <?php endif; ?>
                             </td></tr>
                         <?php else: ?>
                             <?php foreach ($panelDocumentos['documentos'] as $documento): ?>
                                 <?php
                                 $idDocumento = (int) $documento['id_documento'];
-                                $tipoCodigo = (string) $documento['tipo_documento'];
-                                $tipoTexto = docs_tipo($tipoCodigo);
-                                $codigo = docs_codigo($idDocumento);
+                                $codigoLote = docs_lote($documento);
+                                $tipoMuestra = trim((string) ($documento['tipo_muestra'] ?? '')) ?: '—';
                                 $cliente = trim((string) ($documento['cliente'] ?? '')) ?: 'Sin institución';
-                                $codigoLote = trim((string) ($documento['codigo_lote'] ?? '')) ?: '—';
+                                $version = (int) ($documento['version'] ?? 1);
                                 $textoBusqueda = mb_strtolower(implode(' ', [
-                                    $codigo,
-                                    $documento['titulo'] ?? '',
-                                    $tipoTexto,
-                                    $codigoLote,
+                                    'lote ' . $codigoLote,
+                                    $tipoMuestra,
                                     $cliente,
                                     $documento['generado_por'] ?? '',
+                                    docs_codigo($idDocumento),
                                 ]), 'UTF-8');
                                 ?>
-                                <tr class="document-row" data-type="<?= docs_e($tipoCodigo) ?>" data-search="<?= docs_e($textoBusqueda) ?>">
-                                    <td class="documents-code">
-                                        <?= docs_e($codigo) ?>
-                                        <?php if ((int) ($documento['version'] ?? 1) > 1): ?><span class="documents-version-badge">v<?= (int) $documento['version'] ?></span><?php endif; ?>
+                                <tr class="document-row" data-type="<?= docs_e(mb_strtolower($tipoMuestra, 'UTF-8')) ?>" data-search="<?= docs_e($textoBusqueda) ?>">
+                                    <td class="documents-lote">
+                                        <strong><?= docs_e($codigoLote) ?></strong>
+                                        <?php if ($version > 1): ?><span class="documents-version-badge">v<?= $version ?></span><?php endif; ?>
                                     </td>
-                                    <td class="documents-small"><?= docs_e($tipoTexto) ?></td>
-                                    <td><?= docs_e($cliente) ?><small><?= docs_e($codigoLote) ?></small></td>
-                                    <td class="documents-mono">v<?= (int) ($documento['version'] ?? 1) ?></td>
+                                    <td class="documents-small"><?= docs_e(docs_tipo_muestra($tipoMuestra)) ?></td>
+                                    <td><?= docs_e($cliente) ?></td>
+                                    <td class="documents-mono">v<?= $version ?></td>
                                     <td class="documents-small"><?= docs_e($documento['generado_por'] ?: '—') ?></td>
                                     <td class="documents-muted"><?= docs_e(docs_fecha($documento['generado_en'] ?? null)) ?></td>
                                     <td class="documents-actions">
-                                        <button type="button" class="documents-button is-ghost" data-view-document="<?= $idDocumento ?>">Ver PDF</button>
-                                        <button type="button" class="documents-button is-ghost" data-view-history="<?= $idDocumento ?>" <?= empty($documento['total_cambios']) ? 'disabled' : '' ?>>Historial</button>
+                                        <details class="documents-menu">
+                                            <summary class="documents-button is-ghost" aria-label="Acciones del reporte del lote <?= docs_e($codigoLote) ?>">Acciones <span aria-hidden="true">▾</span></summary>
+                                            <div class="documents-menu-list" role="menu">
+                                                <span class="documents-menu-title">Informe · Lote <?= docs_e($codigoLote) ?></span>
+                                                <button type="button" role="menuitem" data-view-document="<?= $idDocumento ?>"><?= docs_svg('ver') ?>Ver PDF</button>
+                                                <a role="menuitem" href="../controllers/documento_pdf.php?id_documento=<?= $idDocumento ?>&amp;download=1"><?= docs_svg('descargar') ?>Descargar PDF</a>
+                                                <?php if ($puedeExcelInformes): ?>
+                                                    <a role="menuitem" href="../controllers/informe_excel.php?lote=<?= (int) $documento['id_lote'] ?>" title="Informe firmado en Excel (.xlsx), con los valores aprobados"><?= docs_svg('excel') ?>Descargar Excel</a>
+                                                <?php endif; ?>
+                                                <button type="button" role="menuitem" data-send-document="<?= $idDocumento ?>"><?= docs_svg('correo') ?>Enviar por correo</button>
+                                                <span class="documents-menu-title">Trazabilidad</span>
+                                                <?php if (!empty($documento['total_cambios'])): ?>
+                                                    <button type="button" role="menuitem" data-view-history="<?= $idDocumento ?>"><?= docs_svg('historial') ?>Historial (<?= (int) $documento['total_cambios'] ?>)</button>
+                                                <?php else: ?>
+                                                    <span class="documents-menu-disabled" title="Sin correcciones ni envíos registrados"><?= docs_svg('historial') ?>Sin historial</span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </details>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
-                            <tr class="documents-empty-row is-filtered" id="documentsFilteredEmpty" hidden><td colspan="7">No hay documentos que coincidan con los filtros.</td></tr>
+                            <tr class="documents-empty-row is-filtered" id="documentsFilteredEmpty" hidden><td colspan="7">No hay reportes que coincidan con los filtros.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
+            <nav class="lab-pager" id="documentsPager" aria-label="Páginas de reportes" hidden>
+                <span data-pager-rango></span>
+                <div class="lab-pager-nav">
+                    <button type="button" class="lab-pager-btn" data-pager-prev aria-label="Página anterior"><span aria-hidden="true">‹</span></button>
+                    <b data-pager-info aria-live="polite"></b>
+                    <button type="button" class="lab-pager-btn" data-pager-next aria-label="Página siguiente"><span aria-hidden="true">›</span></button>
+                </div>
+            </nav>
         </section>
     </div>
 
@@ -194,7 +240,30 @@ foreach ($panelDocumentos['documentos'] as $documento) {
         </div>
     </div>
 
+    <div class="documents-modal" id="sendModal" hidden>
+        <form class="documents-modal-dialog documents-send-dialog" id="sendForm" role="dialog" aria-modal="true" aria-labelledby="sendModalTitle" novalidate>
+            <header class="documents-modal-head">
+                <h2 id="sendModalTitle">Enviar reporte por correo</h2>
+                <button type="button" class="documents-modal-close" data-close-modal aria-label="Cerrar"><?= docs_svg('cerrar') ?></button>
+            </header>
+            <div class="documents-send-body">
+                <p class="documents-send-summary" id="sendSummary"></p>
+                <label class="documents-send-field">
+                    <span>Destinatarios</span>
+                    <textarea id="sendEmails" rows="3" placeholder="cliente@ejemplo.com, otro@ejemplo.com" required></textarea>
+                    <small>Separe varios correos con coma. Se proponen los correos registrados en la recepción del lote. Se adjunta el PDF de la versión vigente.</small>
+                </label>
+                <p class="documents-send-status" id="sendStatus" role="status" aria-live="polite"></p>
+            </div>
+            <footer class="documents-modal-foot">
+                <button type="button" class="documents-button is-ghost" data-close-modal>Cancelar</button>
+                <button type="submit" class="documents-button is-primary" id="sendSubmit"><?= docs_svg('correo') ?> Enviar</button>
+            </footer>
+        </form>
+    </div>
+
 <?php lab_shell_content_close(); ?>
+<script src="../js/lab_pager.js?v=<?= filemtime(__DIR__ . '/../js/lab_pager.js') ?>"></script>
 <script>
 (function () {
     var typeFilter = document.getElementById('documentTypeFilter');
@@ -208,6 +277,14 @@ foreach ($panelDocumentos['documentos'] as $documento) {
     var history = document.getElementById('documentHistory');
     var historyList = document.getElementById('documentHistoryList');
     var download = document.getElementById('documentDownload');
+    var sendModal = document.getElementById('sendModal');
+    var sendForm = document.getElementById('sendForm');
+    var sendEmails = document.getElementById('sendEmails');
+    var sendSummary = document.getElementById('sendSummary');
+    var sendStatus = document.getElementById('sendStatus');
+    var sendSubmit = document.getElementById('sendSubmit');
+    var sendId = null;
+    var csrf = <?= json_encode($_SESSION['reportes_csrf']) ?>;
     var documents = <?= json_encode($documentosJs, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var histories = <?= json_encode($historiales, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
@@ -215,17 +292,24 @@ foreach ($panelDocumentos['documentos'] as $documento) {
         return (value || '').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     }
 
+    // 25 reportes por página (más recientes primero), sobre los que pasan el filtro y la búsqueda.
+    var pager = window.LabPager.crear(document.getElementById('documentsPager'), 25);
+    pager.alCambiar(function () {
+        document.querySelector('.documents-repository').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
     function filterRows() {
         var type = typeFilter ? typeFilter.value : '';
         var term = normalize(search ? search.value.trim() : '');
-        var visible = 0;
+        var visibles = [];
         rows.forEach(function (row) {
             var matchesType = !type || row.dataset.type === type;
             var matchesSearch = !term || normalize(row.dataset.search).indexOf(term) !== -1;
             row.hidden = !(matchesType && matchesSearch);
-            if (!row.hidden) visible++;
+            if (!row.hidden) visibles.push(row);
         });
-        if (filteredEmpty) filteredEmpty.hidden = visible !== 0;
+        if (filteredEmpty) filteredEmpty.hidden = visibles.length !== 0;
+        pager.aplicar(visibles);
     }
 
     function formatDate(value) {
@@ -277,7 +361,7 @@ foreach ($panelDocumentos['documentos'] as $documento) {
     function openModal(id, historyOnly) {
         var doc = documents[id];
         if (!doc || !modal) return;
-        modalTitle.textContent = doc.codigo + ' — ' + doc.tipo;
+        modalTitle.textContent = 'Informe · Lote ' + doc.lote + (doc.tipo ? ' (' + doc.tipo + ')' : '') + ' · v' + doc.version;
         frame.src = '../controllers/documento_pdf.php?id_documento=' + encodeURIComponent(id);
         download.href = '../controllers/documento_pdf.php?id_documento=' + encodeURIComponent(id) + '&download=1';
         renderHistory(id);
@@ -289,23 +373,91 @@ foreach ($panelDocumentos['documentos'] as $documento) {
     }
 
     function closeModal() {
-        if (!modal) return;
-        modal.hidden = true;
-        frame.src = 'about:blank';
+        if (modal) {
+            modal.hidden = true;
+            frame.src = 'about:blank';
+        }
+        if (sendModal) sendModal.hidden = true;
         document.body.classList.remove('documents-modal-open');
     }
 
+    function openSend(id) {
+        var doc = documents[id];
+        if (!doc || !sendModal) return;
+        sendId = id;
+        sendSummary.textContent = 'Informe del lote ' + doc.lote + (doc.tipo ? ' (' + doc.tipo + ')' : '') + ' · ' + doc.cliente + ' · v' + doc.version;
+        sendEmails.value = (doc.correos || []).join(', ');
+        setSendStatus('', '');
+        sendSubmit.disabled = false;
+        sendModal.hidden = false;
+        document.body.classList.add('documents-modal-open');
+        sendEmails.focus();
+    }
+
+    function setSendStatus(text, kind) {
+        sendStatus.textContent = text;
+        sendStatus.className = 'documents-send-status' + (kind ? ' is-' + kind : '');
+    }
+
+    if (sendForm) sendForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var emails = sendEmails.value.split(/[,;\s]+/).map(function (v) { return v.trim(); }).filter(Boolean);
+        var invalid = emails.filter(function (v) { return !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v); });
+        if (!emails.length) { setSendStatus('Ingrese al menos un correo.', 'error'); sendEmails.focus(); return; }
+        if (invalid.length) { setSendStatus('Correo no válido: ' + invalid.join(', '), 'error'); sendEmails.focus(); return; }
+        sendSubmit.disabled = true;
+        setSendStatus('Generando el PDF y enviando…', '');
+        fetch('../controllers/enviar_reporte_correo.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+            body: JSON.stringify({id_documento: Number(sendId), emails: emails, csrf: csrf})
+        }).then(function (response) {
+            return response.json().catch(function () { return {ok: false, message: 'Respuesta no válida del servidor (' + response.status + ').'}; });
+        }).then(function (data) {
+            setSendStatus(data.message || (data.ok ? 'Enviado.' : 'No se pudo enviar.'), data.ok ? 'ok' : 'error');
+            sendSubmit.disabled = !!data.ok;
+        }).catch(function () {
+            setSendStatus('No se pudo conectar con el servidor.', 'error');
+            sendSubmit.disabled = false;
+        });
+    });
+
+    // Menú de acciones: uno abierto a la vez, en posición fija para no quedar recortado por la tabla.
+    function closeMenus(except) {
+        document.querySelectorAll('details.documents-menu[open]').forEach(function (menu) {
+            if (menu !== except) menu.removeAttribute('open');
+        });
+    }
+    document.addEventListener('toggle', function (event) {
+        var menu = event.target;
+        if (!menu.matches || !menu.matches('details.documents-menu') || !menu.open) return;
+        closeMenus(menu);
+        var list = menu.querySelector('.documents-menu-list');
+        var rect = menu.querySelector('summary').getBoundingClientRect();
+        list.style.left = Math.max(8, rect.right - list.offsetWidth) + 'px';
+        var below = rect.bottom + 4;
+        list.style.top = (below + list.offsetHeight > window.innerHeight - 8 ? Math.max(8, rect.top - list.offsetHeight - 4) : below) + 'px';
+    }, true);
+    window.addEventListener('scroll', function () { closeMenus(null); }, true);
+    window.addEventListener('resize', function () { closeMenus(null); });
+
     if (typeFilter) typeFilter.addEventListener('change', filterRows);
     if (search) search.addEventListener('input', filterRows);
+    filterRows();
     document.addEventListener('click', function (event) {
         var viewButton = event.target.closest('[data-view-document]');
         var historyButton = event.target.closest('[data-view-history]');
+        var sendButton = event.target.closest('[data-send-document]');
+        if (!event.target.closest('details.documents-menu') || event.target.closest('.documents-menu-list [role="menuitem"]')) closeMenus(null);
         if (viewButton) openModal(viewButton.dataset.viewDocument, false);
-        if (historyButton && !historyButton.disabled) openModal(historyButton.dataset.viewHistory, true);
-        if (event.target.closest('[data-close-modal]') || event.target === modal) closeModal();
+        if (historyButton) openModal(historyButton.dataset.viewHistory, true);
+        if (sendButton) openSend(sendButton.dataset.sendDocument);
+        if (event.target.closest('[data-close-modal]') || event.target === modal || event.target === sendModal) closeModal();
     });
     document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape' && modal && !modal.hidden) closeModal();
+        if (event.key !== 'Escape') return;
+        if ((modal && !modal.hidden) || (sendModal && !sendModal.hidden)) closeModal();
+        else closeMenus(null);
     });
 })();
 </script>

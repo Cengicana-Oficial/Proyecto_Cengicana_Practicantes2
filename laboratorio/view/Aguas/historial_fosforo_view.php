@@ -10,8 +10,8 @@ $historial = $historial ?? [];
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Historial Fósforo</title>
-    <link rel="stylesheet" href="../../styles/formularios.css">
-    <link rel="stylesheet" href="../../styles/historial.css">
+    <link rel="stylesheet" href="../../styles/formularios.css?v=20261006">
+    <link rel="stylesheet" href="../../styles/historial.css?v=20261006">
 </head>
 
 <body>

@@ -4,7 +4,7 @@
 :root {
   --surface-card-bg: var(--lab-body-surface-strong);
   --surface-panel-bg: var(--lab-body-surface);
-  --surface-hero-bg: linear-gradient(180deg, rgba(248, 248, 246, 0.98), rgba(236, 238, 234, 0.98));
+  --surface-hero-bg: linear-gradient(180deg, rgba(247, 248, 248, 0.98), rgba(238, 240, 241, 0.98));
   --surface-notice-bg: var(--state-info-bg);
   --surface-empty-bg: var(--lab-body-surface-strong);
   --surface-border: 1px solid var(--panel-border);

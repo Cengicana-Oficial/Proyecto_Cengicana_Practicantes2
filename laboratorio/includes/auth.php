@@ -6,6 +6,35 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+/*
+ * Rol por modulo (login/config/roles_modulo.php): la sesion es compartida con los demas
+ * modulos, asi que en cada peticion se cargan el rol y los permisos del usuario EN
+ * LABORATORIO. Su rol en Cursos, Comites, etc. no aplica aqui.
+ */
+if (!empty($_SESSION['id_usuario']) && !defined('LAB_ROL_MODULO_ACTIVADO')) {
+    define('LAB_ROL_MODULO_ACTIVADO', true);
+    try {
+        require_once __DIR__ . '/../../login/config/roles_modulo.php';
+        $labEnvCentral = parse_ini_file(__DIR__ . '/../../login/.env', false, INI_SCANNER_RAW);
+        if ($labEnvCentral) {
+            $labCentral = new PDO(
+                'mysql:host=' . $labEnvCentral['DB_HOST'] . ';port=' . ($labEnvCentral['DB_PORT'] ?? 3306) . ';dbname=' . $labEnvCentral['DB_NAME'] . ';charset=utf8mb4',
+                $labEnvCentral['DB_USER'], $labEnvCentral['DB_PASS'] ?? $labEnvCentral['DB_PASSWORD'] ?? '',
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+            cengi_rm_activar_modulo($labCentral, 'laboratorio');
+            $labCentral = null;
+        }
+        unset($labEnvCentral);
+    } catch (Throwable $e) {
+        // Sin el rol del modulo no se usan permisos de otro modulo que hayan quedado en sesion.
+        $_SESSION['rol'] = $_SESSION['nombre_rol'] = '';
+        $_SESSION['rol_id'] = 0;
+        $_SESSION['user_permissions'] = [];
+        error_log('Laboratorio: no se pudo cargar el rol del modulo: ' . $e->getMessage());
+    }
+}
+
 function lab_session_get(array $keys)
 {
     foreach ($keys as $key) {
@@ -155,6 +184,7 @@ function lab_role_is_laboratory_related(): bool
         || strpos($role, 'administrador') !== false
         || strpos($role, 'admin') !== false
         || strpos($role, 'jefa') !== false
+        || strpos($role, 'jefe') !== false
         || strpos($role, 'tecnico') !== false
         || strpos($role, 'analista') !== false
         || strpos($role, 'laboratorista') !== false
@@ -248,6 +278,8 @@ function lab_all_permissions(): array
         'laboratorio.documentos.gestionar',
         'laboratorio.firma.gestionar',
         'laboratorio.informes.ver',
+        'laboratorio.catalogo_analisis.ver',
+        'laboratorio.catalogo_muestras.ver',
     ];
 }
 
@@ -363,9 +395,9 @@ function lab_forbidden(string $message = 'No tiene permisos para acceder a este 
 {
     http_response_code(403);
     echo '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Acceso denegado</title>';
-    echo '<style>body{font-family:Arial,sans-serif;background:#f6f8f3;color:#1f2a1f;padding:40px}';
-    echo '.box{max-width:560px;margin:auto;background:#fff;border:1px solid #dfe7d8;border-radius:8px;padding:24px}';
-    echo 'a{color:#2c6b2f}</style></head><body><div class="box">';
+    echo '<style>body{font-family:Arial,sans-serif;background:#F7F8F8;color:#1F2326;padding:40px}';
+    echo '.box{max-width:560px;margin:auto;background:#fff;border:1px solid #C7E4A8;border-radius:8px;padding:24px}';
+    echo 'a{color:#4E8418}</style></head><body><div class="box">';
     echo '<h1>Acceso denegado</h1>';
     echo '<p>' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p>';
     echo '<a href="' . htmlspecialchars(lab_login_url(), ENT_QUOTES, 'UTF-8') . '">Volver al inicio de sesion</a>';

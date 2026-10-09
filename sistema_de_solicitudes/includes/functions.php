@@ -66,19 +66,20 @@ function current_user(PDO $menuPdo, PDO $pdo): array
         return [];
     }
 
-    $stmt = $menuPdo->prepare(
-        'SELECT u.id, u.nombre, u.correo, u.rol_id, u.es_superadmin, r.nombre_rol
-         FROM usuarios u
-         INNER JOIN roles r ON r.id = u.rol_id
-         WHERE u.id = ?'
-    );
+    $stmt = $menuPdo->prepare('SELECT u.id, u.nombre, u.correo, u.es_superadmin FROM usuarios u WHERE u.id = ?');
     $stmt->execute([$id]);
     $user = $stmt->fetch();
     if (!$user) {
         return [];
     }
 
-    $permissions = refresh_session_permissions($menuPdo, (int) $user['rol_id']);
+    // Rol y permisos del usuario EN ESTE MODULO (login/config/roles_modulo.php): el rol que
+    // tenga en otros modulos no aplica aqui.
+    require_once __DIR__ . '/../../login/config/roles_modulo.php';
+    $rolModulo = cengi_rm_activar_modulo($menuPdo, current_module_names()[0]);
+    $user['rol_id'] = $rolModulo['rol_id'] ?? 0;
+    $user['nombre_rol'] = $rolModulo['nombre_rol'] ?? '';
+    $permissions = $_SESSION['user_permissions'];
     $moduleStmt = $menuPdo->prepare('SELECT modulo_id FROM usuario_modulo WHERE usuario_id = ?');
     $moduleStmt->execute([$id]);
 
@@ -122,23 +123,80 @@ function has_permission(array $user, string $permission): bool
     return in_array($permission, $user['permissions'] ?? [], true);
 }
 
-function can_view_requests(array $user): bool
+/*
+ * Roles del modulo Solicitudes internas
+ * -------------------------------------
+ * Los roles son roles de la plataforma (login/roles/roles.php); este modulo solo
+ * lee los permisos `solicitudes_internas.*` del rol asignado al usuario:
+ *
+ * - superadmin: bandera global `usuarios.es_superadmin`. Ve y gestiona todo.
+ * - director:   rol con `solicitudes_internas.ver_todas` (p. ej. "Director"). Ve,
+ *               en solo lectura, todas las solicitudes entre programas; solo
+ *               gestiona las dirigidas a su programa (Direccion).
+ * - jefe:       rol con `solicitudes_internas.ver` / `.gestionar` (p. ej. "Jefe de
+ *               programa"). Ve y gestiona las solicitudes que otros programas
+ *               envian a SU programa, y ve las que el mismo envio. Nada mas.
+ * - colaborador: rol con `solicitudes_internas.crear` (p. ej. "Colaborador de
+ *               programa"). Crea solicitudes y solo ve las suyas.
+ * - ninguno:    su rol no tiene permisos de este modulo.
+ *
+ * El programa del usuario se guarda en `usuario_programa` (base local).
+ */
+const MODULE_ROLE_LABELS = [
+    'superadmin' => 'Superadmin',
+    'director' => 'Director',
+    'jefe' => 'Jefe de programa',
+    'colaborador' => 'Colaborador',
+    'ninguno' => 'Sin permisos en el modulo',
+];
+
+/** Nombre del programa que debe tener asignado un director. */
+const DIRECTOR_PROGRAM_NAME = 'Direccion';
+
+function module_role(array $user): string
 {
-    return has_permission($user, 'solicitudes_internas.ver') || has_permission($user, 'solicitudes_internas.gestionar');
+    if (is_superadmin($user)) {
+        return 'superadmin';
+    }
+    if (has_permission($user, 'solicitudes_internas.ver_todas')) {
+        return 'director';
+    }
+    if (has_permission($user, 'solicitudes_internas.ver') || has_permission($user, 'solicitudes_internas.gestionar')) {
+        return 'jefe';
+    }
+    if (has_permission($user, 'solicitudes_internas.crear')) {
+        return 'colaborador';
+    }
+
+    return 'ninguno';
+}
+
+function module_role_label(string $role): string
+{
+    return MODULE_ROLE_LABELS[$role] ?? MODULE_ROLE_LABELS['ninguno'];
+}
+
+/** Jefe o director con programa: recibe y gestiona lo que llega a su programa. */
+function is_program_head(array $user): bool
+{
+    return in_array(module_role($user), ['jefe', 'director'], true) && !empty($user['programa_id']);
+}
+
+/** Superadmin o director: ve todas las solicitudes (el director en solo lectura). */
+function can_view_all_requests(array $user): bool
+{
+    return is_superadmin($user) || has_permission($user, 'solicitudes_internas.ver_todas');
 }
 
 function can_view_received_requests(array $user): bool
 {
-    if (is_superadmin($user)) {
-        return true;
-    }
-
-    return can_view_requests($user) && !empty($user['programa_id']);
+    return can_view_all_requests($user) || is_program_head($user);
 }
 
 function can_manage_requests(array $user): bool
 {
-    return has_permission($user, 'solicitudes_internas.gestionar');
+    return is_superadmin($user)
+        || (has_permission($user, 'solicitudes_internas.gestionar') && !empty($user['programa_id']));
 }
 
 function can_view_users(array $user): bool
@@ -168,6 +226,102 @@ function can_create_requests(array $user): bool
     }
 
     return has_permission($user, 'solicitudes_internas.crear') && !empty($user['programa_id']);
+}
+
+/**
+ * Roles de la plataforma que se pueden asignar desde este modulo: los que tienen
+ * permisos de solicitudes (crear/ver/gestionar). Nunca incluye Superadmin.
+ * Devuelve [rol_id => ['nombre' => string, 'modulo' => 'director'|'jefe'|'colaborador']].
+ */
+function assignable_module_roles(PDO $menuPdo): array
+{
+    $rows = $menuPdo->query(
+        "SELECT r.id, r.nombre_rol,
+                SUM(pe.nombre_permiso = 'solicitudes_internas.ver_todas') AS es_director,
+                SUM(pe.nombre_permiso IN ('solicitudes_internas.ver', 'solicitudes_internas.gestionar')) AS es_jefe
+         FROM roles r
+         INNER JOIN rol_permiso rp ON rp.rol_id = r.id
+         INNER JOIN permisos pe ON pe.id = rp.permiso_id
+         WHERE pe.nombre_permiso IN ('solicitudes_internas.crear', 'solicitudes_internas.ver', 'solicitudes_internas.gestionar', 'solicitudes_internas.ver_todas')
+           AND r.id <> 1
+           AND LOWER(r.nombre_rol) <> 'superadmin'
+         GROUP BY r.id, r.nombre_rol
+         ORDER BY es_director DESC, es_jefe DESC, r.nombre_rol"
+    )->fetchAll();
+
+    $roles = [];
+    foreach ($rows as $row) {
+        $kind = 'colaborador';
+        if ((int) $row['es_director'] > 0) {
+            $kind = 'director';
+        } elseif ((int) $row['es_jefe'] > 0) {
+            $kind = 'jefe';
+        }
+        $roles[(int) $row['id']] = ['nombre' => $row['nombre_rol'], 'modulo' => $kind];
+    }
+
+    return $roles;
+}
+
+/**
+ * Asigna el rol de plataforma enviado en el formulario (campo rol_id). Vacio = no cambiar.
+ * Valida que sea un rol del modulo, que un jefe tenga programa y que un director
+ * tenga asignado el programa Direccion ($directionProgramId).
+ */
+function apply_posted_platform_role(PDO $menuPdo, int $userId, int $programId, ?int $directionProgramId): void
+{
+    $roleId = (int) ($_POST['rol_id'] ?? 0);
+    $roles = assignable_module_roles($menuPdo);
+
+    if ($roleId > 0 && !isset($roles[$roleId])) {
+        throw new RuntimeException('El rol seleccionado no tiene permisos de Solicitudes internas.');
+    }
+
+    $targetStmt = $menuPdo->prepare('SELECT es_superadmin FROM usuarios WHERE id = ?');
+    $targetStmt->execute([$userId]);
+    $target = $targetStmt->fetch();
+    if (!$target) {
+        throw new RuntimeException('El usuario seleccionado no existe.');
+    }
+    // Rol actual EN ESTE MODULO (login/config/roles_modulo.php), no el de otros modulos.
+    require_once __DIR__ . '/../../login/config/roles_modulo.php';
+    $target['rol_id'] = (int) (cengi_rm_rol_en_modulo($menuPdo, $userId, current_module_names()[0])['rol_id'] ?? 0);
+
+    $effectiveRoleId = $roleId > 0 ? $roleId : (int) $target['rol_id'];
+    $effectiveKind = $roles[$effectiveRoleId]['modulo'] ?? null;
+    if ($effectiveKind === 'director' && (int) $target['es_superadmin'] !== 1 && ($directionProgramId === null || $programId !== $directionProgramId)) {
+        throw new RuntimeException('Un director debe tener asignado el programa ' . DIRECTOR_PROGRAM_NAME . ': solo gestiona las solicitudes dirigidas a ese programa.');
+    }
+    if ($effectiveKind === 'jefe' && $programId <= 0) {
+        throw new RuntimeException('Un jefe de programa necesita tener un programa asignado.');
+    }
+
+    if ($roleId <= 0 || $roleId === (int) $target['rol_id']) {
+        return;
+    }
+    if ((int) $target['es_superadmin'] === 1) {
+        throw new RuntimeException('El rol de un superadmin solo se cambia desde la gestion de usuarios de la plataforma.');
+    }
+
+    // Solo cambia su rol en Solicitudes internas; sus roles en otros modulos no se tocan.
+    foreach (module_ids($menuPdo) as $moduloId) {
+        cengi_rm_asignar($menuPdo, $userId, $moduloId, $roleId);
+    }
+}
+
+/** Guarda el programa del usuario en el modulo; sin programa se elimina la asignacion. */
+function save_user_program(PDO $pdo, int $userId, int $programId): void
+{
+    if ($programId <= 0) {
+        $pdo->prepare('DELETE FROM usuario_programa WHERE usuario_id = ?')->execute([$userId]);
+        return;
+    }
+
+    $pdo->prepare(
+        'INSERT INTO usuario_programa (usuario_id, programa_id)
+         VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE programa_id = VALUES(programa_id)'
+    )->execute([$userId, $programId]);
 }
 
 function role_is_superadmin(string $roleName): bool
@@ -248,7 +402,7 @@ function find_program_id_by_name(array $programs, string $name): ?int
 
 function can_view_request(array $user, array $request): bool
 {
-    if (is_superadmin($user)) {
+    if (can_view_all_requests($user)) {
         return true;
     }
 
@@ -256,8 +410,7 @@ function can_view_request(array $user, array $request): bool
         return true;
     }
 
-    return can_view_requests($user)
-        && !empty($user['programa_id'])
+    return is_program_head($user)
         && (int) ($request['programa_destino_id'] ?? 0) === (int) $user['programa_id'];
 }
 
@@ -274,11 +427,11 @@ function can_manage_request(array $user, array $request): bool
 
 function request_scope_sql(array $user, string $alias = 's'): array
 {
-    if (is_superadmin($user)) {
+    if (can_view_all_requests($user)) {
         return ['1 = 1', []];
     }
 
-    if (!empty($user['programa_id']) && can_view_requests($user)) {
+    if (is_program_head($user)) {
         return [
             "({$alias}.solicitante_id = ? OR {$alias}.programa_destino_id = ?)",
             [(int) $user['id'], (int) $user['programa_id']],
@@ -299,7 +452,7 @@ function sent_scope_sql(array $user, string $alias = 's'): array
 
 function received_scope_sql(array $user, string $alias = 's'): array
 {
-    if (is_superadmin($user)) {
+    if (can_view_all_requests($user)) {
         return ['1 = 1', []];
     }
 
@@ -317,57 +470,52 @@ function fetch_module_users(PDO $menuPdo, PDO $pdo, array $user): array
         return [];
     }
 
-    $params = [];
-    $where = [];
     $modulePlaceholders = implode(',', array_fill(0, count($moduleIds), '?'));
+    $params = $moduleIds;
 
-    $where[] = "EXISTS (
-        SELECT 1
-        FROM usuario_modulo um
-        WHERE um.usuario_id = u.id
-          AND um.modulo_id IN ({$modulePlaceholders})
-    )";
-    $params = array_merge($params, $moduleIds);
-
+    // El rol y los permisos que se muestran son los del usuario EN ESTE MODULO
+    // (usuario_modulo.rol_id), no su rol en otros modulos.
     $sql = "
         SELECT
             u.id,
             u.nombre,
             u.correo,
-            u.rol_id,
+            um.rol_id,
             u.es_superadmin,
             u.ingenio_id,
-            r.nombre_rol,
+            COALESCE(r.nombre_rol, '') AS nombre_rol,
             i.nombre_ingenio AS ingenio,
             up.programa_id,
+            (
+                SELECT GROUP_CONCAT(pe.nombre_permiso)
+                FROM rol_permiso rp
+                INNER JOIN permisos pe ON pe.id = rp.permiso_id
+                WHERE rp.rol_id = um.rol_id
+                  AND pe.nombre_permiso LIKE 'solicitudes\_internas.%'
+            ) AS permisos_solicitudes,
             p.nombre AS programa,
-            CASE
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM usuario_modulo ums
-                    WHERE ums.usuario_id = u.id
-                      AND ums.modulo_id IN ({$modulePlaceholders})
-                ) THEN 1 ELSE 0
-            END AS tiene_modulo
+            1 AS tiene_modulo
         FROM usuarios u
-        INNER JOIN roles r ON r.id = u.rol_id
+        INNER JOIN usuario_modulo um ON um.usuario_id = u.id AND um.modulo_id IN ({$modulePlaceholders})
+        LEFT JOIN roles r ON r.id = um.rol_id
         LEFT JOIN ingenios i ON i.id = u.ingenio_id
         LEFT JOIN " . $pdo->query('SELECT DATABASE()')->fetchColumn() . ".usuario_programa up ON up.usuario_id = u.id
         LEFT JOIN " . $pdo->query('SELECT DATABASE()')->fetchColumn() . ".programas p ON p.id = up.programa_id
     ";
-
-    $params = array_merge($moduleIds, $params);
-
-    if ($where) {
-        $sql .= ' WHERE ' . implode(' AND ', $where);
-    }
 
     $sql .= ' ORDER BY u.nombre';
 
     $stmt = $menuPdo->prepare($sql);
     $stmt->execute($params);
 
-    return $stmt->fetchAll();
+    $rows = $stmt->fetchAll();
+    foreach ($rows as &$row) {
+        // Permite usar has_permission()/module_role() sobre cada usuario listado.
+        $row['permissions'] = array_filter(explode(',', (string) $row['permisos_solicitudes']));
+    }
+    unset($row);
+
+    return $rows;
 }
 
 function render_table(array $rows, string $id, array $user, bool $management = false): void
@@ -411,4 +559,144 @@ function render_table(array $rows, string $id, array $user, bool $management = f
         </div>
     </div>
     <?php
+}
+
+/*
+ * Notificaciones (campanita)
+ * --------------------------
+ * Cada registro de `seguimientos` es un evento. Un usuario ve los eventos que
+ * hicieron OTROS usuarios sobre:
+ *  - las solicitudes que el envio (cambios de estado / seguimiento);
+ *  - jefe de programa: las solicitudes que recibe su programa;
+ *  - superadmin: la creacion de cualquier solicitud nueva.
+ * Las lecturas se guardan en `notificaciones_leidas`.
+ */
+const NOTIFICATION_DAYS = 30;
+
+function notification_scope_sql(array $user): array
+{
+    $conditions = ['s.solicitante_id = ?'];
+    $params = [(int) $user['id']];
+
+    if (is_superadmin($user)) {
+        $conditions[] = 'sg.id = (SELECT MIN(f.id) FROM seguimientos f WHERE f.solicitud_id = s.id)';
+    } elseif (is_program_head($user)) {
+        $conditions[] = 's.programa_destino_id = ?';
+        $params[] = (int) $user['programa_id'];
+    }
+
+    $where = 'sg.usuario_id <> ?
+        AND sg.creado_en >= NOW() - INTERVAL ' . NOTIFICATION_DAYS . ' DAY
+        AND (' . implode(' OR ', $conditions) . ')';
+
+    return [$where, array_merge([(int) $user['id']], $params)];
+}
+
+function fetch_notifications(PDO $pdo, string $menuDbName, array $user, int $limit = 15): array
+{
+    [$where, $params] = notification_scope_sql($user);
+
+    $countStmt = $pdo->prepare(
+        "SELECT COUNT(*)
+         FROM seguimientos sg
+         INNER JOIN solicitudes s ON s.id = sg.solicitud_id
+         WHERE {$where}
+           AND NOT EXISTS (
+               SELECT 1 FROM notificaciones_leidas nl
+               WHERE nl.usuario_id = ? AND nl.seguimiento_id = sg.id
+           )"
+    );
+    $countStmt->execute(array_merge($params, [(int) $user['id']]));
+
+    $listStmt = $pdo->prepare(
+        "SELECT sg.id, sg.estado, sg.observacion, sg.creado_en,
+                s.id AS solicitud_id, s.codigo, s.titulo, s.solicitante_id,
+                po.nombre AS programa_origen,
+                u.nombre AS autor,
+                (sg.id = (SELECT MIN(f.id) FROM seguimientos f WHERE f.solicitud_id = s.id)) AS es_nueva,
+                EXISTS (
+                    SELECT 1 FROM notificaciones_leidas nl
+                    WHERE nl.usuario_id = ? AND nl.seguimiento_id = sg.id
+                ) AS leida
+         FROM seguimientos sg
+         INNER JOIN solicitudes s ON s.id = sg.solicitud_id
+         INNER JOIN programas po ON po.id = s.programa_origen_id
+         LEFT JOIN {$menuDbName}.usuarios u ON u.id = sg.usuario_id
+         WHERE {$where}
+         ORDER BY sg.creado_en DESC, sg.id DESC
+         LIMIT " . max(1, $limit)
+    );
+    $listStmt->execute(array_merge([(int) $user['id']], $params));
+
+    return [
+        'unread' => (int) $countStmt->fetchColumn(),
+        'items' => $listStmt->fetchAll(),
+    ];
+}
+
+/** Marca como leidas las notificaciones del usuario (todas, o solo las de una solicitud). */
+function mark_notifications_read(PDO $pdo, array $user, ?int $requestId = null): void
+{
+    [$where, $params] = notification_scope_sql($user);
+    $sql = "INSERT IGNORE INTO notificaciones_leidas (usuario_id, seguimiento_id)
+            SELECT ?, sg.id
+            FROM seguimientos sg
+            INNER JOIN solicitudes s ON s.id = sg.solicitud_id
+            WHERE {$where}";
+    $params = array_merge([(int) $user['id']], $params);
+
+    if ($requestId !== null) {
+        $sql .= ' AND s.id = ?';
+        $params[] = $requestId;
+    }
+
+    $pdo->prepare($sql)->execute($params);
+}
+
+/** Texto e icono de una notificacion para el usuario que la ve. */
+function notification_view(array $item, array $user): array
+{
+    $author = $item['autor'] ?: 'Un usuario';
+
+    if ((int) $item['es_nueva'] === 1) {
+        return [
+            'icon' => 'ti-inbox',
+            'tone' => 'nueva',
+            'text' => "Nueva solicitud {$item['codigo']} de {$item['programa_origen']}: {$item['titulo']}",
+        ];
+    }
+
+    $status = estado_label((string) $item['estado']);
+    $icons = ['recibido' => 'ti-mail', 'proceso' => 'ti-loader-2', 'completado' => 'ti-circle-check', 'rechazado' => 'ti-circle-x'];
+    $text = (int) $item['solicitante_id'] === (int) $user['id']
+        ? "Tu solicitud {$item['codigo']} paso a \"{$status}\" ({$author})"
+        : "{$author} actualizo {$item['codigo']} a \"{$status}\"";
+
+    return [
+        'icon' => $icons[$item['estado']] ?? 'ti-bell',
+        'tone' => (string) $item['estado'],
+        'text' => $text,
+    ];
+}
+
+function time_ago(string $datetime): string
+{
+    $seconds = max(0, time() - strtotime($datetime));
+    if ($seconds < 60) {
+        return 'hace un momento';
+    }
+    if ($seconds < 3600) {
+        $minutes = intdiv($seconds, 60);
+        return "hace {$minutes} min";
+    }
+    if ($seconds < 86400) {
+        $hours = intdiv($seconds, 3600);
+        return $hours === 1 ? 'hace 1 hora' : "hace {$hours} horas";
+    }
+    $days = intdiv($seconds, 86400);
+    if ($days < 7) {
+        return $days === 1 ? 'ayer' : "hace {$days} dias";
+    }
+
+    return date('d/m/Y', strtotime($datetime));
 }

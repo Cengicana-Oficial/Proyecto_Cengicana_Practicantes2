@@ -31,7 +31,12 @@ $kpis = lab_dashboard_kpis($pdo);
 $tiempoPorEtapa = lab_dashboard_tiempo_por_etapa($pdo);
 $sla = lab_dashboard_cumplimiento_sla($pdo);
 $productividad = lab_dashboard_productividad_analista($pdo);
-$actividadReciente = lab_trazabilidad_actividad_reciente($pdo, 12);
+// Actividad reciente en páginas de 10 eventos (?act_pag=N), para revisar flujos anteriores.
+$actividadPorPagina = 10;
+$actividadTotal = lab_trazabilidad_actividad_total($pdo);
+$actividadPaginas = max(1, (int) ceil($actividadTotal / $actividadPorPagina));
+$actividadPagina = min(max(1, (int) ($_GET['act_pag'] ?? 1)), $actividadPaginas);
+$actividadReciente = lab_trazabilidad_actividad_reciente($pdo, $actividadPorPagina, ($actividadPagina - 1) * $actividadPorPagina);
 
 function dash_e($value): string
 {
@@ -59,7 +64,8 @@ foreach ($productividad as $fila) {
 }
 
 lab_shell_head('Dashboard', 'Panorama general del flujo del laboratorio, con datos en tiempo real', [
-    '../css/lab_shell.css?v=1',
+    '../css/lab_shell.css?v=20261006',
+    '../css/lab_pager.css?v=' . filemtime(__DIR__ . '/../css/lab_pager.css'),
 ]);
 lab_shell_open('dashboard.php');
 ?>
@@ -143,7 +149,7 @@ lab_shell_open('dashboard.php');
             </div>
         <?php else: ?>
             <div class="cengi-donut-wrap">
-                <div class="cengi-donut" style="background: conic-gradient(var(--cengi-primary) 0% <?= (float) $sla['porcentaje'] ?>%, #f0d9d9 <?= (float) $sla['porcentaje'] ?>% 100%);">
+                <div class="cengi-donut" style="background: conic-gradient(var(--cengi-primary) 0% <?= (float) $sla['porcentaje'] ?>%, #FFD9BF <?= (float) $sla['porcentaje'] ?>% 100%);">
                     <div class="cengi-donut-hole">
                         <strong><?= dash_e($sla['porcentaje']) ?>%</strong>
                         <span>A tiempo</span>
@@ -151,7 +157,7 @@ lab_shell_open('dashboard.php');
                 </div>
                 <div class="cengi-donut-legend">
                     <div><span class="dot" style="background:var(--cengi-primary);"></span> A tiempo: <b><?= (int) $sla['cumplidas'] ?></b></div>
-                    <div><span class="dot" style="background:#f0d9d9;"></span> Fuera de plazo: <b><?= (int) ($sla['total'] - $sla['cumplidas']) ?></b></div>
+                    <div><span class="dot" style="background:#FFD9BF;"></span> Fuera de plazo: <b><?= (int) ($sla['total'] - $sla['cumplidas']) ?></b></div>
                     <div class="muted" style="color:var(--cengi-muted);margin-top:4px;"><?= (int) $sla['total'] ?> solicitudes con plazo vencido evaluadas</div>
                 </div>
             </div>
@@ -188,7 +194,7 @@ lab_shell_open('dashboard.php');
         <?php endif; ?>
     </div>
 
-    <div class="cengi-card">
+    <div class="cengi-card" id="actividad">
         <h3>Actividad reciente en el flujo</h3>
         <div class="cengi-card-sub">
             Ultimos eventos registrados (tablero de planificacion, validacion tecnica y trazabilidad
@@ -221,6 +227,22 @@ lab_shell_open('dashboard.php');
                     </div>
                 <?php endforeach; ?>
             </div>
+            <?php if ($actividadPaginas > 1): ?>
+                <?php
+                $actividadDesde = ($actividadPagina - 1) * $actividadPorPagina + 1;
+                $actividadHasta = min($actividadPagina * $actividadPorPagina, $actividadTotal);
+                $actividadUrl = static fn(int $p): string => '?' . http_build_query(array_merge($_GET, ['act_pag' => $p])) . '#actividad';
+                ?>
+                <nav class="lab-pager" aria-label="Páginas de actividad reciente">
+                    <span><?= $actividadDesde ?>–<?= $actividadHasta ?> de <?= $actividadTotal ?> eventos</span>
+                    <div class="lab-pager-nav">
+                        <a class="lab-pager-btn" href="<?= dash_e($actividadUrl(1)) ?>" aria-label="Primera página"<?= $actividadPagina <= 1 ? ' aria-disabled="true" tabindex="-1"' : '' ?>><span class="material-symbols-outlined" aria-hidden="true">first_page</span></a>
+                        <a class="lab-pager-btn" href="<?= dash_e($actividadUrl($actividadPagina - 1)) ?>" aria-label="Página anterior"<?= $actividadPagina <= 1 ? ' aria-disabled="true" tabindex="-1"' : '' ?>><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></a>
+                        <b>Página <?= $actividadPagina ?> de <?= $actividadPaginas ?></b>
+                        <a class="lab-pager-btn" href="<?= dash_e($actividadUrl($actividadPagina + 1)) ?>" aria-label="Página siguiente"<?= $actividadPagina >= $actividadPaginas ? ' aria-disabled="true" tabindex="-1"' : '' ?>><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></a>
+                    </div>
+                </nav>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>

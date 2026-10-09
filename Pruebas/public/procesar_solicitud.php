@@ -652,8 +652,11 @@ $connUsuarios = Conexion::conectarUsuariosMenu();
 $stmtEmailAdmin = $connUsuarios->prepare("
  SELECT u.correo, r.nombre_rol
 FROM usuarios u
-INNER JOIN roles r ON u.rol_id = r.id
-WHERE r.nombre_rol = 'Visitante';
+INNER JOIN usuario_modulo um ON um.usuario_id = u.id
+INNER JOIN modulos m ON m.id = um.modulo_id AND LOWER(m.nombre) = 'solicitud de visitas'
+INNER JOIN roles r ON r.id = um.rol_id
+WHERE r.nombre_rol = 'Visitante'
+LIMIT 1;
 ");
  
         $stmtEmailAdmin->execute();
