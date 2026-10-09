@@ -1,31 +1,12 @@
 <?php
 require_once __DIR__ . '/conexion.php';
+// cengi_texto_normalizado() y cengi_usuario_actual_id(): tambien las usan paginas publicas.
+require_once __DIR__ . '/cengi_texto.php';
 require_once __DIR__ . '/../login/config/session.php';
+require_once __DIR__ . '/../login/config/roles_modulo.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     cengi_session_start();
-}
-
-function cengi_texto_normalizado($valor)
-{
-    $valor = trim((string) $valor);
-    $valor = mb_strtolower($valor, 'UTF-8');
-    $valor = strtr($valor, [
-        'á' => 'a',
-        'é' => 'e',
-        'í' => 'i',
-        'ó' => 'o',
-        'ú' => 'u',
-        'ñ' => 'n',
-        'Á' => 'a',
-        'É' => 'e',
-        'Í' => 'i',
-        'Ó' => 'o',
-        'Ú' => 'u',
-        'Ñ' => 'n',
-    ]);
-
-    return preg_replace('/\s+/', '', $valor);
 }
 
 /**
@@ -72,34 +53,25 @@ function cengi_cargar_usuario_actual()
     }
 
     try {
-        $conn = conectar_usuarios_menu();
-        $stmt = $conn->prepare("
-            SELECT
-                u.id,
-                u.nombre,
-                u.correo,
-                u.rol_id,
-                u.ingenio_id,
-                u.es_superadmin,
-                r.nombre_rol,
-                i.nombre_ingenio
+        $menu = conectar_usuarios_menu_pdo();
+        $stmt = $menu->prepare("
+            SELECT u.id, u.nombre, u.correo, u.ingenio_id, u.es_superadmin, i.nombre_ingenio
             FROM usuarios u
-            INNER JOIN roles r ON r.id = u.rol_id
             LEFT JOIN ingenios i ON i.id = u.ingenio_id
             WHERE u.id = ?
             LIMIT 1
         ");
-
-        $idUsuario = (int) $_SESSION['id_usuario'];
-        $stmt->bind_param('i', $idUsuario);
-        $stmt->execute();
-        $usuario = $stmt->get_result()->fetch_assoc();
+        $stmt->execute([(int) $_SESSION['id_usuario']]);
+        $usuario = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
         if ($usuario) {
+            // Rol y permisos del usuario EN CURSOS (login/config/roles_modulo.php): su rol en
+            // Laboratorio, Comites, etc. no aplica aqui.
+            $rolCursos = cengi_rm_activar_modulo($menu, 'cursos');
+            $usuario['rol_id'] = $rolCursos['rol_id'] ?? 0;
+            $usuario['nombre_rol'] = $rolCursos['nombre_rol'] ?? '';
             $_SESSION['usuario'] = $usuario['nombre'];
             $_SESSION['correo'] = $usuario['correo'];
-            $_SESSION['rol'] = $usuario['nombre_rol'];
-            $_SESSION['rol_id'] = $usuario['rol_id'];
             $_SESSION['ingenio_id'] = $usuario['ingenio_id'];
             $_SESSION['ingenio_nombre'] = $usuario['nombre_ingenio'];
             $_SESSION['es_superadmin'] = $usuario['es_superadmin'];
@@ -403,9 +375,24 @@ function cengi_puede_gestionar_diplomas()
  * permisos_roles.php porque el acceso depende del rol/ingenio de la sesion,
  * igual que el resto del scoping por ingenio del modulo (cengi_scope_sql()).
  */
+/**
+ * Seguimiento por ingenio (dashboard_ingenio.php, que reemplazo a seguimiento_ingenio.php):
+ * el administrador elige cualquier ingenio; el usuario de ingenio y quien gestiona cursos
+ * sin ser administrador ven solo su propio ingenio.
+ */
 function cengi_puede_ver_dashboard_ingenio()
 {
-    return cengi_es_admin() || (cengi_es_ingenio() && cengi_ingenio_id_actual() > 0);
+    return cengi_es_admin()
+        || ((cengi_es_ingenio() || cengi_puede_gestionar()) && cengi_ingenio_id_actual() > 0);
+}
+
+/**
+ * Reportes para la Dirección e instituciones de interés (Informe de gestión): el
+ * administrador y quien tenga ver_reportes_cengi (matriz "Reportes" en roles.php).
+ */
+function cengi_puede_ver_reportes()
+{
+    return cengi_es_admin() || cengi_tiene_permiso('ver_reportes_cengi');
 }
 
 function cengi_puede_ver_roles()
@@ -439,11 +426,6 @@ function cengi_clasificar_rol_nivel($nombreRol)
     }
 
     return 1; // Administrador general (admin / superadmin / cualquier otro rol administrativo)
-}
-
-function cengi_usuario_actual_id()
-{
-    return isset($_SESSION['id_usuario']) ? (int) $_SESSION['id_usuario'] : 0;
 }
 
 function cengi_ingenio_id_actual()
@@ -690,6 +672,14 @@ function cengi_require_gestionar_diplomas($redirect = 'diplomas.php')
 function cengi_require_dashboard_ingenio($redirect = 'index.php')
 {
     if (!cengi_puede_ver_dashboard_ingenio()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_ver_reportes($redirect = 'index.php')
+{
+    if (!cengi_puede_ver_reportes()) {
         header("Location: {$redirect}");
         exit();
     }

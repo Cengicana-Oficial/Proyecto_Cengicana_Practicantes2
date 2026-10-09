@@ -96,7 +96,7 @@ function cengi_area_html($valor)
     <title>Áreas técnicas</title>
     <link rel="stylesheet" href="css/bootstrap.min.css">
     <link rel="stylesheet" href="css/bootstrap-theme.css">
-    <link rel="stylesheet" href="css/proyecto.css">
+    <link rel="stylesheet" href="css/proyecto.css?v=<?php echo (int) filemtime(__DIR__ . '/css/proyecto.css'); ?>">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
 </head>

@@ -54,7 +54,7 @@ if (!$row) {
 
 	<link href="css/bootstrap.min.css" rel="stylesheet">
 	<link href="css/bootstrap-theme.css" rel="stylesheet">
-	<link href="css/proyecto.css" rel="stylesheet">
+	<link href="css/proyecto.css?v=<?php echo (int) filemtime(__DIR__ . '/css/proyecto.css'); ?>" rel="stylesheet">
 
 	<script src="js/jquery-3.2.1.min.js"></script>
 	<script src="js/bootstrap.min.js"></script>

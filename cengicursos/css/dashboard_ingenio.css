@@ -1,0 +1,57 @@
+﻿/* Resumen y resultados por ingenio. */
+.cengi-ingenio-page .cengi-kpi-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.cengi-ingenio-page .cengi-kpi{padding:15px;border-top:3px solid #73BC25;border-radius:12px;box-shadow:none}
+.cengi-ingenio-page .cengi-kpi:nth-child(2n){border-top-color:#A3D300}
+.cengi-ingenio-page .cengi-kpi:nth-child(3n){border-top-color:#FFCC00}
+.cengi-ingenio-page .cengi-kpi:last-child{border-top-color:#FF6B00}
+.cengi-ingenio-page .cengi-kpi-val{font-size:26px;margin-top:0;white-space:nowrap}
+.cengi-ingenio-page .cengi-kpi-label{font-size:11px;line-height:1.5}
+.cengi-ingenio-page .cengi-charts-row{grid-template-columns:1fr 1fr;gap:18px}
+.cengi-ingenio-page .cengi-chart-wrap{height:210px}
+.dbi-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 18px}
+.dbi-actions a,.dbi-actions button{border:1px solid #CED2D5;border-radius:8px;background:#fff;padding:9px 13px;font-size:12px;color:#34463a;text-decoration:none}
+.dbi-actions .dbi-primary{background:#73BC25;border-color:#73BC25;color:#203713;font-weight:700}
+.dbi-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;background:#f0f7e8;border:1px solid #dbe8cf;border-radius:12px;padding:16px;margin:0 0 18px}
+.dbi-summary strong{display:block;font-size:21px;color:#29451c}.dbi-summary span{font-size:12px}.dbi-summary small{display:block;font-size:11px;color:#59665d;margin-top:5px}
+.dbi-course-filter{display:flex;align-items:center;gap:12px;padding:14px 20px;flex-wrap:wrap;border-bottom:1px solid #e5e9e1}
+.dbi-course-filter label{margin:0;flex:1;max-width:420px}.dbi-course-filter input{width:100%;border:1px solid #CED2D5;padding:9px 12px;border-radius:8px;font-weight:400}
+.dbi-course-filter span,.dbi-caption{font-size:11px;color:#59665d}.dbi-caption{margin:0 0 16px;line-height:1.6}
+.cengi-ingenio-page .cengi-table-wrap{max-height:480px;overflow:auto}.cengi-ingenio-page .cengi-table-wrap thead th{position:sticky;top:0;z-index:1;background:#f0f5e9}
+.cengi-ingenio-page .cengi-table-wrap td{font-size:12px;vertical-align:middle}.cengi-ingenio-page .cengi-table-wrap td:nth-child(2){min-width:200px}
+.cengi-ingenio-page [hidden]{display:none!important}.dbi-print-date{display:none}
+@media(max-width:1250px){.cengi-ingenio-page .cengi-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.cengi-ingenio-page .cengi-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cengi-ingenio-page .cengi-charts-row,.dbi-summary{grid-template-columns:1fr}}
+@media print{
+@page{size:A4 landscape;margin:12mm}
+.cengi-ingenio-page .cengi-sidebar,.cengi-ingenio-page .cengi-topbar,.dbi-actions,.dbi-course-filter,.cengi-ingenio-page form,.cengi-ingenio-page .btn-group,.cengi-ingenio-page .modal,.cengi-ingenio-page .cengi-directory-profile-button{display:none!important}
+.cengi-ingenio-page .container{width:100%!important;margin:0!important;padding:0!important;max-width:none!important}
+.cengi-ingenio-page{background:#fff!important}.dbi-print-date{display:block;font-size:11px}
+.cengi-ingenio-page .cengi-table-wrap,.cengi-ingenio-page .cengi-directory-table-scroll{max-height:none;overflow:visible}
+.cengi-ingenio-page table{min-width:0!important;width:100%!important}.cengi-ingenio-page th,.cengi-ingenio-page td{font-size:9px!important;padding:5px!important;white-space:normal!important}
+.cengi-ingenio-page .cengi-kpi-grid{grid-template-columns:repeat(6,1fr)}.cengi-ingenio-page .cengi-charts-row{display:none}.cengi-ingenio-page tr,.dbi-summary,.cengi-ingenio-page .cengi-kpi-grid{break-inside:avoid}
+.cengi-ingenio-page .panel,.cengi-ingenio-page .cengi-directory-table-card{overflow:visible!important;box-shadow:none}.cengi-ingenio-page thead{display:table-header-group}.cengi-ingenio-page .cengi-table-wrap thead th{position:static}
+}
+
+/* Cursos del ingenio: información agrupada, sin doce columnas independientes. */
+#dbi-cursos{scroll-margin-top:90px;border-radius:16px}
+#dbi-cursos .dbi-course-filter{background:#fafcf7;gap:12px}
+#dbi-course-count{padding:5px 9px;background:#edf7e1;border-radius:20px;color:#35561e;font-weight:600}
+#dbi-course-table{table-layout:fixed;width:100%;min-width:850px;margin-bottom:0;border:0}
+#dbi-course-table th{font-size:11px;letter-spacing:.03em;color:#52634c;padding:13px 16px;border:0;border-bottom:1px solid #dfe6d8}
+#dbi-course-table th:nth-child(1){width:31%}#dbi-course-table th:nth-child(2){width:15%}#dbi-course-table th:nth-child(3){width:16%}#dbi-course-table th:nth-child(4){width:21%}#dbi-course-table th:nth-child(5){width:17%}
+#dbi-course-table td{padding:18px 16px;border:0;border-bottom:1px solid #e8ece4;white-space:normal;vertical-align:middle;min-width:0}
+#dbi-course-table tbody tr:nth-child(odd){background:#fff}#dbi-course-table tbody tr:nth-child(even){background:#fcfdfb}#dbi-course-table tbody tr:hover{background:#f3f8ec}
+#dbi-course-table .dbi-course-name strong{display:block;font-size:14px;line-height:1.5;color:#293f2c;overflow-wrap:anywhere;margin:5px 0}
+.dbi-code{color:#527438;font-size:10px;font-weight:700;letter-spacing:.06em}.dbi-course-name small,.dbi-result-note{color:#677263;font-size:11px;line-height:1.5}
+.dbi-date{display:flex;justify-content:space-between;gap:6px;font-size:11px;line-height:1.9}.dbi-date span{color:#677263}.dbi-date time{white-space:nowrap}
+.dbi-enrolled{display:block;font-size:20px;font-weight:700;color:#29451c;margin-bottom:7px}.dbi-enrolled small{font-size:11px;font-weight:400;color:#59665d}
+.dbi-result{display:flex;justify-content:space-between;gap:10px;font-size:11px;line-height:1.7;margin-bottom:4px}.dbi-result span{color:#59665d}.dbi-result b{white-space:nowrap;color:#29451c;font-size:12px}
+.dbi-attendance-track{height:5px;background:#e8eddf;border-radius:8px;overflow:hidden}.dbi-attendance-track span{display:block;height:100%;background:#73BC25;border-radius:8px}
+#dbi-course-table .dbi-course-action .cengi-status-badge{font-size:10px;margin-bottom:12px;white-space:normal}
+#dbi-course-table .dbi-course-action button{display:block;width:100%;text-align:center;padding:9px 6px;border:1px solid #d7e5c6;background:#f0f7e8;border-radius:8px;font-size:11px;white-space:normal;color:#35561e}
+#dbi-course-table .dbi-course-action button:hover{background:#e2f0d0;border-color:#73BC25}
+@media screen and (max-width:760px){
+#dbi-cursos .cengi-table-wrap{max-height:none;overflow:visible}#dbi-course-table{min-width:0;table-layout:auto;display:block}#dbi-course-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+#dbi-course-table tbody{display:block;padding:12px}#dbi-course-table tbody tr{display:grid;grid-template-columns:1fr 1fr;border:1px solid #dfe6d8;border-radius:12px;margin-bottom:12px;overflow:hidden;background:white}#dbi-course-table td{display:block;padding:12px;border-bottom:1px solid #eef1e9}#dbi-course-table td::before{content:attr(data-label);display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#677263;margin-bottom:8px}#dbi-course-table td:first-child,#dbi-course-table td:last-child{grid-column:1/-1}#dbi-course-table td:first-child::before{display:none}#dbi-course-table .dbi-course-action button{width:auto;display:inline-block;float:right}#dbi-course-table .dbi-course-action .cengi-status-badge{margin:6px 0}#dbi-course-table .dbi-course-action::before{display:none}
+}
+@media print{#dbi-course-table{min-width:0}#dbi-course-table .dbi-course-name strong{font-size:10px}#dbi-course-table .dbi-course-action button{display:none!important}}

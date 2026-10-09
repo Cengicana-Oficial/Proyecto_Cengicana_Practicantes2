@@ -1,6 +1,7 @@
 <?php
 require_once "conexion.php";
 require_once "menu.php";
+require_once "diplomas_helpers.php";
 
 cengi_require_ver_diplomas();
 
@@ -47,34 +48,17 @@ function cengi_dip_mover_archivo(array $archivo, $carpeta)
     return cengi_guardar_archivo_subido($archivo['tmp_name'], $carpeta, $nombreArchivo);
 }
 
-$tab = $_GET['tab'] ?? 'generar';
-if (!in_array($tab, ['generar', 'curso', 'evento'], true)) {
-    $tab = 'generar';
+// "disenar": diseñador y emision masiva con codigo y QR (js/diplomas.js, diplomas_api.php).
+// "curso" / "evento": carga de PDF ya elaborados fuera del sistema.
+$tab = $_GET['tab'] ?? 'disenar';
+if (!in_array($tab, ['disenar', 'curso', 'evento'], true)) {
+    $tab = 'disenar';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar) {
     $accion = trim((string) ($_POST['accion'] ?? ''));
 
-    if ($accion === 'generar_diploma') {
-        $asignacionId = (int) ($_POST['asignacion_id'] ?? 0);
-        if ($asignacionId > 0) {
-            $stmtExiste = $db->prepare("SELECT id FROM diplomas WHERE tipo = 'curso' AND asignacion_id = ?");
-            $stmtExiste->execute([$asignacionId]);
-            if ($stmtExiste->fetchColumn()) {
-                $mensaje = 'Ya existe un diploma registrado para esta asignacion.';
-                $mensajeTipo = 'error';
-            } else {
-                $codigo = cengi_dip_codigo($db, 'CEN-DIP');
-                $stmt = $db->prepare("
-                    INSERT INTO diplomas (tipo, asignacion_id, codigo_unico, emitido_en, creado_por)
-                    VALUES ('curso', ?, ?, NOW(), ?)
-                ");
-                $stmt->execute([$asignacionId, $codigo, cengi_usuario_actual_id()]);
-                $mensaje = "Diploma generado con codigo {$codigo}. La generacion de PDF con QR de validacion todavia no esta implementada: por ahora solo queda el registro trazable en la base de datos.";
-            }
-        }
-        $tab = 'generar';
-    } elseif ($accion === 'carga_masiva_curso') {
+    if ($accion === 'carga_masiva_curso') {
         $cursoId = (int) ($_POST['curso_id'] ?? 0);
         $tab = 'curso';
 
@@ -190,37 +174,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar) {
     }
 }
 
-// Datos para la pestana "Generar diploma"
-$asignacionesDisponibles = $db->query("
-    SELECT
-        a.id AS asignacion_id,
-        p.nombre_participantes,
-        c.nombre_cursos,
-        COALESCE(i.nombre, 'Sin instructor asignado') AS instructor_nombre,
-        COALESCE((
-            SELECT SUM(cm.horas)
-            FROM curso_modulos cm
-            WHERE cm.curso_id = c.id
-        ), 0) AS horas_academicas,
-        c.fin,
-        YEAR(COALESCE(c.inicio, c.creado)) AS anio
-    FROM asignaciones a
-    INNER JOIN participantes p ON p.id = a.participantes_id
-    INNER JOIN cursos c ON c.id = a.cursos_id
-    LEFT JOIN instructores i ON i.id = c.instructor_id
-    WHERE a.estado_asignaciones = 1
-    ORDER BY anio DESC, c.nombre_cursos, p.nombre_participantes
-")->fetchAll(PDO::FETCH_ASSOC);
-
-$diplomasCurso = $db->query("
-    SELECT d.*, p.nombre_participantes, c.nombre_cursos
+// Datos para el diseñador: actividades y diplomas emitidos (cursos y eventos).
+$actividadesDiploma = cengi_dip_actividades($db);
+$actividadInicial = (string) ($_GET['actividad'] ?? '');
+$diplomasEmitidos = $db->query("
+    SELECT d.codigo_unico, d.tipo, d.emitido_en, d.enviado_en, d.pdf_path, d.documento, d.asignacion_id, d.evento_participante_id,
+           COALESCE(NULLIF(d.nombre_participante, ''), p.nombre_participantes, ep.nombre_invitado) AS nombre,
+           COALESCE(NULLIF(d.actividad, ''), c.nombre_cursos, e.nombre) AS actividad
     FROM diplomas d
-    INNER JOIN asignaciones a ON a.id = d.asignacion_id
-    INNER JOIN participantes p ON p.id = a.participantes_id
-    INNER JOIN cursos c ON c.id = a.cursos_id
-    WHERE d.tipo = 'curso'
+    LEFT JOIN asignaciones a ON a.id = d.asignacion_id LEFT JOIN participantes p ON p.id = a.participantes_id LEFT JOIN cursos c ON c.id = a.cursos_id
+    LEFT JOIN evento_participantes ep ON ep.id = d.evento_participante_id LEFT JOIN eventos e ON e.id = ep.evento_id
     ORDER BY d.emitido_en DESC
-    LIMIT 50
+    LIMIT 300
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 // Datos para "Diplomas de curso (carga masiva)"
@@ -272,6 +237,9 @@ if ($eventoSeleccionadoId > 0) {
 <html lang="es">
 <?php include('head.php'); ?>
 <body class="cengi-canvas cengi-certification-page">
+<?php $dipV = static function ($f) { return (int) @filemtime(__DIR__ . '/' . $f); }; ?>
+<link rel="stylesheet" href="css/planificacion.css?v=<?php echo $dipV('css/planificacion.css'); ?>">
+<link rel="stylesheet" href="css/diplomas.css?v=<?php echo $dipV('css/diplomas.css'); ?>">
 <?php menu_render(); ?>
 <main class="container cengi-cert-page">
 
@@ -290,121 +258,119 @@ if ($eventoSeleccionadoId > 0) {
 
     <section class="cengi-cert-section cengi-cert-tabs-section" aria-label="Opciones de certificación">
         <nav class="cengi-tabs">
-            <a href="diplomas.php?tab=generar" class="cengi-tab<?php echo $tab === 'generar' ? ' is-active' : ''; ?>">Generar diploma (cursos académicos)</a>
-            <a href="diplomas.php?tab=curso" class="cengi-tab<?php echo $tab === 'curso' ? ' is-active' : ''; ?>">Diplomas de curso (carga masiva)</a>
-            <a href="diplomas.php?tab=evento" class="cengi-tab<?php echo $tab === 'evento' ? ' is-active' : ''; ?>">Diplomas de evento (carga manual)</a>
+            <a href="diplomas.php?tab=disenar" class="cengi-tab<?php echo $tab === 'disenar' ? ' is-active' : ''; ?>">Diseñar y emitir</a>
+            <a href="diplomas.php?tab=curso" class="cengi-tab<?php echo $tab === 'curso' ? ' is-active' : ''; ?>">Cargar PDF de curso (masiva)</a>
+            <a href="diplomas.php?tab=evento" class="cengi-tab<?php echo $tab === 'evento' ? ' is-active' : ''; ?>">Cargar PDF de evento</a>
         </nav>
     </section>
 
-    <?php if ($tab === 'generar'): ?>
-        <div class="cengi-two-col">
-            <section class="cengi-cert-section">
-                <header class="cengi-cert-section-head">
-                    <div><h3>Diseñador de plantilla</h3><div class="hint">Certificación · registro trazable con código único por participante y curso</div></div>
-                </header>
-                <div class="cengi-cert-section-body">
+    <?php if ($tab === 'disenar'): ?>
+        <div class="cengi-feedback is-warning" style="margin-bottom:16px;"><div class="cengi-feedback-icon"><span class="glyphicon glyphicon-info-sign"></span></div>
+            <div><p>Elige el curso o evento, diseña una sola vez con logos, firmas escaneadas e imagen de fondo (o tu propio diseño de Canva), y el sistema <b>rellena los datos de cada participante</b>: nombre, actividad, fecha, lugar, horas, rol y código. Cada documento lleva un <b>código y QR de validación</b>; se imprime o guarda como PDF (uno por página) o se envía por correo con el enlace para descargarlo.</p></div></div>
+
+        <div class="dip-layout" id="dip-app">
+            <div class="dip-panel-ed">
+                <details open class="dip-sec"><summary>1 · Actividad y participantes</summary>
+                    <div class="form-group"><label for="dipAct">Curso o evento</label>
+                        <select id="dipAct" class="form-control">
+                            <option value="">Selecciona...</option>
+                            <?php foreach ($actividadesDiploma as $grupo => $lista): if (!$lista) { continue; } ?>
+                                <optgroup label="<?php echo cengi_dip_html($grupo); ?>">
+                                    <?php foreach ($lista as $a): ?><option value="<?php echo cengi_dip_html($a['clave']); ?>" <?php echo $actividadInicial === $a['clave'] ? 'selected' : ''; ?>><?php echo cengi_dip_html($a['texto']); ?></option><?php endforeach; ?>
+                                </optgroup>
+                            <?php endforeach; ?>
+                        </select></div>
+                    <div class="form-group"><label for="dipFiltro">¿A quiénes se emite?</label><select id="dipFiltro" class="form-control"></select></div>
+                </details>
+                <div id="dip-editor" hidden>
+                    <details open class="dip-sec"><summary>2 · Diseño</summary>
+                        <div class="dip-estilos">
+                            <button type="button" data-estilo="institucional"><span class="dip-mini dm-inst"></span>Institucional</button>
+                            <button type="button" data-estilo="moderno"><span class="dip-mini dm-mod"></span>Moderno</button>
+                            <button type="button" data-estilo="clasico"><span class="dip-mini dm-cla"></span>Clásico</button>
+                            <button type="button" data-estilo="canva"><span class="dip-mini dm-canva">Canva</span>Diseño propio</button>
+                        </div>
+                        <div class="form-group" style="margin-top:12px;"><label for="dipPapel">Tamaño de papel para imprimir</label>
+                            <select id="dipPapel" class="form-control" data-campo="papel"><option value="carta">Carta horizontal (Guatemala)</option><option value="a4">A4 horizontal</option></select></div>
+                        <div class="dip-grid2" id="dipDisenoOpts">
+                            <div class="form-group"><label for="dipColor">Color principal</label><input type="color" id="dipColor" class="form-control" data-campo="color" style="height:36px;padding:3px;"></div>
+                            <div class="form-group"><label for="dipFondo">Imagen de fondo</label><select id="dipFondo" class="form-control" data-campo="fondo"><option value="ninguno">Sin imagen</option><option value="propia">Subir una imagen</option></select></div>
+                            <div class="form-group is-full" id="dipFondoSubir"><label class="btn btn-default btn-sm" style="cursor:pointer;">Subir imagen de fondo<input type="file" accept="image/png,image/jpeg,image/webp" hidden data-imagen="fondoImg" data-max="1600"></label></div>
+                            <div class="form-group is-full" id="dipFondoOpW"><label for="dipFondoOp">Intensidad de la imagen de fondo</label><input type="range" min="5" max="60" id="dipFondoOp" data-campo="fondoOp" data-numero="1"></div>
+                        </div>
+                    </details>
+                    <details open class="dip-sec" id="dipSecCanva" hidden><summary>3 · Diseño de Canva y campos automáticos</summary>
+                        <div class="form-group"><label>Diseño exportado de Canva <small>(PNG o JPG, carta o A4 horizontal)</small></label>
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                <img id="dipCanvaMini" alt="" style="height:48px;border-radius:4px;border:1px solid #E4E7E1;" hidden>
+                                <label class="btn btn-primary btn-sm" style="cursor:pointer;margin:0;"><span id="dipCanvaBtn">Seleccionar archivo</span><input type="file" accept="image/png,image/jpeg,image/webp" hidden id="dipCanvaFile"></label>
+                                <span class="pp-sub" id="dipCanvaNombre"></span>
+                            </div></div>
+                        <details style="margin-bottom:10px;"><summary class="pp-sub" style="cursor:pointer;display:list-item;">¿Cómo exportarlo desde Canva?</summary><ol class="pp-sub" style="padding-left:18px;">
+                            <li>Diseña el diploma en tamaño carta u A4 horizontal con logos, firmas y textos fijos.</li>
+                            <li>Deja vacío el espacio del nombre (y de fecha o código si quieres que el sistema los escriba).</li>
+                            <li>En Canva: Compartir → Descargar → PNG, y súbelo aquí.</li>
+                            <li>Arrastra cada campo a su lugar sobre la vista previa y ajusta letra, tamaño y color.</li></ol></details>
+                        <label>Campos que se llenan solos</label>
+                        <div id="dipCampos" class="dpc-chips"></div>
+                        <div style="display:flex;gap:6px;margin:8px 0 12px;"><button type="button" class="btn btn-default btn-sm" data-agregar="texto">+ Campo de texto</button><button type="button" class="btn btn-default btn-sm" data-agregar="qr">+ QR de validación</button></div>
+                        <div id="dipCampoEd" style="border-top:1px solid #E4E7E1;padding-top:10px;"></div>
+                    </details>
+                    <details open class="dip-sec" data-clasico><summary>3 · Logos</summary><div id="dipLogos" class="dip-logos-ed"></div><p class="pp-sub" style="margin-top:6px;">PNG con fondo transparente para mejor resultado.</p></details>
+                    <details open class="dip-sec" data-clasico><summary>4 · Textos y campos automáticos</summary>
+                        <div class="dip-grid2">
+                            <div class="form-group"><label for="dipDocumento">Tipo de documento</label><select id="dipDocumento" class="form-control" data-campo="documento"><option>Diploma</option><option>Certificado</option><option>Constancia de participación</option><option>Reconocimiento</option></select></div>
+                            <div class="form-group"><label for="dipHoras">Horas</label><input id="dipHoras" class="form-control" data-campo="horas" placeholder="Ej. 40"></div>
+                            <div class="form-group is-full"><label for="dipIntro">Encabezado</label><input id="dipIntro" class="form-control" data-campo="intro"></div>
+                            <div class="form-group is-full"><label for="dipCuerpo">Texto</label><textarea id="dipCuerpo" class="form-control" rows="3" data-campo="cuerpo"></textarea>
+                                <div class="dip-campos" id="dipCamposCuerpo"></div></div>
+                            <div class="form-group"><label for="dipLF">Lugar y fecha</label><input id="dipLF" class="form-control" data-campo="lugarFecha"></div>
+                            <div class="form-group"><label for="dipEmision">Fecha de emisión</label><input type="date" id="dipEmision" class="form-control" data-campo="emision"></div>
+                        </div>
+                    </details>
+                    <details open class="dip-sec" data-clasico><summary>5 · Firmas</summary>
+                        <div class="form-group"><label for="dipNF">Cantidad de firmas</label><select id="dipNF" class="form-control" data-campo="nFirmas" data-numero="1"><option value="0">Sin firmas</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
+                        <div id="dipFirmas"></div><p class="pp-sub">Escanea la firma en papel blanco y súbela en PNG; se ajusta sola.</p>
+                    </details>
+                    <details open class="dip-sec" data-clasico><summary>6 · Validación</summary>
+                        <label style="display:flex;gap:8px;align-items:center;font-weight:400;"><input type="checkbox" id="dipQR" data-campo="qr"> Incluir código y QR de validación</label>
+                    </details>
                     <?php if ($puedeGestionar): ?>
-                    <form method="POST" id="diplomaDesignerForm">
-                        <input type="hidden" name="accion" value="generar_diploma">
-                        <div class="cengi-cert-form-grid">
-                            <div class="cengi-cert-field is-full">
-                                <label for="diplomaLogoInput">Logo institucional <span class="opt">(solo para la vista previa)</span></label>
-                                <div class="cengi-cert-logo-drop" id="diplomaLogoDrop" role="button" tabindex="0" aria-controls="diplomaLogoInput">
-                                    <input type="file" id="diplomaLogoInput" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
-                                    <span class="glyphicon glyphicon-picture" aria-hidden="true"></span>
-                                    <span id="diplomaLogoLabel">Arrastra el logo de CENGICAÑA o de tu ingenio aquí</span>
-                                </div>
-                            </div>
-                            <div class="cengi-cert-field is-full">
-                                <label for="diplomaAssignment">Participante y curso (edición)</label>
-                                <select name="asignacion_id" id="diplomaAssignment" class="form-control" required>
-                                <option value="">Selecciona una asignación...</option>
-                                <?php foreach ($asignacionesDisponibles as $a): ?>
-                                    <option value="<?php echo (int) $a['asignacion_id']; ?>"
-                                            data-participant="<?php echo cengi_dip_html($a['nombre_participantes']); ?>"
-                                            data-course="<?php echo cengi_dip_html($a['nombre_cursos']); ?>"
-                                            data-instructor="<?php echo cengi_dip_html($a['instructor_nombre']); ?>"
-                                            data-hours="<?php echo cengi_dip_html(rtrim(rtrim(number_format((float) $a['horas_academicas'], 2, '.', ''), '0'), '.')); ?>">
-                                        <?php echo cengi_dip_html($a['nombre_participantes'] . ' — ' . $a['nombre_cursos'] . ' (edición ' . $a['anio'] . ')'); ?>
-                                        <?php echo ($a['fin'] && $a['fin'] < date('Y-m-d')) ? ' [histórico]' : ''; ?>
-                                    </option>
-                                <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="cengi-cert-field">
-                                <label for="diplomaCourse">Curso</label>
-                                <input type="text" id="diplomaCourse" class="form-control" placeholder="Selecciona una asignación" readonly>
-                            </div>
-                            <div class="cengi-cert-field">
-                                <label for="diplomaHours">Horas académicas</label>
-                                <input type="number" id="diplomaHours" class="form-control" min="0" step="0.25" value="0">
-                            </div>
-                            <div class="cengi-cert-field">
-                                <label for="diplomaInstructor">Instructor</label>
-                                <input type="text" id="diplomaInstructor" class="form-control" value="Sin instructor asignado">
-                            </div>
-                            <div class="cengi-cert-field">
-                                <label for="diplomaDate">Fecha de emisión</label>
-                                <input type="date" id="diplomaDate" class="form-control" value="<?php echo date('Y-m-d'); ?>">
-                            </div>
-                            <div class="cengi-cert-field is-full">
-                                <label for="diplomaCode">Código único <span class="opt">(generado automáticamente)</span></label>
-                                <input type="text" id="diplomaCode" class="form-control mono" value="CEN-DIP-000000" disabled>
-                            </div>
-                        </div>
-                        <div class="cengi-cert-actions">
-                            <button type="submit" class="btn btn-primary"><span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span> Generar diploma</button>
-                            <button type="button" class="btn btn-default" id="printDiplomaPreview"><span class="glyphicon glyphicon-print" aria-hidden="true"></span> Imprimir vista previa</button>
-                        </div>
-                    </form>
-                    <?php else: ?>
-                        <p class="text-muted">No tienes permiso para generar diplomas.</p>
+                        <div style="display:flex;gap:8px;margin-top:12px;"><button type="button" class="btn btn-primary btn-sm" id="dipGuardar">Guardar plantilla</button><button type="button" class="btn btn-link btn-sm" id="dipRestablecer">Restablecer diseño</button></div>
                     <?php endif; ?>
+                    <p class="pp-sub" id="dipEstado" style="margin-top:6px;"></p>
                 </div>
-            </section>
+            </div>
 
             <div>
-                <section class="cengi-cert-section cengi-preview-section">
-                    <header class="cengi-cert-section-head"><h3>Vista previa</h3></header>
-                    <div class="cengi-cert-section-body">
-                        <div class="cengi-diploma-preview" id="diplomaPreview">
-                            <div class="dp-border"></div>
-                            <div class="dp-inner">
-                                <div class="dp-eyebrow">CENGICAÑA otorga el presente diploma a</div>
-                                <img class="dp-logo" id="diplomaPreviewLogo" alt="Logo institucional" hidden>
-                                <div class="dp-name" id="diplomaPreviewName">Nombre del participante</div>
-                                <div class="dp-course" id="diplomaPreviewCourse">por haber aprobado satisfactoriamente el curso seleccionado.</div>
-                            </div>
-                            <div class="dp-code mono">CEN-DIP-000000 · código de validación</div>
-                        </div>
-                    </div>
+                <section class="pp-card">
+                    <div class="pp-card-head"><div><h3>Vista previa</h3><span class="pp-sub">Con los datos reales del participante seleccionado</span></div>
+                        <div style="display:flex;gap:6px;align-items:center;"><button type="button" class="btn btn-default btn-sm" id="dipPrev" aria-label="Anterior">‹</button><span class="pp-sub" id="dipPrevNom" style="min-width:170px;text-align:center;">—</span><button type="button" class="btn btn-default btn-sm" id="dipNext" aria-label="Siguiente">›</button></div></div>
+                    <div class="pp-card-body"><div id="dipPreview" class="dip-preview-box"><p class="pp-sub" style="padding:40px;text-align:center;">Elige un curso o evento para empezar.</p></div></div>
                 </section>
-                <section class="cengi-cert-section">
-                    <header class="cengi-cert-section-head"><h3>Diplomas emitidos</h3></header>
-                    <div class="cengi-cert-section-body is-table">
-                        <div class="cengi-cert-table-wrap">
-                        <table class="cengi-cert-table">
-                            <tbody>
-                                <?php if (!$diplomasCurso): ?>
-                                    <tr><td colspan="3" class="text-center">Sin diplomas emitidos todavía.</td></tr>
-                                <?php endif; ?>
-                                <?php foreach ($diplomasCurso as $d): ?>
-                                    <tr>
-                                        <td class="cengi-cert-person"><strong><?php echo cengi_dip_html($d['nombre_participantes']); ?></strong><small><?php echo cengi_dip_html($d['nombre_cursos']); ?></small></td>
-                                        <td class="mono cengi-cert-code"><?php echo cengi_dip_html($d['codigo_unico']); ?></td>
-                                        <td class="cengi-cert-action-cell">
-                                            <?php if ($d['pdf_path']): ?>
-                                                <a href="descargar_diploma.php?asignacion_id=<?php echo (int) $d['asignacion_id']; ?>" target="_blank" rel="noopener" class="btn btn-default btn-xs">Ver PDF</a>
-                                            <?php else: ?>
-                                                <span class="text-muted">Sin PDF</span>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                        </div>
-                    </div>
+                <section class="pp-card">
+                    <div class="pp-card-head"><div><h3>Participantes</h3><span class="pp-sub">Marca a quiénes emitir; clic en un nombre para verlo en la vista previa</span></div>
+                        <?php if ($puedeGestionar): ?><div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="btn btn-default btn-sm" id="dipBtnMail" disabled>Enviar por correo</button><button type="button" class="btn btn-primary btn-sm" id="dipBtnPdf" disabled>Imprimir / guardar PDF</button></div><?php endif; ?></div>
+                    <div class="pp-card-body" style="padding-bottom:4px;"><input type="search" class="form-control" id="dipBuscar" placeholder="Buscar participante..."></div>
+                    <div class="pp-table-wrap dip-dest-list"><table class="cengi-org-table" style="min-width:520px;"><thead><tr><th style="width:30px;"><input type="checkbox" id="dipSelTodo" aria-label="Seleccionar todos"></th><th>Participante</th><th>Estado</th><th>Documento</th></tr></thead><tbody id="dipDest"><tr><td colspan="4" class="pp-empty">—</td></tr></tbody></table></div>
+                </section>
+                <section class="pp-card">
+                    <div class="pp-card-head"><div><h3>Diplomas emitidos y validación</h3></div>
+                        <div style="display:flex;gap:6px;"><input type="text" class="form-control input-sm" id="dipValidar" placeholder="Validar código CEN-..." style="width:210px;"><button type="button" class="btn btn-default btn-sm" id="dipBtnValidar">Validar</button></div></div>
+                    <div class="pp-card-body" style="padding-bottom:4px;"><div id="dipValRes"></div><input type="search" class="form-control" id="dipBuscarEm" placeholder="Buscar por código, nombre o actividad..."></div>
+                    <div class="pp-table-wrap dip-dest-list"><table class="cengi-org-table" style="min-width:600px;"><thead><tr><th>Código</th><th>Participante</th><th>Actividad</th><th>Emisión</th><th>Estado</th></tr></thead>
+                        <tbody id="dipEmitidos">
+                            <?php if (!$diplomasEmitidos): ?><tr><td colspan="5" class="pp-empty">Aún no se han emitido diplomas.</td></tr><?php endif; ?>
+                            <?php foreach ($diplomasEmitidos as $d): ?>
+                                <tr data-buscar="<?php echo cengi_dip_html(cengi_texto_normalizado($d['codigo_unico'] . ' ' . $d['nombre'] . ' ' . $d['actividad'])); ?>">
+                                    <td class="pp-mono"><a href="validar_diploma.php?c=<?php echo rawurlencode($d['codigo_unico']); ?>" target="_blank" rel="noopener"><?php echo cengi_dip_html($d['codigo_unico']); ?></a></td>
+                                    <td><strong><?php echo cengi_dip_html($d['nombre']); ?></strong></td>
+                                    <td><?php echo cengi_dip_html($d['actividad']); ?><span class="pp-sub"><?php echo cengi_dip_html($d['documento'] ?: ($d['tipo'] === 'evento' ? 'Constancia' : 'Diploma')); ?></span></td>
+                                    <td class="pp-num"><?php echo $d['emitido_en'] ? date('d/m/Y H:i', strtotime($d['emitido_en'])) : '—'; ?></td>
+                                    <td><?php echo $d['pdf_path'] ? '<span class="cengi-status-badge is-neutral"><i></i>PDF cargado</span>' : ($d['enviado_en'] ? '<span class="cengi-status-badge is-active"><i></i>Enviado</span>' : '<span class="cengi-status-badge is-upcoming"><i></i>Emitido</span>'); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody></table></div>
                 </section>
             </div>
         </div>
@@ -560,59 +526,15 @@ if ($eventoSeleccionadoId > 0) {
         </div>
     <?php endif; ?>
 </main>
+<?php if ($tab === 'disenar'): ?>
+<script src="js/qrcode-generator.js"></script>
+<script src="js/diplomas.js?v=<?php echo $dipV('js/diplomas.js'); ?>"></script>
+<script>window.CENGI_DIP_CONFIG = { puedeGestionar: <?php echo $puedeGestionar ? 'true' : 'false'; ?>, notaAprobacion: <?php echo CENGI_NOTA_APROBACION; ?> };</script>
+<script src="js/diplomas_disenador.js?v=<?php echo $dipV('js/diplomas_disenador.js'); ?>"></script>
+<?php endif; ?>
 <script>
 (function () {
     'use strict';
-
-    var assignment = document.getElementById('diplomaAssignment');
-    var courseInput = document.getElementById('diplomaCourse');
-    var hoursInput = document.getElementById('diplomaHours');
-    var instructorInput = document.getElementById('diplomaInstructor');
-    var previewName = document.getElementById('diplomaPreviewName');
-    var previewCourse = document.getElementById('diplomaPreviewCourse');
-
-    function renderCourseDescription(course, hours) {
-        if (!previewCourse) return;
-        previewCourse.textContent = course
-            ? 'por haber aprobado satisfactoriamente ' + course + (hours > 0 ? ', con una duración de ' + hours + ' horas académicas.' : '.')
-            : 'por haber aprobado satisfactoriamente el curso seleccionado.';
-    }
-
-    function updateDiplomaPreview() {
-        if (!assignment || !assignment.options.length) return;
-        var option = assignment.options[assignment.selectedIndex];
-        var participant = option && option.dataset.participant ? option.dataset.participant : 'Nombre del participante';
-        var course = option && option.dataset.course ? option.dataset.course : '';
-        var hours = option && option.dataset.hours ? parseFloat(option.dataset.hours) : 0;
-
-        if (courseInput) courseInput.value = course;
-        if (hoursInput) hoursInput.value = hours || '0';
-        if (instructorInput) instructorInput.value = option && option.dataset.instructor ? option.dataset.instructor : 'Sin instructor asignado';
-        if (previewName) previewName.textContent = participant;
-        renderCourseDescription(course, hours);
-    }
-
-    if (assignment) assignment.addEventListener('change', updateDiplomaPreview);
-    if (hoursInput) hoursInput.addEventListener('input', function () {
-        renderCourseDescription(courseInput ? courseInput.value : '', parseFloat(hoursInput.value || '0'));
-    });
-
-    var logoDrop = document.getElementById('diplomaLogoDrop');
-    var logoInput = document.getElementById('diplomaLogoInput');
-    var logoPreview = document.getElementById('diplomaPreviewLogo');
-    var logoLabel = document.getElementById('diplomaLogoLabel');
-
-    function showLogo(file) {
-        if (!file || !file.type.match(/^image\//) || !logoPreview) return;
-        var reader = new FileReader();
-        reader.onload = function (event) {
-            logoPreview.src = event.target.result;
-            logoPreview.hidden = false;
-            if (logoLabel) logoLabel.textContent = file.name;
-        };
-        reader.readAsDataURL(file);
-    }
-
     function makeDropTarget(dropzone, input, onFiles) {
         if (!dropzone || !input) return;
         dropzone.addEventListener('click', function (event) {
@@ -644,7 +566,6 @@ if ($eventoSeleccionadoId > 0) {
         input.addEventListener('change', function () { onFiles(input.files); });
     }
 
-    makeDropTarget(logoDrop, logoInput, function (files) { showLogo(files[0]); });
 
     document.querySelectorAll('[data-file-drop]').forEach(function (dropzone) {
         var input = document.getElementById(dropzone.getAttribute('data-file-drop'));
@@ -664,8 +585,6 @@ if ($eventoSeleccionadoId > 0) {
         });
     }
 
-    var printButton = document.getElementById('printDiplomaPreview');
-    if (printButton) printButton.addEventListener('click', function () { window.print(); });
 }());
 </script>
 </body>

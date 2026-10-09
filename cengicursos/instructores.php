@@ -1093,6 +1093,10 @@ function cengi_inst_html($valor)
                             <span class="glyphicon glyphicon-time" aria-hidden="true"></span>
                             Historial de cargas
                         </button>
+                        <a class="inst-btn inst-btn-outline inst-btn-sm" href="base_instructores.php">
+                            <span class="glyphicon glyphicon-folder-open" aria-hidden="true"></span>
+                            Base de datos y documentos
+                        </a>
                         <button class="inst-btn inst-btn-primary" type="button" id="nuevoInstructorBtn">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
                             Nuevo instructor
@@ -1457,6 +1461,11 @@ body.inst-modal-open { overflow: hidden; }
         });
         return { items: result, filters: filters, filtersActive: filtersActive };
     }
+    // Ficha completa (documentos, sesiones, evaluaciones y pagos): solo quien gestiona instructores.
+    function fichaLink(instructor) {
+        if (!puedeGestionar) return '';
+        return '<a class="inst-btn inst-btn-ghost inst-btn-sm" href="ficha_instructor.php?id=' + Number(instructor.id) + '">Ficha</a>';
+    }
     function managementTools(instructor) {
         if (!puedeGestionar) return '';
         var nextLabel = Number(instructor.estado) === 1 ? 'Desactivar' : 'Activar';
@@ -1525,7 +1534,8 @@ body.inst-modal-open { overflow: hidden; }
             '<div><div class="inst-stat-value is-green">' + evaluationValue(instructor.evaluacion_promedio) + '</div><div class="inst-stat-label">Evaluación promedio</div></div></div>' +
             '<div class="inst-chips"><span class="inst-chip">' + escapeHtml(institutionLabel(item.allEditions)) + '</span>' + cvChip(instructor, previewId) + '</div>' +
             '<div class="inst-card-actions"><button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="cursos">Ver historial</button>' +
-            '<button class="inst-btn inst-btn-ghost inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="evaluaciones">Informe</button></div>' +
+            '<button class="inst-btn inst-btn-ghost inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="evaluaciones">Informe</button>' +
+            fichaLink(instructor) + '</div>' +
             cvPreview(instructor, previewId, false) + '</div></article>';
     }
     function renderListItem(item, filtersActive) {
@@ -1538,7 +1548,7 @@ body.inst-modal-open { overflow: hidden; }
             '<div class="inst-list-stat"><div class="inst-stat-value is-green">' + evaluationValue(instructor.evaluacion_promedio) + '</div><div class="inst-stat-label">Evaluación</div></div>' +
             '<div style="min-width:118px;">' + cvChip(instructor, previewId) + '</div><div style="display:flex;gap:6px;align-items:center;">' +
             '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="cursos">Historial</button>' +
-            '<button class="inst-btn inst-btn-ghost inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="evaluaciones">Informe</button>' + managementTools(instructor) + '</div></div>' +
+            '<button class="inst-btn inst-btn-ghost inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="evaluaciones">Informe</button>' + fichaLink(instructor) + managementTools(instructor) + '</div></div>' +
             cvPreview(instructor, previewId, true);
     }
     function renderInstructors() {

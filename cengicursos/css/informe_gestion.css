@@ -1,0 +1,101 @@
+/* Informe de gestión (informe_gestion.php) — mismo documento del prototipo SIGEC v29. */
+
+.ig-page .pp-card { margin-bottom: 16px; }
+.ig-page .pp-toolbar { padding: 12px 16px; }
+.ig-fecha { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 500; }
+
+.ig-doc {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 28px 32px;
+    background: #fff;
+    border: 1px solid #D9DED4;
+    border-radius: 14px;
+    color: #1C2517;
+    font-size: 12.5px;
+}
+.ig-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 3px solid #2F6B12;
+}
+.ig-head img { height: 48px; width: auto; }
+.ig-k { font-size: 11px; font-weight: 800; letter-spacing: .08em; color: #2F6B12; }
+.ig-t { margin-top: 2px; font-size: 19px; font-weight: 800; }
+.ig-s { color: #5B6459; font-size: 12px; }
+
+.ig-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 16px 0 4px; }
+.ig-kpi { padding: 10px 12px; border: 1px solid #E1E5DD; border-radius: 10px; background: #F6F8F4; }
+.ig-kpi .v { font-size: 18px; font-weight: 800; line-height: 1.2; }
+.ig-kpi .l { margin-top: 2px; color: #5B6459; font-size: 11px; }
+
+.ig-sec {
+    margin: 22px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #D9DED4;
+    color: #2F6B12;
+    font-size: 13.5px;
+    font-weight: 800;
+}
+.ig-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; }
+.ig-item { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px dashed #E1E5DD; }
+.ig-item span { color: #3B4438; }
+.ig-item b { white-space: nowrap; }
+
+.ig-scroll { overflow-x: auto; }
+.ig-tb { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ig-tb th {
+    padding: 6px 5px;
+    border-bottom: 1px solid #1C2517;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-align: right;
+    vertical-align: bottom;
+}
+.ig-tb td { padding: 6px 5px; border-bottom: 1px solid #E1E5DD; text-align: right; vertical-align: top; }
+.ig-tb .ig-l { text-align: left; }
+.ig-tb tfoot td { background: #F6F8F4; font-weight: 700; }
+.ig-bal td { font-size: 12.5px; }
+.ig-bal .ig-bal-total td { background: #F4FBEC; font-size: 13.5px; }
+.ig-barcell { min-width: 150px; }
+
+.ig-muted { color: #5B6459; font-size: 11px; font-weight: 400; }
+.ig-nota { margin: 6px 0 0; }
+.ig-nowrap { white-space: nowrap; font-size: 11px; }
+.ig-pos { color: #2F6B12; }
+.ig-neg { color: #B23223; }
+.ig-bar { display: block; min-width: 70px; }
+.ig-bar > span { display: block; height: 100%; border-radius: 99px; background: #2F6B12; }
+.ig-pie { margin-top: 22px; padding-top: 8px; border-top: 1px solid #E1E5DD; color: #8A9187; font-size: 10.5px; text-align: right; }
+
+.ig-gasto-form { margin-top: 16px; padding-top: 12px; border-top: 1px solid #E1E5DD; }
+.ig-gasto-form h5 { margin: 0 0 10px; font-weight: 700; }
+.ig-gasto-grid { display: grid; grid-template-columns: 150px 1fr 170px 140px 130px; gap: 10px; }
+.ig-gasto-grid label { margin: 0; font-size: 12px; font-weight: 600; }
+.ig-gasto-grid .form-control { margin-top: 4px; }
+.ig-gasto-form .modal-footer { margin-top: 14px; padding: 12px 0 0; }
+
+@media (max-width: 900px) {
+    .ig-doc { padding: 18px 16px; }
+    .ig-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ig-2 { grid-template-columns: 1fr; }
+    .ig-tb { min-width: 720px; }
+    .ig-gasto-grid { grid-template-columns: 1fr 1fr; }
+    .ig-gasto-concepto { grid-column: 1 / -1; }
+}
+
+@media print {
+    @page { size: letter landscape; margin: 10mm; }
+    body.cengi-canvas { background: #fff; }
+    .cengi-sidebar, .cengi-topbar, .cengi-feedback, .ig-no-print, .modal, .modal-backdrop { display: none !important; }
+    .cengi-canvas .container.ig-page { max-width: none; margin: 0; padding: 0; }
+    .ig-doc { max-width: none; padding: 0; border: 0; border-radius: 0; font-size: 11px; }
+    .ig-tb { min-width: 0; font-size: 10.5px; }
+    .ig-scroll { overflow: visible; }
+    .ig-sec { break-after: avoid; }
+    .ig-tb tr { break-inside: avoid; }
+    .ig-kpi, .ig-tb tfoot td, .ig-bal .ig-bal-total td, .ig-bar > span { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

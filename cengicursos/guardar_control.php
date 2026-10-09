@@ -115,47 +115,22 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
             $posevaluacion = $normalizarNota($valores['posevaluacion'] ?? null);
 
             if ($moduloId > 0) {
-                // Notas por modulo: sin diploma (el diploma sigue siendo a nivel de curso
-                // completo, en control_cursos).
+                // Notas por modulo: solo Pre/Post. La asistencia es acumulada del curso
+                // completo (Teams/Moodle) y el diploma tambien es del curso: ambos viven
+                // en control_cursos y se registran en la vista "Todo el curso".
                 $stmtVerificarModulo->execute([$asignacionId, $moduloId]);
-                $existeModulo = (bool) $stmtVerificarModulo->fetch(PDO::FETCH_ASSOC);
-
-                if ($existeModulo && $puedeGuardarAsistencia) {
-                    $stmt = $db->prepare("
-                        UPDATE control_curso_modulos
-                        SET asistencia = ?, sesiones_asistidas = ?, evaluacion = ?, posevaluacion = ?
-                        WHERE asignacion_id = ? AND curso_modulo_id = ?
-                    ");
-                    $stmt->execute([$asistencia, $sesionesAsistidas, $evaluacion, $posevaluacion, $asignacionId, $moduloId]);
-                } elseif ($existeModulo) {
-                    $stmt = $db->prepare("
-                        UPDATE control_curso_modulos
-                        SET evaluacion = ?, posevaluacion = ?
-                        WHERE asignacion_id = ? AND curso_modulo_id = ?
-                    ");
-                    $stmt->execute([$evaluacion, $posevaluacion, $asignacionId, $moduloId]);
-                } elseif ($puedeGuardarAsistencia) {
-                    $stmt = $db->prepare("
-                        INSERT INTO control_curso_modulos
-                            (asignacion_id, curso_modulo_id, asistencia, sesiones_asistidas, evaluacion, posevaluacion)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ");
-                    $stmt->execute([$asignacionId, $moduloId, $asistencia, $sesionesAsistidas, $evaluacion, $posevaluacion]);
+                if ($stmtVerificarModulo->fetch(PDO::FETCH_ASSOC)) {
+                    $db->prepare('UPDATE control_curso_modulos SET evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ? AND curso_modulo_id = ?')
+                        ->execute([$evaluacion, $posevaluacion, $asignacionId, $moduloId]);
+                } elseif ($evaluacion !== null || $posevaluacion !== null) {
+                    $db->prepare('INSERT INTO control_curso_modulos (asignacion_id, curso_modulo_id, evaluacion, posevaluacion) VALUES (?, ?, ?, ?)')
+                        ->execute([$asignacionId, $moduloId, $evaluacion, $posevaluacion]);
                 } else {
-                    $stmt = $db->prepare("
-                        INSERT INTO control_curso_modulos
-                            (asignacion_id, curso_modulo_id, evaluacion, posevaluacion)
-                        VALUES (?, ?, ?, ?)
-                    ");
-                    $stmt->execute([$asignacionId, $moduloId, $evaluacion, $posevaluacion]);
+                    continue; // sin nota y sin registro previo: nada que guardar ni recalcular
                 }
 
-                // Recalcular el resumen del curso completo (control_cursos) como
-                // promedio de las notas de TODOS los modulos del curso que este
-                // participante ya tiene cargadas en control_curso_modulos. Misma
-                // logica que usa la carga masiva por modulo (extraida a
-                // curso_form_helpers.php para no duplicarla).
-                cengi_recalcular_resumen_curso($db, $asignacionId, $cursoId, $puedeGuardarAsistencia);
+                // Nota del curso completo = promedio de los modulos ponderado por horas.
+                cengi_recalcular_resumen_curso($db, $asignacionId, $cursoId);
 
                 continue;
             }
@@ -185,51 +160,33 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
                 }
             }
 
+            // Columnas a guardar en control_cursos. En un curso con modulos la nota del
+            // curso (Pre/Post) es calculada desde los modulos y no se edita aqui.
+            $campos = [];
+            if ($puedeGuardarAsistencia) {
+                $campos['asistencia'] = $asistencia;
+                $campos['sesiones_asistidas'] = $sesionesAsistidas;
+            }
+            if (!$modulosCurso) {
+                $campos['evaluacion'] = $evaluacion;
+                $campos['posevaluacion'] = $posevaluacion;
+            }
+            if ($diploma !== '') {
+                $campos['diploma'] = $diploma;
+            }
+
             $stmtVerificarLote->execute([$asignacionId]);
             $existe = (bool) $stmtVerificarLote->fetch(PDO::FETCH_ASSOC);
 
-            if ($existe && $puedeGuardarAsistencia && $diploma !== '') {
-                $stmt = $db->prepare("
-                    UPDATE control_cursos
-                    SET asistencia = ?, sesiones_asistidas = ?, evaluacion = ?, posevaluacion = ?, diploma = ?
-                    WHERE asignacion_id = ?
-                ");
-                $stmt->execute([$asistencia, $sesionesAsistidas, $evaluacion, $posevaluacion, $diploma, $asignacionId]);
-            } elseif ($existe && $puedeGuardarAsistencia) {
-                $stmt = $db->prepare("
-                    UPDATE control_cursos
-                    SET asistencia = ?, sesiones_asistidas = ?, evaluacion = ?, posevaluacion = ?
-                    WHERE asignacion_id = ?
-                ");
-                $stmt->execute([$asistencia, $sesionesAsistidas, $evaluacion, $posevaluacion, $asignacionId]);
-            } elseif ($existe && $diploma !== '') {
-                $stmt = $db->prepare("
-                    UPDATE control_cursos
-                    SET evaluacion = ?, posevaluacion = ?, diploma = ?
-                    WHERE asignacion_id = ?
-                ");
-                $stmt->execute([$evaluacion, $posevaluacion, $diploma, $asignacionId]);
-            } elseif ($existe) {
-                $stmt = $db->prepare("
-                    UPDATE control_cursos
-                    SET evaluacion = ?, posevaluacion = ?
-                    WHERE asignacion_id = ?
-                ");
-                $stmt->execute([$evaluacion, $posevaluacion, $asignacionId]);
-            } elseif ($puedeGuardarAsistencia) {
-                $stmt = $db->prepare("
-                    INSERT INTO control_cursos
-                        (asignacion_id, asistencia, sesiones_asistidas, evaluacion, posevaluacion, diploma)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ");
-                $stmt->execute([$asignacionId, $asistencia, $sesionesAsistidas, $evaluacion, $posevaluacion, $diploma]);
-            } else {
-                $stmt = $db->prepare("
-                    INSERT INTO control_cursos
-                        (asignacion_id, evaluacion, posevaluacion, diploma)
-                    VALUES (?, ?, ?, ?)
-                ");
-                $stmt->execute([$asignacionId, $evaluacion, $posevaluacion, $diploma]);
+            if ($existe && $campos) {
+                $db->prepare('UPDATE control_cursos SET ' . implode(', ', array_map(static function ($c) {
+                    return "$c = ?";
+                }, array_keys($campos))) . ' WHERE asignacion_id = ?')
+                    ->execute(array_merge(array_values($campos), [$asignacionId]));
+            } elseif (!$existe) {
+                $campos += ['diploma' => ''];
+                $db->prepare('INSERT INTO control_cursos (asignacion_id, ' . implode(', ', array_keys($campos)) . ') VALUES (?' . str_repeat(', ?', count($campos)) . ')')
+                    ->execute(array_merge([$asignacionId], array_values($campos)));
             }
         }
 
@@ -241,7 +198,7 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
         throw $e;
     }
 
-    header("Location: ver_participante_curso.php?id=$cursoId" . ($moduloId > 0 ? "&modulo_id={$moduloId}" : ''));
+    header("Location: ver_participante_curso.php?id=$cursoId" . ($moduloId > 0 ? "&modulo_id={$moduloId}" : '') . '&mensaje=calificacion');
     exit;
 }
 
@@ -404,6 +361,14 @@ $stmtCurso = $db->prepare("
 $stmtCurso->execute([$asignacion_id]);
 $curso = $stmtCurso->fetch(PDO::FETCH_ASSOC);
 $idcurso = (int) ($curso['cursos_id'] ?? 0);
+
+// Curso con modulos: la nota del curso se calcula desde los modulos, asi que se
+// restaura aunque el formulario individual haya enviado otros valores.
+$stmtTieneModulos = $db->prepare('SELECT COUNT(*) FROM curso_modulos WHERE curso_id = ?');
+$stmtTieneModulos->execute([$idcurso]);
+if ((int) $stmtTieneModulos->fetchColumn() > 0) {
+    cengi_recalcular_resumen_curso($db, $asignacion_id, $idcurso);
+}
 
 if (trim((string) ($_POST['return_to'] ?? '')) === 'participantes') {
     header("Location: participantes.php?curso_id=$idcurso&mensaje=calificacion");

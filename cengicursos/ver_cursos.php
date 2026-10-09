@@ -358,7 +358,7 @@ function cengi_curso_modal_atributos(array $curso)
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
-    <link rel="stylesheet" type="text/css" href="css/proyecto.css">
+    <link rel="stylesheet" type="text/css" href="css/proyecto.css?v=<?php echo (int) filemtime(__DIR__ . '/css/proyecto.css'); ?>">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
     <meta charset="utf-8">
@@ -483,6 +483,7 @@ function cengi_curso_modal_atributos(array $curso)
             }
         }
     </style>
+<link rel="stylesheet" href="css/course_actions.css?v=<?php echo filemtime(__DIR__ . '/css/course_actions.css'); ?>">
 </head>
 
 <body class="cengi-canvas">
@@ -610,6 +611,7 @@ function cengi_curso_modal_atributos(array $curso)
         });
     </script>
     <?php endif; ?>
+<script src="js/course_actions.js?v=<?php echo filemtime(__DIR__ . '/js/course_actions.js'); ?>"></script>
 </body>
 </html>
 <?php endif; ?>
@@ -623,18 +625,20 @@ function cengi_curso_modal_atributos(array $curso)
     <title>Cursos · Cengicursos</title>
     <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
-    <link rel="stylesheet" type="text/css" href="css/proyecto.css">
+    <link rel="stylesheet" type="text/css" href="css/proyecto.css?v=<?php echo (int) filemtime(__DIR__ . '/css/proyecto.css'); ?>">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
+<link rel="stylesheet" href="css/course_actions.css?v=<?php echo filemtime(__DIR__ . '/css/course_actions.css'); ?>">
 </head>
 <body class="cengi-canvas">
 <?php menu_render(); ?>
 
 <main class="container cengi-courses-page">
-    <?php if ($mensajeCurso === 'creado' || $mensajeCurso === 'actualizado'): ?>
+    <?php if (in_array($mensajeCurso, ['creado', 'actualizado', 'importado'], true)): ?>
         <div class="cengi-course-feedback is-success" role="status">
             <span class="glyphicon glyphicon-ok-circle" aria-hidden="true"></span>
-            <span><?php echo $mensajeCurso === 'creado' ? 'El curso fue creado correctamente.' : 'Los cambios del curso fueron guardados correctamente.'; ?></span>
+            <span><?php echo ['creado' => 'El curso fue creado correctamente.', 'actualizado' => 'Los cambios del curso fueron guardados correctamente.',
+                'importado' => 'Carga masiva aplicada: ' . (int) ($_GET['n'] ?? 0) . ' curso(s) creados directamente en ejecución.'][$mensajeCurso]; ?></span>
             <a href="ver_cursos.php" aria-label="Cerrar mensaje">&times;</a>
         </div>
     <?php elseif ($errorCurso !== ''): ?>
@@ -685,6 +689,7 @@ function cengi_curso_modal_atributos(array $curso)
                 <a href="ver_cursos.php" class="cengi-filter-clear" aria-label="Limpiar filtros">Limpiar</a>
             <?php endif; ?>
             <?php if ($puedeGestionar): ?>
+                <a class="btn btn-default cengi-course-bulk" href="carga_masiva_planificacion.php?tipo=curso" title="Cargar cursos en ejecución desde Excel o CSV, sin pasar por la planificación"><span class="glyphicon glyphicon-upload" aria-hidden="true"></span>Carga masiva</a>
                 <button type="button" class="btn btn-primary cengi-course-create" data-course-modal="create" data-toggle="modal" data-target="#course-form-modal"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>Crear curso</button>
             <?php endif; ?>
         </form>
@@ -695,13 +700,13 @@ function cengi_curso_modal_atributos(array $curso)
             <table class="cengi-courses-table">
                 <thead><tr>
                     <th class="is-expand"><span class="sr-only">Detalle</span></th>
-                    <th>Código</th><th>Curso</th><th>Categoría</th>
-                    <th>Modalidad</th><th>Fecha inicio</th><th>Fecha fin</th><th>Avance</th>
-                    <th>Instructor</th><th>Cupo</th><th>Estado</th><th class="is-actions"><span class="sr-only">Acciones</span></th>
+                    <th>Curso / modalidad</th>
+                    <th>Período</th>
+                    <th>Instructor</th><th>Inscritos / cupo</th><th>Estado / avance</th><th class="is-actions"><span class="sr-only">Acciones</span></th>
                 </tr></thead>
                 <tbody>
                 <?php if (!$cursos): ?>
-                    <tr><td colspan="12" class="cengi-courses-empty"><span class="glyphicon glyphicon-education" aria-hidden="true"></span><strong>No se encontraron cursos</strong><small>Prueba con otros filtros o registra un curso nuevo.</small></td></tr>
+                    <tr><td colspan="7" class="cengi-courses-empty"><span class="glyphicon glyphicon-education" aria-hidden="true"></span><strong>No se encontraron cursos</strong><small>Prueba con otros filtros o registra un curso nuevo.</small></td></tr>
                 <?php endif; ?>
 
                 <?php foreach ($cursos as $row):
@@ -712,16 +717,18 @@ function cengi_curso_modal_atributos(array $curso)
                 ?>
                     <tr class="cengi-course-row">
                         <td class="is-expand"><button type="button" class="cengi-course-expand" data-course-toggle="course-detail-<?php echo $cursoId; ?>" aria-controls="course-detail-<?php echo $cursoId; ?>" aria-expanded="false" aria-label="Mostrar detalle de <?php echo cengi_curso_html($row['nombre_cursos']); ?>"><span class="glyphicon glyphicon-menu-down" aria-hidden="true"></span></button></td>
-                        <td class="cengi-course-code" data-label="Código"><?php echo cengi_curso_html(cengi_curso_codigo_visible($row)); ?></td>
-                        <td class="cengi-course-name" data-label="Curso"><strong><?php echo cengi_curso_html($row['nombre_cursos']); ?></strong><small><?php echo cengi_curso_html($row['descripcion_categorias_cursos']); ?> · edición <?php echo cengi_curso_html($edicion); ?></small></td>
-                        <td data-label="Categoría"><?php echo cengi_curso_html($row['descripcion_categorias_cursos']); ?></td>
-                        <td data-label="Modalidad"><?php echo cengi_curso_html($row['tipo'] ?: 'Sin definir'); ?></td>
-                        <td class="is-date" data-label="Fecha inicio"><?php echo cengi_curso_fecha($row['inicio']); ?></td>
-                        <td class="is-date" data-label="Fecha fin"><?php echo cengi_curso_fecha($row['fin']); ?></td>
-                        <td class="cengi-course-progress-cell" data-label="Avance"><div class="cengi-course-progress" aria-label="<?php echo cengi_curso_html($avanceLabel); ?>"><span style="width:<?php echo $avance; ?>%;<?php echo $avance === 100 ? 'background:#CED2D5;' : ''; ?>"></span></div><small><?php echo cengi_curso_html($avanceLabel); ?></small></td>
+                        <td class="cengi-course-name" data-label="Curso">
+                            <span class="course-compact-code"><?php echo cengi_curso_html(cengi_curso_codigo_visible($row)); ?></span>
+                            <strong><?php echo cengi_curso_html($row['nombre_cursos']); ?></strong>
+                            <small><?php echo cengi_curso_html($row['descripcion_categorias_cursos']); ?> · <?php echo cengi_curso_html($row['tipo'] ?: 'Modalidad sin definir'); ?> · edición <?php echo cengi_curso_html($edicion); ?></small>
+                        </td>
+                        <td class="course-period" data-label="Período">
+                            <div><small>Inicio</small><span><?php echo cengi_curso_fecha($row['inicio']); ?></span></div>
+                            <div><small>Fin</small><span><?php echo cengi_curso_fecha($row['fin']); ?></span></div>
+                        </td>
                         <td data-label="Instructor"><?php echo cengi_curso_html($row['instructor_nombre'] ?: 'Sin asignar'); ?></td>
                         <td data-label="Cupo"><?php echo (int) $row['inscritos']; ?><?php echo (int) $row['cupo'] > 0 ? ' / ' . (int) $row['cupo'] : ''; ?></td>
-                        <td data-label="Estado"><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo cengi_curso_html($estadoLabel); ?></span></td>
+                        <td data-label="Estado y avance" class="course-state-progress"><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo cengi_curso_html($estadoLabel); ?></span><div class="cengi-course-progress" aria-label="Avance por fechas: <?php echo cengi_curso_html($avanceLabel); ?>"><span style="width:<?php echo $avance; ?>%"></span></div><small>Calendario: <?php echo cengi_curso_html($avanceLabel); ?></small></td>
                         <td class="is-actions"><div class="cengi-row-actions">
                             <?php if ($puedeGestionar || $puedeCalificar): ?><a class="cengi-action-btn is-view" href="ver_participante_curso.php?id=<?php echo $cursoId; ?>" data-tooltip="Ver participantes" aria-label="Ver participantes"><span class="glyphicon glyphicon-eye-open"></span></a><?php endif; ?>
                             <?php if ($puedeGestionar): ?>
@@ -731,7 +738,7 @@ function cengi_curso_modal_atributos(array $curso)
                             <?php endif; ?>
                         </div></td>
                     </tr>
-                    <tr class="cengi-course-detail-row" id="course-detail-<?php echo $cursoId; ?>" hidden><td colspan="12">
+                    <tr class="cengi-course-detail-row" id="course-detail-<?php echo $cursoId; ?>" hidden><td colspan="7">
                         <div class="cengi-course-detail">
                             <div class="cengi-course-detail-copy">
                                 <span class="cengi-course-detail-label">Información del curso</span>
@@ -1180,5 +1187,6 @@ function cengi_curso_modal_atributos(array $curso)
     });
 })();
 </script>
+<script src="js/course_actions.js?v=<?php echo filemtime(__DIR__ . '/js/course_actions.js'); ?>"></script>
 </body>
 </html>

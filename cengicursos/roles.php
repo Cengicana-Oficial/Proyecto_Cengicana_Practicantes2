@@ -24,9 +24,10 @@ $modulos = [
     'instructores' => ['label' => 'Instructores', 'read' => 'ver_instructores_cengi', 'write' => 'gestionar_instructores_cengi'],
     'organizaciones' => ['label' => 'Organizaciones', 'read' => 'ver_organizaciones_cengi', 'write' => 'gestionar_organizaciones_cengi'],
     'eventos' => ['label' => 'Eventos', 'read' => 'ver_eventos_cengi', 'write' => 'gestionar_eventos_cengi'],
+    'pagos_inscripcion' => ['label' => 'Pagos de inscripción y eventos', 'read' => 'ver_pagos_cengi', 'write' => 'validar_pagos_cengi'],
     'diplomas' => ['label' => 'Diplomas y certificación', 'read' => 'ver_diplomas_cengi', 'write' => 'gestionar_diplomas_cengi'],
     'carga_masiva' => ['label' => 'Carga masiva', 'read' => 'ver_participantes_cengi', 'write' => 'cargar_participantes_cengi'],
-    'reportes' => ['label' => 'Reportes por ingenio', 'read' => 'ver_reportes_cengi', 'write' => 'ver_reportes_cengi'],
+    'reportes' => ['label' => 'Reportes e informe de gestión', 'read' => 'ver_reportes_cengi', 'write' => 'ver_reportes_cengi'],
     'roles' => ['label' => 'Roles y permisos', 'read' => 'ver_roles_cengi', 'write' => 'roles_gestionar_cengi'],
 ];
 
@@ -39,7 +40,11 @@ $descripcionNivel = [
 
 // Todos los roles reales de usuarios_menu, excluyendo Instructor/Estudiante/Participante
 // (esos acceden via Moodle y no se gestionan en esta pantalla).
-$rolesRaw = $pdo->query("SELECT id, nombre_rol FROM roles ORDER BY nombre_rol")->fetchAll(PDO::FETCH_ASSOC);
+// Solo roles que sirven en Cursos (propios del modulo o genericos): los de Laboratorio,
+// Comites, etc. no se mezclan aqui (login/config/roles_modulo.php).
+$rolesRaw = array_map(static function ($r) {
+    return ['id' => $r['id'], 'nombre_rol' => $r['nombre_rol']];
+}, cengi_rm_roles_asignables($pdo, cengi_rm_modulo_id($pdo, 'cursos'), true));
 $rolesPorNivel = [1 => [], 2 => [], 3 => []];
 
 foreach ($rolesRaw as $r) {
@@ -146,13 +151,14 @@ foreach ([1, 2, 3] as $nivel) {
 $usuarios = $pdo->query("
     SELECT DISTINCT
         u.id, u.nombre, u.correo, u.es_superadmin,
-        r.nombre_rol,
+        COALESCE(r.nombre_rol, 'Sin rol en Cursos') AS nombre_rol,
         COALESCE(i.nombre_ingenio, 'Sin ingenio') AS nombre_ingenio
     FROM usuarios u
-    INNER JOIN roles r ON r.id = u.rol_id
     LEFT JOIN ingenios i ON i.id = u.ingenio_id
     INNER JOIN usuario_modulo um ON um.usuario_id = u.id
     INNER JOIN modulos m ON m.id = um.modulo_id
+    -- rol del usuario EN CURSOS (el superadmin conserva el suyo)
+    LEFT JOIN roles r ON r.id = CASE WHEN u.es_superadmin = 1 THEN u.rol_id ELSE um.rol_id END
     WHERE LOWER(m.nombre) IN ('cursos', 'cengicursos')
     ORDER BY u.nombre
 ")->fetchAll(PDO::FETCH_ASSOC);

@@ -234,7 +234,16 @@ if ($moduloId > 0) {
 $prePostVisibles = cengi_curso_pre_post_visibles($modulos, $moduloId);
 $mostrarPre = $prePostVisibles['pre'];
 $mostrarPost = $prePostVisibles['post'];
-$mostrarAsistencia = $puedeGestionar || (!$mostrarPre && !$mostrarPost);
+// La asistencia es acumulada del curso completo (Teams/Moodle): solo se registra en
+// "Todo el curso". En un curso con modulos, Pre/Post del curso son calculados (promedio
+// de los modulos ponderado por horas) y se muestran como solo lectura en esa vista.
+$cursoConModulos = (bool) $modulos;
+$vistaResumenModulos = $cursoConModulos && $moduloId === 0;
+$mostrarAsistencia = $moduloId === 0 && ($puedeGestionar || (!$mostrarPre && !$mostrarPost));
+if ($vistaResumenModulos) {
+    $mostrarPre = false;
+    $mostrarPost = false;
+}
 
 if ($moduloId > 0) {
     $sql = "
@@ -292,13 +301,52 @@ $stmt = $db->prepare($sql);
 $stmt->execute($moduloId > 0 ? [$moduloId, $idcurso] : [$idcurso]);
 $filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Notas de cada modulo por participante: [asignacion_id][curso_modulo_id] => fila.
+// Alimentan la matriz de "Todo el curso" y el avance de calificacion de cada modulo.
+$notasModulo = [];
+if ($cursoConModulos) {
+    $stmtNotasModulo = $db->prepare("
+        SELECT ccm.asignacion_id, ccm.curso_modulo_id, ccm.evaluacion, ccm.posevaluacion
+        FROM control_curso_modulos ccm
+        INNER JOIN curso_modulos cm ON cm.id = ccm.curso_modulo_id
+        WHERE cm.curso_id = ?
+    ");
+    $stmtNotasModulo->execute([$idcurso]);
+    foreach ($stmtNotasModulo->fetchAll(PDO::FETCH_ASSOC) as $n) {
+        $notasModulo[(int) $n['asignacion_id']][(int) $n['curso_modulo_id']] = $n;
+    }
+}
+
+/** Un participante esta calificado en un modulo cuando tiene todas las notas que el modulo pide. */
+function cengi_pc_modulo_calificado(array $modulo, $nota)
+{
+    if (empty($modulo['acepta_pre']) && empty($modulo['acepta_post'])) {
+        return true;
+    }
+    return $nota !== null
+        && (empty($modulo['acepta_pre']) || is_numeric($nota['evaluacion']))
+        && (empty($modulo['acepta_post']) || is_numeric($nota['posevaluacion']));
+}
+
+$avanceModulos = [];
+foreach ($modulos as $m) {
+    $calificados = 0;
+    foreach ($filas as $f) {
+        if (cengi_pc_modulo_calificado($m, $notasModulo[(int) $f['asignacion_id']][(int) $m['id']] ?? null)) {
+            $calificados++;
+        }
+    }
+    $avanceModulos[(int) $m['id']] = ['calificados' => $calificados, 'total' => count($filas),
+        'sinNotas' => empty($m['acepta_pre']) && empty($m['acepta_post'])];
+}
+
 // KPIs del curso (o del modulo seleccionado, si aplica)
 $totalInscritos = count($filas);
 $evaluacionesValidas = array_filter($filas, static function ($f) { return is_numeric($f['posevaluacion']); });
 $asistenciasValidas = array_filter($filas, static function ($f) { return is_numeric($f['asistencia']); });
 $evalPromedio = $evaluacionesValidas ? array_sum(array_map(static function ($f) { return (float) $f['posevaluacion']; }, $evaluacionesValidas)) / count($evaluacionesValidas) : null;
 $asistPromedio = $asistenciasValidas ? array_sum(array_map(static function ($f) { return (float) $f['asistencia']; }, $asistenciasValidas)) / count($asistenciasValidas) : null;
-$aprobados = count(array_filter($filas, static function ($f) { return is_numeric($f['posevaluacion']) && (float) $f['posevaluacion'] >= 60; }));
+$aprobados = count(array_filter($filas, static function ($f) { return is_numeric($f['posevaluacion']) && (float) $f['posevaluacion'] >= CENGI_NOTA_APROBACION; }));
 
 function cengi_pc_html($valor)
 {
@@ -372,9 +420,13 @@ $error = trim((string) ($_GET['error'] ?? ''));
 
     <div class="cengi-kpi-grid">
         <div class="cengi-kpi"><div class="cengi-kpi-val"><?php echo $totalInscritos; ?></div><div class="cengi-kpi-label">Inscritos</div></div>
-        <div class="cengi-kpi"><div class="cengi-kpi-val"><?php echo $aprobados; ?></div><div class="cengi-kpi-label">Aprobados (post. >= 60)</div></div>
-        <div class="cengi-kpi"><div class="cengi-kpi-val"><?php echo $asistPromedio !== null ? number_format($asistPromedio, 0) . '%' : '—'; ?></div><div class="cengi-kpi-label">Asistencia promedio</div></div>
-        <div class="cengi-kpi"><div class="cengi-kpi-val" style="color:var(--cengi-primary-deep);"><?php echo $evalPromedio !== null ? number_format($evalPromedio, 0) . ' pts' : '—'; ?></div><div class="cengi-kpi-label">Evaluacion final promedio</div></div>
+        <div class="cengi-kpi"><div class="cengi-kpi-val"><?php echo $aprobados; ?></div><div class="cengi-kpi-label">Aprobados (pos-evaluación ≥ <?php echo CENGI_NOTA_APROBACION; ?>)</div></div>
+        <?php if ($moduloId > 0): $av = $avanceModulos[$moduloId]; ?>
+            <div class="cengi-kpi"><div class="cengi-kpi-val"><?php echo $av['calificados'] . ' / ' . $av['total']; ?></div><div class="cengi-kpi-label">Calificados en este módulo</div></div>
+        <?php else: ?>
+            <div class="cengi-kpi"><div class="cengi-kpi-val"><?php echo $asistPromedio !== null ? number_format($asistPromedio, 0) . '%' : '—'; ?></div><div class="cengi-kpi-label">Asistencia promedio (curso)</div></div>
+        <?php endif; ?>
+        <div class="cengi-kpi"><div class="cengi-kpi-val" style="color:var(--cengi-primary-deep);"><?php echo $evalPromedio !== null ? number_format($evalPromedio, 0) . ' pts' : '—'; ?></div><div class="cengi-kpi-label"><?php echo $moduloId > 0 ? 'Post-evaluación promedio del módulo' : 'Evaluacion final promedio'; ?></div></div>
     </div>
 
     <div class="panel panel-success">
@@ -551,55 +603,59 @@ $error = trim((string) ($_GET['error'] ?? ''));
         </div>
     </div>
 
-    <div class="panel panel-success">
+    <div class="panel panel-success cengi-roster">
         <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
             <div>
-                <h3 class="panel-title">Participantes del curso</h3>
+                <h3 class="panel-title">Participantes del curso <span class="cengi-roster-count"><?php echo count($filas); ?></span></h3>
                 <?php if ($modulos): ?>
-                    <small>Elige "Todo el curso" para el resumen general, o un modulo especifico para cargar sus notas por separado.</small>
+                    <small>La asistencia es del curso completo; las notas se cargan en cada módulo y la nota final se calcula sola.</small>
                 <?php endif; ?>
             </div>
-            <?php if ($modulos): ?>
-                <form method="GET">
-                    <input type="hidden" name="id" value="<?php echo (int) $idcurso; ?>">
-                    <select name="modulo_id" class="form-control" onchange="this.form.submit()">
-                        <option value="0" <?php echo $moduloId === 0 ? 'selected' : ''; ?>>Todo el curso (resumen general)</option>
-                        <?php foreach ($modulos as $m): ?>
-                            <option value="<?php echo (int) $m['id']; ?>" <?php echo $moduloId === (int) $m['id'] ? 'selected' : ''; ?>>
-                                <?php echo cengi_pc_html($m['nombre']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </form>
-            <?php endif; ?>
         </div>
 
+        <?php if ($modulos): ?>
+            <nav class="cengi-mod-tabs" aria-label="Vista de notas">
+                <a href="ver_participante_curso.php?id=<?php echo (int) $idcurso; ?>" class="cengi-mod-tab<?php echo $moduloId === 0 ? ' is-active' : ''; ?>"<?php echo $moduloId === 0 ? ' aria-current="page"' : ''; ?>>
+                    <span class="cengi-mod-tab-name"><span class="glyphicon glyphicon-th-list" aria-hidden="true"></span> Todo el curso</span>
+                    <span class="cengi-mod-tab-meta">Asistencia, nota final y diploma</span>
+                </a>
+                <?php foreach ($modulos as $k => $m):
+                    $av = $avanceModulos[(int) $m['id']];
+                    $completo = $av['total'] > 0 && $av['calificados'] >= $av['total'];
+                    $activo = $moduloId === (int) $m['id'];
+                ?>
+                    <a href="ver_participante_curso.php?id=<?php echo (int) $idcurso; ?>&amp;modulo_id=<?php echo (int) $m['id']; ?>" class="cengi-mod-tab<?php echo $activo ? ' is-active' : ''; ?><?php echo $completo ? ' is-complete' : ''; ?>"<?php echo $activo ? ' aria-current="page"' : ''; ?>>
+                        <span class="cengi-mod-tab-name"><span class="cengi-mod-tab-num"><?php echo $k + 1; ?></span> <?php echo cengi_pc_html($m['nombre']); ?></span>
+                        <?php if ($av['sinNotas']): ?>
+                            <span class="cengi-mod-tab-meta">Sin evaluación</span>
+                        <?php else: ?>
+                            <span class="cengi-mod-tab-meta"><?php echo $completo ? '<span class="glyphicon glyphicon-ok" aria-hidden="true"></span> ' : ''; ?><?php echo $av['calificados'] . ' de ' . $av['total']; ?> calificados</span>
+                            <span class="cengi-mod-tab-bar"><span style="width:<?php echo $av['total'] ? round($av['calificados'] / $av['total'] * 100) : 0; ?>%;"></span></span>
+                        <?php endif; ?>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+        <?php endif; ?>
+
         <div class="panel-body">
-            <?php if ($soloCalifica): ?>
+            <?php if ($moduloSeleccionado): ?>
+                <div class="cengi-mod-info">
+                    <span class="glyphicon glyphicon-info-sign" aria-hidden="true"></span>
+                    <div>
+                        <strong><?php echo cengi_pc_html($moduloSeleccionado['nombre']); ?></strong>
+                        <?php echo (float) $moduloSeleccionado['horas'] > 0 ? '· ' . rtrim(rtrim(number_format((float) $moduloSeleccionado['horas'], 1), '0'), '.') . ' h' : ''; ?>
+                        · <?php echo cengi_pc_html(implode(' y ', array_filter([!empty($moduloSeleccionado['acepta_pre']) ? 'pre-evaluación' : null, !empty($moduloSeleccionado['acepta_post']) ? 'post-evaluación' : null])) ?: 'sin evaluación'); ?>.
+                        Se aprueba con <b><?php echo CENGI_NOTA_APROBACION; ?> puntos o más</b> en la pos-evaluación. Al guardar, la nota final del curso se recalcula con el promedio de los módulos ponderado por horas.
+                    </div>
+                </div>
+            <?php elseif ($vistaResumenModulos): ?>
+                <div class="cengi-mod-info">
+                    <span class="glyphicon glyphicon-info-sign" aria-hidden="true"></span>
+                    <div>Registra aquí la <strong>asistencia acumulada</strong> del curso (Teams/Moodle) y los diplomas. Las notas por módulo se ven como referencia: para cambiarlas abre la pestaña del módulo.</div>
+                </div>
+            <?php elseif ($soloCalifica): ?>
                 <div class="cengi-empty" style="margin-bottom: 20px;">
                     En esta vista solo puedes registrar notas del curso.
-                </div>
-            <?php endif; ?>
-
-            <?php if ($moduloId > 0): ?>
-                <div style="margin-bottom: 20px; text-align: right;">
-                    <a href="exportar_notas_modulo.php?curso_id=<?php echo (int) $idcurso; ?>&modulo_id=<?php echo (int) $moduloId; ?>&format=excel" class="btn btn-default" download>
-                        <span class="glyphicon glyphicon-download-alt"></span> Descargar Excel
-                    </a>
-                    <a href="exportar_notas_modulo.php?curso_id=<?php echo (int) $idcurso; ?>&modulo_id=<?php echo (int) $moduloId; ?>&format=pdf" class="btn btn-default" download>
-                        <span class="glyphicon glyphicon-file"></span> Descargar PDF
-                    </a>
-                    <button type="button" class="btn btn-default" data-toggle="modal" data-target="#bulk-grades-modulo-modal">
-                        <span class="glyphicon glyphicon-upload"></span> Cargar notas de este modulo
-                    </button>
-                </div>
-            <?php endif; ?>
-
-            <?php if ($puedeGestionar): ?>
-                <div style="margin-bottom: 20px; text-align: right;">
-                    <button type="button" class="btn btn-success" data-toggle="modal" data-target="#add-participant-modal">
-                        Agregar participante al curso
-                    </button>
                 </div>
             <?php endif; ?>
 
@@ -610,22 +666,51 @@ $error = trim((string) ($_GET['error'] ?? ''));
                     + ($mostrarAsistencia ? 2 : 0)
                     + ($mostrarPre ? 1 : 0)
                     + ($mostrarPost ? 1 : 0)
+                    + ($vistaResumenModulos ? count($modulos) + 1 : 0)
                     + ($moduloId === 0 ? 1 : 0)
                     + ($puedeGestionar ? 1 : 0);
+                $moduloSinNotas = $moduloSeleccionado && !$mostrarPre && !$mostrarPost;
             ?>
 
-            <?php if (!empty($filas)): ?>
-                <div class="cengi-participante-filtro" style="margin-bottom:14px;max-width:360px;">
-                    <input
-                        type="text"
-                        id="cengi-participante-buscar"
-                        class="form-control input-sm"
-                        placeholder="Buscar por nombre, CUI o ingenio..."
-                        autocomplete="off"
-                        aria-label="Buscar participantes en la tabla"
-                    >
+            <div class="cengi-roster-toolbar">
+                <?php if (!empty($filas)): ?>
+                    <div class="cengi-roster-search">
+                        <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+                        <input
+                            type="text"
+                            id="cengi-participante-buscar"
+                            class="form-control"
+                            placeholder="Buscar por nombre, CUI o ingenio..."
+                            autocomplete="off"
+                            aria-label="Buscar participantes en la tabla"
+                        >
+                    </div>
+                    <?php if ($moduloSeleccionado && !$moduloSinNotas): ?>
+                        <label class="cengi-roster-toggle">
+                            <input type="checkbox" id="cengi-solo-pendientes">
+                            <span>Solo pendientes (<?php echo $avanceModulos[$moduloId]['total'] - $avanceModulos[$moduloId]['calificados']; ?>)</span>
+                        </label>
+                    <?php endif; ?>
+                <?php endif; ?>
+                <div class="cengi-roster-actions">
+                    <?php if ($moduloId > 0 && !$moduloSinNotas): ?>
+                        <a href="exportar_notas_modulo.php?curso_id=<?php echo (int) $idcurso; ?>&modulo_id=<?php echo (int) $moduloId; ?>&format=excel" class="btn btn-default btn-sm" download>
+                            <span class="glyphicon glyphicon-download-alt"></span> Excel
+                        </a>
+                        <a href="exportar_notas_modulo.php?curso_id=<?php echo (int) $idcurso; ?>&modulo_id=<?php echo (int) $moduloId; ?>&format=pdf" class="btn btn-default btn-sm" download>
+                            <span class="glyphicon glyphicon-file"></span> PDF
+                        </a>
+                        <button type="button" class="btn btn-default btn-sm" data-toggle="modal" data-target="#bulk-grades-modulo-modal">
+                            <span class="glyphicon glyphicon-upload"></span> Cargar notas del modulo
+                        </button>
+                    <?php endif; ?>
+                    <?php if ($puedeGestionar): ?>
+                        <button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#add-participant-modal">
+                            <span class="glyphicon glyphicon-plus"></span> Agregar participante
+                        </button>
+                    <?php endif; ?>
                 </div>
-            <?php endif; ?>
+            </div>
 
             <form action="guardar_control.php" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="accion" value="guardar_general">
@@ -642,6 +727,12 @@ $error = trim((string) ($_GET['error'] ?? ''));
                         <?php if ($mostrarAsistencia): ?><th>Asistencia</th><th>Sesiones asistidas</th><?php endif; ?>
                         <?php if ($mostrarPre): ?><th>Pre-Evaluacion</th><?php endif; ?>
                         <?php if ($mostrarPost): ?><th>Pos-Evaluacion</th><?php endif; ?>
+                        <?php if ($vistaResumenModulos): ?>
+                            <?php foreach ($modulos as $k => $m): ?>
+                                <th class="cengi-mod-col" title="<?php echo cengi_pc_html($m['nombre']); ?>">M<?php echo $k + 1; ?><small><?php echo cengi_pc_html(mb_strimwidth($m['nombre'], 0, 18, '…', 'UTF-8')); ?></small></th>
+                            <?php endforeach; ?>
+                            <th>Nota final</th>
+                        <?php endif; ?>
                         <?php if ($moduloId === 0): ?><th>Diploma</th><?php endif; ?>
                         <?php if ($puedeGestionar): ?><th>Acciones</th><?php endif; ?>
                     </tr>
@@ -656,77 +747,117 @@ $error = trim((string) ($_GET['error'] ?? ''));
                     <?php } ?>
 
                     <?php foreach ($filas as $fila) { ?>
-                        <tr>
-                                <td><strong><?= htmlspecialchars($fila['nombre_participantes']) ?></strong><br><small><?= htmlspecialchars(implode(' · ', array_filter([$fila['correo_participantes'], $fila['telefono_participantes'], $fila['grado_academico_participantes']]))) ?></small></td>
-                                <td><?= htmlspecialchars($fila['cui_participantes']) ?></td>
-                                <td><?= htmlspecialchars($fila['nombre_ingenios']) ?></td>
+                        <tr<?php echo $moduloSeleccionado && !cengi_pc_modulo_calificado($moduloSeleccionado, $notasModulo[(int) $fila['asignacion_id']][$moduloId] ?? null) ? ' data-pendiente="1"' : ''; ?>>
+                                <?php
+                                    $cengiIniciales = '';
+                                    foreach (preg_split('/\s+/', trim((string) $fila['nombre_participantes']), -1, PREG_SPLIT_NO_EMPTY) as $cengiParte) {
+                                        $cengiIniciales .= mb_strtoupper(mb_substr($cengiParte, 0, 1, 'UTF-8'), 'UTF-8');
+                                        if (mb_strlen($cengiIniciales, 'UTF-8') >= 2) {
+                                            break;
+                                        }
+                                    }
+                                    $cengiAsig = (int) $fila['asignacion_id'];
+                                ?>
+                                <td>
+                                    <div class="cengi-roster-person" data-ini="<?= htmlspecialchars($cengiIniciales ?: '?') ?>">
+                                        <div>
+                                            <strong><?= htmlspecialchars($fila['nombre_participantes']) ?></strong>
+                                            <small><?= htmlspecialchars(implode(' · ', array_filter([$fila['correo_participantes'], $fila['telefono_participantes'], $fila['grado_academico_participantes']]))) ?></small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="cengi-roster-mono"><?= htmlspecialchars($fila['cui_participantes'] ?: '—') ?></span></td>
+                                <td><span class="cengi-roster-chip"><?= htmlspecialchars($fila['nombre_ingenios']) ?></span></td>
 
                                 <?php if ($mostrarAsistencia): ?>
                                     <td>
-                                        <input
-                                            type="number"
-                                            name="registros[<?= (int) $fila['asignacion_id'] ?>][asistencia]"
-                                            class="form-control"
-                                            min="0"
-                                            max="100"
-                                            step="0.01"
-                                            value="<?= htmlspecialchars($fila['asistencia']) ?>"
-                                        >
+                                        <div class="cengi-roster-field has-suffix">
+                                            <input type="number" name="registros[<?= $cengiAsig ?>][asistencia]" class="form-control" min="0" max="100" step="0.01" placeholder="0" aria-label="Asistencia (%)" value="<?= cengi_pc_html($fila['asistencia']) ?>">
+                                            <span>%</span>
+                                        </div>
                                     </td>
                                     <td>
-                                        <input
-                                            type="number"
-                                            name="registros[<?= (int) $fila['asignacion_id'] ?>][sesiones_asistidas]"
-                                            class="form-control"
-                                            min="0"
-                                            step="1"
-                                            value="<?= htmlspecialchars($fila['sesiones_asistidas']) ?>"
-                                        >
+                                        <div class="cengi-roster-field">
+                                            <input type="number" name="registros[<?= $cengiAsig ?>][sesiones_asistidas]" class="form-control" min="0" step="1" placeholder="0" aria-label="Sesiones asistidas" value="<?= cengi_pc_html($fila['sesiones_asistidas']) ?>">
+                                        </div>
                                     </td>
                                 <?php endif; ?>
 
                                 <?php if ($mostrarPre): ?>
                                 <td>
-                                    <input
-                                        type="number"
-                                        name="registros[<?= (int) $fila['asignacion_id'] ?>][evaluacion]"
-                                        class="form-control"
-                                        min="0"
-                                        max="100"
-                                        step="0.01"
-                                        value="<?= htmlspecialchars($fila['evaluacion']) ?>"
-                                    >
+                                    <div class="cengi-roster-field">
+                                        <input type="number" name="registros[<?= $cengiAsig ?>][evaluacion]" class="form-control" min="0" max="100" step="0.01" placeholder="0–100" aria-label="Pre-evaluación" value="<?= cengi_pc_html($fila['evaluacion']) ?>">
+                                    </div>
                                 </td>
                                 <?php endif; ?>
 
                                 <?php if ($mostrarPost): ?>
                                 <td>
-                                    <input
-                                        type="number"
-                                        name="registros[<?= (int) $fila['asignacion_id'] ?>][posevaluacion]"
-                                        class="form-control"
-                                        min="0"
-                                        max="100"
-                                        step="0.01"
-                                        value="<?= htmlspecialchars($fila['posevaluacion']) ?>"
-                                    >
+                                    <div class="cengi-roster-post">
+                                        <div class="cengi-roster-field">
+                                            <input type="number" name="registros[<?= $cengiAsig ?>][posevaluacion]" class="form-control" min="0" max="100" step="0.01" placeholder="0–100" aria-label="Pos-evaluación" value="<?= cengi_pc_html($fila['posevaluacion']) ?>" data-posevaluacion>
+                                        </div>
+                                        <?php $cengiPost = is_numeric($fila['posevaluacion']) ? (float) $fila['posevaluacion'] : null; ?>
+                                        <span class="cengi-roster-estado<?= $cengiPost === null ? '' : ($cengiPost >= CENGI_NOTA_APROBACION ? ' is-ok' : ' is-low') ?>" data-estado-post><?= $cengiPost === null ? 'Sin nota' : ($cengiPost >= CENGI_NOTA_APROBACION ? 'Aprobado' : 'No aprobado') ?></span>
+                                    </div>
                                 </td>
+                                <?php endif; ?>
+
+                                <?php if ($vistaResumenModulos): ?>
+                                    <?php
+                                    $cengiFaltan = 0;
+                                    foreach ($modulos as $m):
+                                        $nota = $notasModulo[$cengiAsig][(int) $m['id']] ?? null;
+                                        $sinEval = empty($m['acepta_pre']) && empty($m['acepta_post']);
+                                        $listo = cengi_pc_modulo_calificado($m, $nota);
+                                        $cengiFaltan += $listo ? 0 : 1;
+                                        $principal = !empty($m['acepta_post']) ? ($nota['posevaluacion'] ?? null) : ($nota['evaluacion'] ?? null);
+                                    ?>
+                                        <td class="cengi-mod-cell">
+                                            <?php if ($sinEval): ?>
+                                                <span class="cengi-roster-empty">—</span>
+                                            <?php else: ?>
+                                                <a href="ver_participante_curso.php?id=<?= (int) $idcurso ?>&amp;modulo_id=<?= (int) $m['id'] ?>" class="cengi-mod-nota<?= !$listo ? ' is-pending' : ((float) $principal < CENGI_NOTA_APROBACION ? ' is-low' : '') ?>" title="<?= cengi_pc_html($m['nombre']) ?>">
+                                                    <?php if (is_numeric($principal)): ?>
+                                                        <b><?= cengi_pc_html(rtrim(rtrim(number_format((float) $principal, 1), '0'), '.')) ?></b>
+                                                        <?php if (!empty($m['acepta_pre']) && !empty($m['acepta_post']) && is_numeric($nota['evaluacion'] ?? null)): ?>
+                                                            <small>pre <?= cengi_pc_html(rtrim(rtrim(number_format((float) $nota['evaluacion'], 1), '0'), '.')) ?></small>
+                                                        <?php endif; ?>
+                                                    <?php else: ?>
+                                                        <small>Pendiente</small>
+                                                    <?php endif; ?>
+                                                </a>
+                                            <?php endif; ?>
+                                        </td>
+                                    <?php endforeach; ?>
+                                    <td>
+                                        <?php if (is_numeric($fila['posevaluacion'])): $final = (float) $fila['posevaluacion']; ?>
+                                            <span class="cengi-mod-final<?= $final >= CENGI_NOTA_APROBACION ? ' is-ok' : ' is-low' ?>"><?= cengi_pc_html(rtrim(rtrim(number_format($final, 1), '0'), '.')) ?></span>
+                                            <small class="cengi-mod-final-hint"><?= $cengiFaltan ? 'parcial · faltan ' . $cengiFaltan : ($final >= CENGI_NOTA_APROBACION ? 'aprobado' : 'no aprobado') ?></small>
+                                        <?php else: ?>
+                                            <span class="cengi-roster-empty">Sin notas</span>
+                                        <?php endif; ?>
+                                    </td>
                                 <?php endif; ?>
 
                                 <?php if ($moduloId === 0): ?>
                                 <td>
                                     <?php if ($puedeSubirDiploma && empty($fila['diploma'])): ?>
-                                        <input type="file" name="diplomas[<?= (int) $fila['asignacion_id'] ?>]" class="form-control" accept="application/pdf,.pdf">
-                                        <br>
+                                        <label class="cengi-roster-upload" title="Adjuntar diploma en PDF">
+                                            <input type="file" name="diplomas[<?= $cengiAsig ?>]" accept="application/pdf,.pdf">
+                                            <span class="glyphicon glyphicon-paperclip" aria-hidden="true"></span>
+                                            <span class="cengi-roster-upload-text">Adjuntar PDF</span>
+                                        </label>
                                     <?php endif; ?>
                                     <?php if (!empty($fila['diploma'])) { ?>
-                                        <a href="descargar_diploma.php?asignacion_id=<?= (int) $fila['asignacion_id'] ?>" target="_blank" class="btn btn-info btn-sm">
-                                            Ver PDF
+                                        <div class="cengi-roster-diploma">
+                                        <a href="descargar_diploma.php?asignacion_id=<?= $cengiAsig ?>" target="_blank" class="cengi-roster-pill">
+                                            <span class="glyphicon glyphicon-file" aria-hidden="true"></span> Ver diploma
                                         </a>
                                         <?php if ($puedeSubirDiploma): ?>
                                             <button
                                                 type="button"
-                                                class="btn btn-danger btn-sm diploma-delete-trigger"
+                                                class="cengi-action-btn is-delete diploma-delete-trigger"
                                                 data-toggle="modal"
                                                 data-target="#confirm-diploma-delete"
                                                 data-name="<?= htmlspecialchars($fila['nombre_participantes']) ?>"
@@ -735,17 +866,18 @@ $error = trim((string) ($_GET['error'] ?? ''));
                                                 aria-label="Eliminar diploma"
                                             >
                                                 <span class="glyphicon glyphicon-trash"></span>
-                                                Eliminar diploma
+                                                <span class="sr-only">Eliminar diploma</span>
                                             </button>
                                         <?php endif; ?>
-                                    <?php } elseif (!$puedeGestionar) { ?>
-                                        <span class="text-muted">Sin diploma</span>
+                                        </div>
+                                    <?php } elseif (!$puedeSubirDiploma) { ?>
+                                        <span class="cengi-roster-empty">Sin diploma</span>
                                     <?php } ?>
                                 </td>
                                 <?php endif; ?>
 
                                 <?php if ($puedeGestionar): ?>
-                                <td>
+                                <td class="cengi-roster-col-actions">
                                     <div class="cengi-row-actions">
                                         <?php if ($puedeEliminar): ?>
                                             <button
@@ -771,18 +903,19 @@ $error = trim((string) ($_GET['error'] ?? ''));
                     <?php if (!empty($filas)): ?>
                         <tr id="cengi-participante-sin-coincidencias" style="display:none;">
                             <td colspan="<?php echo $cengiColspan; ?>" class="text-center text-muted">
-                                No hay participantes que coincidan con la búsqueda.
+                                No hay participantes que coincidan con el filtro.
                             </td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
             </table>
             </div>
-            <?php if (!empty($filas)): ?>
-                <div style="margin-top: 20px; text-align: right;">
+            <?php if (!empty($filas) && !$moduloSinNotas): ?>
+                <div class="cengi-roster-footer">
+                    <span class="cengi-roster-footer-hint" id="cengi-roster-estado">Edita los valores de la tabla y guarda una sola vez para todos los participantes.<?php echo $mostrarPost || $vistaResumenModulos ? ' Aprobado: ' . CENGI_NOTA_APROBACION . ' puntos o más en la pos-evaluación.' : ''; ?></span>
                     <button type="submit" class="btn btn-success">
                         <span class="glyphicon glyphicon-floppy-disk"></span>
-                        Guardar todos los registros
+                        Guardar cambios
                     </button>
                 </div>
             <?php endif; ?>
@@ -799,7 +932,8 @@ $error = trim((string) ($_GET['error'] ?? ''));
             <div class="modal-body">
                 <input type="hidden" name="curso_id" value="<?php echo (int) $idcurso; ?>">
                 <input type="hidden" name="modulo_id" value="<?php echo (int) $moduloId; ?>">
-                <div class="cengi-upload-guide"><strong>Formato requerido</strong><span>CUI, ASISTENCIA<?php echo $mostrarPre ? ', PRE_EVALUACION' : ''; ?><?php echo $mostrarPost ? ', POST_EVALUACION' : ''; ?></span><small>Los valores deben estar entre 0 y 100. Descarga el listado de este modulo, llénalo y súbelo tal cual (Excel .xlsx, tambien se acepta CSV).<?php if (!$mostrarPre || !$mostrarPost): ?> Las columnas de evaluación que este módulo no utiliza pueden dejarse vacías o quitarse.<?php endif; ?></small></div>
+                <div class="cengi-upload-guide"><strong>Formato requerido</strong><span>CUI<?php echo $mostrarPre ? ', PRE_EVALUACION' : ''; ?><?php echo $mostrarPost ? ', POST_EVALUACION' : ''; ?></span><small>Los valores deben estar entre 0 y 100. La plantilla ya trae a los participantes del módulo con sus notas actuales: llénala y súbela tal cual (Excel .xlsx, también se acepta CSV).<?php if (!$mostrarPre || !$mostrarPost): ?> Las columnas de evaluación que este módulo no utiliza pueden dejarse vacías o quitarse.<?php endif; ?></small>
+                    <a class="btn btn-default btn-sm cengi-upload-template" href="exportar_notas_modulo.php?curso_id=<?php echo (int) $idcurso; ?>&amp;modulo_id=<?php echo (int) $moduloId; ?>&amp;format=excel" download><span class="glyphicon glyphicon-download-alt"></span> Descargar plantilla del módulo (Excel)</a></div>
                 <label class="cengi-upload-dropzone" for="bulk-grades-modulo-file"><span class="glyphicon glyphicon-cloud-upload"></span><strong>Selecciona el archivo Excel (.xlsx)</strong><small>Máximo 5 MB</small><input type="file" id="bulk-grades-modulo-file" name="archivo" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" required></label>
             </div>
             <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success">Procesar archivo</button></div>
@@ -1130,6 +1264,46 @@ $error = trim((string) ($_GET['error'] ?? ''));
 <?php endif; ?>
 
 <script>
+// Tabla "Participantes del curso": muestra el nombre del PDF adjuntado y avisa que hay
+// cambios sin guardar (resalta la fila editada y la barra de guardado).
+(function ($) {
+    'use strict';
+
+    var $roster = $('.cengi-roster');
+    var $estado = $('#cengi-roster-estado');
+    var pendientes = 0;
+
+    $roster.on('change', '.cengi-roster-upload input[type="file"]', function () {
+        var $label = $(this).closest('.cengi-roster-upload');
+        var nombre = this.files && this.files.length ? this.files[0].name : '';
+        $label.toggleClass('has-file', nombre !== '');
+        $label.find('.cengi-roster-upload-text').text(nombre || 'Adjuntar PDF');
+        $label.attr('title', nombre || 'Adjuntar diploma en PDF');
+    });
+
+    // Estado de aprobacion junto a la pos-evaluacion, mientras se escribe.
+    var NOTA_APROBACION = <?php echo CENGI_NOTA_APROBACION; ?>;
+    $roster.on('input change', '[data-posevaluacion]', function () {
+        var $estado = $(this).closest('.cengi-roster-post').find('[data-estado-post]');
+        var v = this.value.trim() === '' ? NaN : parseFloat(this.value);
+        var ok = !isNaN(v) && v >= NOTA_APROBACION;
+        $estado.toggleClass('is-ok', !isNaN(v) && ok).toggleClass('is-low', !isNaN(v) && !ok)
+            .text(isNaN(v) ? 'Sin nota' : (ok ? 'Aprobado' : 'No aprobado'));
+    });
+
+    $roster.on('input change', 'tbody input', function () {
+        var $fila = $(this).closest('tr');
+        if (!$fila.hasClass('is-dirty')) {
+            $fila.addClass('is-dirty');
+            pendientes++;
+        }
+        $roster.find('.cengi-roster-footer').addClass('is-dirty');
+        $estado.text(pendientes === 1 ? '1 participante con cambios sin guardar.' : pendientes + ' participantes con cambios sin guardar.');
+    });
+})(jQuery);
+</script>
+
+<script>
 // Filtro en el cliente de la tabla "Participantes del curso": muestra/oculta las
 // filas del <tbody> segun el texto escrito, comparando contra nombre, CUI e
 // ingenio (las primeras tres celdas). No hace AJAX ni recarga: la tabla ya viene
@@ -1165,25 +1339,26 @@ $error = trim((string) ($_GET['error'] ?? ''));
         $(this).data('cengiBuscar', normalizar(partes.join(' ')));
     });
 
-    $input.on('input', function () {
-        var termino = normalizar($.trim(this.value));
+    // "Solo pendientes" (vista de modulo): se combina con el texto buscado.
+    var $soloPendientes = $('#cengi-solo-pendientes');
 
-        if (termino === '') {
-            $filas.show();
-            $sinCoincidencias.hide();
-            return;
-        }
-
+    function filtrar() {
+        var termino = normalizar($.trim($input.val()));
+        var pendientes = $soloPendientes.is(':checked');
         var visibles = 0;
         $filas.each(function () {
-            var coincide = $(this).data('cengiBuscar').indexOf(termino) !== -1;
+            var coincide = (termino === '' || $(this).data('cengiBuscar').indexOf(termino) !== -1)
+                && (!pendientes || $(this).attr('data-pendiente') === '1');
             $(this).toggle(coincide);
             if (coincide) {
                 visibles++;
             }
         });
-        $sinCoincidencias.toggle(visibles === 0);
-    });
+        $sinCoincidencias.toggle(visibles === 0 && (termino !== '' || pendientes));
+    }
+
+    $input.on('input', filtrar);
+    $soloPendientes.on('change', filtrar);
 })(jQuery);
 </script>
 </body>

@@ -12,13 +12,14 @@ $sql = "
         u.id AS idusuario,
         u.nombre,
         u.correo,
-        r.nombre_rol,
+        COALESCE(r.nombre_rol, 'Sin rol en Cursos') AS nombre_rol,
         COALESCE(i.nombre_ingenio, 'Sin ingenio') AS nombre_ingenio
     FROM usuarios u
-    INNER JOIN roles r ON r.id = u.rol_id
     LEFT JOIN ingenios i ON i.id = u.ingenio_id
     INNER JOIN usuario_modulo um ON um.usuario_id = u.id
     INNER JOIN modulos m ON m.id = um.modulo_id
+    -- rol del usuario EN CURSOS (el superadmin conserva el suyo)
+    LEFT JOIN roles r ON r.id = CASE WHEN u.es_superadmin = 1 THEN u.rol_id ELSE um.rol_id END
     WHERE LOWER(m.nombre) IN ('cursos', 'cengicursos')
 ";
 
@@ -43,7 +44,7 @@ $resultado = $stmt->get_result();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
-    <link rel="stylesheet" type="text/css" href="css/proyecto.css">
+    <link rel="stylesheet" type="text/css" href="css/proyecto.css?v=<?php echo (int) filemtime(__DIR__ . '/css/proyecto.css'); ?>">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
     <meta charset="utf-8">

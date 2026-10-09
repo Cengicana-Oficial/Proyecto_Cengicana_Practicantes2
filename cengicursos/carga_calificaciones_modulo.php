@@ -73,7 +73,9 @@ try {
     $prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, $moduloId);
     $requierePre = $prePostVisibles['pre'];
     $requierePost = $prePostVisibles['post'];
-    $columnasMinimas = $requierePost ? 4 : ($requierePre ? 3 : 2);
+    if (!$requierePre && !$requierePost) {
+        throw new RuntimeException('Este módulo no lleva pre ni post-evaluación.');
+    }
 
     $sqlCurso = 'SELECT c.id FROM cursos c WHERE c.id = ?';
     $paramsCurso = [$cursoId];
@@ -122,42 +124,51 @@ try {
     $sqlAsignacion .= ' LIMIT 1';
     $stmtAsignacion = $db->prepare($sqlAsignacion);
     $stmtExiste = $db->prepare('SELECT id FROM control_curso_modulos WHERE asignacion_id = ? AND curso_modulo_id = ? LIMIT 1');
-    // La columna asistencia solo la puede escribir quien cengi_puede_gestionar(); si
-    // el usuario actual no puede gestionar, se omite del INSERT/UPDATE en vez de
-    // forzarla a NULL (mismo criterio que el bloque de modulo en guardar_control.php).
-    $stmtActualizarConAsistencia = $db->prepare('UPDATE control_curso_modulos SET asistencia = ?, evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ? AND curso_modulo_id = ?');
-    $stmtActualizarSinAsistencia = $db->prepare('UPDATE control_curso_modulos SET evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ? AND curso_modulo_id = ?');
-    $stmtInsertarConAsistencia = $db->prepare('INSERT INTO control_curso_modulos (asignacion_id, curso_modulo_id, asistencia, evaluacion, posevaluacion) VALUES (?, ?, ?, ?, ?)');
-    $stmtInsertarSinAsistencia = $db->prepare('INSERT INTO control_curso_modulos (asignacion_id, curso_modulo_id, evaluacion, posevaluacion) VALUES (?, ?, ?, ?)');
+    $stmtActualizar = $db->prepare('UPDATE control_curso_modulos SET evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ? AND curso_modulo_id = ?');
+    $stmtInsertar = $db->prepare('INSERT INTO control_curso_modulos (asignacion_id, curso_modulo_id, evaluacion, posevaluacion) VALUES (?, ?, ?, ?)');
+
+    // Columnas: se ubican por encabezado (CUI, PRE_EVALUACION, POST_EVALUACION) para
+    // aceptar tambien la plantilla anterior que traia ASISTENCIA en la 2.a columna
+    // (la asistencia ya no se carga por modulo: es acumulada del curso completo).
+    // Sin encabezado reconocible se usa el orden de la plantilla actual: CUI, PRE, POST.
+    $col = ['cui' => 0, 'pre' => 1, 'post' => 2];
+    $encabezado = array_map(static function ($v) {
+        return strtoupper(preg_replace('/[^A-Za-z]/', '', (string) $v));
+    }, array_values($filasDatos[0] ?? []));
+    $tieneEncabezado = in_array('CUI', $encabezado, true) || in_array('DPI', $encabezado, true);
+    if ($tieneEncabezado) {
+        foreach ($encabezado as $i => $nombre) {
+            if ($nombre === 'CUI' || $nombre === 'DPI') {
+                $col['cui'] = $i;
+            } elseif (in_array($nombre, ['PREEVALUACION', 'PRE'], true)) {
+                $col['pre'] = $i;
+            } elseif (in_array($nombre, ['POSTEVALUACION', 'POSEVALUACION', 'POST'], true)) {
+                $col['post'] = $i;
+            }
+        }
+    }
 
     $db->beginTransaction();
     $filaNumero = 0;
     $procesados = 0;
     foreach ($filasDatos as $fila) {
         $filaNumero++;
-        if (!is_array($fila) || count($fila) < $columnasMinimas) {
-            if ($filaNumero === 1) {
-                continue;
-            }
-            $columnasEsperadas = 'CUI, ASISTENCIA'
-                . ($requierePre ? ', PRE_EVALUACION' : '')
-                . ($requierePost ? ', POST_EVALUACION' : '');
-            throw new RuntimeException('La fila ' . $filaNumero . ' no contiene las columnas requeridas (' . $columnasEsperadas . ').');
-        }
-        $fila = array_values($fila);
-        $cui = preg_replace('/[^0-9A-Za-z-]/', '', trim((string) $fila[0]));
-        if ($filaNumero === 1 && in_array(strtolower($cui), ['cui', 'dpi'], true)) {
+        if ($filaNumero === 1 && $tieneEncabezado) {
             continue;
         }
+        if (!is_array($fila)) {
+            continue;
+        }
+        $fila = array_values($fila);
+        $cui = preg_replace('/[^0-9A-Za-z-]/', '', trim((string) ($fila[$col['cui']] ?? '')));
         if ($cui === '') {
             continue;
         }
 
-        $asistencia = cengi_calificacion_modulo_numero($fila[1] ?? '');
         // Pre/Pos-Evaluacion solo se leen y validan si el modulo las requiere; si
         // no, se ignoran (aunque el archivo traiga la columna) y quedan NULL.
-        $pre = $requierePre ? cengi_calificacion_modulo_numero($fila[2] ?? '') : null;
-        $post = $requierePost ? cengi_calificacion_modulo_numero($fila[3] ?? '') : null;
+        $pre = $requierePre ? cengi_calificacion_modulo_numero($fila[$col['pre']] ?? '') : null;
+        $post = $requierePost ? cengi_calificacion_modulo_numero($fila[$col['post']] ?? '') : null;
         $paramsAsignacion = [$cursoId, $cui];
         if (!cengi_ve_todo_por_rol_o_ingenio()) {
             $paramsAsignacion[] = cengi_ingenio_id_actual();
@@ -171,19 +182,15 @@ try {
         $stmtExiste->execute([$asignacionId, $moduloId]);
         $existe = (bool) $stmtExiste->fetchColumn();
 
-        if ($existe && $puedeGestionar) {
-            $stmtActualizarConAsistencia->execute([$asistencia, $pre, $post, $asignacionId, $moduloId]);
-        } elseif ($existe) {
-            $stmtActualizarSinAsistencia->execute([$pre, $post, $asignacionId, $moduloId]);
-        } elseif ($puedeGestionar) {
-            $stmtInsertarConAsistencia->execute([$asignacionId, $moduloId, $asistencia, $pre, $post]);
+        if ($existe) {
+            $stmtActualizar->execute([$pre, $post, $asignacionId, $moduloId]);
         } else {
-            $stmtInsertarSinAsistencia->execute([$asignacionId, $moduloId, $pre, $post]);
+            $stmtInsertar->execute([$asignacionId, $moduloId, $pre, $post]);
         }
 
-        // Mantiene control_cursos (resumen del curso completo) consistente con el
-        // nuevo promedio de modulos, igual que el flujo manual de guardar_control.php.
-        cengi_recalcular_resumen_curso($db, $asignacionId, $cursoId, $puedeGestionar);
+        // Nota del curso completo = promedio de los modulos ponderado por horas,
+        // igual que el flujo manual de guardar_control.php.
+        cengi_recalcular_resumen_curso($db, $asignacionId, $cursoId);
 
         $procesados++;
     }

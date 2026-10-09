@@ -63,8 +63,11 @@ try {
     $stmtModulosCurso->execute([$cursoId]);
     $modulosCurso = $stmtModulosCurso->fetchAll(PDO::FETCH_ASSOC);
     $prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, 0);
-    $requierePre = $prePostVisibles['pre'];
-    $requierePost = $prePostVisibles['post'];
+    // Curso con modulos: la nota se carga por modulo (Seguimiento por curso) y la del
+    // curso se calcula; aqui solo se carga la asistencia acumulada.
+    $conModulos = (bool) $modulosCurso;
+    $requierePre = !$conModulos && $prePostVisibles['pre'];
+    $requierePost = !$conModulos && $prePostVisibles['post'];
     $columnasMinimas = $requierePost ? 4 : ($requierePre ? 3 : 2);
 
     $archivo = fopen($_FILES['archivo']['tmp_name'], 'r');
@@ -126,7 +129,11 @@ try {
         }
 
         $stmtExiste->execute([$asignacionId]);
-        if ($stmtExiste->fetchColumn()) {
+        if ($conModulos) {
+            $db->prepare($stmtExiste->fetchColumn()
+                ? 'UPDATE control_cursos SET asistencia = ? WHERE asignacion_id = ?'
+                : "INSERT INTO control_cursos (asistencia, asignacion_id, diploma) VALUES (?, ?, '')")->execute([$asistencia, $asignacionId]);
+        } elseif ($stmtExiste->fetchColumn()) {
             $stmtActualizar->execute([$asistencia, $pre, $post, $asignacionId]);
         } else {
             $stmtInsertar->execute([$asignacionId, $asistencia, $pre, $post]);

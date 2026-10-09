@@ -226,6 +226,7 @@ $kpi = [
     'cursos_en_curso' => 0,
     'cursos_completados' => 0,
     'asistencia_prom' => null,
+    'brecha' => null,
     'diplomas' => 0,
 ];
 $cursosIngenio = [];
@@ -258,8 +259,11 @@ if ($ingenioId > 0) {
     $stmt->execute([$ingenioId]);
     $kpi['cursos_completados'] = (int) $stmt->fetchColumn();
 
+    // Brecha de aprendizaje (antes en Seguimiento por ingenio): promedio post - promedio pre.
     $stmt = $db->prepare("
-        SELECT AVG(CASE WHEN cc.asistencia REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.asistencia AS DECIMAL(6,2)) END) AS asistencia_prom
+        SELECT AVG(CASE WHEN cc.asistencia REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.asistencia AS DECIMAL(6,2)) END) AS asistencia_prom,
+            AVG(CASE WHEN cc.evaluacion REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.evaluacion AS DECIMAL(6,2)) END) AS pre_prom,
+            AVG(CASE WHEN cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?\$' THEN CAST(cc.posevaluacion AS DECIMAL(6,2)) END) AS post_prom
         FROM asignaciones a
         INNER JOIN participantes p ON p.id = a.participantes_id
         LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
@@ -268,6 +272,18 @@ if ($ingenioId > 0) {
     $stmt->execute([$ingenioId]);
     $asistenciaFila = $stmt->fetch(PDO::FETCH_ASSOC);
     $kpi['asistencia_prom'] = $asistenciaFila['asistencia_prom'] !== null ? (float) $asistenciaFila['asistencia_prom'] : null;
+    // Comparar las mismas inscripciones: una nota faltante no equivale a cero.
+    $stmtPares = $db->prepare("SELECT COUNT(*) pares,
+        AVG(CAST(cc.posevaluacion AS DECIMAL(6,2)) - CAST(cc.evaluacion AS DECIMAL(6,2))) avance
+        FROM asignaciones a INNER JOIN participantes p ON p.id = a.participantes_id
+        INNER JOIN control_cursos cc ON cc.asignacion_id = a.id
+        WHERE p.ingenio_id = ? AND p.estado_participantes = 1 AND a.estado_asignaciones = 1
+        AND cc.evaluacion REGEXP '^[0-9]+([.][0-9]+)?$'
+        AND cc.posevaluacion REGEXP '^[0-9]+([.][0-9]+)?$'");
+    $stmtPares->execute([$ingenioId]);
+    $pares = $stmtPares->fetch(PDO::FETCH_ASSOC);
+    $kpi['brecha'] = $pares['avance'] !== null ? (float) $pares['avance'] : null;
+    $kpi['pares'] = (int) $pares['pares'];
 
     $stmt = $db->prepare("
         SELECT COUNT(DISTINCT CASE WHEN COALESCE(NULLIF(d.pdf_path, ''), NULLIF(cc.diploma, '')) IS NOT NULL THEN a.id END)
@@ -368,7 +384,8 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
 <html lang="es">
 <?php include('head.php'); ?>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<body class="cengi-canvas cengi-directory-page">
+<body class="cengi-canvas cengi-directory-page cengi-ingenio-page">
+<link rel="stylesheet" href="css/dashboard_ingenio.css?v=<?php echo filemtime(__DIR__ . '/css/dashboard_ingenio.css'); ?>">
 <?php menu_render(); ?>
 <main class="container">
 
@@ -376,11 +393,12 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
         <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
             <div>
                 <h3 class="panel-title"><?php echo cengi_dbi_html($ingenioActual['nombre_ingenios'] ?? 'Sin ingenio asignado'); ?></h3>
-                <small>Panel de tu ingenio: participantes, cursos e historial de capacitación</small>
+                <small>Resultados de capacitación · historial completo del ingenio</small>
+                <p class="dbi-print-date">Consulta: <?php echo date('d/m/Y H:i'); ?> · <?php echo $busqueda !== '' ? 'Participantes filtrados por: ' . cengi_dbi_html($busqueda) : 'Todos los participantes activos'; ?></p>
             </div>
             <?php if ($esAdmin && $ingenios): ?>
                 <form method="GET">
-                    <select name="ingenio_id" class="form-control" onchange="this.form.submit()">
+                    <select name="ingenio_id" aria-label="Seleccionar ingenio" class="form-control" onchange="this.form.submit()">
                         <?php foreach ($ingenios as $ing): ?>
                             <option value="<?php echo (int) $ing['id']; ?>" <?php echo $ingenioId === (int) $ing['id'] ? 'selected' : ''; ?>><?php echo cengi_dbi_html($ing['nombre_ingenios']); ?></option>
                         <?php endforeach; ?>
@@ -394,6 +412,12 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
         <div class="alert alert-warning" role="alert">Tu cuenta todavía no tiene un ingenio asignado. Contacta a un administrador para poder ver esta información.</div>
     <?php else: ?>
 
+    <div class="dbi-actions">
+        <a class="dbi-primary" href="#dbi-cursos">Resultados por curso</a>
+        <a href="#dashboard-ingenio-filters">Consultar participantes</a>
+        <button type="button" onclick="window.print()">Imprimir / guardar resumen PDF</button>
+    </div>
+    <p class="dbi-caption">Historial de participantes activos. Los cursos finalizados se clasifican por fecha, no por aprobación. «—» indica que no hay resultado registrado. La búsqueda de participantes no modifica los indicadores generales.</p>
     <div class="cengi-kpi-grid">
         <div class="cengi-kpi">
             <div class="cengi-kpi-val"><?php echo number_format($kpi['participantes_activos']); ?></div>
@@ -405,21 +429,35 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
         </div>
         <div class="cengi-kpi">
             <div class="cengi-kpi-val"><?php echo number_format($kpi['cursos_completados']); ?></div>
-            <div class="cengi-kpi-label">Cursos completados</div>
+            <div class="cengi-kpi-label">Cursos finalizados por fecha</div>
         </div>
         <div class="cengi-kpi">
             <div class="cengi-kpi-val"><?php echo $kpi['asistencia_prom'] !== null ? number_format($kpi['asistencia_prom'], 0) . '%' : '—'; ?></div>
             <div class="cengi-kpi-label">Asistencia promedio</div>
         </div>
         <div class="cengi-kpi">
+            <div class="cengi-kpi-val" style="color:var(--cengi-primary-deep);"><?php echo $kpi['brecha'] !== null ? ($kpi['brecha'] >= 0 ? '+' : '') . number_format($kpi['brecha'], 0) . ' pts' : '—'; ?></div>
+            <div class="cengi-kpi-label">Cambio post − pre<br><?php echo (int) ($kpi['pares'] ?? 0); ?> evaluaciones con ambas notas</div>
+        </div>
+        <div class="cengi-kpi">
             <div class="cengi-kpi-val"><?php echo number_format($kpi['diplomas']); ?></div>
-            <div class="cengi-kpi-label">Diplomas emitidos</div>
+            <div class="cengi-kpi-label">Inscripciones con diploma</div>
         </div>
     </div>
 
+    <?php
+        $inscripcionesResumen = array_sum(array_column($cursosIngenio, 'inscritos'));
+        $sinEvaluacion = count(array_filter($cursosIngenio, static function ($curso) { return $curso['eval_prom'] === null; }));
+        $sinAsistencia = count(array_filter($cursosIngenio, static function ($curso) { return $curso['asistencia_prom'] === null; }));
+    ?>
+    <section class="dbi-summary" aria-label="Cobertura de resultados">
+        <div><strong><?php echo number_format($inscripcionesResumen); ?></strong><span>Inscripciones en <?php echo count($cursosIngenio); ?> cursos</span><small>Una persona puede participar en varios cursos.</small></div>
+        <div><strong><?php echo $sinEvaluacion; ?></strong><span>Cursos sin evaluación final registrada</span><small>Sin notas finales numéricas de participantes del ingenio.</small></div>
+        <div><strong><?php echo $sinAsistencia; ?></strong><span>Cursos sin asistencia registrada</span><small>Incluye cursos que todavía no han iniciado.</small></div>
+    </section>
     <div class="cengi-charts-row">
         <div class="panel panel-success">
-            <div class="panel-heading"><h3 class="panel-title">Participantes capacitados por año</h3></div>
+            <div class="panel-heading"><h3 class="panel-title">Personas inscritas por año de asignación</h3></div>
             <div class="panel-body"><div class="cengi-chart-wrap"><canvas id="chartIngenioAnual"></canvas></div></div>
         </div>
         <div class="panel panel-success">
@@ -428,7 +466,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
         </div>
     </div>
 
-    <div class="panel panel-success cengi-dropdown-overflow-fix">
+    <div class="panel panel-success cengi-dropdown-overflow-fix" id="dbi-cursos">
         <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
             <div>
                 <h3 class="panel-title">Cursos de tu ingenio</h3>
@@ -444,31 +482,41 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                 </ul>
             </div>
         </div>
-        <div class="cengi-table-wrap">
-            <table class="table table-striped table-bordered table-hover">
+        <div class="dbi-course-filter" id="dbi-course-filter" hidden>
+            <label><span class="sr-only">Buscar curso, categoría o código</span><input type="search" id="dbi-course-search" placeholder="Buscar curso, categoría o código…" aria-controls="dbi-course-table"></label>
+            <span id="dbi-course-count" role="status"></span>
+            <span>PDF y Excel incluyen todos los cursos del ingenio.</span>
+        </div>
+        <div class="cengi-table-wrap" tabindex="0" aria-label="Resultados de cursos del ingenio">
+            <table class="table table-striped table-bordered table-hover" id="dbi-course-table">
                 <thead>
-                    <tr><th>Código</th><th>Curso</th><th>Categoría</th><th>Modalidad</th><th>Inicio</th><th>Fin</th><th>Inscritos</th><th>Asistencia</th><th>Sesiones asistidas</th><th>Evaluación final</th><th>Estado</th><th>Acciones</th></tr>
+                    <tr><th scope="col">Curso</th><th scope="col">Período</th><th scope="col">Participación</th><th scope="col">Resultados</th><th scope="col">Estado y detalle</th></tr>
                 </thead>
                 <tbody>
                     <?php if (!$cursosIngenio): ?>
-                        <tr><td colspan="12" class="text-center">Tu ingenio todavía no tiene cursos con participantes inscritos.</td></tr>
+                        <tr><td colspan="5" class="text-center">Tu ingenio todavía no tiene cursos con participantes inscritos.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($cursosIngenio as $c):
                         [$estadoLabel, $estadoClase] = cengi_dbi_estado_curso($c['inicio'], $c['fin']);
                     ?>
                         <tr>
-                            <td><?php echo cengi_dbi_html($c['codigo_curso'] ?: ('CEN-' . str_pad((string) $c['id'], 3, '0', STR_PAD_LEFT))); ?></td>
-                            <td><strong><?php echo cengi_dbi_html($c['nombre_cursos']); ?></strong></td>
-                            <td><?php echo cengi_dbi_html($c['categoria']); ?></td>
-                            <td><?php echo cengi_dbi_html($c['modalidad'] ?: 'Sin definir'); ?></td>
-                            <td><?php echo cengi_dbi_html(cengi_dbi_fecha($c['inicio'])); ?></td>
-                            <td><?php echo cengi_dbi_html(cengi_dbi_fecha($c['fin'])); ?></td>
-                            <td><?php echo (int) $c['inscritos']; ?></td>
-                            <td><?php echo $c['asistencia_prom'] !== null ? number_format((float) $c['asistencia_prom'], 0) . '%' : '—'; ?></td>
-                            <td><?php echo $c['sesiones_asistidas_prom'] !== null ? number_format((float) $c['sesiones_asistidas_prom'], 0) : '—'; ?></td>
-                            <td><?php echo $c['eval_prom'] !== null ? number_format((float) $c['eval_prom'], 0) . ' pts' : '—'; ?></td>
-                            <td><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo $estadoLabel; ?></span></td>
-                            <td><button type="button" class="cengi-directory-profile-button" data-toggle="modal" data-target="#dashboard-ingenio-course-modal" data-curso-id="<?php echo (int) $c['id']; ?>">Ver participantes</button></td>
+                            <td class="dbi-course-name" data-label="Curso">
+                                <span class="dbi-code"><?php echo cengi_dbi_html($c['codigo_curso'] ?: ('CEN-' . str_pad((string) $c['id'], 3, '0', STR_PAD_LEFT))); ?></span>
+                                <strong><?php echo cengi_dbi_html($c['nombre_cursos']); ?></strong>
+                                <small><?php echo cengi_dbi_html($c['categoria']); ?> · <?php echo cengi_dbi_html($c['modalidad'] ?: 'Modalidad sin definir'); ?></small>
+                            </td>
+                            <td data-label="Período"><div class="dbi-date"><span>Inicio</span><time><?php echo cengi_dbi_html(cengi_dbi_fecha($c['inicio'])); ?></time></div><div class="dbi-date"><span>Fin</span><time><?php echo cengi_dbi_html(cengi_dbi_fecha($c['fin'])); ?></time></div></td>
+                            <td data-label="Participación">
+                                <span class="dbi-enrolled"><?php echo (int) $c['inscritos']; ?> <small>inscritos</small></span>
+                                <div class="dbi-result"><span>Asistencia</span><b><?php echo $c['asistencia_prom'] !== null ? number_format((float) $c['asistencia_prom'], 0) . '%' : '—'; ?></b></div>
+                                <?php if ($c['asistencia_prom'] !== null): ?><div class="dbi-attendance-track" aria-hidden="true"><span style="width:<?php echo max(0, min(100, (float) $c['asistencia_prom'])); ?>%"></span></div><?php endif; ?>
+                            </td>
+                            <td data-label="Resultados">
+                                <div class="dbi-result"><span>Evaluación final</span><b><?php echo $c['eval_prom'] !== null ? number_format((float) $c['eval_prom'], 1) . ' pts' : '—'; ?></b></div>
+                                <div class="dbi-result"><span>Sesiones asistidas</span><b><?php echo $c['sesiones_asistidas_prom'] !== null ? number_format((float) $c['sesiones_asistidas_prom'], 1) : '—'; ?></b></div>
+                                <small class="dbi-result-note">Promedios del ingenio</small>
+                            </td>
+                            <td data-label="Estado y detalle" class="dbi-course-action"><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo $estadoLabel; ?></span><button type="button" class="cengi-directory-profile-button" data-toggle="modal" data-target="#dashboard-ingenio-course-modal" data-curso-id="<?php echo (int) $c['id']; ?>" aria-label="Ver participantes de <?php echo cengi_dbi_html($c['nombre_cursos']); ?>">Ver participantes <span aria-hidden="true">→</span></button></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -568,7 +616,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
                 <div class="cengi-table-wrap cengi-directory-course-table-wrap" tabindex="0" aria-label="Participantes inscritos en el curso">
                     <table class="table table-striped table-bordered cengi-directory-table cengi-directory-course-table">
                         <thead>
-                            <tr><th>Participante</th><th>CUI</th><th>Estado</th><th>Asistencia</th><th>Sesiones asistidas</th><th>Evaluación</th><th>Diploma</th></tr>
+                            <tr><th>Participante</th><th>CUI</th><th>Estado</th><th>Asistencia</th><th>Sesiones asistidas</th><th>Pre-evaluación</th><th>Evaluación final</th><th>Diploma</th></tr>
                         </thead>
                         <tbody id="dashboard-ingenio-course-participants"></tbody>
                     </table>
@@ -595,6 +643,7 @@ $urlExportCursos = 'exportardashboardingenio.php?' . http_build_query($parametro
 </div>
 
 <script>
+if (typeof Chart !== 'undefined') {
 Chart.defaults.font.family = "'Inter',sans-serif";
 Chart.defaults.font.size = 11;
 Chart.defaults.color = "#55705f";
@@ -618,6 +667,7 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
     options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 9, padding: 12 } } }, maintainAspectRatio: false, cutout: '62%' }
 });
 <?php endif; ?>
+}
 
 (function ($) {
     'use strict';
@@ -768,6 +818,7 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
         $row.append($('<td>').text(valueOrDash(participant.asistencia, '%')));
         $row.append($('<td>').text(valueOrDash(participant.sesiones_asistidas, '')));
         $row.append($('<td>').text(valueOrDash(participant.evaluacion, ' pts')));
+        $row.append($('<td>').text(valueOrDash(participant.posevaluacion, ' pts')));
 
         var href = diplomaHref(participant);
         var $diplomaCell = $('<td>');
@@ -794,7 +845,7 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
         $('#dashboard-ingenio-course-subtitle').text((course.codigo_curso ? course.codigo_curso + ' · ' : '') + meta);
         $courseParticipants.empty();
         if (!participants.length) {
-            $courseParticipants.append($('<tr>').append($('<td>', {colspan: 7, class: 'text-center'}).text('Tu ingenio no tiene participantes inscritos en este curso.')));
+            $courseParticipants.append($('<tr>').append($('<td>', {colspan: 8, class: 'text-center'}).text('Tu ingenio no tiene participantes inscritos en este curso.')));
         } else {
             participants.forEach(function (participant) { $courseParticipants.append(renderCourseParticipantRow(participant)); });
         }
@@ -863,5 +914,6 @@ new Chart(document.getElementById('chartIngenioCategoria'), {
     });
 })(jQuery);
 </script>
+<script src="js/dashboard_ingenio.js?v=<?php echo filemtime(__DIR__ . '/js/dashboard_ingenio.js'); ?>"></script>
 </body>
 </html>

@@ -78,7 +78,7 @@ if ($busqueda !== '') {
 if ($estado === 'activo') {
     $condiciones[] = 'p.estado_participantes = 1 AND a.estado_asignaciones = 1';
 } elseif ($estado === 'aprobado') {
-    $condiciones[] = 'p.estado_participantes = 1 AND a.estado_asignaciones = 1 AND CAST(cc.posevaluacion AS DECIMAL(10,2)) >= 60';
+    $condiciones[] = 'p.estado_participantes = 1 AND a.estado_asignaciones = 1 AND CAST(cc.posevaluacion AS DECIMAL(10,2)) >= ' . CENGI_NOTA_APROBACION;
 } elseif ($estado === 'inactivo') {
     $condiciones[] = '(p.estado_participantes = 0 OR a.estado_asignaciones = 0)';
 }
@@ -102,7 +102,7 @@ function cengi_export_estado(array $fila)
     if ((int) $fila['estado_participantes'] !== 1 || (int) $fila['estado_asignaciones'] !== 1) {
         return 'Inactivo';
     }
-    return is_numeric($fila['posevaluacion']) && (float) $fila['posevaluacion'] >= 60
+    return is_numeric($fila['posevaluacion']) && (float) $fila['posevaluacion'] >= CENGI_NOTA_APROBACION
         ? 'Aprobado' : 'Activo';
 }
 

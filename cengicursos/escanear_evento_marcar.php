@@ -62,7 +62,7 @@ if (!$evento) {
 $eventoId = (int) $evento['id'];
 
 $stmt = $db->prepare("
-    SELECT ep.id, ep.ingreso_en,
+    SELECT ep.id, ep.ingreso_en, ep.confirmado_en,
            COALESCE(NULLIF(p.nombre_participantes, ''), ep.nombre_invitado) AS nombre
     FROM evento_participantes ep
     LEFT JOIN participantes p ON p.id = ep.participante_id
@@ -78,6 +78,17 @@ if (!$participante) {
 
 $nombre = (string) ($participante['nombre'] ?: 'Participante');
 
+// Solo ingresan participantes confirmados (evento pagado: pago validado por Administracion
+// y participacion confirmada por Capacitacion; gratuito: confirmado al inscribirse).
+if (!$participante['confirmado_en']) {
+    echo json_encode([
+        'ok' => false,
+        'nombre' => $nombre,
+        'mensaje' => $nombre . ' no puede ingresar todavía: su participación no está confirmada (pago pendiente de validar).',
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 if ($participante['ingreso_en']) {
     $hora = date('H:i', strtotime((string) $participante['ingreso_en']));
     echo json_encode([
@@ -89,8 +100,9 @@ if ($participante['ingreso_en']) {
     exit;
 }
 
-$stmtActualizar = $db->prepare('UPDATE evento_participantes SET ingreso_en = NOW() WHERE id = ? AND evento_id = ? AND ingreso_en IS NULL');
-$stmtActualizar->execute([$participante['id'], $eventoId]);
+// Hora de PHP (zona del sistema), no NOW() de MySQL (UTC), para que coincida con lo que se muestra.
+$stmtActualizar = $db->prepare('UPDATE evento_participantes SET ingreso_en = ? WHERE id = ? AND evento_id = ? AND ingreso_en IS NULL');
+$stmtActualizar->execute([date('Y-m-d H:i:s'), $participante['id'], $eventoId]);
 
 echo json_encode([
     'ok' => true,

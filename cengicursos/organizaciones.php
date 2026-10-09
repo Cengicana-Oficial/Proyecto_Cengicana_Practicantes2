@@ -164,7 +164,7 @@ function cengi_org_tipo_label($tipo)
     <title>Organizaciones</title>
     <link rel="stylesheet" href="css/bootstrap.min.css">
     <link rel="stylesheet" href="css/bootstrap-theme.css">
-    <link rel="stylesheet" href="css/proyecto.css">
+    <link rel="stylesheet" href="css/proyecto.css?v=<?php echo (int) filemtime(__DIR__ . '/css/proyecto.css'); ?>">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
 </head>
@@ -369,7 +369,7 @@ function cengi_org_tipo_label($tipo)
         </div>
         <div class="cengi-org-detail-footer">
             <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
-            <a href="seguimiento_ingenio.php" class="btn btn-primary" id="org-detail-followup">Ver seguimiento completo</a>
+            <a href="dashboard_ingenio.php" class="btn btn-primary" id="org-detail-followup">Ver seguimiento completo</a>
         </div>
     </div></div>
 </div>
@@ -423,7 +423,7 @@ function cengi_org_tipo_label($tipo)
         document.getElementById('org-detail-collab').textContent = trigger.getAttribute('data-collab') || '0';
         document.getElementById('org-detail-courses').textContent = trigger.getAttribute('data-courses-count') || '0';
         var ingenioId = trigger.getAttribute('data-ingenio') || '';
-        document.getElementById('org-detail-followup').href = 'seguimiento_ingenio.php' + (ingenioId ? '?ingenio_id=' + encodeURIComponent(ingenioId) : '');
+        document.getElementById('org-detail-followup').href = 'dashboard_ingenio.php' + (ingenioId ? '?ingenio_id=' + encodeURIComponent(ingenioId) : '');
         var satisfaction = trigger.getAttribute('data-satisfaction') || '';
         document.getElementById('org-detail-satisfaction').textContent = satisfaction !== '' ? satisfaction : 'No disponible';
 

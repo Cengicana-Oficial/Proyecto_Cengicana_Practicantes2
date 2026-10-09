@@ -10,7 +10,9 @@ $puedeRechazarSolicitudes = cengi_puede_rechazar_solicitudes();
 cengi_require_gestor_solicitudes('ver_cursos.php');
 
 $campo = trim($_POST['campo'] ?? '');
-$condiciones = [];
+// Solo solicitudes directas a un curso: las de una convocatoria (planificacion_id) se
+// gestionan en inscripciones.php y pagos_inscripcion.php.
+$condiciones = ['s.planificacion_id IS NULL'];
 $params = [];
 
 if ($campo !== '') {

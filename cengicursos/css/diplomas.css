@@ -1,0 +1,113 @@
+/* Certificacion: hoja del diploma (1123 x 794 px = carta/A4 horizontal a 96 dpi) y
+   diseñador de diplomas.php. La hoja la dibuja js/diplomas.js; tambien se usa en
+   validar_diploma.php y al imprimir (iframe con @page horizontal). */
+
+/* ---------- hoja ---------- */
+.dip-page { width: 1123px; height: 794px; position: relative; overflow: hidden; background: #fff; color: #1C2517;
+    font-family: Georgia, 'Times New Roman', serif; page-break-after: always; break-after: page;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }
+.dip-page *, .dip-page *::before, .dip-page *::after { box-sizing: border-box; }
+.dp-bg { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.dp-marco1 { position: absolute; inset: 26px; border: 3px solid; }
+.dp-marco2 { position: absolute; inset: 36px; border: 1px solid; }
+.dp-cinta { position: absolute; top: 0; left: 0; right: 0; height: 10px; }
+.dp-orn { position: absolute; font-size: 44px; line-height: 1; }
+.dp-tl { top: 40px; left: 46px; } .dp-tr { top: 40px; right: 46px; transform: scaleX(-1); }
+.dp-bl { bottom: 40px; left: 46px; transform: scaleY(-1); } .dp-br { bottom: 40px; right: 46px; transform: scale(-1, -1); }
+.dp-in { position: absolute; inset: 60px 90px 70px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.dp-logos { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; width: 100%; height: 80px; }
+.dp-logos > *:nth-child(1) { justify-self: start; } .dp-logos > *:nth-child(2) { justify-self: center; } .dp-logos > *:nth-child(3) { justify-self: end; }
+.dp-logos img { max-height: 74px; max-width: 210px; object-fit: contain; }
+.dp-doc { font-size: 50px; letter-spacing: 10px; font-weight: 700; margin-top: 14px; line-height: 1.1; }
+.dp-doc.largo { font-size: 38px; letter-spacing: 6px; }
+.dp-intro { font-family: Arial, Helvetica, sans-serif; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; color: #5B6459; margin-top: 14px; max-width: 820px; line-height: 1.5; }
+.dp-intro b { color: #5B6459; font-weight: 400; }
+.dp-nom { font-size: 46px; font-style: italic; margin-top: 14px; padding: 0 40px 8px; border-bottom: 1.5px solid; min-width: 560px; color: #0F2A1C; }
+.dp-cuerpo { font-size: 18px; line-height: 1.6; max-width: 820px; margin-top: 18px; color: #2A3226; }
+.dp-lf { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #5B6459; margin-top: 14px; }
+.dp-lf b { font-weight: 400; }
+.dp-firmas { display: flex; justify-content: center; gap: 70px; margin-top: auto; width: 100%; }
+.dp-firma { display: flex; flex-direction: column; align-items: center; min-width: 210px; font-family: Arial, Helvetica, sans-serif; }
+.dp-firma img { height: 62px; max-width: 200px; object-fit: contain; margin-bottom: -6px; }
+.dp-linea { width: 100%; border-top: 1px solid; margin-bottom: 6px; }
+.dp-firma b { font-size: 13px; } .dp-firma span { font-size: 11.5px; color: #5B6459; }
+.dp-qr { position: absolute; right: 58px; bottom: 52px; text-align: center; font-family: 'Courier New', monospace; font-size: 9px; color: #5B6459; background: #fff; padding: 4px; }
+.dp-qr svg { display: block; width: 92px; height: 92px; }
+.dp-cod { position: absolute; left: 62px; bottom: 48px; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #5B6459; }
+.dp-inst .dp-doc, .dp-clasico .dp-doc { margin-top: auto; }
+.dp-inst .dp-lf, .dp-clasico .dp-lf { margin-bottom: 10px; }
+.dp-clasico .dp-nom { font-family: 'Palatino Linotype', Palatino, Georgia, serif; }
+.dp-clasico .dp-cod { left: 100px; bottom: 50px; } .dp-clasico .dp-qr { right: 100px; }
+.dp-moderno { font-family: Arial, Helvetica, sans-serif; display: flex; }
+.dp-banda { width: 320px; height: 100%; position: relative; color: #fff; flex: 0 0 320px; }
+.dp-banda-in { position: absolute; inset: 50px 34px; display: flex; flex-direction: column; gap: 16px; }
+.dp-logo-b { background: #fff; border-radius: 10px; padding: 10px; display: flex; justify-content: center; }
+.dp-logo-b img { max-height: 56px; max-width: 100%; object-fit: contain; }
+.dp-banda-t { margin-top: auto; font-size: 26px; font-weight: 800; line-height: 1.15; } .dp-banda-s { font-size: 14px; opacity: .9; }
+.dp-cont { flex: 1; padding: 70px 70px 60px; display: flex; flex-direction: column; position: relative; }
+.dp-moderno .dp-doc { font-family: Arial, Helvetica, sans-serif; font-size: 54px; letter-spacing: 4px; font-weight: 800; margin: 0; }
+.dp-moderno .dp-doc.largo { font-size: 40px; letter-spacing: 2px; }
+.dp-moderno .dp-intro { margin-top: 18px; }
+.dp-moderno .dp-nom { font-style: normal; font-weight: 800; font-size: 48px; border: none; padding: 0; min-width: 0; margin-top: 14px; font-family: Arial, Helvetica, sans-serif; }
+.dp-bar { width: 120px; height: 6px; border-radius: 3px; margin: 14px 0 4px; }
+.dp-moderno .dp-cuerpo { font-family: Georgia, serif; }
+.dp-moderno .dp-firmas { gap: 50px; justify-content: flex-start; }
+.dp-moderno .dp-qr { right: 50px; bottom: 50px; } .dp-moderno .dp-cod { left: 70px; bottom: 28px; }
+
+/* diseño propio (Canva) */
+.dpc-fondo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+.dpc-vacio { position: absolute; inset: 40px; border: 2px dashed #C9CFC5; border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    font-family: Arial, sans-serif; color: #6B7468; background: repeating-linear-gradient(45deg, #FAFBF8 0 20px, #F4F6F1 20px 40px); }
+.dpc-vacio b { font-size: 28px; color: #3A4236; } .dpc-vacio span { font-size: 17px; }
+.dpc-campo { position: absolute; line-height: 1.2; white-space: pre-wrap; }
+.dpc-campo svg { display: block; }
+.dpc-campo.ed { cursor: move; outline: 1.5px dashed rgba(47, 107, 18, .45); outline-offset: 4px; border-radius: 3px; touch-action: none; }
+.dpc-campo.ed:hover { outline-color: #2F6B12; background: rgba(115, 188, 37, .08); }
+.dpc-campo.sel { outline: 2.5px solid #2F6B12; background: rgba(115, 188, 37, .12); }
+
+/* ---------- diseñador ---------- */
+.dip-layout { display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 18px; align-items: start; }
+.dip-layout > div { min-width: 0; }
+.dip-panel-ed { background: #fff; border: 1px solid #E4E7E1; border-radius: 12px; padding: 6px 16px 14px; position: sticky; top: 12px; max-height: calc(100vh - 110px); overflow-y: auto; box-shadow: var(--cengi-shadow); }
+.dip-panel-ed .form-group { margin-bottom: 10px; }
+.dip-panel-ed label { font-size: 11.5px; font-weight: 700; color: #1E2A1A; }
+.dip-sec { border-bottom: 1px solid #E4E7E1; padding: 10px 0; }
+.dip-sec:last-of-type { border-bottom: 0; }
+.dip-sec > summary { cursor: pointer; font-weight: 700; font-size: 13px; margin-bottom: 10px; color: var(--cengi-ink); }
+.dip-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.dip-grid2 .is-full { grid-column: 1 / -1; }
+.dip-estilos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.dip-estilos button { border: 1.5px solid #E4E7E1; background: #fff; border-radius: 10px; padding: 8px 4px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.dip-estilos button.sel { border-color: var(--cengi-primary-strong); background: #F4FBEC; }
+.dip-mini { display: block; width: 58px; height: 40px; border-radius: 4px; background: #fff; border: 1px solid #DDE3D8; position: relative; overflow: hidden; }
+.dm-inst::before { content: ""; position: absolute; inset: 4px; border: 1.5px solid #2F6B12; }
+.dm-mod::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 18px; background: linear-gradient(170deg, #2F6B12, #0F2A1C); }
+.dm-cla { background: #FBF7EC; } .dm-cla::before { content: ""; position: absolute; inset: 4px; border: 1.5px double #B08D3C; }
+.dm-canva { display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #00C4CC, #7D2AE8); }
+.dip-logos-ed { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.dip-slot { border: 1.5px dashed #D3D9CE; border-radius: 9px; padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 84px; justify-content: center; text-align: center; }
+.dip-slot img { max-height: 42px; max-width: 100%; object-fit: contain; }
+.dip-slot .btn { padding: 2px 8px; font-size: 11px; }
+.dip-firma-ed { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.dip-firma-ed .dip-slot { width: 120px; flex: 0 0 120px; }
+.dip-firma-ed input { margin-bottom: 6px; }
+.dip-campos { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.dip-campos button { border: 1px solid #E4E7E1; background: #F6F8F4; border-radius: 100px; padding: 3px 9px; font-size: 11px; cursor: pointer; }
+.dip-preview-box { position: relative; overflow: hidden; width: 100%; background: #EEF1EA; border-radius: 8px; }
+.dip-escala { transform-origin: top left; width: 1123px; box-shadow: 0 8px 30px rgba(15, 42, 28, .18); }
+.dpc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.dpc-chip { border: 1px solid #E4E7E1; background: #fff; border-radius: 8px; padding: 5px 9px; font-size: 11.5px; cursor: pointer; }
+.dpc-chip.sel { border-color: var(--cengi-primary-strong); background: #F4FBEC; font-weight: 600; }
+.dip-dest-list { max-height: 330px; overflow-y: auto; }
+.dip-dest-list tr.is-preview > td { background: #F4FBEC; }
+.dip-valido { padding: 10px 12px; border-radius: 8px; font-size: 12.5px; margin-top: 8px; }
+.dip-valido.ok { background: #EAF6DD; color: #2F6B12; border: 1px solid #CFE9B3; }
+.dip-valido.no { background: #FBE3E0; color: #8E2A1E; }
+
+@media (max-width: 1200px) {
+    .dip-layout { grid-template-columns: minmax(0, 1fr); }
+    .dip-panel-ed { position: static; max-height: none; }
+}
+
+/* Bootstrap 3 fuerza display:block en input[type=file]; los del diseñador van dentro de un boton. */
+#dip-app input[type="file"][hidden], #dip-app [hidden] { display: none !important; }

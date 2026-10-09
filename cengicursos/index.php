@@ -1,214 +1,77 @@
 <?php
-require_once __DIR__ . "/revisar_permisos.php";
-require_once __DIR__ . "/conexion.php";
-require_once __DIR__ . "/menu.php";
-
-$db = conectar();
-
-function cengi_dash_valor($db, $sql)
-{
-    try {
-        $stmt = $db->query($sql);
-        $fila = $stmt->fetch(PDO::FETCH_NUM);
-        return $fila ? (int) $fila[0] : 0;
-    } catch (Exception $e) {
-        return 0;
-    }
-}
-
-function cengi_dash_serie($db, $sql)
-{
-    try {
-        $stmt = $db->query($sql);
-        return $stmt->fetchAll(PDO::FETCH_NUM) ?: [];
-    } catch (Exception $e) {
-        return [];
-    }
-}
-
-$scopeIngenios = function_exists('cengi_scope_sql_por_nombre_ingenio')
-    ? static function ($alias, $alreadyWhere) {
-        return cengi_scope_sql_por_nombre_ingenio($alias, $alreadyWhere);
-    }
-    : static function ($alias, $alreadyWhere) {
-        return '';
-    };
-
-$cursosActivos = cengi_dash_valor($db, "
-    SELECT COUNT(*)
-    FROM cursos c
-    INNER JOIN ingenios i ON i.id = c.ingenio_id
-    WHERE (c.fin IS NULL OR c.fin >= CURDATE())
-" . $scopeIngenios('i', true));
-
-$cursosFinalizados = cengi_dash_valor($db, "
-    SELECT COUNT(*)
-    FROM cursos c
-    INNER JOIN ingenios i ON i.id = c.ingenio_id
-    WHERE c.fin IS NOT NULL AND c.fin < CURDATE()
-" . $scopeIngenios('i', true));
-
-$participantesCapacitados = cengi_dash_valor($db, "
-    SELECT COUNT(DISTINCT p.id)
-    FROM participantes p
-    INNER JOIN ingenios i ON i.id = p.ingenio_id
-    INNER JOIN asignaciones a ON a.participantes_id = p.id AND a.estado_asignaciones = 1
-" . $scopeIngenios('i', false));
-
-$ingeniosAtendidos = cengi_dash_valor($db, "
-    SELECT COUNT(DISTINCT p.ingenio_id)
-    FROM participantes p
-    INNER JOIN ingenios i ON i.id = p.ingenio_id
-    INNER JOIN asignaciones a ON a.participantes_id = p.id AND a.estado_asignaciones = 1
-" . $scopeIngenios('i', false));
-
-$totalIngenios = cengi_dash_valor($db, "SELECT COUNT(*) FROM ingenios");
-
-$serieAnual = cengi_dash_serie($db, "
-    SELECT YEAR(a.creado) AS anio, COUNT(DISTINCT a.participantes_id) AS total
-    FROM asignaciones a
-    INNER JOIN participantes p ON p.id = a.participantes_id
-    INNER JOIN ingenios i ON i.id = p.ingenio_id
-    WHERE a.creado IS NOT NULL
-" . $scopeIngenios('i', true) . "
-    GROUP BY YEAR(a.creado)
-    ORDER BY anio
-");
-$anioLabels = array_map(static function ($fila) { return (string) $fila[0]; }, $serieAnual);
-$anioValores = array_map(static function ($fila) { return (int) $fila[1]; }, $serieAnual);
-
-$serieIngenio = cengi_dash_serie($db, "
-    SELECT i.nombre_ingenios AS ingenio, COUNT(DISTINCT p.id) AS total
-    FROM participantes p
-    INNER JOIN ingenios i ON i.id = p.ingenio_id
-    INNER JOIN asignaciones a ON a.participantes_id = p.id AND a.estado_asignaciones = 1
-" . $scopeIngenios('i', false) . "
-    GROUP BY i.nombre_ingenios
-    ORDER BY total DESC
-    LIMIT 6
-");
-$ingenioLabels = array_map(static function ($fila) { return (string) $fila[0]; }, $serieIngenio);
-$ingenioValores = array_map(static function ($fila) { return (int) $fila[1]; }, $serieIngenio);
-
-$serieCategoria = cengi_dash_serie($db, "
-    SELECT ca.descripcion_categorias_cursos AS categoria, COUNT(*) AS total
-    FROM cursos c
-    INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
-    INNER JOIN ingenios i ON i.id = c.ingenio_id
-" . $scopeIngenios('i', false) . "
-    GROUP BY ca.descripcion_categorias_cursos
-    ORDER BY total DESC
-");
-$categoriaLabels = array_map(static function ($fila) { return (string) $fila[0]; }, $serieCategoria);
-$categoriaValores = array_map(static function ($fila) { return (int) $fila[1]; }, $serieCategoria);
-
-$eventosGratuitos = cengi_dash_valor($db, "SELECT COUNT(*) FROM eventos WHERE modalidad_pago <> 'Pagado' OR modalidad_pago IS NULL");
-$eventosPagados = cengi_dash_valor($db, "SELECT COUNT(*) FROM eventos WHERE modalidad_pago = 'Pagado'");
+require_once __DIR__ . '/revisar_permisos.php';
+require_once __DIR__ . '/conexion.php';
+require_once __DIR__ . '/menu.php';
+require_once __DIR__ . '/dashboard_helpers.php';
+$year = filter_input(INPUT_GET, 'anio', FILTER_VALIDATE_INT);
+$year = $year && $year >= 2000 && $year <= (int) date('Y') + 5 ? $year : (int) date('Y');
+$data = cengi_dash_data(conectar(), $year);
+extract($data, EXTR_SKIP);
+$sessionPct = $sessions && $sessions['total'] ? round(100 * $sessions['impartidas'] / $sessions['total']) : null;
+$attendancePct = $attendance && $attendance['registros'] ? round(100 * $attendance['ingresos'] / $attendance['registros']) : null;
+$months = array_fill(0, 12, 0);
+foreach ($monthly ?? [] as $row) { $months[(int) $row['mes'] - 1] = (int) $row['total']; }
 ?>
-
+<!DOCTYPE html>
 <html lang="es">
 <head>
-	<link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<meta charset="utf-8">
-	<link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
-	<link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
-	<link rel="stylesheet" type="text/css" href="css/proyecto.css">
-	<script src="js/jquery-3.2.1.min.js"></script>
-	<script src="js/bootstrap.min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Avance de capacitación y eventos | Cengicursos</title>
+    <link rel="icon" href="img/logo-comite-capacitacion.png">
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/bootstrap-theme.css">
+    <link rel="stylesheet" href="css/proyecto.css?v=<?php echo filemtime(__DIR__ . '/css/proyecto.css'); ?>">
+    <link rel="stylesheet" href="css/dashboard.css?v=<?php echo filemtime(__DIR__ . '/css/dashboard.css'); ?>">
 </head>
-
-<body class="cengi-canvas">
-	<?php menu_render(); ?>
-	<div class="container">
-
-		<div class="cengi-kpi-grid">
-			<div class="cengi-kpi">
-				<div class="cengi-kpi-bar" style="background:var(--cengi-primary);"></div>
-				<div class="cengi-kpi-icon"><span class="glyphicon glyphicon-education"></span></div>
-				<div class="cengi-kpi-val"><?php echo $cursosActivos; ?></div>
-				<div class="cengi-kpi-label">Cursos activos</div>
-			</div>
-			<div class="cengi-kpi">
-				<div class="cengi-kpi-bar" style="background:var(--cengi-border);"></div>
-				<div class="cengi-kpi-icon" style="background:#EDEFEA;color:#5B6459;"><span class="glyphicon glyphicon-ok"></span></div>
-				<div class="cengi-kpi-val"><?php echo $cursosFinalizados; ?></div>
-				<div class="cengi-kpi-label">Cursos finalizados</div>
-			</div>
-			<div class="cengi-kpi">
-				<div class="cengi-kpi-bar" style="background:var(--cengi-amarillo);"></div>
-				<div class="cengi-kpi-icon" style="background:#FFF6DA;color:#8A6600;"><span class="glyphicon glyphicon-user"></span></div>
-				<div class="cengi-kpi-val"><?php echo $participantesCapacitados; ?></div>
-				<div class="cengi-kpi-label">Participantes capacitados</div>
-			</div>
-			<div class="cengi-kpi">
-				<div class="cengi-kpi-bar" style="background:var(--cengi-naranja);"></div>
-				<div class="cengi-kpi-icon" style="background:#FFE9D9;color:#B34E00;"><span class="glyphicon glyphicon-tree-deciduous"></span></div>
-				<div class="cengi-kpi-val"><?php echo $ingeniosAtendidos; ?></div>
-				<div class="cengi-kpi-label">Ingenios atendidos <?php echo $totalIngenios ? 'de ' . $totalIngenios . ' afiliados' : ''; ?></div>
-			</div>
-		</div>
-
-		<div class="cengi-charts-row">
-			<div class="panel panel-success">
-				<div class="panel-heading"><h3 class="panel-title">Participantes capacitados por año</h3></div>
-				<div class="panel-body"><div class="cengi-chart-wrap"><canvas id="chartAnual"></canvas></div></div>
-			</div>
-			<div class="panel panel-success">
-				<div class="panel-heading"><h3 class="panel-title">Distribución por ingenio</h3></div>
-				<div class="panel-body"><div class="cengi-chart-wrap"><canvas id="chartIngenio"></canvas></div></div>
-			</div>
-		</div>
-
-		<div class="panel panel-success">
-			<div class="panel-heading"><h3 class="panel-title">Cursos por categoría</h3></div>
-			<div class="panel-body"><div class="cengi-chart-wrap"><canvas id="chartCategoria"></canvas></div></div>
-		</div>
-
-		<div class="panel panel-success">
-			<div class="panel-heading"><h3 class="panel-title">Eventos pagados y gratuitos</h3></div>
-			<div class="panel-body"><div class="cengi-chart-wrap"><canvas id="chartEventosPago"></canvas></div></div>
-		</div>
-
-	</div>
-
-	<script>
-	Chart.defaults.font.family = "'Inter',sans-serif";
-	Chart.defaults.font.size = 11;
-	Chart.defaults.color = "#55705f";
-
-	var anioLabels = <?php echo json_encode($anioLabels); ?>;
-	var anioValores = <?php echo json_encode($anioValores); ?>;
-	var ingenioLabels = <?php echo json_encode($ingenioLabels); ?>;
-	var ingenioValores = <?php echo json_encode($ingenioValores); ?>;
-	var categoriaLabels = <?php echo json_encode($categoriaLabels); ?>;
-	var categoriaValores = <?php echo json_encode($categoriaValores); ?>;
-	var eventosPagoValores = <?php echo json_encode([$eventosGratuitos, $eventosPagados]); ?>;
-
-	new Chart(document.getElementById('chartAnual'), {
-		type: 'bar',
-		data: { labels: anioLabels, datasets: [{ label: 'Participantes', data: anioValores, backgroundColor: '#73BC25', borderRadius: 5, maxBarThickness: 40 }] },
-		options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#EEF0EA' }, beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } }, maintainAspectRatio: false }
-	});
-
-	new Chart(document.getElementById('chartIngenio'), {
-		type: 'doughnut',
-		data: { labels: ingenioLabels, datasets: [{ data: ingenioValores, backgroundColor: ['#73BC25', '#A3D300', '#FFCC00', '#FF6B00', '#CED2D5', '#5e9b1d'], borderWidth: 0 }] },
-		options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 9, padding: 12 } } }, maintainAspectRatio: false, cutout: '62%' }
-	});
-
-	new Chart(document.getElementById('chartCategoria'), {
-		type: 'bar',
-		data: { labels: categoriaLabels, datasets: [{ data: categoriaValores, backgroundColor: '#A3D300', borderRadius: 5, maxBarThickness: 28 }] },
-		options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#EEF0EA' }, beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } }, maintainAspectRatio: false }
-	});
-
-	new Chart(document.getElementById('chartEventosPago'), {
-		type: 'doughnut',
-		data: { labels: ['Gratuitos', 'Pagados'], datasets: [{ data: eventosPagoValores, backgroundColor: ['#73BC25', '#FFCC00'], borderWidth: 0 }] },
-		options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 9, padding: 12 } } }, maintainAspectRatio: false, cutout: '62%' }
-	});
-	</script>
-</body>
-</html>
+<body class="cengi-canvas cengi-dashboard-page">
+<?php menu_render(); ?>
+<main class="container">
+    <div class="dash-heading">
+        <div><h1>Avance de capacitación y eventos</h1><p>Cursos iniciados en el año · sesiones y eventos por su fecha programada.</p></div>
+        <form method="get" class="dash-period"><label for="anio">Año</label><input id="anio" name="anio" type="number" min="2000" max="<?php echo date('Y') + 5; ?>" value="<?php echo $year; ?>" required><button type="submit">Consultar</button></form>
+    </div>
+    <?php if ($courses === null || $people === null || $sessions === null || $monthly === null || $nextCourses === null || ($showEvents && ($events === null || $attendance === null || $nextEvents === null))): ?>
+        <p class="dash-notice" role="status">No fue posible cargar algunos indicadores. Se muestran con «—»; no representan un valor de cero.</p>
+    <?php endif; ?>
+    <div class="dash-metrics">
+        <?php foreach ([['Cursos del año', $courses, 'total', 'Oferta registrada', 'education'], ['En curso', $courses, 'activos', 'Según fechas de inicio y fin', 'time'], ['Personas inscritas', $people, 'personas', 'Personas únicas con asignación activa', 'user'], ['Inscripciones activas', $people, 'inscripciones', 'Una persona puede estar en varios cursos', 'list-alt']] as [$label, $row, $key, $help, $icon]): ?>
+            <article class="dash-metric"><span class="glyphicon glyphicon-<?php echo $icon; ?>" aria-hidden="true"></span><span><?php echo $label; ?></span><strong><?php echo cengi_dash_n($row, $key); ?></strong><small><?php echo $help; ?></small></article>
+        <?php endforeach; ?>
+    </div>
+    <div class="dash-grid">
+        <section class="dash-panel"><h2>Ejecución de la capacitación</h2>
+            <div class="dash-states">
+                <?php foreach (['proximos' => 'Por iniciar', 'activos' => 'En curso', 'finalizados' => 'Finalizados por fecha'] as $key => $label): ?><div><strong><?php echo cengi_dash_n($courses, $key); ?></strong><span><?php echo $label; ?></span></div><?php endforeach; ?>
+            </div>
+            <div class="dash-progress-label"><strong>Sesiones impartidas</strong><b><?php echo $sessionPct === null ? '—' : $sessionPct . '%'; ?></b></div>
+            <progress max="100" value="<?php echo $sessionPct ?? 0; ?>" aria-label="Porcentaje de sesiones impartidas"></progress>
+            <p><?php echo cengi_dash_n($sessions, 'impartidas'); ?> de <?php echo cengi_dash_n($sessions, 'total'); ?> sesiones no canceladas del año.</p>
+            <p class="dash-note"><?php echo cengi_dash_n($sessions, 'pendientes'); ?> sesiones con fecha pasada aún sin marcar como impartidas.</p>
+            <?php if (cengi_puede_gestionar()): ?><a class="dash-link" href="programa_sesiones.php">Revisar programa de sesiones →</a><?php endif; ?>
+        </section>
+        <section class="dash-panel"><h2>Inicio de cursos por mes</h2><p>Distribución de la oferta registrada en <?php echo $year; ?>.</p>
+            <?php if ($monthly === null): ?><p class="dash-empty">Indicador no disponible.</p><?php elseif (!array_sum($months)): ?><p class="dash-empty">No hay cursos con inicio registrado en este año.</p><?php else: ?>
+                <div class="dash-months" role="list" aria-label="Cantidad de cursos por mes">
+                    <?php foreach (['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'] as $i => $label): ?><div role="listitem" aria-label="<?php echo $label . ': ' . $months[$i] . ' cursos'; ?>"><b><?php echo $months[$i]; ?></b><div class="dash-bar-track"><span style="height:<?php echo round(100 * $months[$i] / max($months)); ?>%"></span></div><small><?php echo $label; ?></small></div><?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </section>
+        <?php if ($showEvents): ?>
+        <section class="dash-panel"><h2>Eventos del año <small>Alcance institucional</small></h2>
+            <div class="dash-states"><div><strong><?php echo cengi_dash_n($events, 'total'); ?></strong><span>No cancelados</span></div><div><strong><?php echo cengi_dash_n($events, 'transcurridos'); ?></strong><span>Con fecha pasada</span></div><div><strong><?php echo cengi_dash_n($events, 'proximos'); ?></strong><span>Desde hoy</span></div></div>
+            <div class="dash-progress-label"><strong>Asistencia registrada</strong><b><?php echo $attendancePct === null ? '—' : $attendancePct . '%'; ?></b></div>
+            <progress class="dash-event-progress" max="100" value="<?php echo $attendancePct ?? 0; ?>" aria-label="Porcentaje de registros con ingreso a eventos"></progress>
+            <p><?php echo cengi_dash_n($attendance, 'ingresos'); ?> ingresos de <?php echo cengi_dash_n($attendance, 'registros'); ?> registros en eventos hasta hoy.</p>
+            <p class="dash-note">Se cuentan participaciones por evento, no personas únicas.</p><a class="dash-link" href="eventos_qr.php">Ver eventos y asistencia →</a>
+        </section>
+        <?php endif; ?>
+        <section class="dash-panel"><h2>Próximas actividades <small>Hasta 5 por tipo · <?php echo $year; ?></small></h2>
+            <?php foreach (array_merge([['Cursos', $nextCourses]], $showEvents ? [['Eventos', $nextEvents]] : []) as [$title, $items]): ?>
+                <h3><?php echo $title; ?></h3>
+                <?php if (!$items): ?><p class="dash-empty"><?php echo $items === null ? 'No se pudo cargar la agenda.' : 'Sin próximas actividades en el año seleccionado.'; ?></p><?php else: ?><ul class="dash-agenda"><?php foreach ($items as $item): ?><li><time datetime="<?php echo cengi_dash_h($item['fecha']); ?>"><?php echo date('d/m', strtotime($item['fecha'])); ?></time><span><?php echo cengi_dash_h($item['nombre']); ?></span></li><?php endforeach; ?></ul><?php endif; ?>
+            <?php endforeach; ?>
+        </section>
+    </div>
+    <p class="dash-footnote">Cursos e inscripciones según el alcance de tu cuenta. Finalizado por fecha no implica aprobación ni certificación. Los cursos sin fecha de inicio no se incluyen en el período.</p>
+</main>
+</body></html>

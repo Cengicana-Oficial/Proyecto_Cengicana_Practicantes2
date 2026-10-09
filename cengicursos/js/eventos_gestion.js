@@ -450,9 +450,10 @@
     $('.cengi-ev-tab').on('click', function () {
         var t = $(this).attr('data-evtab');
         $('.cengi-ev-tab').removeClass('active').filter(this).addClass('active');
-        $('#evPanelEventos').toggle(t === 'eventos');
-        $('#evPanelEvaluacion').toggle(t === 'evaluacion');
-        $('#evEstadoF, #evBuscar').toggle(t === 'eventos');
+        // Pestañas de pagos, confirmacion y cobros: ver js/eventos_pagos.js (la busqueda filtra cada lista).
+        $.each({eventos: '#evPanelEventos', pagos: '#evPanelPagos', confirmar: '#evPanelConfirmar', cobros: '#evPanelCobros', evaluacion: '#evPanelEvaluacion'}, function (k, sel) { $(sel).toggle(k === t); });
+        $('#evEstadoF').toggle(t === 'eventos');
+        $('#evBuscar').toggle(t !== 'evaluacion');
         if (t === 'evaluacion') cargar(renderEvaluacion);
     });
 
@@ -494,12 +495,59 @@
     }
     function accesoCambio() {
         // El costo se oculta pero no se borra: el servidor lo ignora si el acceso es gratuito.
-        $('#evtCostoGrupo').toggle($('#evtModalidadPago').val() === 'Pagado');
+        $('#evtCostoGrupo, .evt-pago-extra').toggle($('#evtModalidadPago').val() === 'Pagado');
     }
     $('#evtModalidadPago').on('change', accesoCambio);
     $('#evfColab, #evfColabFin').on('change', function () { leerColabFilas(); renderColab(); });
     $('#evfColabAgregar').on('click', function () { leerColabFilas(); colabFilas.push({id: '', nombre: '', contacto: '', correo: ''}); renderColab(); });
     $('#evfColabLista').on('click', '[data-quitar-aliado]', function () { leerColabFilas(); colabFilas.splice(Number($(this).attr('data-quitar-aliado')), 1); renderColab(); });
+
+    /* Imagen y logo del evento: se reducen en el navegador (imagen 1400 px en JPG, logo 500 px
+       en PNG para conservar la transparencia) y viajan como data URL en un campo oculto. */
+    var IMG_CFG = {imagen: {max: 1400, tipo: 'image/jpeg', boton: 'Subir imagen del evento'}, logo: {max: 500, tipo: 'image/png', boton: 'Subir logo del evento'}};
+    function pintarImagen($box, src) {
+        var campo = $box.attr('data-img-box');
+        $box.find('[data-img-prev]').attr('src', src || '').prop('hidden', !src);
+        $box.find('[data-img-quitar]').prop('hidden', !src);
+        $box.find('[data-img-btn]').text(src ? 'Cambiar' : IMG_CFG[campo].boton);
+    }
+    function cargarImagenesEvento(e) {
+        $('[data-img-box]').each(function () {
+            var $box = $(this), campo = $box.attr('data-img-box');
+            $box.find('[data-img-data], [data-img-quitar-flag]').val('');
+            $box.find('[data-img-file]').val('');
+            pintarImagen($box, e && e[campo] ? e[campo] : '');
+        });
+    }
+    $('[data-img-box]').on('change', '[data-img-file]', function () {
+        var $box = $(this).closest('[data-img-box]'), cfg = IMG_CFG[$box.attr('data-img-box')], archivo = this.files && this.files[0];
+        if (!archivo) return;
+        if (!/^image\/(png|jpeg|webp)$/.test(archivo.type)) { window.alert('Usa una imagen PNG, JPG o WebP.'); this.value = ''; return; }
+        var lector = new FileReader();
+        lector.onload = function () {
+            var im = new Image();
+            im.onload = function () {
+                var k = Math.min(1, cfg.max / Math.max(im.width, im.height)), c = document.createElement('canvas');
+                c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+                var g = c.getContext('2d');
+                if (cfg.tipo === 'image/jpeg') { g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); }
+                g.drawImage(im, 0, 0, c.width, c.height);
+                var datos = c.toDataURL(cfg.tipo, 0.88);
+                $box.find('[data-img-data]').val(datos);
+                $box.find('[data-img-quitar-flag]').val('');
+                pintarImagen($box, datos);
+            };
+            im.onerror = function () { window.alert('No se pudo leer la imagen.'); };
+            im.src = lector.result;
+        };
+        lector.readAsDataURL(archivo);
+    });
+    $('[data-img-box]').on('click', '[data-img-quitar]', function () {
+        var $box = $(this).closest('[data-img-box]');
+        $box.find('[data-img-data], [data-img-file]').val('');
+        $box.find('[data-img-quitar-flag]').val('1');
+        pintarImagen($box, '');
+    });
 
     function abrirEvento(id) {
         var e = id ? (CFG.eventos || {})[id] : null;
@@ -515,10 +563,14 @@
         $('#evtModalidadPago').prop('disabled', false).removeData('previo').val(e ? e.modalidad_pago : 'Gratuito');
         $('#evfCupo').val(e ? e.cupo : '');
         $('#evtCosto').val(e && e.modalidad_pago === 'Pagado' ? e.costo : '');
+        $('#evtCostoUsd').val(e && e.costo_usd !== '' ? e.costo_usd : '');
+        $('#evtSinComp').prop('checked', !!(e && e.permitir_sin_comprobante));
         $('#evfEstado').val(e ? e.estado : 'Planificado');
         $('#evfEstadoGrupo').toggle(!!e);
         $('#evfColor').val(e && /^#[0-9a-fA-F]{6}$/.test(e.color) ? e.color : '#2F6B12');
         $('#evfDesc').val(e ? e.descripcion : '');
+        cargarImagenesEvento(e);
+        $('#evfCupo').attr('placeholder', e && e.registrados ? 'Mínimo ' + e.registrados + ' (ya registrados)' : '150');
         $('#evfColab').prop('checked', !!(e && e.en_colaboracion));
         $('#evfColabMod').val(String(e ? e.colab_modalidad : 2));
         $('#evfColabFin').val(e ? e.colab_financia : 'empresa');
@@ -540,6 +592,8 @@
         var pagado = $('#evtModalidadPago').val() === 'Pagado' && !(colab && $('#evfColabFin').val() !== 'compartido');
         if (pagado && !(Number($('#evtCosto').val()) > 0)) errs.push('Un evento pagado necesita costo nacional mayor que 0.');
         if (colab && !colabFilas.filter(function (c) { return String(c.nombre).trim(); }).length) errs.push('Agrega al menos una empresa aliada o desmarca “Evento en colaboración”.');
+        var cupoNuevo = Number($('#evfCupo').val()) || 0;
+        if (eventoEditado && cupoNuevo > 0 && cupoNuevo < eventoEditado.registrados) errs.push('El cupo no puede ser menor que los ' + eventoEditado.registrados + ' participantes ya registrados.');
         if (errs.length) {
             ev2.preventDefault();
             $('#evfMsg').addClass('is-err').html(errs.map(esc).join('<br>'));
@@ -565,4 +619,5 @@
     window.cengiEvtAbrirEvento = abrirEvento;
     window.cengiEvtDifusion = abrirDifusion;
     window.cengiEvtEncuestas = abrirEncuestas;
+    window.cengiEvtInforme = abrirInforme;
 }(jQuery));

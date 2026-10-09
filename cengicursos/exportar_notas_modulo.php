@@ -177,12 +177,11 @@ function cengi_notas_modulo_enviar_xlsx($xlsxBytes, $nombreArchivo)
     exit;
 }
 
-$encabezados = ['CUI', 'ASISTENCIA', 'PRE_EVALUACION', 'POST_EVALUACION', 'NOMBRE', 'INGENIO', 'CORREO', 'CURSO', 'MODULO'];
+$encabezados = ['CUI', 'PRE_EVALUACION', 'POST_EVALUACION', 'NOMBRE', 'INGENIO', 'CORREO', 'CURSO', 'MODULO'];
 $filasExportacion = [];
 foreach ($filas as $fila) {
     $filasExportacion[] = [
         (string) $fila['cui_participantes'],
-        cengi_notas_modulo_valor($fila['asistencia']),
         $prePostVisibles['pre'] ? cengi_notas_modulo_valor($fila['evaluacion']) : '',
         $prePostVisibles['post'] ? cengi_notas_modulo_valor($fila['posevaluacion']) : '',
         (string) $fila['nombre_participantes'],
@@ -212,7 +211,7 @@ if ($formato === 'excel') {
     }
 
     $ultimaFila = max($filaExcel - 1, 1);
-    $sheet->getStyle('A1:I1')->applyFromArray([
+    $sheet->getStyle('A1:H1')->applyFromArray([
         'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
         'fill' => [
             'fillType' => Fill::FILL_SOLID,
@@ -222,22 +221,22 @@ if ($formato === 'excel') {
     ]);
 
     if ($ultimaFila > 1) {
-        $sheet->getStyle('A1:I' . $ultimaFila)->applyFromArray([
+        $sheet->getStyle('A1:H' . $ultimaFila)->applyFromArray([
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'CCCCCC']]],
         ]);
         $sheet->getStyle('A2:A' . $ultimaFila)->applyFromArray([
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F2F2F2']],
         ]);
-        $sheet->getStyle('E2:I' . $ultimaFila)->applyFromArray([
+        $sheet->getStyle('D2:H' . $ultimaFila)->applyFromArray([
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F2F2F2']],
         ]);
     }
 
-    foreach (['A' => 20, 'B' => 14, 'C' => 16, 'D' => 16, 'E' => 34, 'F' => 24, 'G' => 30, 'H' => 34, 'I' => 28] as $columna => $ancho) {
+    foreach (['A' => 20, 'B' => 16, 'C' => 16, 'D' => 34, 'E' => 24, 'F' => 30, 'G' => 34, 'H' => 28] as $columna => $ancho) {
         $sheet->getColumnDimension($columna)->setWidth($ancho);
     }
     $sheet->freezePane('A2');
-    $sheet->getAutoFilter()->setRange('A1:I' . $ultimaFila);
+    $sheet->getAutoFilter()->setRange('A1:H' . $ultimaFila);
 
     $writer = new Xlsx($hoja);
     ob_start();
@@ -250,16 +249,15 @@ if ($formato === 'excel') {
 $filasTablaPdf = '';
 foreach ($filasExportacion as $datosFila) {
     $filasTablaPdf .= '<tr>'
-        . '<td>' . cengi_notas_modulo_html($datosFila[4]) . '</td>'
+        . '<td>' . cengi_notas_modulo_html($datosFila[3]) . '</td>'
         . '<td>' . cengi_notas_modulo_html($datosFila[0]) . '</td>'
-        . '<td>' . cengi_notas_modulo_html($datosFila[5]) . '</td>'
+        . '<td>' . cengi_notas_modulo_html($datosFila[4]) . '</td>'
         . '<td class="num">' . cengi_notas_modulo_html($datosFila[1]) . '</td>'
         . '<td class="num">' . cengi_notas_modulo_html($datosFila[2]) . '</td>'
-        . '<td class="num">' . cengi_notas_modulo_html($datosFila[3]) . '</td>'
         . '</tr>';
 }
 if ($filasTablaPdf === '') {
-    $filasTablaPdf = '<tr><td colspan="6" class="empty">No hay participantes activos para este modulo.</td></tr>';
+    $filasTablaPdf = '<tr><td colspan="5" class="empty">No hay participantes activos para este modulo.</td></tr>';
 }
 
 $html = '<!DOCTYPE html>
@@ -294,7 +292,6 @@ $html = '<!DOCTYPE html>
                 <th>Participante</th>
                 <th>CUI</th>
                 <th>Ingenio</th>
-                <th>Asistencia</th>
                 <th>Pre-evaluacion</th>
                 <th>Post-evaluacion</th>
             </tr>

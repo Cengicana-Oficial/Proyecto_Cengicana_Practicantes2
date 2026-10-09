@@ -237,63 +237,72 @@ function cengi_curso_pre_post_visibles(array $modulos, $moduloId)
 }
 
 /**
- * Recalcula el resumen del curso completo (control_cursos) para un participante
- * como el promedio de las notas de TODOS los modulos del curso que ese
- * participante ya tiene cargadas en control_curso_modulos (se relee completo,
- * no se suma incrementalmente). Los modulos sin nota aun se excluyen del
- * promedio: AVG() de MySQL ya ignora los NULL, asi que si el participante no
- * tiene ninguna nota de modulo, el resultado es NULL (no 0), igual que antes
- * de calificar.
- *
- * El diploma es exclusivo del flujo "todo el curso": no se toca aqui. La
- * columna asistencia solo se persiste en control_cursos si $puedeGestionar es
- * true, igual que el resto de los flujos de guardado de este modulo.
- *
- * Se llama justo despues de guardar cada fila de control_curso_modulos, tanto
- * desde el guardado manual (guardar_control.php) como desde la carga masiva
- * por modulo (carga_calificaciones_modulo.php).
+ * Promedio de una nota de modulo, ponderado por las horas de cada modulo.
+ * $notas: lista de ['nota' => float|null, 'horas' => float]. Los modulos sin nota
+ * se excluyen; si alguno de los que tienen nota no tiene horas, se usa promedio
+ * simple. Devuelve null si no hay ninguna nota.
  */
-function cengi_recalcular_resumen_curso(PDO $db, $asignacionId, $cursoId, $puedeGestionar)
+function cengi_promedio_modulos(array $notas)
 {
-    $stmtPromedioModulos = $db->prepare("
-        SELECT
-            AVG(CAST(ccm.asistencia AS DECIMAL(10,2))) AS asistencia_prom,
-            AVG(CAST(ccm.sesiones_asistidas AS DECIMAL(10,2))) AS sesiones_asistidas_prom,
-            AVG(CAST(ccm.evaluacion AS DECIMAL(10,2))) AS evaluacion_prom,
-            AVG(CAST(ccm.posevaluacion AS DECIMAL(10,2))) AS posevaluacion_prom
-        FROM control_curso_modulos ccm
-        INNER JOIN curso_modulos cm ON cm.id = ccm.curso_modulo_id
-        WHERE ccm.asignacion_id = ? AND cm.curso_id = ?
+    $conNota = array_values(array_filter($notas, static function ($n) {
+        return $n['nota'] !== null && $n['nota'] !== '' && is_numeric($n['nota']);
+    }));
+    if (!$conNota) {
+        return null;
+    }
+    $ponderar = !array_filter($conNota, static function ($n) {
+        return (float) $n['horas'] <= 0;
+    });
+    $suma = 0.0;
+    $pesos = 0.0;
+    foreach ($conNota as $n) {
+        $peso = $ponderar ? (float) $n['horas'] : 1.0;
+        $suma += (float) $n['nota'] * $peso;
+        $pesos += $peso;
+    }
+    return round($suma / $pesos, 2);
+}
+
+/**
+ * Recalcula la nota del curso completo (control_cursos.evaluacion/posevaluacion)
+ * de un participante a partir de sus notas por modulo (control_curso_modulos),
+ * con promedio ponderado por las horas de cada modulo (cengi_promedio_modulos).
+ * Los modulos aun sin nota no cuentan; sin ninguna nota el resultado es NULL.
+ *
+ * La asistencia y las sesiones asistidas NO se tocan: son acumuladas del curso
+ * completo (se toman de Teams/Moodle) y se registran en la vista "Todo el curso".
+ * El diploma tampoco se toca.
+ *
+ * Se llama despues de guardar cada fila de control_curso_modulos, tanto desde el
+ * guardado manual (guardar_control.php) como desde la carga masiva por modulo
+ * (carga_calificaciones_modulo.php). $puedeGestionar se conserva por compatibilidad.
+ */
+function cengi_recalcular_resumen_curso(PDO $db, $asignacionId, $cursoId, $puedeGestionar = false)
+{
+    $stmt = $db->prepare("
+        SELECT cm.horas, ccm.evaluacion, ccm.posevaluacion
+        FROM curso_modulos cm
+        INNER JOIN control_curso_modulos ccm ON ccm.curso_modulo_id = cm.id AND ccm.asignacion_id = ?
+        WHERE cm.curso_id = ?
     ");
-    $stmtPromedioModulos->execute([$asignacionId, $cursoId]);
-    $promediosModulos = $stmtPromedioModulos->fetch(PDO::FETCH_ASSOC) ?: [];
+    $stmt->execute([(int) $asignacionId, (int) $cursoId]);
+    $filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $asistenciaProm = $promediosModulos['asistencia_prom'] ?? null;
-    $sesionesAsistidasProm = $promediosModulos['sesiones_asistidas_prom'] ?? null;
-    $sesionesAsistidasProm = ($sesionesAsistidasProm === null) ? null : (int) round((float) $sesionesAsistidasProm);
-    $evaluacionProm = $promediosModulos['evaluacion_prom'] ?? null;
-    $posevaluacionProm = $promediosModulos['posevaluacion_prom'] ?? null;
+    $evaluacion = cengi_promedio_modulos(array_map(static function ($f) {
+        return ['nota' => $f['evaluacion'], 'horas' => $f['horas']];
+    }, $filas));
+    $posevaluacion = cengi_promedio_modulos(array_map(static function ($f) {
+        return ['nota' => $f['posevaluacion'], 'horas' => $f['horas']];
+    }, $filas));
 
-    $stmtVerificarLote = $db->prepare("
-        SELECT id_control
-        FROM control_cursos
-        WHERE asignacion_id = ?
-    ");
-    $stmtVerificarLote->execute([$asignacionId]);
-    $existeControlCurso = (bool) $stmtVerificarLote->fetch(PDO::FETCH_ASSOC);
-
-    if ($existeControlCurso && $puedeGestionar) {
-        $stmt = $db->prepare("UPDATE control_cursos SET asistencia = ?, sesiones_asistidas = ?, evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ?");
-        $stmt->execute([$asistenciaProm, $sesionesAsistidasProm, $evaluacionProm, $posevaluacionProm, $asignacionId]);
-    } elseif ($existeControlCurso) {
-        $stmt = $db->prepare("UPDATE control_cursos SET evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ?");
-        $stmt->execute([$evaluacionProm, $posevaluacionProm, $asignacionId]);
-    } elseif ($puedeGestionar) {
-        $stmt = $db->prepare("INSERT INTO control_cursos (asignacion_id, asistencia, sesiones_asistidas, evaluacion, posevaluacion, diploma) VALUES (?, ?, ?, ?, ?, '')");
-        $stmt->execute([$asignacionId, $asistenciaProm, $sesionesAsistidasProm, $evaluacionProm, $posevaluacionProm]);
+    $stmtExiste = $db->prepare('SELECT id_control FROM control_cursos WHERE asignacion_id = ?');
+    $stmtExiste->execute([(int) $asignacionId]);
+    if ($stmtExiste->fetch(PDO::FETCH_ASSOC)) {
+        $db->prepare('UPDATE control_cursos SET evaluacion = ?, posevaluacion = ? WHERE asignacion_id = ?')
+            ->execute([$evaluacion, $posevaluacion, (int) $asignacionId]);
     } else {
-        $stmt = $db->prepare("INSERT INTO control_cursos (asignacion_id, evaluacion, posevaluacion, diploma) VALUES (?, ?, ?, '')");
-        $stmt->execute([$asignacionId, $evaluacionProm, $posevaluacionProm]);
+        $db->prepare("INSERT INTO control_cursos (asignacion_id, evaluacion, posevaluacion, diploma) VALUES (?, ?, ?, '')")
+            ->execute([(int) $asignacionId, $evaluacion, $posevaluacion]);
     }
 }
 
