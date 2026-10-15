@@ -7,6 +7,11 @@ if (!isset($_SESSION['id_usuario'])) {
     exit;
 }
 
+if (strtolower(trim((string) ($_GET['scope'] ?? ''))) === 'visitas') {
+    header('Location: ../visitas_roles.php', true, 303);
+    exit;
+}
+
 function user_scope_config($scope)
 {
     $scope = strtolower(trim((string) $scope));
@@ -74,7 +79,7 @@ if ($scopeConfig) {
     $modulosDisponibles = $stmtScopeMods->fetchAll(PDO::FETCH_ASSOC);
     $moduloIdsForzados = array_map(fn($mod) => (int) $mod['id'], $modulosDisponibles);
 } elseif ($esSuperadmin) {
-    $stmtMod = $conn->query("SELECT id, nombre FROM modulos ORDER BY nombre");
+    $stmtMod = $conn->query("SELECT id, nombre FROM modulos WHERE nombre NOT IN ('CengiSalas','Visitas CengiSalas','Visitas') ORDER BY nombre");
     $modulosDisponibles = $stmtMod->fetchAll(PDO::FETCH_ASSOC);
 } else {
     $stmtMod = $conn->prepare("

@@ -32,6 +32,9 @@ RUN a2enconf no-php-uploads
 COPY dockerfiles/modulos-app/error-pages.conf /etc/apache2/conf-available/error-pages.conf
 RUN a2enconf error-pages
 
+COPY dockerfiles/modulos-app/cengisalas-session.conf /etc/apache2/conf-available/cengisalas-session.conf
+RUN a2enconf cengisalas-session
+
 # Reenvia /sigec/* al contenedor "sigec" (docker-compose.prod.yml), sin
 # exponer su puerto publicamente: modulos.cengicana.org/sigec/... se sirve
 # asi bajo el mismo dominio ya configurado, sin necesitar un subdominio ni
@@ -62,6 +65,10 @@ RUN if [ -f cengicursos/composer.json ]; then \
 # revienta con "failed to open stream".
 RUN if [ -f Pruebas/composer.json ]; then \
         cd Pruebas && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \
+    fi
+
+RUN if [ -f visitas/composer.json ]; then \
+        cd visitas && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \
     fi
 
 RUN chown -R www-data:www-data /var/www/html

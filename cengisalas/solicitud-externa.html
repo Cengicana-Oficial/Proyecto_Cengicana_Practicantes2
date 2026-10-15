@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#2E7D32">
+  <title>Solicitud pública de salón | CengiSalas</title>
+    <link rel="stylesheet" href="modules/salas/css/solicitud-externa.css?v=20260826-8">
+  <style>.header-links{display:flex;gap:9px}.header-links .back-link:first-child{color:#2E7D32;background:#fff}.success-links{display:grid;justify-items:center;gap:13px}.success-card .tracking-action{border-radius:9px;padding:12px 18px;color:#fff;background:#2E7D32;text-decoration:none}@media(max-width:680px){.public-header{align-items:flex-start}.header-links{flex-direction:column;gap:3px;text-align:right}.header-links .back-link{border:0;padding:4px;font-size:11px}.header-links .back-link:first-child{color:#fff;background:transparent}}</style>
+</head>
+<body>
+  <header class="public-header">
+    <a class="public-brand" href="index.html"><span><img src="assets/cengicana-mark.png" alt="Logo de Cengicaña"></span><div><b>CengiSalas</b></div></a>
+    <div class="header-links"><a class="back-link" href="seguimiento.html">Consultar solicitud</a><a class="back-link" href="index.html">← Iniciar sesión</a></div>
+  </header>
+  <main>
+    <section class="public-intro">
+      <p>SOLICITUD PARA VISITANTES</p>
+      <h1>Solicita un salón sin crear una cuenta</h1>
+      <span>Completa la información. La solicitud quedará pendiente hasta que el equipo de Cengicaña la revise.</span>
+    </section>
+
+    <form id="externalRequestForm" class="public-form">
+      <section class="form-section">
+        <header><i>1</i><div><h2>Datos de contacto</h2><p>Persona responsable del salón durante la actividad.</p></div></header>
+        <div class="form-grid">
+          <label class="full">Responsable del salón<input id="externalContactName" autocomplete="name" minlength="3" required></label>
+          <label>Correo electrónico<input id="externalContactEmail" type="email" autocomplete="email" required></label>
+          <label>Teléfono<input id="externalContactPhone" type="tel" autocomplete="tel" minlength="7" maxlength="30" placeholder="Ej. 5555-5555" required></label>
+          <label class="full">Organización<select id="externalOrganization" required><option value="">Cargando organizaciones…</option></select></label>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <header><i>2</i><div><h2>Información de la reunión</h2><p>Datos generales y cantidad de participantes.</p></div></header>
+        <div class="form-grid">
+          <label class="full">Título<input id="externalTitle" minlength="3" maxlength="180" required></label>
+          <label class="full">Descripción<textarea id="externalDescription" rows="3" placeholder="Objetivo o temas principales"></textarea></label>
+          <label class="full">Tipo de reunión<select id="externalMeetingType" required><option value="">Cargando tipos…</option></select></label>
+          <label>Primera fecha<input id="externalDate" type="date" required></label>
+          <label>Participantes<input id="externalAttendees" type="number" min="1" value="8" required></label>
+          <label class="full">Repetición<select id="externalRecurrence"><option value="none">No se repite</option><option value="weekly">Semanalmente</option><option value="biweekly">Cada 2 semanas</option><option value="monthly">Mensualmente</option><option value="custom">Fechas específicas</option></select></label>
+          <div id="externalRecurrencePanel" class="full recurrence-box hidden">
+            <label id="externalUntilLabel">Repetir hasta<input id="externalUntil" type="date"></label>
+            <div id="externalCustomPanel" class="hidden"><label>Agregar otra fecha</label><div class="date-adder"><input id="externalCustomDate" type="date"><button id="externalAddDate" type="button">＋ Agregar</button></div><div id="externalDateList" class="date-chips"></div></div>
+            <small id="externalRecurrencePreview"></small>
+          </div>
+          <label>Hora de inicio<input id="externalStart" type="time" value="10:00" required></label>
+          <label>Hora de finalización<input id="externalEnd" type="time" value="11:00" required></label>
+          <div id="externalAvailability" class="full availability-box"><b>Disponibilidad de salones</b><small>Selecciona la fecha y el horario para consultar.</small><div id="externalAvailableRooms" class="availability-chips"></div></div>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <header><i>3</i><div><h2>Salón y distribución</h2><p>Primero elige el salón para consultar las configuraciones disponibles.</p></div></header>
+        <div class="form-grid">
+          <label class="full"><span>Salón solicitado <strong id="externalMainRoomAvailability" class="room-unavailable-note hidden">No Disponible</strong></span><select id="externalRoom" required><option value="">Cargando salones…</option></select><small id="externalRoomHelp" class="help"></small></label>
+          <label id="externalCombineOption" class="full combine-option hidden"><span><input id="externalCombine" type="checkbox"> Usar Salón 1 y Salón 2 juntos</span><small>Se bloquearán ambos salones para la misma reunión.</small></label>
+          <fieldset class="full configuration-field"><legend>Configuración del salón</legend><div class="configuration-options">
+            <label class="configuration-card selected"><input type="radio" name="externalConfiguration" value="U" checked><span class="configuration-image"><img src="assets/tipo-u.svg" alt="Distribución Tipo U"></span><span class="configuration-copy"><b>Tipo U</b><small>Ideal para conversación y trabajo colaborativo.</small></span><i>✓</i></label>
+            <label class="configuration-card"><input type="radio" name="externalConfiguration" value="SCHOOL"><span class="configuration-image"><img src="assets/tipo-escuela.svg" alt="Distribución Tipo Escuela"></span><span class="configuration-copy"><b>Tipo Escuela</b><small>Mesas en espina de pescado orientadas hacia el instructor.</small></span><i>✓</i></label>
+            <label class="configuration-card"><input type="radio" name="externalConfiguration" value="BOARDROOM"><span class="configuration-image"><img src="assets/tipo-juntas.svg?v=20260817-3" alt="Distribución Tipo Juntas con mesa central vertical"></span><span class="configuration-copy"><b>Tipo Juntas</b><small>Mesa central para conversación ejecutiva y toma de decisiones.</small></span><i>✓</i></label>
+          </div><small id="externalConfigurationHelp" class="help"></small></fieldset>
+          <section id="externalDateAssignments" class="full date-assignments hidden" aria-live="polite"><div class="date-assignments-head"><div><b>Salón y distribución por fecha</b><small>Personaliza el espacio de cada reunión de la serie.</small></div><span id="externalAssignmentCount"></span></div><div id="externalAssignmentList" class="date-assignment-list"></div></section>
+          <fieldset id="externalRefreshmentField" class="full refreshment-field locked">
+            <legend>Solicitar refacción <span id="externalRefreshmentStatus" class="access-badge">Solo Cengicaña</span></legend>
+            <div id="externalRefreshmentOptions" class="refreshment-options"><span>Cargando opciones…</span></div>
+            <small id="externalRefreshmentHelp" class="help">Selecciona Cengicaña como organización para habilitar esta opción.</small>
+          </fieldset>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <header><i>4</i><div><h2>Observaciones</h2><p>Comparte cualquier indicación adicional que deba considerar el equipo administrador.</p></div></header>
+        <div class="form-grid"><label class="full">Observaciones<textarea id="externalObservations" rows="4" maxlength="1000" placeholder="Información adicional sobre la actividad, montaje o atención requerida (opcional)"></textarea><small class="help">Máximo 1,000 caracteres.</small></label></div>
+      </section>
+
+      <label class="website-field" aria-hidden="true">Sitio web<input id="externalWebsite" tabindex="-1" autocomplete="off"></label>
+      <p id="externalError" class="form-error" role="alert"></p>
+      <div class="form-actions"><button type="reset" class="secondary">Limpiar</button><button type="submit" class="primary">Enviar solicitud →</button></div>
+    </form>
+
+    <section id="externalSuccess" class="success-card hidden" aria-live="polite"><span>✓</span><h2>Solicitud enviada</h2><p>Tu solicitud quedó pendiente de revisión. Conserva este código de referencia:</p><b id="externalRequestCode"></b><div class="success-links"><a id="externalTrackingLink" class="tracking-action" href="seguimiento.html">Dar seguimiento a mi solicitud →</a><a href="solicitud-externa.html">Crear otra solicitud</a></div></section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js?v=20260815-1"></script>
+  <script src="modules/salas/js/solicitud-externa.js?v=20260826-7"></script>
+</body>
+</html>

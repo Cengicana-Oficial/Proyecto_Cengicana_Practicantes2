@@ -11,11 +11,12 @@ $stmt = $conn->query("
     SELECT
         r.id,
         r.nombre_rol,
-        COUNT(rp.permiso_id) AS total_permisos,
+        COUNT(p.id) AS total_permisos,
         GROUP_CONCAT(p.nombre_permiso ORDER BY p.nombre_permiso SEPARATOR ', ') AS permisos
     FROM roles r
     LEFT JOIN rol_permiso rp ON rp.rol_id = r.id
     LEFT JOIN permisos p ON p.id = rp.permiso_id
+        AND p.nombre_permiso NOT LIKE 'cengisalas.salas.%'
     GROUP BY r.id, r.nombre_rol
     ORDER BY r.id
 ");

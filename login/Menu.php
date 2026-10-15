@@ -2,6 +2,7 @@
 require_once __DIR__ . "/config/session.php";
 cengi_session_start();
 require_once __DIR__ . "/config/conexion.php";
+require_once __DIR__ . "/config/cengisalas_access.php";
 
 if (!isset($_SESSION['id_usuario'])) {
     header("Location: login.php");
@@ -102,18 +103,14 @@ function menu_modulo_meta($nombre)
         // directo a una carpeta hermana como los demas modulos.
         $ruta = 'sso_sigec.php';
         $icono = 'biotech';
-    } elseif ($modulo === 'solicitud de visitas') {
-        $ruta = '../Pruebas/public/admin/dashboard_unificado.php?modulo=solicitudes';
-        $icono = 'calendar_today';
-
-        if (!$esSuperadmin && $rolId === 2) {
-            $ruta .= '&estado=aprobado';
-        }
-    } elseif ($modulo === 'servicio tecnico' && $esSuperadmin) {
-        // No existe dashboard_servicio.php en el repo; se reutiliza el
-        // dashboard unificado del modulo Pruebas (mismo que "Solicitud de
-        // visitas") hasta que exista una vista propia de servicio tecnico.
-        $ruta = '../Pruebas/public/admin/dashboard_unificado.php';
+    } elseif ($modulo === 'cengisalas') {
+        $ruta = '../cengisalas/index.html?panel=1';
+        $icono = 'meeting_room';
+    } elseif (in_array($modulo, ['visitas', 'visitas cengisalas', 'solicitud de visitas'], true)) {
+        $ruta = 'sso_visitas.php';
+        $icono = 'tour';
+    } elseif (in_array($modulo, ['servicio tecnico','servicios tecnicos'], true) && ($esSuperadmin || !empty($GLOBALS['techModuleAccess']))) {
+        $ruta = '../Pruebas/index.php';
         $icono = 'build';
     } elseif ($modulo === 'ensayos' && $esSuperadmin) {
         $ruta = '../Pruebas/public/admin/dashboard_ensayos.php';
@@ -146,6 +143,37 @@ if ($mostrarAdministracion) {
 }
 
 $modulos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$techModuleAccess = $mostrarAdministracion;
+$techAccessFile = __DIR__ . '/../Pruebas/module_access.php';
+if (!$mostrarAdministracion && is_file($techAccessFile)) {
+    require_once $techAccessFile;
+    $techModuleAccess = tech_module_has_access($idUsuario);
+}
+if (!$mostrarAdministracion) {
+    $techNames = ['servicio tecnico','servicios tecnicos'];
+    $modulos = array_values(array_filter($modulos, static function (array $row) use ($techModuleAccess, $techNames): bool {
+        return !in_array(menu_normalizar_modulo($row['nombre']), $techNames, true) || $techModuleAccess;
+    }));
+    if ($techModuleAccess) {
+        $hasTech = false;
+        foreach ($modulos as $row) {
+            if (in_array(menu_normalizar_modulo($row['nombre']), $techNames, true)) $hasTech = true;
+        }
+        if (!$hasTech) {
+            $techModules = $conn->query('SELECT id,nombre FROM modulos ORDER BY nombre')->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($techModules as $row) {
+                if (in_array(menu_normalizar_modulo($row['nombre']), $techNames, true)) { $modulos[] = $row; break; }
+            }
+        }
+    }
+}
+if (!$mostrarAdministracion) {
+    $modulos = array_values(array_filter($modulos, static function (array $row) use ($conn, $idUsuario): bool {
+        $name = menu_normalizar_modulo($row['nombre']);
+        $code = $name === 'cengisalas' ? 'salas' : (in_array($name, ['visitas', 'visitas cengisalas', 'solicitud de visitas'], true) ? 'visitas' : '');
+        return $code === '' || cengisalas_role($conn, $idUsuario, $code) !== null;
+    }));
+}
 
 if ($mostrarAdministracion) {
     $stmtDash = $conn->query("
@@ -229,6 +257,7 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
                         </summary>
                         <div class="dropdown-panel">
                             <span class="dropdown-title">Administración</span>
+                            <a href="visitas_roles.php"><span class="material-symbols-outlined">admin_panel_settings</span> Roles de Visitas</a>
                             <?php if (menu_can('gestionar_usuarios')): ?>
                                 <a href="usuarios/usuarios.php"><span class="material-symbols-outlined">group</span> Usuarios</a>
                             <?php endif; ?>
@@ -284,7 +313,7 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
                         </div>
                     </div>
                     <span class="session-status"><i></i> Sesión activa</span>
-                    <a href="../Pruebas/public/admin/logout.php" class="logout-link">
+                    <a href="cengisalas_logout.php" class="logout-link">
                         <span class="material-symbols-outlined">logout</span>
                         Cerrar sesión
                     </a>

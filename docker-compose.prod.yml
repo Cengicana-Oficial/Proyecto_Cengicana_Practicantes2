@@ -12,20 +12,50 @@ services:
     environment:
       TZ: America/Guatemala
     volumes:
+      - ./dockerfiles/modulos-app/no-sendfile.conf:/etc/apache2/conf-enabled/no-sendfile.conf:ro
+      - ./login/roles/roles.php:/var/www/html/login/roles/roles.php:ro
+      - ./login/roles/editar_rol.php:/var/www/html/login/roles/editar_rol.php:ro
+      - ./login/roles/crear_rol.php:/var/www/html/login/roles/crear_rol.php:ro
+      - ./login/usuarios/crear_usuario.php:/var/www/html/login/usuarios/crear_usuario.php:ro
+      - ./login/usuarios/editar_usuario.php:/var/www/html/login/usuarios/editar_usuario.php:ro
+      - ./login/Menu.php:/var/www/html/login/Menu.php:ro
+      - ./login/cengisalas_session.php:/var/www/html/login/cengisalas_session.php:ro
+      - ./login/cengisalas_gate.php:/var/www/html/login/cengisalas_gate.php:ro
+      - ./login/cengisalas_roles_api.php:/var/www/html/login/cengisalas_roles_api.php:ro
+      - ./login/cengisalas_logout.php:/var/www/html/login/cengisalas_logout.php:ro
+      - ./login/config/cengisalas_supabase.php:/var/www/html/login/config/cengisalas_supabase.php:ro
+      - ./login/config/cengisalas_access.php:/var/www/html/login/config/cengisalas_access.php:ro
+      - ./login/sso_cengisalas.php:/var/www/html/login/sso_cengisalas.php:ro
+      - ./cengisalas/index.html:/var/www/html/cengisalas/index.html:ro
+      - ./cengisalas/tablero.html:/var/www/html/cengisalas/tablero.html:ro
+      - ./cengisalas/solicitud-externa.html:/var/www/html/cengisalas/solicitud-externa.html:ro
+      - ./cengisalas/solicitud-pago.html:/var/www/html/cengisalas/solicitud-pago.html:ro
+      - ./cengisalas/seguimiento.html:/var/www/html/cengisalas/seguimiento.html:ro
+      - ./cengisalas/modules/salas/js/app.js:/var/www/html/cengisalas/modules/salas/js/app.js:ro
+      - ./cengisalas/modules/salas/css/styles.css:/var/www/html/cengisalas/modules/salas/css/styles.css:ro
       - ./deploy/env/login.env:/var/www/html/login/.env:ro
       - ./deploy/env/cengicursos.env:/var/www/html/cengicursos/.env:ro
       - ./deploy/env/laboratorio.env:/var/www/html/laboratorio/.env:ro
       - ./deploy/env/visitas.env:/var/www/html/Pruebas/.env:ro
+      - ./deploy/env/cengisalas.env:/var/www/html/visitas/.env:ro
+      - ./visitas:/var/www/html/visitas
+      - visitas-vendor:/var/www/html/visitas/vendor
+      - ./uploads/visitas:/var/www/html/visitas/uploads
+      - ./login/visitas_roles.php:/var/www/html/login/visitas_roles.php:ro
+      - ./login/sso_visitas.php:/var/www/html/login/sso_visitas.php:ro
+      - ./login/config/visitas_access.php:/var/www/html/login/config/visitas_access.php:ro
+      - ./dockerfiles/modulos-app/cengisalas-session.conf:/etc/apache2/conf-enabled/cengisalas-session.conf:ro
       - ./uploads:/var/www/html/uploads
       # Adjuntos que suben modulos que no escriben bajo /var/www/html/uploads:
-      # cartas/listados de "Solicitud de visitas" (Pruebas/) y adjuntos de
+      # adjuntos del servicio técnico (Pruebas/) y adjuntos de
       # "Solicitudes internas" (sistema_de_solicitudes/). Sin estos bind mounts
       # los archivos viven solo en la capa del contenedor y se pierden al
       # recrearlo. entrypoint.sh corrige la propiedad/permisos en cada arranque.
       - ./uploads/pruebas:/var/www/html/Pruebas/uploads
       - ./uploads/solicitudes-internas:/var/www/html/sistema_de_solicitudes/uploads
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
 
   sigec:
     build:
@@ -41,7 +71,8 @@ services:
       - ./deploy/env/sigec.env:/var/www/html/sigec/.env:ro
       - sigec-storage:/var/www/html/sigec/storage/app/public
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
 
   mysql:
     image: mysql:8.0
@@ -50,6 +81,12 @@ services:
     env_file:
       - ./deploy/env/mysql.env
     command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql --protocol=TCP -h 127.0.0.1 -u\"$$MYSQL_USER\" -D\"$$MYSQL_DATABASE\" -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     ports:
       - "127.0.0.1:33063:3306"
     volumes:
@@ -57,6 +94,7 @@ services:
       - ./deploy/mysql/init:/docker-entrypoint-initdb.d:ro
 
 volumes:
+  visitas-vendor:
   mysql-data:
     name: cengicana-ui-new-mysql-data
   sigec-storage:

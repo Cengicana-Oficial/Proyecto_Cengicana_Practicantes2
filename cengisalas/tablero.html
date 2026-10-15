@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#2E7D32">
+  <title>Tablero de salones | CengiSalas</title>
+  <link rel="stylesheet" href="modules/salas/css/tablero.css?v=20260816-9">
+</head>
+<body>
+  <header class="board-header">
+    <div class="board-brand"><span class="brand-mark"><img src="assets/cengicana-mark.png" alt="Logo de Cengicaña"></span><div><b>CengiSalas</b></div></div>
+    <div class="board-date"><strong id="boardDate"></strong><span id="boardClock"></span></div>
+    <div class="board-actions">
+      <span id="liveIndicator" class="live-indicator"><i></i> Conectando…</span>
+      <button id="fullscreen" type="button">⛶ Pantalla completa</button>
+      <a href="../login/sso_cengisalas.php?module=salas">Ir al panel</a>
+    </div>
+  </header>
+
+  <main>
+    <section id="roomBoard" class="room-board" aria-label="Estado de los ocho salones"></section>
+  </main>
+
+  <template id="emptySchedule">
+    <div class="empty-schedule"><span>✓</span><b>Disponible todo el día</b><small>No hay reuniones programadas</small></div>
+  </template>
+  <div id="announcement" class="announcement" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js?v=20260815-1"></script>
+  <script src="modules/salas/js/tablero.js?v=20260816-6"></script>
+</body>
+</html>

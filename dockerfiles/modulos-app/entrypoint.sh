@@ -17,6 +17,7 @@ set -e
 for dir in \
     /var/www/html/uploads \
     /var/www/html/Pruebas/uploads \
+    /var/www/html/visitas/uploads \
     /var/www/html/sistema_de_solicitudes/uploads
 do
     [ -d "$dir" ] || continue

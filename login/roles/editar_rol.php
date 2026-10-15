@@ -62,17 +62,28 @@ $rol = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$rol) {
     roles_mostrar_aviso("Rol no encontrado", "El rol que intentas editar ya no existe.");
 }
-
 $error = "";
-$permisos = obtener_permisos($conn);
+$permisos = array_values(array_filter(obtener_permisos($conn), static function (array $permiso): bool {
+    return !str_starts_with((string) $permiso['nombre_permiso'], 'cengisalas.salas.');
+}));
 $gruposPermisos = agrupar_permisos($permisos);
-$permisosRol = obtener_permisos_rol($conn, $id);
+$permisosRolActuales = obtener_permisos_rol($conn, $id);
+$permisosCengiSalas = array_values(array_filter($permisosRolActuales, static function (string $permiso): bool {
+    return str_starts_with($permiso, 'cengisalas.salas.');
+}));
+$permisosRol = array_values(array_diff($permisosRolActuales, $permisosCengiSalas));
 
 if ($_POST) {
     $nombre = trim($_POST['nombre'] ?? '');
-    $permisosSeleccionados = $_POST['permisos'] ?? [];
+    $permisosEnviados = $_POST['permisos'] ?? [];
+    $nombresDisponibles = array_column($permisos, 'nombre_permiso');
+    $permisosSeleccionados = is_array($permisosEnviados)
+        ? array_values(array_intersect($permisosEnviados, $nombresDisponibles)) : [];
+    $permisosRol = $permisosSeleccionados;
 
-    if ($nombre === "") {
+    if (!is_array($permisosEnviados)) {
+        $error = 'La selección de permisos no es válida.';
+    } elseif ($nombre === "") {
         $error = "El nombre no puede estar vacio";
     } else {
         $check = $conn->prepare("
@@ -92,9 +103,11 @@ if ($_POST) {
             ");
             $stmt->execute([$nombre, $id]);
 
-            guardar_permisos_rol($conn, $id, $permisosSeleccionados);
+            // Los permisos históricos de CengiSalas quedan intactos, pero ya
+            // no se editan ni sincronizan desde los roles del portal.
+            guardar_permisos_rol($conn, $id, array_merge($permisosSeleccionados, $permisosCengiSalas));
 
-            header("Location: roles.php");
+            header('Location: roles.php');
             exit;
         }
     }
@@ -142,7 +155,6 @@ if ($_POST) {
                 <button type="button" class="btn-light" onclick="marcarPermisos(false)">Limpiar</button>
             </div>
         </div>
-
         <?php if (empty($permisos)): ?>
             <div class="empty-permissions">
                 No hay permisos en la base de datos. Ejecuta primero el script de permisos en MySQL Workbench.

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SalaFlow | Reserva de salones</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <section id="login" class="login">
+    <div class="login-hero">
+      <a class="brand" href="#"><span>SF</span> SalaFlow</a>
+      <div>
+        <p class="overline">ESPACIOS QUE CONECTAN</p>
+        <h1>Tu próxima gran idea necesita el salón correcto.</h1>
+        <p>Solicita, organiza y administra todos los espacios de reunión desde un solo lugar.</p>
+      </div>
+      <small>Gestión simple. Reuniones productivas.</small>
+    </div>
+    <div class="login-box">
+      <form id="loginForm">
+        <p class="overline blue">BIENVENIDO DE NUEVO</p>
+        <h2>Inicia sesión</h2>
+        <p class="muted">Usa uno de los accesos ficticios para probar la demo.</p>
+        <label>Correo electrónico<input id="email" type="email" value="admin@salaflow.demo" required></label>
+        <label>Contraseña<input id="password" type="password" value="admin123" required></label>
+        <p id="loginError" class="error"></p>
+        <button class="button primary wide" type="submit">Ingresar <b>→</b></button>
+        <div class="demo-users">
+          <button type="button" data-user="admin"><b>Administrador</b><small>admin@salaflow.demo</small></button>
+          <button type="button" data-user="user"><b>Usuario</b><small>usuario@salaflow.demo</small></button>
+          <small>Claves: admin123 / usuario123</small>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <div id="app" class="app hidden">
+    <aside id="sidebar">
+      <a class="brand dark" href="#"><span>SF</span> SalaFlow</a>
+      <nav>
+        <small>PRINCIPAL</small>
+        <button class="active" data-view="agenda">▦ <span>Agenda de hoy</span></button>
+        <button data-view="request">＋ <span>Solicitar salón</span></button>
+        <button data-view="mine">◷ <span>Mis reuniones</span><i id="mineCount">0</i></button>
+        <small class="admin-only">ADMINISTRACIÓN</small>
+        <button class="admin-only" data-view="approvals">✓ <span>Solicitudes</span><i id="pendingCount">0</i></button>
+        <button class="admin-only" data-view="rooms">◇ <span>Salones</span></button>
+      </nav>
+      <div class="side-user"><span class="avatar user-initials">AM</span><div><b class="user-name">Ana Méndez</b><small class="user-role">Administradora</small></div><button id="logout" title="Cerrar sesión">↪</button></div>
+    </aside>
+
+    <main>
+      <header><button id="menu">☰</button><span></span><div class="header-user"><span class="avatar user-initials">AM</span><div><b class="user-name">Ana Méndez</b><small class="user-role">Administradora</small></div></div></header>
+
+      <section id="agendaView" class="view active">
+        <div class="heading"><div><p class="overline blue">PANEL PRINCIPAL</p><h2>Buenos días, <span id="firstName">Ana</span> 👋</h2><p>Este es el panorama de los salones para hoy.</p></div><button class="button primary" data-go="request">＋ Nueva solicitud</button></div>
+        <div class="stats">
+          <article><span class="stat-icon">◇</span><div><small>SALONES DISPONIBLES</small><b id="availableStat">8 <em>de 8</em></b></div></article>
+          <article><span class="stat-icon green">✓</span><div><small>REUNIONES HOY</small><b id="meetingsStat">0</b></div></article>
+          <article class="admin-only"><span class="stat-icon amber">◷</span><div><small>POR APROBAR</small><b id="pendingStat">0</b></div></article>
+          <article><span class="stat-icon purple">◉</span><div><small>OCUPACIÓN DEL DÍA</small><b id="occupancyStat">0%</b></div></article>
+        </div>
+        <article class="panel agenda-panel">
+          <div class="panel-head">
+            <div class="date-nav"><button id="prevDate">‹</button><div><b id="currentDateText"></b><small id="currentYear"></small></div><button id="nextDate">›</button><button id="today">Hoy</button></div>
+            <div class="filters"><span><i class="approved-dot"></i>Aprobada</span><span class="admin-only"><i class="pending-dot"></i>Pendiente</span><select id="roomFilter"><option value="all">Todos los salones</option></select></div>
+          </div>
+          <div class="agenda-scroll"><div id="agendaGrid" class="agenda-grid"></div></div>
+        </article>
+      </section>
+
+      <section id="requestView" class="view">
+        <div class="heading"><div><p class="overline blue">NUEVA RESERVA</p><h2>Solicitar un salón</h2><p>La solicitud quedará pendiente de aprobación.</p></div></div>
+        <form id="requestForm" class="panel form-panel">
+          <h3><span>1</span> Información de la reunión</h3>
+          <div class="form-grid">
+            <label class="full">Título<input id="title" placeholder="Ej. Revisión mensual de resultados" required></label>
+            <label class="full">Descripción<textarea id="description" rows="3" placeholder="Objetivo o temas principales"></textarea></label>
+            <label>Fecha<input id="meetingDate" type="date" required></label>
+            <label>Participantes<input id="attendees" type="number" min="1" value="8" required></label>
+            <label>Hora de inicio<input id="start" type="time" value="10:00" required></label>
+            <label>Hora de finalización<input id="end" type="time" value="11:00" required></label>
+            <label>Configuración<select id="configuration" required><option value="Tipo U">Tipo U</option><option value="Tipo Escuela">Tipo Escuela</option></select><small class="help" id="configHelp"></small></label>
+            <label>Salón solicitado<select id="meetingRoom" required></select><small class="help" id="roomHelp"></small></label>
+            <label id="combineOption" class="full combine-option"><span><input id="combineRooms" type="checkbox"> Usar Salón 1 y Salón 2 juntos</span><small>Esta opción reserva y bloquea ambos salones para la misma reunión.</small></label>
+          </div>
+          <div class="form-actions"><button class="button secondary" type="reset">Limpiar</button><button class="button primary" type="submit">Enviar solicitud →</button></div>
+        </form>
+      </section>
+
+      <section id="mineView" class="view">
+        <div class="heading"><div><p class="overline blue">MI ACTIVIDAD</p><h2>Mis reuniones</h2><p>Consulta tus solicitudes y cancela únicamente las que hayas creado.</p></div><button class="button primary" data-go="request">＋ Nueva solicitud</button></div>
+        <article class="panel table-panel"><div class="tabs"><button class="active" data-status="all">Todas</button><button data-status="pending">Pendientes</button><button data-status="approved">Aprobadas</button><button data-status="rejected">Rechazadas</button></div><div class="table-wrap"><table><thead><tr><th>REUNIÓN</th><th>FECHA Y HORA</th><th>ESPACIO</th><th>CONFIGURACIÓN</th><th>ESTADO</th><th></th></tr></thead><tbody id="mineRows"></tbody></table></div></article>
+      </section>
+
+      <section id="approvalsView" class="view admin-only">
+        <div class="heading"><div><p class="overline blue">ADMINISTRACIÓN</p><h2>Solicitudes pendientes</h2><p>Aprueba, rechaza o cambia el salón asignado.</p></div></div>
+        <div id="approvalCards" class="approval-grid"></div>
+      </section>
+
+      <section id="roomsView" class="view admin-only">
+        <div class="heading"><div><p class="overline blue">ESPACIOS</p><h2>Salones de reuniones</h2><p>Capacidad de referencia según la configuración elegida.</p></div></div>
+        <div id="roomCards" class="room-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal" class="modal-bg hidden"><div class="modal"><button id="closeModal">×</button><div id="modalBody"></div></div></div>
+  <div id="toasts"></div>
+  <script src="app.js"></script>
+</body>
+</html>

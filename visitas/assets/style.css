@@ -1,0 +1,40 @@
+
+body{
+    font-family: Arial, sans-serif;
+    background: #f5f5f5;
+}
+
+.container{
+    width: 600px;
+    margin: 30px auto;
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+}
+
+h2{
+    text-align: center;
+}
+
+label{
+    display: block;
+    margin-top: 15px;
+    font-weight: bold;
+}
+
+input, select{
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+}
+
+.checkbox-group{
+    margin-top: 10px;
+}
+
+button{
+    margin-top: 20px;
+    width: 100%;
+    padding: 12px;
+    cursor: pointer;
+}

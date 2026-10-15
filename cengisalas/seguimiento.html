@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#2E7D32">
+  <title>Seguimiento de solicitud | CengiSalas</title>
+  <link rel="stylesheet" href="modules/salas/css/seguimiento.css?v=20260817-3">
+  <style>.tracking-search.code-only{grid-template-columns:1fr auto;max-width:760px}.tracking-steps li.approved>i{border-color:#2E7D32;color:#fff;background:#2E7D32}@media(max-width:600px){.tracking-search.code-only{grid-template-columns:1fr}}</style>
+</head>
+<body>
+  <header class="tracking-header">
+    <a class="tracking-brand" href="index.html"><span><img src="assets/cengicana-mark.png" alt="Logo de Cengicaña"></span><div><b>CengiSalas</b></div></a>
+    <nav><a href="solicitud-externa.html">Nueva solicitud</a><a href="index.html">Iniciar sesión</a></nav>
+  </header>
+  <main>
+    <section class="tracking-intro">
+      <p>SEGUIMIENTO DE SOLICITUDES</p>
+      <h1>Consulta el proceso de aprobación</h1>
+      <span>Ingresa el código de referencia que recibiste al enviar la solicitud externa.</span>
+    </section>
+    <form id="trackingForm" class="tracking-search code-only">
+      <label>Código de referencia<input id="trackingCode" autocomplete="off" autocapitalize="characters" maxlength="40" placeholder="Ej. 2026-001" required></label>
+      <button id="trackingSubmit" type="submit">Consultar solicitud <span>→</span></button>
+      <p id="trackingError" role="alert"></p>
+    </form>
+    <section id="trackingResult" class="tracking-result hidden" aria-live="polite">
+      <header class="result-heading">
+        <div><small>SOLICITUD</small><h2 id="trackingTitle"></h2><p id="trackingMetadata"></p></div>
+        <div class="reference"><small>CÓDIGO DE REFERENCIA</small><b id="trackingReference"></b><button id="copyReference" type="button">Copiar código</button></div>
+      </header>
+      <div id="trackingNotice" class="status-notice"></div>
+      <div class="process-card">
+        <div class="process-line" aria-hidden="true"><i></i></div>
+        <ol id="trackingSteps" class="tracking-steps">
+          <li data-step="received"><i>✓</i><div><b>Solicitud recibida</b><small id="receivedAt"></small></div></li>
+          <li data-step="review"><i>2</i><div><b>Revisión administrativa</b><small>Validación de disponibilidad y datos</small></div></li>
+          <li data-step="resolution"><i>3</i><div><b id="resolutionLabel">Resolución</b><small id="resolutionAt">Pendiente</small></div></li>
+        </ol>
+      </div>
+      <div class="summary-grid">
+        <article><small>ORGANIZACIÓN</small><b id="trackingOrganization"></b></article>
+        <article><small>TIPO DE REUNIÓN</small><b id="trackingMeetingType"></b></article>
+        <article><small>CONFIGURACIÓN</small><b id="trackingConfiguration"></b></article>
+        <article><small>PARTICIPANTES</small><b id="trackingAttendees"></b></article>
+      </div>
+      <section class="occurrences-section">
+        <header><div><small>PROGRAMACIÓN</small><h3 id="occurrencesTitle">Fechas solicitadas</h3></div><button id="refreshTracking" type="button">↻ Actualizar estado</button></header>
+        <div id="trackingOccurrences" class="occurrences-list"></div>
+      </section>
+    </section>
+  </main>
+  <footer>Un sistema de Cengicaña · CengiSalas</footer>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js?v=20260815-1"></script>
+  <script src="modules/salas/js/seguimiento.js?v=20260817-3"></script>
+</body>
+</html>

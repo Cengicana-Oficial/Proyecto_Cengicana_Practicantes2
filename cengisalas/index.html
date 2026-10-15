@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#2E7D32">
+  <title>CengiSalas</title>
+  <style>html.private-entry #publicLanding{display:none!important}</style>
+  <script>if(new URLSearchParams(location.search).get('panel')==='1')document.documentElement.classList.add('private-entry')</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Material+Symbols+Outlined:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="modules/salas/css/styles.css?v=20261008-2">
+</head>
+<body class="auth-checking">
+  <div id="appLoading" class="app-loading" aria-live="polite"><div class="loading-mark"><img src="assets/cengicana-mark.png" alt="Cengicaña"></div><b>CengiSalas</b><span>Preparando tu espacio de trabajo…</span></div>
+  <section id="publicLanding" class="public-landing auth-checking"><header class="public-landing-header"><a class="public-brand" href="index.html"><span><img src="assets/cengicana-mark.png" alt="Logo de Cengicaña"></span><div><b>CengiSalas</b></div></a><a class="button primary" href="login.html">Iniciar sesión →</a></header><div class="public-landing-grid"><div class="public-form-frame"><iframe data-src="solicitud-externa.html?v=20260826-8" title="Solicitud de salón"></iframe></div><section class="public-calendar-frame"><div class="public-calendar-head"><div><p class="overline blue">DISPONIBILIDAD</p><h1>Agenda de salones</h1><p>Selecciona una fecha para iniciar tu solicitud.</p></div><div class="public-calendar-nav"><button id="publicPrevMonth">‹</button><b id="publicMonthLabel"></b><button id="publicNextMonth">›</button></div></div><div id="publicCalendar" class="public-calendar"></div><div id="publicDayAgenda" class="public-day-agenda"></div></section></div></section>
+
+  <div id="app" class="app hidden">
+    <aside id="sidebar">
+      <a class="brand dark" href="#" aria-label="Inicio de CengiSalas"><span class="brand-mark"><img src="assets/cengicana-mark.png" alt=""></span><span class="brand-copy"><b>CengiSalas</b></span></a>
+      <nav>
+        <small>PRINCIPAL</small>
+        <button class="active" data-view="agenda"><span class="nav-icon material-symbols-outlined" aria-hidden="true">calendar_month</span><span>Agenda de hoy</span></button>
+        <button data-view="request"><span class="nav-icon material-symbols-outlined" aria-hidden="true">add_circle</span><span>Solicitar salón</span></button>
+        <button data-view="mine"><span class="nav-icon material-symbols-outlined" aria-hidden="true">event_note</span><span>Mis reuniones</span><i id="mineCount">0</i></button>
+        <a class="board-link" href="tablero.html" target="_blank" rel="noopener"><span class="nav-icon material-symbols-outlined" aria-hidden="true">dashboard</span><span>Tablero de salones</span><i>LIVE</i></a>
+        <small class="admin-only manager-allowed">ADMINISTRACIÓN</small>
+        <button class="admin-only" data-view="incidents"><span class="nav-icon material-symbols-outlined" aria-hidden="true">report_problem</span><span>Incidencias</span><i data-incident-count>0</i></button>
+        <button class="admin-only" data-view="approvals"><span class="nav-icon material-symbols-outlined" aria-hidden="true">fact_check</span><span>Solicitudes</span><i id="pendingCount">0</i></button>
+        <button class="admin-only manager-allowed" data-view="paidRequests"><span class="nav-icon material-symbols-outlined" aria-hidden="true">payments</span><span>Solicitudes pago</span><i id="paidRequestNavCount">0</i></button>
+        <span id="pendingUserCount" class="hidden" aria-hidden="true">0</span>
+        <button class="admin-only" data-view="users"><span class="nav-icon material-symbols-outlined" aria-hidden="true">group</span><span>Usuarios de CengiSalas</span></button>
+        <button id="navManagePermissions" class="admin-only hidden" type="button"><span class="nav-icon material-symbols-outlined" aria-hidden="true">admin_panel_settings</span><span>Roles y permisos</span></button>
+        <button class="admin-only" data-view="maintenance"><span class="nav-icon material-symbols-outlined" aria-hidden="true">build</span><span>Mantenimiento</span><i id="maintenanceCount">0</i></button>
+        <button class="admin-only" data-view="rooms"><span class="nav-icon material-symbols-outlined" aria-hidden="true">meeting_room</span><span>Salones</span></button>
+        <button class="admin-only manager-allowed" data-view="reports"><span class="nav-icon material-symbols-outlined" aria-hidden="true">bar_chart</span><span>Reportería</span></button>
+        <a class="board-link" href="portal.html"><span class="nav-icon material-symbols-outlined" aria-hidden="true">apps</span><span>Cambiar módulo</span></a>
+      </nav>
+      <div class="side-user"><span class="avatar user-initials"></span><div><b class="user-name"></b><small class="user-role"></small></div><button id="logout" title="Cerrar sesión" aria-label="Cerrar sesión"><span class="material-symbols-outlined" aria-hidden="true">logout</span></button></div>
+    </aside>
+
+    <main>
+      <header><button id="menu">☰</button><div class="topbar-brand"><span class="brand-mark"><img src="assets/cengicana-mark.png" alt=""></span><div><b>CengiSalas</b></div></div><span></span><div class="header-user"><span class="avatar user-initials"></span><div><b class="user-name"></b><small class="user-role"></small></div></div></header>
+
+      <section id="agendaView" class="view active">
+        <div class="heading"><div><p class="overline blue">PANEL PRINCIPAL</p><h2>Buenos días, <span id="firstName"></span> 👋</h2><p>Este es el panorama de los salones para hoy.</p></div><button class="button primary" data-go="request">＋ Nueva solicitud</button></div>
+        <div class="stats">
+          <article><span class="stat-icon">◇</span><div><small>SALONES DISPONIBLES</small><b id="availableStat">8 <em>de 8</em></b></div></article>
+          <article><span class="stat-icon green">✓</span><div><small>REUNIONES HOY</small><b id="meetingsStat">0</b></div></article>
+          <article class="admin-only"><span class="stat-icon amber">◷</span><div><small>POR APROBAR</small><b id="pendingStat">0</b></div></article>
+          <article><span class="stat-icon purple">◉</span><div><small>OCUPACIÓN DEL DÍA</small><b id="occupancyStat">0%</b></div></article>
+        </div>
+        <article class="panel agenda-panel">
+          <div class="panel-head">
+            <div class="date-nav"><button id="prevDate">‹</button><div><b id="currentDateText"></b><small id="currentYear"></small></div><button id="nextDate">›</button><button id="today">Hoy</button></div>
+            <div class="agenda-panel-tools">
+              <div class="view-switch" aria-label="Vista del panel principal"><button id="agendaViewButton" class="active" type="button">▦ Vista de agenda</button><button id="listViewButton" type="button">☷ Vista de lista</button><button id="calendarViewButton" type="button">□ Vista calendario</button></div>
+              <div class="filters"><span><i class="approved-dot"></i>Aprobada</span><select id="roomFilter"><option value="all">Todos los salones</option></select></div>
+            </div>
+          </div>
+          <div id="agendaContainer" class="agenda-scroll"><div id="agendaGrid" class="agenda-grid"></div></div>
+          <div id="roomListContainer" class="room-meeting-list hidden"><div id="roomMeetingList"></div></div>
+          <div id="calendarContainer" class="calendar-container hidden"><div class="calendar-weekdays"><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span></div><div id="monthlyCalendar" class="monthly-calendar"></div><p class="calendar-help">Selecciona una fecha disponible para iniciar una solicitud de reserva.</p></div>
+        </article>
+      </section>
+
+      <section id="requestView" class="view">
+        <div class="heading"><div><p class="overline blue">NUEVA RESERVA</p><h2>Solicitar un salón</h2><p>La solicitud quedará pendiente de aprobación.</p></div></div>
+        <form id="requestForm" class="panel form-panel">
+          <h3><span>1</span> Información de la reunión</h3>
+          <div class="form-grid">
+            <label class="full">Título<input id="title" placeholder="Ej. Revisión mensual de resultados" required></label>
+            <label class="full">Descripción<textarea id="description" rows="3" placeholder="Objetivo o temas principales"></textarea></label>
+            <label class="full">Tipo de reunión<select id="meetingType" required><option value="">Cargando tipos de reunión…</option></select></label>
+            <label class="full">Responsable del salón<input id="contactName" autocomplete="name" placeholder="Nombre de la persona responsable" required minlength="3"></label>
+            <label>Correo electrónico de contacto<input id="contactEmail" type="email" autocomplete="email" placeholder="nombre@organizacion.org" required></label>
+            <label>Teléfono de contacto<input id="contactPhone" type="tel" autocomplete="tel" placeholder="Ej. 5555-5555" minlength="7" maxlength="30" required></label>
+            <label>Primera fecha<input id="meetingDate" type="date" required><small id="meetingDateHelp" class="help"></small></label>
+            <label>Participantes<input id="attendees" type="number" min="1" value="8" required></label>
+            <label class="full">Repetición<select id="recurrence">
+              <option value="none">No se repite</option>
+              <option value="weekly">Semanalmente</option>
+              <option value="biweekly">Cada 2 semanas</option>
+              <option value="monthly">Mensualmente</option>
+              <option value="custom">Fechas específicas</option>
+            </select></label>
+            <div id="recurrencePanel" class="full recurrence-box hidden">
+              <label id="repeatUntilLabel">Repetir hasta<input id="repeatUntil" type="date"></label>
+              <div id="customDatesPanel" class="hidden">
+                <label>Agregar otra fecha</label>
+                <div class="date-adder"><input id="customDate" type="date"><button id="addCustomDate" class="button secondary" type="button">＋ Agregar</button></div>
+                <div id="customDateList" class="date-chips"></div>
+              </div>
+              <small id="recurrencePreview" class="recurrence-preview"></small>
+            </div>
+            <label>Hora de inicio<input id="start" type="time" value="10:00" required></label>
+            <label>Hora de finalización<input id="end" type="time" value="11:00" required></label>
+            <label class="full"><span>Salón solicitado <strong id="meetingMainRoomAvailability" class="room-unavailable-note hidden">No Disponible</strong></span><select id="meetingRoom" required></select><small class="help" id="roomHelp"></small></label>
+            <label id="combineOption" class="full combine-option"><span><input id="combineRooms" type="checkbox"> <span id="combineRoomsLabel">Usar salones combinados</span></span><small>Esta opción reserva y bloquea simultáneamente los salones del espacio combinado.</small></label>
+            <fieldset class="full configuration-field">
+              <legend>Configuración del salón</legend>
+              <div class="configuration-options">
+                <label class="configuration-card selected">
+                  <input type="radio" name="configuration" value="Tipo U" checked>
+                  <span class="configuration-image"><img src="assets/tipo-u.svg" alt="Vista superior de mesas y sillas distribuidas en forma de U"></span>
+                  <span class="configuration-copy"><b>Tipo U</b><small>Ideal para conversación y trabajo colaborativo.</small></span>
+                  <i>✓</i>
+                </label>
+                <label class="configuration-card">
+                  <input type="radio" name="configuration" value="Tipo Escuela">
+                  <span class="configuration-image"><img src="assets/tipo-escuela.svg" alt="Configuración tipo escuela en espina de pescado, con mesas diagonales a ambos lados de un pasillo central"></span>
+                  <span class="configuration-copy"><b>Tipo Escuela</b><small>Mesas en espina de pescado orientadas hacia el instructor.</small></span>
+                  <i>✓</i>
+                </label>
+                <label class="configuration-card">
+                  <input type="radio" name="configuration" value="Tipo Juntas">
+                  <span class="configuration-image"><img src="assets/tipo-juntas.svg?v=20260817-3" alt="Configuración tipo juntas con una mesa central vertical y sillas alrededor"></span>
+                  <span class="configuration-copy"><b>Tipo Juntas</b><small>Mesa central para conversación ejecutiva y toma de decisiones.</small></span>
+                  <i>✓</i>
+                </label>
+              </div>
+              <small class="help configuration-help" id="configHelp"></small>
+            </fieldset>
+            <section id="meetingDateAssignments" class="full date-assignments hidden" aria-live="polite">
+              <div class="date-assignments-head"><div><b>Salón y distribución por fecha</b><small>Personaliza el espacio de cada reunión de la serie.</small></div><span id="meetingAssignmentCount"></span></div>
+              <div id="meetingAssignmentList" class="date-assignment-list"></div>
+            </section>
+            <fieldset id="refreshmentField" class="full refreshment-field">
+              <legend>Solicitar refacción <span id="refreshmentStatus" class="access-badge"></span></legend>
+              <div class="refreshment-options"><span>Cargando opciones…</span></div>
+              <small id="refreshmentHelp" class="help"></small>
+            </fieldset>
+            <label class="full">Observaciones<textarea id="requestObservations" rows="4" maxlength="1000" placeholder="Indicaciones adicionales para el equipo administrador (opcional)"></textarea><small class="help">Máximo 1,000 caracteres.</small></label>
+          </div>
+          <div class="form-actions"><button class="button secondary" type="reset">Limpiar</button><button class="button primary" type="submit">Enviar solicitud →</button></div>
+        </form>
+      </section>
+
+      <section id="mineView" class="view">
+        <div class="heading"><div><p class="overline blue">MI ACTIVIDAD</p><h2>Mis reuniones</h2><p>Consulta tus solicitudes y cancela únicamente las que hayas creado.</p></div><button class="button primary" data-go="request">＋ Nueva solicitud</button></div>
+        <article class="panel table-panel"><div id="meetingTabs" class="tabs"><button class="active" data-status="all">Todas</button><button data-status="pending">Pendientes</button><button data-status="approved">Aprobadas</button><button data-status="rejected">Rechazadas</button></div><div class="table-wrap"><table><thead><tr><th>REUNIÓN</th><th>FECHA Y HORA</th><th>ESPACIO</th><th>CONFIGURACIÓN</th><th>APROBACIÓN</th><th>ESTADO</th><th></th></tr></thead><tbody id="mineRows"></tbody></table></div></article>
+      </section>
+
+      <section id="incidentsView" class="view admin-only">
+        <div class="heading"><div><p class="overline blue">CONTROL DE SALONES</p><h2>Incidencias</h2><p>Consulta las incidencias detectadas al finalizar las reuniones y su detalle.</p></div></div>
+        <div id="incidentsAdminView" class="admin-only">
+          <article class="panel incidents-panel"><div class="incidents-panel-head"><div><h3>Reuniones para revisar</h3><p>Registra una o varias incidencias por sesión aprobada.</p></div><span id="incidentAdminCount">0 reuniones</span></div><div class="table-wrap"><table class="incidents-table"><thead><tr><th>REUNIÓN</th><th>SOLICITANTE</th><th>SALÓN</th><th>FECHA Y HORA</th><th>ESTADO</th><th>INCIDENCIAS</th><th></th></tr></thead><tbody id="incidentAdminRows"></tbody></table></div></article>
+        </div>
+        <div id="incidentsUserView">
+          <div id="incidentCards" class="incident-cards"></div>
+        </div>
+      </section>
+
+      <section id="approvalsView" class="view admin-only">
+        <div class="heading"><div><p class="overline blue">ADMINISTRACIÓN</p><h2>Solicitudes de reuniones</h2><p>Consulta y administra solicitudes pendientes, aprobadas, rechazadas y canceladas.</p></div></div>
+        <article class="panel admin-requests-panel">
+          <div class="request-toolbar">
+            <div id="adminRequestTabs" class="tabs request-tabs" aria-label="Estado de solicitudes">
+              <button class="active" data-request-status="pending">Pendientes <span id="requestPendingCount">0</span></button>
+              <button data-request-status="approved">Aprobadas <span id="requestApprovedCount">0</span></button>
+              <button data-request-status="rejected">Rechazadas <span id="requestRejectedCount">0</span></button>
+              <button data-request-status="cancelled">Canceladas <span id="requestCancelledCount">0</span></button>
+              <button data-request-status="all">Todas <span id="requestAllCount">0</span></button>
+            </div>
+            <div class="request-date-filter">
+              <label for="adminRequestDate">Filtrar por fecha</label>
+              <input id="adminRequestDate" type="date">
+              <button id="clearRequestDate" class="mini" type="button">Limpiar</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="adminRequestTable" class="admin-request-table">
+              <thead><tr><th>SOLICITUD</th><th>SOLICITANTE</th><th>RESPONSABLE DEL SALÓN</th><th>FECHA Y HORA</th><th>ESPACIO</th><th>REFACCIÓN</th><th>APROBACIÓN</th><th>ESTADO</th><th id="requestAuditHeader">FECHA DE SOLICITUD</th><th id="requestCancelActorHeader" class="hidden-col">CANCELADA POR</th><th></th></tr></thead>
+              <tbody id="adminRequestRows"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="paidRequestsView" class="view admin-only manager-allowed">
+        <div class="heading"><div><p class="overline blue">ADMINISTRACIÓN</p><h2>Solicitudes pago</h2><p>Gestiona exclusivamente las solicitudes comerciales y consulta el precio total cotizado.</p></div></div>
+        <article class="panel admin-requests-panel">
+          <div class="request-toolbar">
+            <div id="paidRequestTabs" class="tabs request-tabs" aria-label="Estado de solicitudes de pago">
+              <button class="active" data-paid-request-status="pending">Pendientes <span id="paidPendingCount">0</span></button>
+              <button data-paid-request-status="approved">Aprobadas <span id="paidApprovedCount">0</span></button>
+              <button data-paid-request-status="rejected">Rechazadas <span id="paidRejectedCount">0</span></button>
+              <button data-paid-request-status="cancelled">Canceladas <span id="paidCancelledCount">0</span></button>
+              <button data-paid-request-status="all">Todas <span id="paidAllCount">0</span></button>
+            </div>
+            <div class="request-date-filter">
+              <label for="paidRequestDate">Filtrar por fecha</label>
+              <input id="paidRequestDate" type="date">
+              <button id="clearPaidRequestDate" class="mini" type="button">Limpiar</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="paidRequestTable" class="admin-request-table paid-request-table">
+              <thead><tr><th>SOLICITUD</th><th>SOLICITANTE</th><th>RESPONSABLE DEL SALÓN</th><th>FECHA Y HORA</th><th>ESPACIO</th><th>REFACCIÓN</th><th>PRECIO TOTAL</th><th>APROBACIÓN</th><th>ESTADO</th><th id="paidRequestAuditHeader">FECHA DE SOLICITUD</th><th id="paidRequestCancelActorHeader" class="hidden-col">CANCELADA POR</th><th></th></tr></thead>
+              <tbody id="paidRequestRows"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="usersView" class="view admin-only">
+        <div class="heading"><div><p class="overline blue">ADMINISTRACIÓN</p><h2>Usuarios de CengiSalas</h2><p>Crea cuentas de Módulos con acceso exclusivo a CengiSalas o asigna un rol a las cuentas existentes.</p></div><div class="heading-actions"><button id="createPortalUser" class="button primary" type="button"><span class="material-symbols-outlined" aria-hidden="true">person_add</span>Crear usuario</button><button id="managePermissions" class="button secondary" type="button">▣ Asignar rol</button><button id="manageOrganizations" class="button secondary" type="button">◇ Instituciones</button></div></div>
+        <article class="panel user-management-panel">
+          <div class="portal-users-tools"><label>Buscar usuario<input id="portalUserSearch" type="search" placeholder="Nombre o correo"></label><button id="portalUserRefresh" class="button secondary" type="button">Actualizar</button></div>
+          <div id="userGroups" class="user-groups"></div>
+        </article>
+      </section>
+
+      <section id="maintenanceView" class="view admin-only">
+        <div class="heading"><div><p class="overline blue">ADMINISTRACIÓN</p><h2>Aviso de mantenimiento</h2><p>Bloquea temporalmente un salón y publica el aviso en el tablero.</p></div></div>
+        <div class="maintenance-layout">
+          <form id="maintenanceForm" class="panel maintenance-form">
+            <h3><span>⚒</span> Programar mantenimiento</h3>
+            <div class="form-grid">
+              <label>Salón<select id="maintenanceRoom" required></select></label>
+              <label>Fecha<input id="maintenanceDate" type="date" required></label>
+              <label class="full all-day-option"><span><input id="maintenanceAllDay" type="checkbox" checked> Mantenimiento durante todo el día</span></label>
+              <label>Hora de inicio<input id="maintenanceStart" type="time" value="08:00"></label>
+              <label>Hora de finalización<input id="maintenanceEnd" type="time" value="17:00"></label>
+              <label class="full">Motivo o descripción<textarea id="maintenanceReason" rows="4" placeholder="Ej. Mantenimiento preventivo del equipo audiovisual" required></textarea></label>
+            </div>
+            <div class="form-actions"><button class="button secondary" type="reset">Limpiar</button><button class="button primary" type="submit">Publicar aviso →</button></div>
+          </form>
+          <article class="panel maintenance-list-panel">
+            <div class="maintenance-list-head"><div><h3>Historial de mantenimientos</h3><p>Consulta mantenimientos programados, cancelados y finalizados.</p></div><span id="maintenanceActiveBadge">0 activos</span></div>
+            <div class="table-wrap"><table><thead><tr><th>SALÓN</th><th>FECHA</th><th>HORARIO</th><th>MOTIVO</th><th>ESTADO</th></tr></thead><tbody id="maintenanceRows"></tbody></table></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="roomsView" class="view admin-only">
+        <div class="heading"><div><p class="overline blue">ESPACIOS</p><h2>Salones de reuniones</h2><p>Selecciona un salón para modificar sus capacidades y tarifas de uso.</p></div></div>
+        <div id="roomCards" class="room-grid"></div>
+        <h3 class="paid-admin-title">Espacios comerciales para solicitudes de pago</h3>
+        <div id="paidOfferingCards" class="room-grid"></div>
+      </section>
+
+      <section id="reportsView" class="view admin-only manager-allowed">
+        <div class="heading"><div><p class="overline blue">ADMINISTRACIÓN</p><h2>Reportería de reuniones</h2><p>Consulta las reuniones aprobadas, el consumo energético y, en solicitudes de pago, los costos e ingresos estimados.</p></div><div class="heading-actions"><button id="exportReportPdf" class="button secondary">⇩ PDF</button><button id="exportReportXlsx" class="button primary">⇩ Excel XLSX</button></div></div>
+        <article class="panel report-panel"><div id="reportTabs" class="tabs report-tabs"><button type="button" data-report-source="all" class="active">Reuniones generales</button><button type="button" data-report-source="paid">Solicitudes de pago</button></div><div class="report-filters"><label>Mes del reporte<input id="reportMonth" type="month"></label><label>Institución<select id="reportOrganization"><option value="all">Todas las instituciones</option></select></label><div class="report-summary"><span><b id="reportMeetingCount">0</b> reuniones</span><span><b id="reportTotalHours">0.00</b> horas</span><span><b id="reportTotalEnergy">0.00</b> kWh estimados</span><span id="reportIncomeSummary" class="hidden-col"><b id="reportTotalIncome">Q0.00</b> ingresos estimados</span></div></div><div class="table-wrap"><table id="reportTable" class="report-table"><thead><tr><th>Nombre</th><th>Salón</th><th>Responsable</th><th>Institución</th><th>Fecha</th><th>Hora de inicio</th><th>Hora de finalización</th><th>Cantidad de horas</th><th>kWh</th><th>Consumo energético</th><th id="reportPaidCostHeader" class="hidden-col">Costo total</th></tr></thead><tbody id="reportRows"></tbody></table></div></article>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal" class="modal-bg hidden"><div class="modal"><button id="closeModal">×</button><div id="modalBody"></div></div></div>
+  <div id="toasts"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="supabase-config.js?v=20261007-3"></script>
+  <script src="modules/salas/js/public-landing.js?v=20261001-1"></script>
+  <script src="modules/salas/js/app.js?v=20261015-2"></script>
+</body>
+</html>

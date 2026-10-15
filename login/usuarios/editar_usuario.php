@@ -49,6 +49,11 @@ function usuarios_mostrar_aviso($titulo, $mensaje, $volverA = 'usuarios.php')
     exit;
 }
 
+if (strtolower(trim((string) ($_GET['scope'] ?? ''))) === 'visitas') {
+    header('Location: ../visitas_roles.php', true, 303);
+    exit;
+}
+
 function user_scope_config($scope)
 {
     $scope = strtolower(trim((string) $scope));
@@ -129,7 +134,7 @@ if ($scopeConfig) {
     $modulosDisponibles = $stmtScopeMods->fetchAll(PDO::FETCH_ASSOC);
     $moduloIdsForzados = array_map(fn($mod) => (int) $mod['id'], $modulosDisponibles);
 } elseif ($esSuperadmin) {
-    $stmtMods = $conn->query("SELECT id, nombre FROM modulos ORDER BY nombre");
+    $stmtMods = $conn->query("SELECT id, nombre FROM modulos WHERE nombre NOT IN ('CengiSalas','Visitas CengiSalas','Visitas') ORDER BY nombre");
     $modulosDisponibles = $stmtMods->fetchAll(PDO::FETCH_ASSOC);
 } else {
     $stmtMods = $conn->prepare("
@@ -148,6 +153,9 @@ $stmtModUser->execute([$id]);
 $modulosUsuarioActuales = array_map('intval', $stmtModUser->fetchAll(PDO::FETCH_COLUMN));
 
 $destinoRegreso = $scopeConfig['return_url'] ?? 'usuarios.php';
+if (empty($_SESSION['portal_user_edit_csrf'])) {
+    $_SESSION['portal_user_edit_csrf'] = bin2hex(random_bytes(24));
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nombre = trim($_POST['nombre'] ?? '');
@@ -156,6 +164,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $contrasena = trim($_POST['contrasena'] ?? '');
     $ingenioId = $_POST['ingenio_id'] !== '' ? (int) $_POST['ingenio_id'] : null;
     $esSuperadminNuevo = $rolId === 1 ? 1 : 0;
+    if (!hash_equals($_SESSION['portal_user_edit_csrf'], (string) ($_POST['csrf'] ?? ''))) {
+        $error = 'La sesión del formulario expiró. Recarga la página.';
+    }
 
     if ($scopeConfig || !$esSuperadmin) {
         $moduloIdsSeleccionados = $moduloIdsForzados;
@@ -165,45 +176,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($nombre === '' || $correo === '' || $rolId <= 0 || $ingenioId === null) {
         $error = "Completa los campos obligatorios.";
-    } else {
+    }
+    if (!$esSuperadmin && $esSuperadminNuevo) {
+        $error = 'No puedes asignar el rol de superadministrador.';
+    }
+    if (empty($error)) {
         $check = $conn->prepare("SELECT id FROM usuarios WHERE correo = ? AND id <> ?");
         $check->execute([$correo, $id]);
 
         if ($check->fetchColumn()) {
             $error = "El correo ya esta registrado por otro usuario.";
         } else {
-            if ($contrasena !== '') {
-                $contrasenaHash = password_hash($contrasena, PASSWORD_DEFAULT);
-                $stmtUpdate = $conn->prepare("
-                    UPDATE usuarios
-                    SET nombre = ?, correo = ?, contrasena = ?, rol_id = ?, ingenio_id = ?, es_superadmin = ?
-                    WHERE id = ?
-                ");
-                $stmtUpdate->execute([$nombre, $correo, $contrasenaHash, $rolId, $ingenioId, $esSuperadminNuevo, $id]);
-            } else {
-                $stmtUpdate = $conn->prepare("
-                    UPDATE usuarios
-                    SET nombre = ?, correo = ?, rol_id = ?, ingenio_id = ?, es_superadmin = ?
-                    WHERE id = ?
-                ");
-                $stmtUpdate->execute([$nombre, $correo, $rolId, $ingenioId, $esSuperadminNuevo, $id]);
-            }
-
-            $conn->prepare("DELETE FROM usuario_modulo WHERE usuario_id = ?")->execute([$id]);
-
-            if (!$esSuperadminNuevo && !empty($moduloIdsSeleccionados)) {
-                $stmtModulo = $conn->prepare("
-                    INSERT INTO usuario_modulo (usuario_id, modulo_id)
-                    VALUES (?, ?)
-                ");
-
-                foreach (array_unique($moduloIdsSeleccionados) as $moduloId) {
-                    $stmtModulo->execute([$id, (int) $moduloId]);
+            try {
+                $conn->beginTransaction();
+                if ($contrasena !== '') {
+                    $stmtUpdate = $conn->prepare("UPDATE usuarios SET nombre=?,correo=?,contrasena=?,rol_id=?,ingenio_id=?,es_superadmin=? WHERE id=?");
+                    $stmtUpdate->execute([$nombre, $correo, password_hash($contrasena, PASSWORD_DEFAULT), $rolId, $ingenioId, $esSuperadminNuevo, $id]);
+                } else {
+                    $stmtUpdate = $conn->prepare("UPDATE usuarios SET nombre=?,correo=?,rol_id=?,ingenio_id=?,es_superadmin=? WHERE id=?");
+                    $stmtUpdate->execute([$nombre, $correo, $rolId, $ingenioId, $esSuperadminNuevo, $id]);
                 }
+                $conn->prepare("DELETE um FROM usuario_modulo um JOIN modulos m ON m.id=um.modulo_id WHERE um.usuario_id=? AND m.nombre NOT IN ('CengiSalas','Visitas CengiSalas','Visitas')")->execute([$id]);
+                if (!$esSuperadminNuevo) {
+                    $stmtModulo = $conn->prepare('INSERT IGNORE INTO usuario_modulo(usuario_id,modulo_id) VALUES (?,?)');
+                    foreach (array_unique($moduloIdsSeleccionados) as $moduloId) {
+                        $stmtModulo->execute([$id, (int) $moduloId]);
+                    }
+                }
+                $conn->commit();
+                header("Location: {$destinoRegreso}");
+                exit;
+            } catch (Throwable $saveError) {
+                if ($conn->inTransaction()) $conn->rollBack();
+                error_log('Editar usuario: ' . $saveError->getMessage());
+                $error = 'No fue posible guardar los cambios. Inténtalo nuevamente.';
             }
-
-            header("Location: {$destinoRegreso}");
-            exit;
         }
     }
 
@@ -249,8 +256,8 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
             <span><?= htmlspecialchars($error) ?></span>
         </div>
     <?php endif; ?>
-
     <form method="POST" class="form-card form-card-wide">
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['portal_user_edit_csrf'], ENT_QUOTES, 'UTF-8') ?>">
         <h1>Editar usuario</h1>
         <p class="form-sub">Actualiza los datos del usuario #<?= (int) $usuario['id'] ?>.</p>
 
@@ -316,7 +323,7 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
                         </label>
                     <?php endforeach; ?>
                 </div>
-                <p class="form-help">Selecciona uno o más módulos para este usuario.</p>
+                <p class="form-help">Selecciona los módulos disponibles para este usuario.</p>
             </div>
         <?php elseif (!empty($modulosDisponibles)): ?>
             <div class="form-field">

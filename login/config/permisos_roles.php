@@ -30,6 +30,9 @@ function asegurar_tablas_permisos(PDO $conn)
 function sembrar_permisos_base(PDO $conn)
 {
     $permisos = [
+        'cengisalas.salas.admin' => 'Acceso a CengiSalas con todo el panel de administracion.',
+        'cengisalas.salas.user' => 'Acceso a CengiSalas como cliente: solo panel Principal.',
+        'cengisalas.salas.manager' => 'Acceso a Principal, Solicitudes pago y Reporteria de CengiSalas.',
         'ver_dashboard' => 'Permite ver el dashboard general',
         'gestionar_solicitudes' => 'Permite aprobar y rechazar solicitudes del modulo de visitas',
         'ver_solicitudes' => 'Permite ver el listado de solicitudes del modulo de visitas',
@@ -161,6 +164,7 @@ function obtener_permisos_rol(PDO $conn, $rolId)
 function agrupar_permisos(array $permisos)
 {
     $grupos = [
+        'Permisos de CengiSalas' => [],
         'Permisos de visitas' => [],
         'Permisos de cursos' => [],
         'Permisos de solicitudes internas' => [],
@@ -181,6 +185,10 @@ function agrupar_permisos(array $permisos)
 function clasificar_grupo_permiso($nombrePermiso)
 {
     $nombre = strtolower((string) $nombrePermiso);
+
+    if (strpos($nombre, 'cengisalas.salas.') === 0) {
+        return 'Permisos de CengiSalas';
+    }
 
     if (strpos($nombre, 'solicitudes_internas.') === 0) {
         return 'Permisos de solicitudes internas';
@@ -216,6 +224,7 @@ function clasificar_grupo_permiso($nombrePermiso)
 function titulo_corto_grupo_permiso($grupo)
 {
     $mapa = [
+        'Permisos de CengiSalas' => 'CengiSalas',
         'Permisos de visitas' => 'Visitas',
         'Permisos de cursos' => 'Cengicursos',
         'Permisos de solicitudes internas' => 'Solicitudes internas',
@@ -232,6 +241,7 @@ function titulo_corto_grupo_permiso($grupo)
 function descripcion_grupo_permiso($grupo)
 {
     $mapa = [
+        'Permisos de CengiSalas' => 'Selecciona un solo perfil para el modulo de salones. Los usuarios de este rol lo heredaran.',
         'Permisos de visitas' => 'Controla solicitudes, areas, correos y seguimiento del modulo de visitas.',
         'Permisos de cursos' => 'Agrupa acciones para cursos, participantes, notas, ingenios y asignaciones.',
         'Permisos de solicitudes internas' => 'Controla acceso a solicitudes, usuarios y programas del modulo Sistema de solicitudes.',
@@ -248,6 +258,9 @@ function descripcion_grupo_permiso($grupo)
 function etiqueta_permiso($nombrePermiso)
 {
     $mapa = [
+        'cengisalas.salas.admin' => 'Administrador de CengiSalas',
+        'cengisalas.salas.user' => 'Usuario estandar de CengiSalas',
+        'cengisalas.salas.manager' => 'Gestor de CengiSalas',
         'ver_dashboard' => 'Ver dashboard',
         'ver_solicitudes' => 'Ver solicitudes',
         'ver_solicitudes_aprobadas' => 'Ver solicitudes aprobadas',
