@@ -42,6 +42,35 @@ function cengicursos_env()
 }
 
 /**
+ * Token de los cron por HTTP (cron_comunicaciones.php, cron_recordatorio_cupo.php): debe
+ * coincidir con CRON_RECORDATORIO_SECRET y llegar en una cabecera, nunca en la URL (la URL
+ * queda en los logs de acceso y de proxies):
+ *   Authorization: Bearer <token>   o   X-Cron-Token: <token>
+ */
+function cengi_cron_token_valido()
+{
+    $secreto = (string) (cengicursos_env()['CRON_RECORDATORIO_SECRET'] ?? '');
+    if ($secreto === '' || $secreto === 'change-me') {
+        return false;
+    }
+    $recibido = (string) ($_SERVER['HTTP_X_CRON_TOKEN'] ?? '');
+    if ($recibido === '') {
+        $autorizacion = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($autorizacion === '' && function_exists('getallheaders')) {
+            foreach (getallheaders() as $nombre => $valor) {
+                if (strcasecmp($nombre, 'Authorization') === 0) {
+                    $autorizacion = (string) $valor;
+                }
+            }
+        }
+        if (stripos($autorizacion, 'Bearer ') === 0) {
+            $recibido = trim(substr($autorizacion, 7));
+        }
+    }
+    return $recibido !== '' && hash_equals($secreto, $recibido);
+}
+
+/**
  * MYSQL (MENU / USUARIOS)
  */
 function cengicursos_abrir_mysqli($host, $puerto, $usuario, $pass, $bdd)

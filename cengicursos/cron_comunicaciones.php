@@ -12,7 +12,8 @@
  *
  * Mismos modos de ejecucion que cron_recordatorio_cupo.php:
  *   1) CLI (recomendado): `php cron_comunicaciones.php` (por ejemplo, cada dia a las 7:00).
- *   2) HTTP con ?token=... igual a CRON_RECORDATORIO_SECRET (deploy/env/cengicursos.env).
+ *   2) HTTP con la cabecera "Authorization: Bearer <CRON_RECORDATORIO_SECRET>" o
+ *      "X-Cron-Token: ..." (ver cengi_cron_token_valido() en conexion.php).
  */
 
 require_once __DIR__ . '/planificacion_helpers.php';
@@ -20,11 +21,8 @@ require_once __DIR__ . '/planificacion_helpers.php';
 $esCli = (php_sapi_name() === 'cli');
 
 if (!$esCli) {
-    $env = cengicursos_env();
-    $secretoEsperado = (string) ($env['CRON_RECORDATORIO_SECRET'] ?? '');
-    $tokenRecibido = (string) ($_GET['token'] ?? '');
     header('Content-Type: application/json; charset=utf-8');
-    if ($secretoEsperado === '' || !hash_equals($secretoEsperado, $tokenRecibido)) {
+    if (!cengi_cron_token_valido()) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'mensaje' => 'Acceso no autorizado.']);
         exit();
