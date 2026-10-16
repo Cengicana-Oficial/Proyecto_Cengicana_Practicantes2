@@ -277,6 +277,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: index.php?view=detalle&id=' . $requestId . '&message=' . urlencode('Estado actualizado correctamente.'));
             exit;
         }
+
+        if ($action === 'actualizar_idea') {
+            $ideaId = (int) ($_POST['idea_id'] ?? 0);
+            $ideaStatus = (string) ($_POST['estado'] ?? '');
+            if (!can_manage_ideas($user) || !isset(BUZON_ESTADOS[$ideaStatus])) {
+                throw new RuntimeException('No puedes actualizar esta idea.');
+            }
+
+            $pdo->prepare('UPDATE ideas SET estado = ? WHERE id = ?')->execute([$ideaStatus, $ideaId]);
+
+            header('Location: index.php?view=buzon&message=' . urlencode('Idea #' . $ideaId . ' marcada como ' . mb_strtolower(BUZON_ESTADOS[$ideaStatus], 'UTF-8') . '.') . '#idea-' . $ideaId);
+            exit;
+        }
     } catch (Throwable $exception) {
         if ($menuPdo->inTransaction()) {
             $menuPdo->rollBack();
@@ -480,6 +493,20 @@ if ($view === 'detalle' && isset($_GET['id'])) {
     }
 }
 
+$ideas = [];
+$ideaCounts = array_fill_keys(array_keys(BUZON_ESTADOS), 0);
+$buzonPublicUrl = '';
+if ($view === 'buzon' && can_view_ideas($user)) {
+    $ideas = $pdo->query('SELECT * FROM ideas ORDER BY creado_en DESC, id DESC')->fetchAll();
+    foreach ($ideas as $idea) {
+        $ideaCounts[$idea['estado']] = ($ideaCounts[$idea['estado']] ?? 0) + 1;
+    }
+
+    $https = ($_SERVER['HTTPS'] ?? '') === 'on' || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+    $basePath = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php')), '/');
+    $buzonPublicUrl = ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $basePath . '/buzon.php';
+}
+
 $notifications = fetch_notifications($pdo, $menuDbName, $user);
 $notificationsReturn = 'index.php' . ($_GET ? '?' . http_build_query(array_diff_key($_GET, ['message' => 1])) : '');
 
@@ -493,6 +520,7 @@ $sidebarTitles = [
     'programas' => ['Programas', 'Programas y direcciones'],
     'nueva' => ['Nueva solicitud', 'Registra una nueva solicitud'],
     'detalle' => ['Detalle de solicitud', 'Seguimiento de la solicitud'],
+    'buzon' => ['Buzon de ideas', 'Ideas y sugerencias enviadas desde el formulario publico'],
 ];
 [$topbarTitle, $topbarSub] = $sidebarTitles[$view] ?? ['Sistema de solicitudes', 'CENGICANA'];
 
@@ -545,6 +573,11 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                 <?php if (can_create_requests($user)): ?>
                     <a href="index.php?view=nueva" class="sidebar-nav-item <?= e($active('nueva')) ?>">
                         <i class="ti ti-plus"></i><span>Nueva solicitud</span>
+                    </a>
+                <?php endif; ?>
+                <?php if (can_view_ideas($user)): ?>
+                    <a href="index.php?view=buzon" class="sidebar-nav-item <?= e($active('buzon')) ?>">
+                        <i class="ti ti-bulb"></i><span>Buzon de ideas</span>
                     </a>
                 <?php endif; ?>
             </div>
@@ -1149,6 +1182,100 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                 <div class="panel-empty hidden" id="lista-programas-vacio"><i class="ti ti-search-off"></i>Ningun programa coincide con la busqueda.</div>
                 <?php if (!$programs): ?>
                     <div class="panel-empty"><i class="ti ti-building-off"></i>No hay programas registrados.</div>
+                <?php endif; ?>
+            <?php endif; ?>
+        <?php endif; ?>
+
+        <?php if ($view === 'buzon'): ?>
+            <?php if (!can_view_ideas($user)): ?>
+                <div class="alert error">No tienes permiso para ver el buzon de ideas.</div>
+            <?php else: ?>
+                <?php $canManageIdeas = can_manage_ideas($user); ?>
+                <div class="section-header">
+                    <div>
+                        <div class="section-title">Buzon de ideas</div>
+                        <div class="section-sub">Cualquier persona con el link puede enviar ideas, sin iniciar sesion.</div>
+                    </div>
+                    <a class="btn-outline" href="buzon.php" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Abrir formulario</a>
+                </div>
+
+                <div class="buzon-link card">
+                    <span class="buzon-link-icon"><i class="ti ti-link"></i></span>
+                    <div class="buzon-link-copy">
+                        <strong>Link publico del formulario</strong>
+                        <input class="form-control" id="buzon-url" value="<?= e($buzonPublicUrl) ?>" readonly aria-label="Link publico del buzon de ideas" onclick="this.select()">
+                    </div>
+                    <button type="button" class="btn-primary" onclick="copyBuzonLink(this)"><i class="ti ti-copy"></i>Copiar link</button>
+                </div>
+
+                <div class="filters">
+                    <div class="search-box"><input class="form-control" id="buscar-ideas" oninput="filterIdeas()" placeholder="Buscar idea..."></div>
+                    <button class="filter-chip active" data-estado="todas" onclick="setIdeaFilter(this)">Todas (<?= count($ideas) ?>)</button>
+                    <?php foreach (BUZON_ESTADOS as $estadoKey => $estadoLabel): ?>
+                        <button class="filter-chip" data-estado="<?= e($estadoKey) ?>" onclick="setIdeaFilter(this)"><?= e($estadoLabel) ?> (<?= (int) $ideaCounts[$estadoKey] ?>)</button>
+                    <?php endforeach; ?>
+                </div>
+
+                <section class="idea-list" id="lista-ideas">
+                    <?php foreach ($ideas as $idea): ?>
+                        <?php $ideaId = (int) $idea['id']; ?>
+                        <article class="idea-card card" id="idea-<?= $ideaId ?>" data-estado="<?= e($idea['estado']) ?>">
+                            <header class="idea-card-head">
+                                <div>
+                                    <div class="idea-card-title">
+                                        <strong>#<?= $ideaId ?></strong>
+                                        <?= e($idea['area']) ?><?= $idea['area_otra'] ? ': ' . e($idea['area_otra']) : '' ?>
+                                    </div>
+                                    <div class="idea-card-meta">
+                                        <span><i class="ti ti-calendar"></i><?= e(date('d/m/Y H:i', strtotime((string) $idea['creado_en']))) ?></span>
+                                        <?php if ((int) $idea['anonimo'] === 1): ?>
+                                            <span><i class="ti ti-user-off"></i>Anonimo</span>
+                                        <?php else: ?>
+                                            <span><i class="ti ti-user"></i><?= e($idea['nombre'] ?: 'Sin nombre') ?></span>
+                                            <?php if ($idea['correo']): ?>
+                                                <span><i class="ti ti-mail"></i><a href="mailto:<?= e($idea['correo']) ?>"><?= e($idea['correo']) ?></a></span>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <?= badge_idea_estado($idea['estado']) ?>
+                            </header>
+                            <dl class="idea-card-body">
+                                <dt>Situacion o problema</dt>
+                                <dd><?= nl2br(e($idea['situacion'])) ?></dd>
+                                <dt>Propuesta de mejora</dt>
+                                <dd><?= nl2br(e($idea['propuesta'])) ?></dd>
+                                <dt>Beneficio esperado</dt>
+                                <dd><?= nl2br(e($idea['beneficio'])) ?></dd>
+                            </dl>
+                            <?php if ($idea['foto_ruta'] || $canManageIdeas): ?>
+                                <footer class="idea-card-foot">
+                                    <?php if ($idea['foto_ruta']): ?>
+                                        <a class="idea-photo" href="buzon_foto.php?id=<?= $ideaId ?>" target="_blank" rel="noopener">
+                                            <img src="buzon_foto.php?id=<?= $ideaId ?>" alt="Foto adjunta a la idea #<?= $ideaId ?>" loading="lazy">
+                                        </a>
+                                    <?php endif; ?>
+                                    <?php if ($canManageIdeas): ?>
+                                        <div class="idea-actions">
+                                            <?php foreach (BUZON_ESTADOS as $estadoKey => $estadoLabel): ?>
+                                                <?php if ($estadoKey === $idea['estado']) { continue; } ?>
+                                                <form method="post">
+                                                    <input type="hidden" name="action" value="actualizar_idea">
+                                                    <input type="hidden" name="idea_id" value="<?= $ideaId ?>">
+                                                    <input type="hidden" name="estado" value="<?= e($estadoKey) ?>">
+                                                    <button class="btn-outline btn-sm" type="submit">Marcar como <?= e(mb_strtolower($estadoLabel, 'UTF-8')) ?></button>
+                                                </form>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </footer>
+                            <?php endif; ?>
+                        </article>
+                    <?php endforeach; ?>
+                </section>
+                <div class="panel-empty hidden" id="lista-ideas-vacio"><i class="ti ti-search-off"></i>Ninguna idea coincide con el filtro.</div>
+                <?php if (!$ideas): ?>
+                    <div class="panel-empty"><i class="ti ti-bulb-off"></i>Todavia no se han recibido ideas. Comparte el link del formulario.</div>
                 <?php endif; ?>
             <?php endif; ?>
         <?php endif; ?>

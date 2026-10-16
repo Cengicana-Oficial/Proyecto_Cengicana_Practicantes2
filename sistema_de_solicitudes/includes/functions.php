@@ -774,3 +774,118 @@ function guardar_adjuntos(PDO $pdo, int $requestId, string $prefijo, array $adju
     }
 }
 
+/*
+ * Buzon de ideas
+ * --------------
+ * Formulario publico (buzon.php): cualquiera con el link puede enviar una idea,
+ * sin iniciar sesion. Las ideas se revisan dentro del modulo (view=buzon) con los
+ * permisos `solicitudes_internas.buzon.ver` / `.buzon.gestionar`.
+ */
+const BUZON_AREAS = [
+    'Procesos y trabajo de campo',
+    'Investigación y calidad',
+    'Seguridad y bienestar',
+    'Recursos y eficiencia',
+    'Comunicación y trabajo en equipo',
+    'Otra',
+];
+const BUZON_ESTADOS = ['nueva' => 'Nueva', 'revisada' => 'Revisada', 'archivada' => 'Archivada'];
+const BUZON_FOTO_TIPOS = ['image/jpeg' => 'jpg', 'image/png' => 'png'];
+const BUZON_FOTO_MAX_BYTES = 5 * 1024 * 1024;
+/** Segundos minimos entre dos envios desde la misma sesion (freno basico contra spam). */
+const BUZON_ESPERA_SEGUNDOS = 30;
+
+function can_view_ideas(array $user): bool
+{
+    return has_permission($user, 'solicitudes_internas.buzon.ver') || has_permission($user, 'solicitudes_internas.buzon.gestionar');
+}
+
+function can_manage_ideas(array $user): bool
+{
+    return has_permission($user, 'solicitudes_internas.buzon.gestionar');
+}
+
+function badge_idea_estado(string $estado): string
+{
+    $clases = ['nueva' => 'recibido', 'revisada' => 'completado', 'archivada' => 'rechazado'];
+
+    return '<span class="badge badge-' . e($clases[$estado] ?? 'recibido') . '">' . e(BUZON_ESTADOS[$estado] ?? $estado) . '</span>';
+}
+
+/** Texto de un textarea con saltos de linea normalizados (el navegador cuenta \r\n como 1). */
+function buzon_texto(string $campo): string
+{
+    return trim(str_replace("\r\n", "\n", (string) ($_POST[$campo] ?? '')));
+}
+
+/**
+ * Valida el envio del formulario publico. Devuelve los datos limpios listos para
+ * guardar o lanza RuntimeException con un mensaje para el visitante.
+ */
+function validar_idea(array $post): array
+{
+    $area = (string) ($post['area'] ?? '');
+    if (!in_array($area, BUZON_AREAS, true)) {
+        throw new RuntimeException('Elige un área de mejora.');
+    }
+    $areaOtra = $area === 'Otra' ? mb_substr(trim((string) ($post['area_otra'] ?? '')), 0, 80, 'UTF-8') : '';
+
+    $textos = [];
+    foreach (['situacion' => 800, 'propuesta' => 800, 'beneficio' => 500] as $campo => $max) {
+        $valor = buzon_texto($campo);
+        if (mb_strlen($valor, 'UTF-8') < 5) {
+            throw new RuntimeException('Completa las preguntas 2, 3 y 4 antes de enviar tu idea.');
+        }
+        $textos[$campo] = mb_substr($valor, 0, $max, 'UTF-8');
+    }
+
+    $anonimo = !empty($post['anonimo']);
+    $nombre = $anonimo ? '' : mb_substr(trim((string) ($post['nombre'] ?? '')), 0, 80, 'UTF-8');
+    $correo = $anonimo ? '' : mb_substr(trim((string) ($post['correo'] ?? '')), 0, 120, 'UTF-8');
+    if ($correo !== '' && !filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Escribe un correo válido o déjalo en blanco.');
+    }
+
+    return [
+        'area' => $area,
+        'area_otra' => $areaOtra !== '' ? $areaOtra : null,
+        'situacion' => $textos['situacion'],
+        'propuesta' => $textos['propuesta'],
+        'beneficio' => $textos['beneficio'],
+        'anonimo' => $anonimo ? 1 : 0,
+        'nombre' => $nombre !== '' ? $nombre : null,
+        'correo' => $correo !== '' ? $correo : null,
+    ];
+}
+
+/**
+ * Valida y guarda la foto opcional en uploads/ideas/ con nombre aleatorio.
+ * Devuelve ['ruta' => ..., 'mime' => ...] o null si no se envio foto.
+ */
+function guardar_foto_idea(?array $file): ?array
+{
+    if (!$file || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    if ((int) $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
+        throw new RuntimeException('No se pudo recibir la foto. Intenta de nuevo o envía tu idea sin foto.');
+    }
+    if ((int) $file['size'] > BUZON_FOTO_MAX_BYTES) {
+        throw new RuntimeException('La foto debe pesar menos de 5 MB.');
+    }
+    $mime = strtolower((string) (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']));
+    if (!isset(BUZON_FOTO_TIPOS[$mime]) || @getimagesize($file['tmp_name']) === false) {
+        throw new RuntimeException('La foto debe ser JPG o PNG.');
+    }
+
+    $dir = __DIR__ . '/../uploads/ideas';
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        throw new RuntimeException('No se pudo guardar la foto. Intenta de nuevo o envía tu idea sin foto.');
+    }
+    $nombre = 'idea_' . bin2hex(random_bytes(16)) . '.' . BUZON_FOTO_TIPOS[$mime];
+    if (!move_uploaded_file($file['tmp_name'], $dir . '/' . $nombre)) {
+        throw new RuntimeException('No se pudo guardar la foto. Intenta de nuevo o envía tu idea sin foto.');
+    }
+
+    return ['ruta' => 'uploads/ideas/' . $nombre, 'mime' => $mime];
+}

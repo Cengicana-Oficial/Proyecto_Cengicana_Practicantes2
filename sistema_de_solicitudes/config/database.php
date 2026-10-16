@@ -194,6 +194,27 @@ function app_bootstrap_database(PDO $pdo): void
         ) ENGINE=InnoDB"
     );
 
+    // Buzon de ideas: formulario publico (buzon.php), no requiere sesion.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS ideas (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            area VARCHAR(80) NOT NULL,
+            area_otra VARCHAR(80) NULL,
+            situacion TEXT NOT NULL,
+            propuesta TEXT NOT NULL,
+            beneficio TEXT NOT NULL,
+            foto_ruta VARCHAR(255) NULL,
+            foto_mime VARCHAR(40) NULL,
+            anonimo TINYINT(1) NOT NULL DEFAULT 0,
+            nombre VARCHAR(80) NULL,
+            correo VARCHAR(120) NULL,
+            estado ENUM('nueva','revisada','archivada') NOT NULL DEFAULT 'nueva',
+            creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_ideas_estado (estado)
+        ) ENGINE=InnoDB"
+    );
+
     if ((int) $pdo->query('SELECT COUNT(*) FROM programas')->fetchColumn() === 0) {
         $pdo->exec(
             "INSERT INTO programas (id, nombre) VALUES
@@ -233,6 +254,8 @@ function app_bootstrap_menu_data(PDO $menuPdo): void
         'solicitudes_internas.usuarios.gestionar' => 'Permite crear, editar y eliminar usuarios del modulo Sistema de solicitudes',
         'solicitudes_internas.programas.ver' => 'Permite ver programas del modulo Sistema de solicitudes',
         'solicitudes_internas.programas.gestionar' => 'Permite crear, editar y eliminar programas del modulo Sistema de solicitudes',
+        'solicitudes_internas.buzon.ver' => 'Permite ver las ideas recibidas en el Buzon de ideas',
+        'solicitudes_internas.buzon.gestionar' => 'Permite marcar como revisadas o archivar las ideas del Buzon de ideas',
     ];
 
     $stmt = $menuPdo->prepare(
