@@ -14,7 +14,7 @@ return [
     |
     */
 
-    'title' => 'SIGEC',
+    'title' => 'Experimentos',
     'title_prefix' => '',
     'title_postfix' => ' · CENGICANA',
 
@@ -63,7 +63,7 @@ return [
     |
     */
 
-    'logo' => 'SIGEC',
+    'logo' => 'Experimentos',
     'logo_img' => 'img/cengicana-logo.png',
     'logo_img_class' => 'brand-image',
     'logo_img_xl' => null,

@@ -152,7 +152,7 @@ function usr_tono_modulo($nombre)
 {
     static $tonos = [];
     $clave = mb_strtolower((string) $nombre);
-    $fijos = ['cursos' => 0, 'laboratorio' => 1, 'solicitudes internas' => 2, 'sigec' => 3, 'servicio tecnico' => 4, 'solicitud de visitas' => 5];
+    $fijos = ['cursos' => 0, 'laboratorio' => 1, 'solicitudes internas' => 2, 'sigec' => 3, 'experimentos' => 3, 'servicio tecnico' => 4, 'solicitud de visitas' => 5];
     foreach ($fijos as $patron => $tono) {
         if (strpos($clave, $patron) !== false) {
             return $tono;

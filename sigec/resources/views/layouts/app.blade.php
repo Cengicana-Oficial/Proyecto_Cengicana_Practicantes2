@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('page_title', $title ?? 'SIGEC') · CENGICANA</title>
+    <title>@yield('page_title', $title ?? 'Experimentos') · CENGICANA</title>
 
     <link rel="icon" type="image/png" href="{{ asset('img/cengicana-logo.png') }}">
     <link rel="stylesheet" href="{{ asset('vendor/fontawesome-free/css/all.min.css') }}">
@@ -22,7 +22,7 @@
     }
     $initials = $initials ?: 'U';
 
-    $pageTitle = trim($__env->yieldContent('page_title', $title ?? 'SIGEC'));
+    $pageTitle = trim($__env->yieldContent('page_title', $title ?? 'Experimentos'));
     $pageSubtitles = [
         'Dashboard' => 'Resumen general de investigacion y ensayos',
         'Programas' => 'Lineas y programas de investigacion',
@@ -40,21 +40,21 @@
         'Formularios de campo' => 'Captura y asignacion de formularios',
         'Reportes' => 'Exportacion y resumen de resultados',
         'Importar y Analizar' => 'Carga masiva y analisis de evaluaciones',
-        'Usuarios y permisos' => 'Administracion de accesos a SIGEC',
+        'Usuarios y permisos' => 'Administracion de accesos a Experimentos',
     ];
     $pageSubtitle = $pageSubtitles[$pageTitle] ?? 'Sistema de Gestion de Ensayos Experimentales';
 @endphp
 <body class="cengi-canvas sigec-shell">
     <aside class="cengi-sidebar" id="cengiSigecSidebar">
-        <a class="cengi-brand" href="{{ route('dashboard') }}" aria-label="Ir al dashboard de SIGEC">
+        <a class="cengi-brand" href="{{ route('dashboard') }}" aria-label="Ir al dashboard de Experimentos">
             <div class="cengi-brand-mark"><i class="fas fa-seedling"></i></div>
             <div class="cengi-brand-copy">
-                <strong>SIGEC</strong>
+                <strong>Experimentos</strong>
                 <small>Investigacion y campo</small>
             </div>
         </a>
 
-        <nav class="cengi-sidebar-nav" id="cengiSigecNav" aria-label="Navegacion principal de SIGEC">
+        <nav class="cengi-sidebar-nav" id="cengiSigecNav" aria-label="Navegacion principal de Experimentos">
             <div class="cengi-nav-group">
                 <div class="cengi-nav-label">Principal</div>
                 <a href="{{ route('dashboard') }}" class="cengi-nav-item{{ request()->routeIs('dashboard') ? ' is-active' : '' }}">
@@ -151,7 +151,7 @@
                     <i class="fas fa-sign-out-alt"></i><span>Cerrar sesion</span>
                 </button>
             </form>
-            <div class="cengi-sidebar-version">SIGEC · Zafra 2025–2026</div>
+            <div class="cengi-sidebar-version">Experimentos · Zafra 2025–2026</div>
         </div>
     </aside>
 
@@ -170,7 +170,7 @@
                 <div class="cengi-avatar">{{ $initials }}</div>
                 <div>
                     <div class="cengi-userbox-u1">{{ $user->name ?? 'Usuario' }}</div>
-                    <div class="cengi-userbox-u2">Sistema SIGEC</div>
+                    <div class="cengi-userbox-u2">Experimentos</div>
                 </div>
             </div>
         </div>

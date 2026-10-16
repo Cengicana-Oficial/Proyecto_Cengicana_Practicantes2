@@ -102,8 +102,8 @@ function menu_modulo_meta($nombre)
     } elseif ($modulo === 'solicitudes internas') {
         $ruta = '../sistema_de_solicitudes/index.php';
         $icono = 'assignment';
-    } elseif ($modulo === 'sigec') {
-        // SIGEC corre en su propio contenedor/dominio (no comparte sesion
+    } elseif (in_array($modulo, ['sigec', 'experimentos'], true)) {
+        // Experimentos (SIGEC) corre en su propio contenedor/dominio (no comparte sesion
         // PHP nativa), por eso pasa por el puente de SSO en vez de saltar
         // directo a una carpeta hermana como los demas modulos.
         $ruta = 'sso_sigec.php';
