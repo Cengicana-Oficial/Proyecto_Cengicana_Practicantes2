@@ -15,16 +15,14 @@ if (!empty($_SESSION['id_usuario']) && !defined('LAB_ROL_MODULO_ACTIVADO')) {
     define('LAB_ROL_MODULO_ACTIVADO', true);
     try {
         require_once __DIR__ . '/../../login/config/roles_modulo.php';
-        $labEnvCentral = parse_ini_file(__DIR__ . '/../../login/.env', false, INI_SCANNER_RAW);
-        if ($labEnvCentral) {
-            $labCentral = new PDO(
-                'mysql:host=' . $labEnvCentral['DB_HOST'] . ';port=' . ($labEnvCentral['DB_PORT'] ?? 3306) . ';dbname=' . $labEnvCentral['DB_NAME'] . ';charset=utf8mb4',
-                $labEnvCentral['DB_USER'], $labEnvCentral['DB_PASS'] ?? $labEnvCentral['DB_PASSWORD'] ?? '',
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-            );
-            cengi_rm_activar_modulo($labCentral, 'laboratorio');
-            $labCentral = null;
-        }
+        $labEnvCentral = lab_env_central();
+        $labCentral = new PDO(
+            'mysql:host=' . $labEnvCentral['DB_HOST'] . ';port=' . ($labEnvCentral['DB_PORT'] ?? 3306) . ';dbname=' . $labEnvCentral['DB_NAME'] . ';charset=utf8mb4',
+            $labEnvCentral['DB_USER'], $labEnvCentral['DB_PASS'] ?? $labEnvCentral['DB_PASSWORD'] ?? '',
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+        );
+        cengi_rm_activar_modulo($labCentral, 'laboratorio');
+        $labCentral = null;
         unset($labEnvCentral);
     } catch (Throwable $e) {
         // Sin el rol del modulo no se usan permisos de otro modulo que hayan quedado en sesion.

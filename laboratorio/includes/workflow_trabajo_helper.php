@@ -27,8 +27,8 @@ function wfHoja(string $tipo,string $analisis): ?array {
 function wfUsuarioKey(array $user): string {return !empty($user['id'])?'id:'.(int)$user['id']:'nombre:'.hash('sha256',(string)($user['nombre']??''));}
 function wfUsuarios(): array {
     static $users;if($users!==null)return $users;
-    $env=parse_ini_file(__DIR__.'/../../login/.env',false,INI_SCANNER_RAW);
-    if(!$env)throw new RuntimeException('No se pudo consultar el directorio de analistas.');
+    require_once __DIR__.'/../config/env.php';
+    $env=lab_env_central();
     $db=new PDO('mysql:host='.$env['DB_HOST'].';port='.($env['DB_PORT']??3306).';dbname='.$env['DB_NAME'].';charset=utf8mb4',$env['DB_USER'],$env['DB_PASS']??$env['DB_PASSWORD']??'',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
     return $users=$db->query("SELECT DISTINCT u.id,u.nombre FROM usuarios u JOIN usuario_modulo um ON um.usuario_id=u.id JOIN modulos m ON m.id=um.modulo_id WHERE LOWER(m.nombre)='laboratorio' ORDER BY u.nombre")->fetchAll(PDO::FETCH_ASSOC);
 }
