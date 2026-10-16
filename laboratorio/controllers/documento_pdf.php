@@ -21,10 +21,12 @@ if (!$documento) {
 
 try {
     $pdf = lab_documento_pdf_binario($documento);
-} catch (RuntimeException $e) {
+} catch (Throwable $e) {
+    // El detalle (rutas, Dompdf, BD) va al log; al usuario solo un mensaje generico.
+    error_log('[laboratorio][documento_pdf] documento ' . $idDocumento . ': ' . $e->getMessage());
     http_response_code(503);
     header('Content-Type: text/plain; charset=UTF-8');
-    echo $e->getMessage();
+    echo 'No se pudo generar el PDF del documento. Inténtelo más tarde o contacte al administrador.';
     exit;
 }
 require_once __DIR__ . '/../../cengicursos/classes/export_helpers.php';
