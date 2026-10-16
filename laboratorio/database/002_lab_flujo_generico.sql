@@ -37,8 +37,10 @@
 --                                    -> normalizarFirmaSolicitud()).
 --
 -- Aplicar despues de laboratorios_prueba.sql. Seguro de ejecutar mas de
--- una vez (usa IF NOT EXISTS / DROP TABLE IF EXISTS solo para las tablas
--- que crea esta misma migracion).
+-- una vez: solo crea lo que falte (CREATE TABLE IF NOT EXISTS). Antes hacia
+-- DROP TABLE + CREATE, y volver a ejecutarla borraba los documentos, sus
+-- versiones, las firmas y la trazabilidad. Espejo en
+-- deploy/mysql/init/33-laboratorio-flujo-generico.sql.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -69,8 +71,7 @@ WHERE NOT EXISTS (
 -- puntual se prefiere usar historial_formulario; este campo solo permite
 -- enlazar el evento genérico con el analisis relacionado si aplica.
 -- ---------------------------------------------------------------------
-DROP TABLE IF EXISTS `lab_evento_trazabilidad`;
-CREATE TABLE `lab_evento_trazabilidad` (
+CREATE TABLE IF NOT EXISTS `lab_evento_trazabilidad` (
   `id_evento` INT NOT NULL AUTO_INCREMENT,
   `id_lote` INT NOT NULL,
   `id_solicitud` INT DEFAULT NULL,
@@ -100,8 +101,7 @@ CREATE TABLE `lab_evento_trazabilidad` (
 -- momento de generar/editar el documento, para poder reabrirlo tal cual
 -- se entrego aunque los datos de origen cambien despues.
 -- ---------------------------------------------------------------------
-DROP TABLE IF EXISTS `lab_documento`;
-CREATE TABLE `lab_documento` (
+CREATE TABLE IF NOT EXISTS `lab_documento` (
   `id_documento` INT NOT NULL AUTO_INCREMENT,
   `tipo_documento` ENUM('boleta','informe') NOT NULL,
   `id_lote` INT NOT NULL,
@@ -124,8 +124,7 @@ CREATE TABLE `lab_documento` (
 -- Control de cambios de un documento (quien edito que version y por
 -- que), analogo a historial_formulario pero para documentos.
 -- ---------------------------------------------------------------------
-DROP TABLE IF EXISTS `lab_documento_historial`;
-CREATE TABLE `lab_documento_historial` (
+CREATE TABLE IF NOT EXISTS `lab_documento_historial` (
   `id_historial` INT NOT NULL AUTO_INCREMENT,
   `id_documento` INT NOT NULL,
   `version` INT NOT NULL,
@@ -144,8 +143,7 @@ CREATE TABLE `lab_documento_historial` (
 -- data URI "data:image/png;base64,...", validado con la misma regla que
 -- normalizarFirmaSolicitud() en includes/solicitud_formulario_helpers.php.
 -- ---------------------------------------------------------------------
-DROP TABLE IF EXISTS `lab_firma_documento`;
-CREATE TABLE `lab_firma_documento` (
+CREATE TABLE IF NOT EXISTS `lab_firma_documento` (
   `id_firma` INT NOT NULL AUTO_INCREMENT,
   `id_documento` INT NOT NULL,
   `rol_firma` VARCHAR(60) NOT NULL COMMENT 'analista|revisor|jefe_laboratorio',
