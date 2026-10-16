@@ -215,6 +215,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            // Se validan los adjuntos antes de registrar la solicitud.
+            $adjuntosValidos = validar_adjuntos($_FILES['adjuntos'] ?? null);
+
             $code = next_codigo($pdo);
             $stmt = $pdo->prepare(
                 'INSERT INTO solicitudes
@@ -240,31 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'INSERT INTO seguimientos (solicitud_id, usuario_id, estado, observacion) VALUES (?, ?, ?, ?)'
             )->execute([$requestId, (int) $user['id'], 'recibido', 'Solicitud registrada en el sistema.']);
 
-            if (!empty($_FILES['adjuntos']['name'][0])) {
-                $uploadDir = __DIR__ . '/uploads';
-                foreach ($_FILES['adjuntos']['name'] as $index => $name) {
-                    if ($_FILES['adjuntos']['error'][$index] !== UPLOAD_ERR_OK) {
-                        continue;
-                    }
-
-                    $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', basename($name));
-                    $targetName = $code . '_' . time() . '_' . $safeName;
-                    $targetPath = $uploadDir . '/' . $targetName;
-
-                    if (move_uploaded_file($_FILES['adjuntos']['tmp_name'][$index], $targetPath)) {
-                        $pdo->prepare(
-                            'INSERT INTO adjuntos (solicitud_id, nombre_original, ruta, mime_type, tamano_bytes)
-                             VALUES (?, ?, ?, ?, ?)'
-                        )->execute([
-                            $requestId,
-                            $name,
-                            'uploads/' . $targetName,
-                            $_FILES['adjuntos']['type'][$index],
-                            (int) $_FILES['adjuntos']['size'][$index],
-                        ]);
-                    }
-                }
-            }
+            guardar_adjuntos($pdo, $requestId, $code, $adjuntosValidos);
 
             header('Location: index.php?view=mis&message=' . urlencode("Solicitud {$code} creada correctamente."));
             exit;
@@ -286,36 +265,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Las solicitudes completadas ya no se pueden modificar.');
             }
 
+            $adjuntosValidos = validar_adjuntos($_FILES['seguimiento_adjuntos'] ?? null);
+
             $pdo->prepare('UPDATE solicitudes SET estado = ? WHERE id = ?')->execute([$status, $requestId]);
             $pdo->prepare(
                 'INSERT INTO seguimientos (solicitud_id, usuario_id, estado, observacion) VALUES (?, ?, ?, ?)'
             )->execute([$requestId, (int) $user['id'], $status, trim($_POST['observacion'] ?? '') ?: null]);
 
-            if (!empty($_FILES['seguimiento_adjuntos']['name'][0])) {
-                $uploadDir = __DIR__ . '/uploads';
-                foreach ($_FILES['seguimiento_adjuntos']['name'] as $index => $name) {
-                    if ($_FILES['seguimiento_adjuntos']['error'][$index] !== UPLOAD_ERR_OK) {
-                        continue;
-                    }
-
-                    $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', basename($name));
-                    $targetName = $request['codigo'] . '_seguimiento_' . time() . '_' . $safeName;
-                    $targetPath = $uploadDir . '/' . $targetName;
-
-                    if (move_uploaded_file($_FILES['seguimiento_adjuntos']['tmp_name'][$index], $targetPath)) {
-                        $pdo->prepare(
-                            'INSERT INTO adjuntos (solicitud_id, nombre_original, ruta, mime_type, tamano_bytes)
-                             VALUES (?, ?, ?, ?, ?)'
-                        )->execute([
-                            $requestId,
-                            $name,
-                            'uploads/' . $targetName,
-                            $_FILES['seguimiento_adjuntos']['type'][$index],
-                            (int) $_FILES['seguimiento_adjuntos']['size'][$index],
-                        ]);
-                    }
-                }
-            }
+            guardar_adjuntos($pdo, $requestId, $request['codigo'] . '_seguimiento', $adjuntosValidos);
 
             header('Location: index.php?view=detalle&id=' . $requestId . '&message=' . urlencode('Estado actualizado correctamente.'));
             exit;

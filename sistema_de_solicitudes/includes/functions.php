@@ -700,3 +700,77 @@ function time_ago(string $datetime): string
 
     return date('d/m/Y', strtotime($datetime));
 }
+
+/**
+ * Tipos de adjunto permitidos: extension => tipos MIME reales aceptados (finfo). Los de
+ * Office antiguos (doc/xls) se detectan como CDFV2; los OOXML (docx/xlsx) a veces como zip.
+ */
+const ADJUNTOS_TIPOS = [
+    'pdf' => ['application/pdf'],
+    'jpg' => ['image/jpeg'],
+    'jpeg' => ['image/jpeg'],
+    'png' => ['image/png'],
+    'doc' => ['application/msword', 'application/vnd.ms-office', 'application/cdfv2', 'application/x-ole-storage'],
+    'xls' => ['application/vnd.ms-excel', 'application/vnd.ms-office', 'application/cdfv2', 'application/x-ole-storage'],
+    'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip'],
+    'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip'],
+];
+const ADJUNTOS_MAX_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Valida los archivos de un input multiple ($_FILES['campo']) antes de guardar nada.
+ * Devuelve [['tmp', 'nombre', 'extension', 'mime', 'tamano'], ...] o lanza RuntimeException.
+ */
+function validar_adjuntos(?array $files): array
+{
+    if (!$files || empty($files['name'][0])) {
+        return [];
+    }
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $validos = [];
+    foreach ($files['name'] as $index => $name) {
+        $errorCode = (int) $files['error'][$index];
+        if ($errorCode === UPLOAD_ERR_NO_FILE) {
+            continue;
+        }
+        $nombre = basename((string) $name);
+        if ($errorCode !== UPLOAD_ERR_OK || !is_uploaded_file($files['tmp_name'][$index])) {
+            throw new RuntimeException("No se pudo recibir el archivo {$nombre}.");
+        }
+        if ((int) $files['size'][$index] > ADJUNTOS_MAX_BYTES) {
+            throw new RuntimeException("El archivo {$nombre} supera los 20 MB.");
+        }
+        $extension = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
+        $mime = strtolower((string) $finfo->file($files['tmp_name'][$index]));
+        if (!isset(ADJUNTOS_TIPOS[$extension]) || !in_array($mime, ADJUNTOS_TIPOS[$extension], true)) {
+            throw new RuntimeException("El archivo {$nombre} no es un tipo permitido (PDF, JPG, PNG, Word o Excel).");
+        }
+        $validos[] = [
+            'tmp' => $files['tmp_name'][$index],
+            'nombre' => mb_substr($nombre, 0, 255, 'UTF-8'),
+            'extension' => $extension,
+            'mime' => $mime,
+            'tamano' => (int) $files['size'][$index],
+        ];
+    }
+    return $validos;
+}
+
+/**
+ * Guarda los adjuntos ya validados en uploads/ con nombre aleatorio (nunca el del usuario)
+ * y los registra en la solicitud.
+ */
+function guardar_adjuntos(PDO $pdo, int $requestId, string $prefijo, array $adjuntos): void
+{
+    $uploadDir = __DIR__ . '/../uploads';
+    $insert = $pdo->prepare(
+        'INSERT INTO adjuntos (solicitud_id, nombre_original, ruta, mime_type, tamano_bytes) VALUES (?, ?, ?, ?, ?)'
+    );
+    foreach ($adjuntos as $adjunto) {
+        $targetName = $prefijo . '_' . bin2hex(random_bytes(12)) . '.' . $adjunto['extension'];
+        if (move_uploaded_file($adjunto['tmp'], $uploadDir . '/' . $targetName)) {
+            $insert->execute([$requestId, $adjunto['nombre'], 'uploads/' . $targetName, $adjunto['mime'], $adjunto['tamano']]);
+        }
+    }
+}
+
