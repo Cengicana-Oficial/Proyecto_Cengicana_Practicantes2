@@ -101,6 +101,7 @@ try {
 } catch (Throwable $e) {
 
     $db->rollBack();
+    cengi_ins_deshacer_cuentas_creadas($db);
 
     header(
         "Location: solicitudes.php?resultado=error&id={$id}&mensaje=" .

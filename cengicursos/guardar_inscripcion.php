@@ -136,6 +136,7 @@ if (strpos($destino, 'p:') === 0) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
+        cengi_ins_deshacer_cuentas_creadas($db);
         error_log('Error al guardar inscripcion de convocatoria: ' . $e->getMessage());
         inscripcion_error('No fue posible enviar tu inscripción. Intenta más tarde.', $destino);
     }
