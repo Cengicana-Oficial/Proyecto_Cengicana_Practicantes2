@@ -17,3 +17,12 @@ deploy/env/*.env
 Pruebas/uploads
 laboratorio/outputs
 *.sql.gz
+# Archivos que suben los usuarios: en produccion se montan como volumen (docker-compose.prod.yml),
+# no van dentro de la imagen. Se conservan las carpetas (.gitkeep) y uploads/.htaccess.
+uploads/**
+!uploads/.htaccess
+!uploads/**/.gitkeep
+sistema_de_solicitudes/uploads/**
+!sistema_de_solicitudes/uploads/.gitkeep
+# Respaldos de la base que genera deploy/mysql/actualizar-bd.sh (datos reales)
+respaldos

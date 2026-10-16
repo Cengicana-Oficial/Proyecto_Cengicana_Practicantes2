@@ -18,3 +18,6 @@ CLAUDE.md
 !/uploads/.htaccess
 !**/uploads/**/.gitkeep
 !/sistema_de_solicitudes/uploads/.gitkeep
+
+# Respaldos que genera deploy/mysql/actualizar-bd.sh (contienen datos reales)
+/respaldos/
