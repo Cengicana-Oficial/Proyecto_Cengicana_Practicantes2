@@ -10,6 +10,90 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 /**
+ * Proteccion CSRF de todas las paginas que incluyen este archivo (las del panel; las
+ * publicas como inscripcion.php no lo incluyen). Con sesion iniciada, todo POST debe traer
+ * el token de la sesion en el campo _csrf o en la cabecera X-CSRF-Token. El token se agrega
+ * solo: en el HTML de salida a cada <form method="post"> y, con un script en <head>, a los
+ * formularios creados por JS y a fetch / XMLHttpRequest (jQuery) del mismo origen.
+ */
+function cengi_csrf_token()
+{
+    if (empty($_SESSION['cengi_csrf'])) {
+        $_SESSION['cengi_csrf'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['cengi_csrf'];
+}
+
+function cengi_csrf_inyectar($html)
+{
+    foreach (headers_list() as $cabecera) {
+        if (stripos($cabecera, 'content-type:') === 0 && stripos($cabecera, 'text/html') === false) {
+            return $html;
+        }
+    }
+    if (stripos($html, '<form') === false && stripos($html, '<head') === false) {
+        return $html;
+    }
+    $token = htmlspecialchars(cengi_csrf_token(), ENT_QUOTES, 'UTF-8');
+    $html = preg_replace(
+        '~<form\b[^>]*\bmethod\s*=\s*(["\']?)post\1[^>]*>~i',
+        '$0<input type="hidden" name="_csrf" value="' . $token . '">',
+        $html
+    );
+    $script = '<meta name="csrf-token" content="' . $token . '"><script>(function(){if(window.__cengiCsrf)return;window.__cengiCsrf=1;'
+        . 'var t=document.querySelector(\'meta[name="csrf-token"]\').content;'
+        . 'function mismo(u){try{return new URL(u,location.href).origin===location.origin}catch(e){return true}}'
+        . 'function lectura(m){m=String(m||"GET").toUpperCase();return m==="GET"||m==="HEAD"||m==="OPTIONS"}'
+        . 'function campo(f){if(f&&String(f.method).toLowerCase()==="post"&&!f.querySelector(\'input[name="_csrf"]\')){var i=document.createElement("input");i.type="hidden";i.name="_csrf";i.value=t;f.appendChild(i)}}'
+        . 'if(window.fetch){var of=window.fetch;window.fetch=function(r,o){o=o||{};var u=typeof r==="string"?r:(r&&r.url),m=o.method||(r&&r.method);'
+        . 'if(!lectura(m)&&mismo(u)){var h=new Headers(o.headers||(r instanceof Request?r.headers:undefined));h.set("X-CSRF-Token",t);o.headers=h}return of.call(this,r,o)}}'
+        . 'var op=XMLHttpRequest.prototype.open,sd=XMLHttpRequest.prototype.send;'
+        . 'XMLHttpRequest.prototype.open=function(m,u){this.__m=m;this.__u=u;return op.apply(this,arguments)};'
+        . 'XMLHttpRequest.prototype.send=function(){if(!lectura(this.__m)&&mismo(this.__u)){try{this.setRequestHeader("X-CSRF-Token",t)}catch(e){}}return sd.apply(this,arguments)};'
+        . 'document.addEventListener("submit",function(e){campo(e.target)},true);'
+        . 'var os=HTMLFormElement.prototype.submit;HTMLFormElement.prototype.submit=function(){campo(this);return os.apply(this,arguments)};'
+        . '})();</script>';
+    // Al inicio de <head> (antes que los scripts de la pagina); sin <head>, al inicio de <body>.
+    $conScript = preg_replace('~<head\b[^>]*>~i', '$0' . $script, $html, 1, $cambios);
+    if (!$cambios) {
+        $conScript = preg_replace('~<body\b[^>]*>~i', '$0' . $script, $html, 1, $cambios);
+    }
+    return $cambios ? $conScript : $html;
+}
+
+function cengi_csrf_proteger()
+{
+    if (PHP_SAPI === 'cli' || defined('CENGI_CSRF_ACTIVO')) {
+        return;
+    }
+    define('CENGI_CSRF_ACTIVO', true);
+
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !empty($_SESSION['id_usuario'])) {
+        $enviado = $_POST['_csrf'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+        if (!is_string($enviado) || !hash_equals(cengi_csrf_token(), $enviado)) {
+            $mensaje = 'La sesión del formulario expiró o la solicitud no es válida. Recarga la página e inténtalo de nuevo.';
+            http_response_code(403);
+            $esperaJson = stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'json') !== false
+                || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])
+                || stripos($_SERVER['SCRIPT_NAME'] ?? '', '_api') !== false;
+            if ($esperaJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'error' => $mensaje], JSON_UNESCAPED_UNICODE);
+            } else {
+                echo '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Solicitud no válida</title></head><body>'
+                    . '<p>' . htmlspecialchars($mensaje) . '</p><p><a href="javascript:history.back()">Volver</a></p></body></html>';
+            }
+            exit;
+        }
+    }
+
+    cengi_csrf_token();
+    ob_start('cengi_csrf_inyectar');
+}
+
+cengi_csrf_proteger();
+
+/**
  * Equivalente en SQL (MySQL) de cengi_texto_normalizado(), para comparar
  * columnas dentro de una consulta. MySQL no tiene TRANSLATE()/REGEXP_REPLACE(...,'g')
  * como PostgreSQL, asi que se encadenan REPLACE() para cada vocal acentuada y la ñ.
@@ -52,6 +136,12 @@ function cengi_cargar_usuario_actual()
         return $usuario;
     }
 
+    // La sesion es compartida con los demas modulos: hasta cargar el rol de Cursos no debe
+    // quedar el rol ni los permisos del ultimo modulo visitado.
+    $_SESSION['rol'] = $_SESSION['nombre_rol'] = '';
+    $_SESSION['rol_id'] = 0;
+    $_SESSION['user_permissions'] = [];
+
     try {
         $menu = conectar_usuarios_menu_pdo();
         $stmt = $menu->prepare("
@@ -76,9 +166,13 @@ function cengi_cargar_usuario_actual()
             $_SESSION['ingenio_nombre'] = $usuario['nombre_ingenio'];
             $_SESSION['es_superadmin'] = $usuario['es_superadmin'];
         }
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         error_log('Error cargando usuario de cengicursos: ' . $e->getMessage());
         $usuario = null;
+        // Si la activacion fallo a medias, no se usa ningun rol ni permiso.
+        $_SESSION['rol'] = $_SESSION['nombre_rol'] = '';
+        $_SESSION['rol_id'] = 0;
+        $_SESSION['user_permissions'] = [];
     }
 
     return $usuario;
