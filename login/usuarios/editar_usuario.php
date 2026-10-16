@@ -90,10 +90,8 @@ if ($id <= 0) {
     usuarios_mostrar_aviso("ID inválido", "No se recibió un identificador de usuario válido.", $scopeConfig['return_url'] ?? 'usuarios.php');
 }
 
-if (!$esSuperadmin && !$scopeConfig) {
-    header("Location: usuarios.php");
-    exit;
-}
+require_once __DIR__ . '/_autorizacion.php';
+$modulosGestionados = usr_exigir_acceso_scope($conn, $idUsuario, $esSuperadmin, $scope, $scopeConfig);
 
 $stmtUsuario = $conn->prepare("SELECT * FROM usuarios WHERE id = ?");
 $stmtUsuario->execute([$id]);
@@ -102,6 +100,13 @@ $usuario = $stmtUsuario->fetch(PDO::FETCH_ASSOC);
 if (!$usuario) {
     usuarios_mostrar_aviso("Usuario no encontrado", "El usuario que intentas editar ya no existe.", $scopeConfig['return_url'] ?? 'usuarios.php');
 }
+
+$alcance = usr_alcance_sobre($conn, $idUsuario, $esSuperadmin, $usuario, $modulosGestionados);
+if ($alcance === 'ninguno') {
+    usr_denegar("No puedes editar este usuario desde este módulo.", $scopeConfig['return_url'] ?? 'usuarios.php');
+}
+// Sin alcance total solo se cambia el acceso/rol en los modulos que gestiona quien edita.
+$editaCuenta = $alcance === 'total';
 
 $modulosActualesUsuario = [];
 if (!$esSuperadmin) {
@@ -118,15 +123,8 @@ $modulosDisponibles = [];
 $moduloIdsForzados = [];
 
 if ($scopeConfig) {
-    $placeholders = implode(',', array_fill(0, count($scopeConfig['module_names']), '?'));
-    $stmtScopeMods = $conn->prepare("
-        SELECT id, nombre
-        FROM modulos
-        WHERE LOWER(nombre) IN ($placeholders)
-        ORDER BY nombre
-    ");
-    $stmtScopeMods->execute($scopeConfig['module_names']);
-    $modulosDisponibles = $stmtScopeMods->fetchAll(PDO::FETCH_ASSOC);
+    // Solo los modulos del scope en los que quien edita puede gestionar usuarios.
+    $modulosDisponibles = $modulosGestionados;
     $moduloIdsForzados = array_map(fn($mod) => (int) $mod['id'], $modulosDisponibles);
 } elseif ($esSuperadmin) {
     $stmtMods = $conn->query("SELECT id, nombre FROM modulos ORDER BY nombre");
@@ -148,7 +146,7 @@ if ($scopeConfig) {
 require_once __DIR__ . '/_modulos_roles.php';
 $modulosPermitidos = array_map(static fn($m) => (int) $m['id'], $modulosDisponibles);
 $nombresModulos = array_column($modulosDisponibles, 'nombre', 'id');
-$rolesPorModulo = usr_roles_por_modulo($conn, $modulosDisponibles, $esSuperadmin);
+$rolesPorModulo = usr_filtrar_roles_asignables($conn, $idUsuario, $esSuperadmin, usr_roles_por_modulo($conn, $modulosDisponibles, $esSuperadmin), $modulosDisponibles);
 $pidePlataforma = $esSuperadmin && !$scopeConfig;
 
 $stmtModUser = $conn->prepare("SELECT modulo_id, rol_id FROM usuario_modulo WHERE usuario_id = ?");
@@ -161,10 +159,20 @@ foreach ($stmtModUser->fetchAll(PDO::FETCH_ASSOC) as $fila) {
 $destinoRegreso = $scopeConfig['return_url'] ?? 'usuarios.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nombre = trim($_POST['nombre'] ?? '');
-    $correo = trim($_POST['correo'] ?? '');
-    $contrasena = trim($_POST['contrasena'] ?? '');
-    $ingenioId = $_POST['ingenio_id'] !== '' ? (int) $_POST['ingenio_id'] : null;
+    if (!usr_csrf_valido($_POST['csrf'] ?? null)) {
+        usr_denegar("La sesión del formulario expiró. Vuelve a abrir el formulario e inténtalo de nuevo.", $destinoRegreso);
+    }
+    if ($editaCuenta) {
+        $nombre = trim($_POST['nombre'] ?? '');
+        $correo = trim($_POST['correo'] ?? '');
+        $contrasena = trim($_POST['contrasena'] ?? '');
+        $ingenioId = ($_POST['ingenio_id'] ?? '') !== '' ? (int) $_POST['ingenio_id'] : null;
+    } else {
+        $nombre = (string) $usuario['nombre'];
+        $correo = (string) $usuario['correo'];
+        $contrasena = '';
+        $ingenioId = $usuario['ingenio_id'] !== null ? (int) $usuario['ingenio_id'] : null;
+    }
     // El rol de la plataforma solo lo cambia el superadmin desde la administracion general;
     // desde un modulo se conserva el que ya tenia.
     $rolId = $pidePlataforma ? (int) ($_POST['rol_id'] ?? 0) : (int) $usuario['rol_id'];
@@ -182,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!empty($error)) {
         // mensaje del selector de modulos
-    } elseif ($nombre === '' || $correo === '' || $ingenioId === null) {
+    } elseif ($editaCuenta && ($nombre === '' || $correo === '' || $ingenioId === null)) {
         $error = "Completa los campos obligatorios.";
     } elseif ($rolId <= 0) {
         $error = "Elige el rol del usuario en la plataforma.";
@@ -266,21 +274,28 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
     <form method="POST" class="form-card form-card-wide">
         <h1>Editar usuario</h1>
         <p class="form-sub">Actualiza los datos del usuario #<?= (int) $usuario['id'] ?>.</p>
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars(usr_csrf_token()) ?>">
+
+        <?php if (!$editaCuenta): ?>
+            <p class="form-help">Este usuario también tiene acceso a otros módulos o permisos que no administras: desde aquí solo puedes cambiar su acceso y rol en este módulo.</p>
+        <?php endif; ?>
 
         <div class="form-field">
             <label for="nombre">Nombre</label>
-            <input id="nombre" name="nombre" value="<?= htmlspecialchars($usuario['nombre']) ?>" required autofocus>
+            <input id="nombre" name="nombre" value="<?= htmlspecialchars($usuario['nombre']) ?>" required autofocus <?= $editaCuenta ? '' : 'disabled' ?>>
         </div>
 
         <div class="form-field">
             <label for="correo">Correo</label>
-            <input id="correo" name="correo" value="<?= htmlspecialchars($usuario['correo']) ?>" required>
+            <input id="correo" name="correo" value="<?= htmlspecialchars($usuario['correo']) ?>" required <?= $editaCuenta ? '' : 'disabled' ?>>
         </div>
 
+        <?php if ($editaCuenta): ?>
         <div class="form-field">
             <label for="contrasena">Nueva contraseña</label>
             <input id="contrasena" type="password" name="contrasena" placeholder="Nueva contraseña (opcional)">
         </div>
+        <?php endif; ?>
 
         <?php if ($pidePlataforma): ?>
         <div class="form-field">
@@ -298,7 +313,7 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
 
         <div class="form-field">
             <label for="ingenio_id">Ingenio asignado</label>
-            <select id="ingenio_id" name="ingenio_id" required>
+            <select id="ingenio_id" name="ingenio_id" required <?= $editaCuenta ? '' : 'disabled' ?>>
                 <option value="">Seleccione un ingenio</option>
                 <?php foreach ($ingenios as $ingenio): ?>
                     <option value="<?= (int) $ingenio['id'] ?>" <?= ((int) $ingenio['id'] === (int) ($usuario['ingenio_id'] ?? 0)) ? 'selected' : '' ?>>

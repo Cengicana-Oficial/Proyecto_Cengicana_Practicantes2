@@ -86,13 +86,11 @@ if ($id <= 0) {
     usuarios_mostrar_aviso("ID inválido", "No se recibió un identificador de usuario válido.", $volverA);
 }
 
-if (!$esSuperadmin && !$scopeConfig) {
-    header("Location: usuarios.php");
-    exit;
-}
+require_once __DIR__ . '/_autorizacion.php';
+$idUsuario = (int) $_SESSION['id_usuario'];
+$modulosGestionados = usr_exigir_acceso_scope($conn, $idUsuario, $esSuperadmin, $scope, $scopeConfig);
 
-// Verificar si es superadmin
-$stmt = $conn->prepare("SELECT es_superadmin FROM usuarios WHERE id = ?");
+$stmt = $conn->prepare("SELECT id, nombre, correo, rol_id, es_superadmin FROM usuarios WHERE id = ?");
 $stmt->execute([$id]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -106,17 +104,75 @@ if ($user['es_superadmin'] == 1) {
 }
 
 // Bloquear autoeliminación
-if ($id === (int) $_SESSION['id_usuario']) {
+if ($id === $idUsuario) {
     usuarios_mostrar_aviso("Acción no permitida", "No puedes eliminar tu propia cuenta.", $volverA);
 }
 
-// Eliminar relación de módulos (para evitar errores de FK)
-$stmtDelMod = $conn->prepare("DELETE FROM usuario_modulo WHERE usuario_id = ?");
-$stmtDelMod->execute([$id]);
+$alcance = usr_alcance_sobre($conn, $idUsuario, $esSuperadmin, $user, $modulosGestionados);
+if ($alcance === 'ninguno') {
+    usuarios_mostrar_aviso("Acción no permitida", "No puedes eliminar este usuario desde este módulo.", $volverA);
+}
+// Si el usuario tiene acceso a modulos que quien elimina no gestiona, solo se le quita el
+// acceso a los modulos de esta pantalla; la cuenta se conserva.
+$soloQuitarAcceso = $alcance !== 'total';
 
-// Eliminar usuario
-$stmt = $conn->prepare("DELETE FROM usuarios WHERE id = ?");
-$stmt->execute([$id]);
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $qs = http_build_query(array_filter(['id' => $id, 'scope' => $scopeConfig ? $scope : null]));
+    ?>
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Eliminar usuario | CENGICAÑA</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="../assets/ingenios.css?v=<?= @filemtime(__DIR__ . '/../assets/ingenios.css') ?: '1' ?>">
+    </head>
+    <body>
+    <div class="ingenios-shell">
+        <a href="<?= htmlspecialchars($volverA) ?>" class="btn-back">
+            <span class="material-symbols-outlined">arrow_back</span>
+            Volver
+        </a>
+        <form method="POST" action="eliminar_usuario.php?<?= htmlspecialchars($qs) ?>" class="confirm-card">
+            <div class="confirm-icon">
+                <span class="material-symbols-outlined">warning</span>
+            </div>
+            <h1><?= $soloQuitarAcceso ? 'Quitar acceso al módulo' : 'Eliminar usuario' ?></h1>
+            <p>
+                <?php if ($soloQuitarAcceso): ?>
+                    <?= htmlspecialchars($user['nombre']) ?> (<?= htmlspecialchars($user['correo']) ?>) también usa otros módulos: se le quitará el acceso a este módulo y su cuenta se conservará.
+                <?php else: ?>
+                    Se eliminará la cuenta de <?= htmlspecialchars($user['nombre']) ?> (<?= htmlspecialchars($user['correo']) ?>). Esta acción no se puede deshacer.
+                <?php endif; ?>
+            </p>
+            <input type="hidden" name="csrf" value="<?= htmlspecialchars(usr_csrf_token()) ?>">
+            <button type="submit" class="btn-primary"><?= $soloQuitarAcceso ? 'Quitar acceso' : 'Eliminar' ?></button>
+            <a href="<?= htmlspecialchars($volverA) ?>" class="btn-secondary">Cancelar</a>
+        </form>
+    </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
+if (!usr_csrf_valido($_POST['csrf'] ?? null)) {
+    usuarios_mostrar_aviso("Acción no permitida", "La sesión del formulario expiró. Vuelve a intentarlo.", $volverA);
+}
+
+$conn->beginTransaction();
+if ($soloQuitarAcceso) {
+    $ids = array_map(static fn($m) => (int) $m['id'], $modulosGestionados);
+    $conn->prepare("DELETE FROM usuario_modulo WHERE usuario_id = ? AND modulo_id IN (" . implode(',', array_fill(0, count($ids), '?')) . ")")
+        ->execute(array_merge([$id], $ids));
+} else {
+    // Eliminar relación de módulos (para evitar errores de FK)
+    $conn->prepare("DELETE FROM usuario_modulo WHERE usuario_id = ?")->execute([$id]);
+    $conn->prepare("DELETE FROM usuarios WHERE id = ?")->execute([$id]);
+}
+$conn->commit();
 
 header("Location: " . $volverA);
 exit;

@@ -43,10 +43,8 @@ $esSuperadmin = (int) ($_SESSION['es_superadmin'] ?? 0) === 1;
 $scope = $_GET['scope'] ?? '';
 $scopeConfig = user_scope_config($scope);
 
-if (!$esSuperadmin && !$scopeConfig) {
-    header("Location: usuarios.php");
-    exit;
-}
+require_once __DIR__ . '/_autorizacion.php';
+$modulosGestionados = usr_exigir_acceso_scope($conn, $idUsuario, $esSuperadmin, $scope, $scopeConfig);
 
 $modulosActualesUsuario = [];
 if (!$esSuperadmin) {
@@ -63,15 +61,8 @@ $modulosDisponibles = [];
 $moduloIdsForzados = [];
 
 if ($scopeConfig) {
-    $placeholders = implode(',', array_fill(0, count($scopeConfig['module_names']), '?'));
-    $stmtScopeMods = $conn->prepare("
-        SELECT id, nombre
-        FROM modulos
-        WHERE LOWER(nombre) IN ($placeholders)
-        ORDER BY nombre
-    ");
-    $stmtScopeMods->execute($scopeConfig['module_names']);
-    $modulosDisponibles = $stmtScopeMods->fetchAll(PDO::FETCH_ASSOC);
+    // Solo los modulos del scope en los que quien crea puede gestionar usuarios.
+    $modulosDisponibles = $modulosGestionados;
     $moduloIdsForzados = array_map(fn($mod) => (int) $mod['id'], $modulosDisponibles);
 } elseif ($esSuperadmin) {
     $stmtMod = $conn->query("SELECT id, nombre FROM modulos ORDER BY nombre");
@@ -96,11 +87,14 @@ $destinoRegreso = $scopeConfig['return_url'] ?? 'usuarios.php';
 require_once __DIR__ . '/_modulos_roles.php';
 $modulosPermitidos = array_map(static fn($m) => (int) $m['id'], $modulosDisponibles);
 $nombresModulos = array_column($modulosDisponibles, 'nombre', 'id');
-$rolesPorModulo = usr_roles_por_modulo($conn, $modulosDisponibles, $esSuperadmin);
+$rolesPorModulo = usr_filtrar_roles_asignables($conn, $idUsuario, $esSuperadmin, usr_roles_por_modulo($conn, $modulosDisponibles, $esSuperadmin), $modulosDisponibles);
 $pidePlataforma = $esSuperadmin && !$scopeConfig;
 $modulosElegidos = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!usr_csrf_valido($_POST['csrf'] ?? null)) {
+        usr_denegar("La sesión del formulario expiró. Vuelve a abrir el formulario e inténtalo de nuevo.", $destinoRegreso);
+    }
     $nombre = trim($_POST['nombre'] ?? '');
     $correo = trim($_POST['correo'] ?? '');
     $contrasenaPlano = trim($_POST['contrasena'] ?? '');
@@ -208,6 +202,7 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
     <form method="POST" class="form-card form-card-wide">
         <h1>Crear usuario</h1>
         <p class="form-sub">Registra un nuevo usuario y asígnale un rol, ingenio y módulos.</p>
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars(usr_csrf_token()) ?>">
 
         <div class="form-field">
             <label for="nombre">Nombre</label>

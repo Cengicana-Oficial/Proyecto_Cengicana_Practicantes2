@@ -38,10 +38,8 @@ $esSuperadmin = (int) ($_SESSION['es_superadmin'] ?? 0) === 1;
 $scope = $_GET['scope'] ?? '';
 $scopeConfig = user_scope_config($scope);
 
-if (!$esSuperadmin && !$scopeConfig) {
-    header("Location: ../Menu.php");
-    exit;
-}
+require_once __DIR__ . '/_autorizacion.php';
+usr_exigir_acceso_scope($conn, $idUsuario, $esSuperadmin, $scope, $scopeConfig);
 
 $params = [];
 $where = [];
