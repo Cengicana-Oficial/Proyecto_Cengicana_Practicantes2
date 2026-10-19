@@ -7,6 +7,12 @@
             <input type="text" class="form-control" placeholder="Buscar por codigo o nombre..." v-model="busqueda">
           </div>
           <div class="col-md-3">
+            <select class="form-control" v-model="filtroPrograma">
+              <option :value="null">Todos los programas</option>
+              <option v-for="prog in programas" :key="prog.id" :value="prog.id">{{ prog.nombre }}</option>
+            </select>
+          </div>
+          <div class="col-md-2">
             <select class="form-control" v-model="filtroEstado">
               <option value="">Todos los estados</option>
               <option value="Activo">Activo</option>
@@ -14,7 +20,7 @@
               <option value="Finalizado">Finalizado</option>
             </select>
           </div>
-          <div class="col-md-5 text-right">
+          <div class="col-md-3 text-right">
             <button v-if="puedeCrear" class="btn btn-success" @click="abrirCrear">
               <i class="fas fa-plus"></i> Nuevo proyecto
             </button>
@@ -148,6 +154,8 @@ export default {
       items: this.proyectos.slice(),
       busqueda: '',
       filtroEstado: '',
+      // ?programa=ID llega desde "Ver proyectos" en la pagina de Programas.
+      filtroPrograma: Number(new URLSearchParams(window.location.search).get('programa')) || null,
       editando: null,
       form: this.formVacio(),
       errors: {},
@@ -160,7 +168,8 @@ export default {
       return this.items.filter((p) => {
         const matchQ = !q || (p.codigo + ' ' + p.nombre).toLowerCase().includes(q);
         const matchEstado = !this.filtroEstado || p.estado === this.filtroEstado;
-        return matchQ && matchEstado;
+        const matchPrograma = !this.filtroPrograma || p.programa_id === this.filtroPrograma;
+        return matchQ && matchEstado && matchPrograma;
       });
     },
   },
@@ -173,7 +182,7 @@ export default {
     },
     abrirCrear() {
       this.editando = null;
-      this.form = this.formVacio();
+      this.form = { ...this.formVacio(), programa_id: this.filtroPrograma };
       this.errors = {};
       window.$(this.$refs.modal).modal('show');
     },

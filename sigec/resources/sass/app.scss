@@ -748,3 +748,12 @@ body.sigec-shell {
     .sigec-shell .cengi-topbar { display: none !important; }
     .sigec-shell .cengi-lab-content { margin-left: 0 !important; padding: 0 !important; }
 }
+
+/*
+ * Capas: el sidebar (1060) y el topbar (1050) quedaban por encima de los
+ * modales de Bootstrap (1050 / backdrop 1040). Modales sobre el layout y
+ * SweetAlert (confirmaciones, toasts) sobre los modales.
+ */
+.sigec-shell .modal-backdrop { z-index: 1070; }
+.sigec-shell .modal { z-index: 1080; }
+.sigec-shell .swal2-container { z-index: 1090; }
