@@ -1,0 +1,23 @@
+<?php
+$cvDigital=cengi_cv_ready($db)?cengi_cv_leer($db,$id):null;
+$soloEnlace = !empty($soloDigital);
+$cvEntregado=$cvDigital && in_array($cvDigital['estado'], ['enviado','validado'], true);
+$cvToken=(string)($_SESSION['cv_enlace_'.$id]??'');
+$cvLink=$cvToken!==''?cengi_cv_enlace($db,$cvToken):null;
+$envCv=cengicursos_env();$baseCv=rtrim((string)($envCv['APP_URL']??''),'/');
+if($baseCv==='')$baseCv=((!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')?'https':'http').'://'.($_SERVER['HTTP_HOST']??'localhost:8085');
+$cvUrl=$baseCv.'/cengicursos/instructor_cv.php?token='.rawurlencode($cvToken);
+?>
+<section class="fi-cv-digital" id="cv-digital" style="padding:20px;margin-bottom:18px;border:1px solid #d5e2ca;border-radius:12px;background:#f8fbf5">
+<h3 class="fi-h">CV digital</h3><?php if(!$cvEntregado || $soloEnlace):?><p>Genera y comparte el enlace del formulario para que el instructor complete su CV digital.</p><?php endif;?>
+<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+<?php if((!$cvEntregado || $soloEnlace) && !$cvLink):?><form method="post"><input type="hidden" name="accion" value="cv_enlace"><input type="hidden" name="tab" value="documentos"><input type="hidden" name="digital" value="<?=$soloEnlace?1:0?>"><input type="hidden" name="csrf" value="<?=cengi_pp_h($_SESSION['cv_gestion_csrf'])?>"><button class="fi-btn" type="submit">Generar enlace del formulario</button></form><?php endif;?>
+<?php if($cvDigital && !$soloEnlace):?><a class="fi-btn is-linea" href="instructor_cv.php?id=<?=$id?>" target="_blank" rel="noopener">Ver CV digital</a><a class="fi-btn is-linea" href="instructor_cv.php?id=<?=$id?>&editar=1">Editar CV digital</a><span class="fi-chip is-verde"><?=cengi_pp_h(['borrador'=>'Borrador en progreso','enviado'=>'CV enviado · por revisar','validado'=>'CV validado'][$cvDigital['estado']]??$cvDigital['estado'])?></span><?php endif;?>
+</div>
+<?php if($cvLink && (!$cvEntregado || $soloEnlace)):?><div style="margin-top:14px"><label for="cv-enlace">Enlace individual para compartir con el instructor</label><input class="form-control" id="cv-enlace" value="<?=cengi_pp_h($cvUrl)?>" readonly onclick="this.select()"><small>Vence el <?=cengi_pp_h($cvLink['expira_en'])?>. Se cierra al enviar el CV. Comparte este enlace únicamente con el instructor.</small>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px"><button class="fi-btn is-linea" type="button" onclick="var e=document.getElementById('cv-enlace');e.select();if(navigator.clipboard){navigator.clipboard.writeText(e.value).then(function(){document.getElementById('cv-copiado').textContent='Enlace copiado';}).catch(function(){document.getElementById('cv-copiado').textContent='Seleccionado: usa Ctrl+C para copiar';});}else{document.getElementById('cv-copiado').textContent='Seleccionado: usa Ctrl+C para copiar';}">Copiar enlace</button><span id="cv-copiado" role="status"></span>
+<form method="post"><input type="hidden" name="accion" value="cv_revocar"><input type="hidden" name="tab" value="documentos"><input type="hidden" name="digital" value="<?=$soloEnlace?1:0?>"><input type="hidden" name="csrf" value="<?=cengi_pp_h($_SESSION['cv_gestion_csrf'])?>"><button class="fi-btn is-texto">Desactivar enlace</button></form></div>
+<?php if(empty($envCv['APP_URL'])):?><p><small>Para compartirlo fuera de esta computadora, configura APP_URL con la dirección accesible del sistema. Un enlace localhost solo abre en esta misma computadora.</small></p><?php endif;?></div><?php endif;?>
+<?php if(!$soloEnlace&&$cvDigital&&$cvDigital['estado']==='enviado'):?><details style="margin-top:16px"><summary>Revisar y validar por Capacitación</summary><p>Consulta el CV digital antes de validar. Estos campos no están disponibles para el instructor.</p><form method="post"><input type="hidden" name="accion" value="cv_validar"><input type="hidden" name="tab" value="documentos"><input type="hidden" name="digital" value="<?=$soloEnlace?1:0?>"><input type="hidden" name="csrf" value="<?=cengi_pp_h($_SESSION['cv_gestion_csrf'])?>"><input type="hidden" name="revision" value="<?=hash('sha256',$cvDigital['datos'])?>"><p>Los cursos a impartir se actualizan automáticamente con las asignaciones del instructor.</p><p>Validará: <?=cengi_pp_h(cengi_pp_usuario_nombre())?></p><button class="fi-btn">Validar CV digital</button></form></details><?php endif;?>
+<?php if(!$soloEnlace&&$cvDigital&&$cvDigital['estado']==='validado'):?><p style="margin-top:12px">Validado por <?=cengi_pp_h($cvDigital['validado_por'])?> · <?=cengi_pp_h($cvDigital['validado_en'])?></p><?php endif;?>
+</section>

@@ -9,6 +9,15 @@ if (cengi_es_estudiante()) {
     exit;
 }
 
+// "Participantes por curso" se unificó en Seguimiento por curso (ver_participante_curso.php):
+// quien puede calificar va allá con el mismo curso y aviso. Aquí quedan la vista de consulta
+// (roles que solo ven participantes) y la de retirados del curso (estado inactivo / todos).
+if (cengi_puede_calificar() && !in_array($_GET['estado'] ?? '', ['inactivo', 'todos'], true)) {
+    $destino = array_filter(['id' => (int) ($_GET['curso_id'] ?? 0), 'mensaje' => (string) ($_GET['mensaje'] ?? ''), 'error' => (string) ($_GET['error'] ?? '')]);
+    header('Location: ver_participante_curso.php' . ($destino ? '?' . http_build_query($destino) : ''));
+    exit;
+}
+
 $db = conectar();
 $puedeCargar = cengi_puede_cargar_participantes();
 $puedeEditar = cengi_puede_editar_participantes();
@@ -192,6 +201,34 @@ function cengi_part_estado($fila)
     return ['Activo', 'is-active'];
 }
 
+// Conteo por estado del curso (sin la búsqueda) para las pestañas de filtro.
+$conteoEstados = ['todos' => 0, 'activo' => 0, 'aprobado' => 0, 'inactivo' => 0];
+if ($cursoId > 0) {
+    $condicionesConteo = ['a.cursos_id = ?'];
+    $paramsConteo = [$cursoId];
+    if (!cengi_ve_todo_por_rol_o_ingenio()) {
+        $condicionesConteo[] = 'p.ingenio_id = ?';
+        $paramsConteo[] = cengi_ingenio_id_actual();
+    }
+    $stmtConteo = $db->prepare("
+        SELECT COUNT(*) AS todos,
+               SUM(p.estado_participantes = 1 AND a.estado_asignaciones = 1) AS activo,
+               SUM(p.estado_participantes = 1 AND a.estado_asignaciones = 1 AND CAST(cc.posevaluacion AS DECIMAL(10,2)) >= " . CENGI_NOTA_APROBACION . ") AS aprobado,
+               SUM(p.estado_participantes = 0 OR a.estado_asignaciones = 0) AS inactivo
+        FROM asignaciones a
+        INNER JOIN participantes p ON p.id = a.participantes_id
+        LEFT JOIN control_cursos cc ON cc.asignacion_id = a.id
+        WHERE " . implode(' AND ', $condicionesConteo));
+    $stmtConteo->execute($paramsConteo);
+    $conteoEstados = array_map('intval', $stmtConteo->fetch(PDO::FETCH_ASSOC) ?: $conteoEstados);
+}
+$pestanasEstado = cengi_ve_todo_por_rol_o_ingenio()
+    ? ['todos' => 'Todos', 'activo' => 'Activos', 'aprobado' => 'Aprobados', 'inactivo' => 'Inactivos']
+    : ['activo' => 'Activos', 'aprobado' => 'Aprobados'];
+$urlEstado = static function ($valor) use ($cursoId, $busqueda) {
+    return 'participantes.php?' . http_build_query(array_filter(['curso_id' => $cursoId, 'q' => $busqueda, 'estado' => $valor], 'strlen'));
+};
+
 $parametrosExportacion = [
     'curso_id' => $cursoId,
     'q' => $busqueda,
@@ -209,13 +246,15 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
     <link rel="stylesheet" href="css/bootstrap.min.css">
     <link rel="stylesheet" href="css/bootstrap-theme.css">
     <link rel="stylesheet" href="css/proyecto.css?v=<?php echo (int) (@filemtime(__DIR__ . '/css/proyecto.css') ?: 1); ?>">
+    <link rel="stylesheet" href="css/cengi-tema.css?v=<?php echo (int) (@filemtime(__DIR__ . '/css/cengi-tema.css') ?: 1); ?>">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
 </head>
-<body class="cengi-canvas cengi-participants-page">
+<body class="cengi-canvas cengi-participants-page cg-tema">
 <?php menu_render(); ?>
 
 <main class="container-fluid cengi-participants-shell">
+    <?php cengi_banner(); ?>
     <?php if ($mensaje !== ''): ?>
         <div class="alert alert-success alert-dismissible cengi-flash" role="alert">
             <button type="button" class="close" data-dismiss="alert" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
@@ -249,98 +288,136 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
         </div>
     <?php endif; ?>
 
-    <section class="cengi-participants-toolbar-card">
-        <form method="get" class="cengi-participants-toolbar" id="participant-filters">
-            <div class="cengi-participants-course-select">
-                <label for="curso_id">Curso</label>
-                <select class="form-control" name="curso_id" id="curso_id">
-                    <?php foreach ($cursos as $curso): ?>
-                        <?php
-                        $codigoCurso = $curso['codigo_curso'] ?? '';
-                        if ($codigoCurso === null || $codigoCurso === '') {
-                            $codigoCurso = 'CEN-' . str_pad((string) $curso['id'], 3, '0', STR_PAD_LEFT);
-                        }
-                        ?>
-                        <option value="<?php echo (int) $curso['id']; ?>" <?php echo (int) $curso['id'] === $cursoId ? 'selected' : ''; ?>>
-                            <?php echo cengi_part_html($codigoCurso . ' — ' . $curso['nombre_cursos'] . (!empty($curso['anio']) ? ' — ' . $curso['anio'] : '')); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="cengi-participants-search">
-                <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
-                <input type="search" class="form-control" name="q" value="<?php echo cengi_part_html($busqueda); ?>" placeholder="Buscar por nombre, CUI, ingenio o área">
-            </div>
-            <div class="cengi-participants-state-select">
-                <label for="estado">Estado</label>
-                <select class="form-control" name="estado" id="estado">
-                    <?php if (cengi_ve_todo_por_rol_o_ingenio()): ?>
-                        <option value="todos" <?php echo $estado === 'todos' ? 'selected' : ''; ?>>Todos</option>
+    <?php
+        $codigoActual = $cursoResumen ? ($cursoResumen['codigo_curso'] ?: 'CEN-' . str_pad((string) $cursoId, 3, '0', STR_PAD_LEFT)) : '';
+        $totalFilas = count($filas);
+        $pctAprobados = $conNota ? round($resumenAprobados / count($conNota) * 100) : 0;
+        $pctDiplomas = $totalFilas ? round($resumenDiplomas / $totalFilas * 100) : 0;
+        $sesionesTotal = $cursoResumen ? (int) $cursoResumen['sesiones_total'] : 0;
+    ?>
+    <section class="cengi-seg-hero">
+        <div class="cengi-seg-hero-main">
+            <?php if ($cursoResumen): ?>
+                <span class="cengi-seg-eyebrow"><?php echo cengi_part_html($codigoActual); ?> · Participantes del curso</span>
+                <h2 class="cengi-seg-title"><?php echo cengi_part_html($cursoResumen['nombre_cursos']); ?></h2>
+                <div class="cengi-seg-meta">
+                    <?php if (!empty($cursoResumen['inicio']) && $cursoResumen['inicio'] !== '0000-00-00'): ?>
+                        <span><span class="glyphicon glyphicon-calendar" aria-hidden="true"></span> <?php echo cengi_part_html(date('d/m/Y', strtotime($cursoResumen['inicio'])) . (!empty($cursoResumen['fin']) && $cursoResumen['fin'] !== '0000-00-00' ? ' – ' . date('d/m/Y', strtotime($cursoResumen['fin'])) : '')); ?></span>
                     <?php endif; ?>
-                    <option value="activo" <?php echo $estado === 'activo' ? 'selected' : ''; ?>>Activos</option>
-                    <option value="aprobado" <?php echo $estado === 'aprobado' ? 'selected' : ''; ?>>Aprobados</option>
-                    <?php if (cengi_ve_todo_por_rol_o_ingenio()): ?>
-                        <option value="inactivo" <?php echo $estado === 'inactivo' ? 'selected' : ''; ?>>Inactivos</option>
+                    <?php if ($cursoConModulos): ?>
+                        <span><span class="glyphicon glyphicon-th-list" aria-hidden="true"></span> <?php echo (int) $cursoResumen['modulos']; ?> módulo<?php echo (int) $cursoResumen['modulos'] === 1 ? '' : 's'; ?></span>
                     <?php endif; ?>
-                </select>
-            </div>
-            <button type="submit" class="btn btn-default"><span class="glyphicon glyphicon-filter"></span> Filtrar</button>
-        </form>
-
-        <div class="cengi-participants-toolbar-actions">
-            <?php if ($puedeCalificar): ?>
-                <button type="button" class="btn btn-default" data-toggle="modal" data-target="#bulk-grades-modal"><span class="glyphicon glyphicon-upload"></span> Cargar calificaciones (CSV)</button>
+                    <?php if ($sesionesTotal > 0): ?>
+                        <span><span class="glyphicon glyphicon-time" aria-hidden="true"></span> <?php echo $sesionesCurso; ?> de <?php echo $sesionesTotal; ?> sesiones impartidas</span>
+                    <?php endif; ?>
+                </div>
+                <a class="cengi-seg-hero-link" href="ver_participante_curso.php?id=<?php echo (int) $cursoId; ?>"><span class="glyphicon glyphicon-list-alt" aria-hidden="true"></span> Abrir seguimiento del curso</a>
+            <?php else: ?>
+                <span class="cengi-seg-eyebrow">Participantes por curso</span>
+                <h2 class="cengi-seg-title">Selecciona un curso</h2>
             <?php endif; ?>
-            <?php if ($puedeCargar): ?>
-                <button type="button" class="btn btn-default" data-toggle="modal" data-target="#bulk-participants-modal"><span class="glyphicon glyphicon-user"></span> Cargar participantes</button>
-            <?php endif; ?>
-            <div class="btn-group">
-                <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" <?php echo $cursoId > 0 ? '' : 'disabled'; ?>>
-                    <span class="glyphicon glyphicon-download-alt"></span> Descargar listado <span class="caret"></span>
-                </button>
-                <ul class="dropdown-menu dropdown-menu-right">
-                    <li><a href="<?php echo cengi_part_html($urlExportacion . '&format=pdf'); ?>" download><span class="glyphicon glyphicon-file"></span> Descargar PDF</a></li>
-                    <li><a href="<?php echo cengi_part_html($urlExportacion . '&format=excel'); ?>" download><span class="glyphicon glyphicon-list-alt"></span> Descargar Excel</a></li>
-                </ul>
-            </div>
         </div>
+        <form method="get" class="cengi-seg-switch">
+            <label for="curso_id">Curso</label>
+            <select class="form-control" name="curso_id" id="curso_id" onchange="this.form.submit()">
+                <?php foreach ($cursos as $curso): ?>
+                    <?php
+                    $codigoCurso = $curso['codigo_curso'] ?? '';
+                    if ($codigoCurso === null || $codigoCurso === '') {
+                        $codigoCurso = 'CEN-' . str_pad((string) $curso['id'], 3, '0', STR_PAD_LEFT);
+                    }
+                    ?>
+                    <option value="<?php echo (int) $curso['id']; ?>" <?php echo (int) $curso['id'] === $cursoId ? 'selected' : ''; ?>>
+                        <?php echo cengi_part_html($codigoCurso . ' — ' . $curso['nombre_cursos'] . (!empty($curso['anio']) ? ' — ' . $curso['anio'] : '')); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <input type="hidden" name="estado" value="<?php echo cengi_part_html($estado); ?>">
+        </form>
     </section>
 
     <?php if ($cursoResumen): ?>
-    <section class="cengi-psum">
-        <div class="cengi-psum-head">
+    <div class="cengi-seg-kpis cengi-part-kpis">
+        <div class="cengi-seg-kpi">
+            <span class="cengi-seg-kpi-icon"><span class="glyphicon glyphicon-user"></span></span>
+            <div><div class="cengi-seg-kpi-val"><?php echo $totalFilas; ?></div><div class="cengi-seg-kpi-label">Participantes · <?php echo count($conNota); ?> con nota final</div></div>
+        </div>
+        <div class="cengi-seg-kpi is-ok">
+            <span class="cengi-seg-kpi-icon"><span class="glyphicon glyphicon-ok"></span></span>
             <div>
-                <span class="cengi-psum-code"><?php echo cengi_part_html($cursoResumen['codigo_curso'] ?: 'CEN-' . str_pad((string) $cursoId, 3, '0', STR_PAD_LEFT)); ?></span>
-                <h2><?php echo cengi_part_html($cursoResumen['nombre_cursos']); ?></h2>
-                <p>
-                    <?php
-                    $detalle = [];
-                    if (!empty($cursoResumen['inicio']) && $cursoResumen['inicio'] !== '0000-00-00') {
-                        $detalle[] = date('d/m/Y', strtotime($cursoResumen['inicio'])) . (!empty($cursoResumen['fin']) && $cursoResumen['fin'] !== '0000-00-00' ? ' – ' . date('d/m/Y', strtotime($cursoResumen['fin'])) : '');
-                    }
-                    if ($cursoConModulos) {
-                        $detalle[] = (int) $cursoResumen['modulos'] . ' módulo' . ((int) $cursoResumen['modulos'] === 1 ? '' : 's');
-                    }
-                    if ((int) $cursoResumen['sesiones_total'] > 0) {
-                        $detalle[] = $sesionesCurso . ' de ' . (int) $cursoResumen['sesiones_total'] . ' sesiones impartidas';
-                    }
-                    echo cengi_part_html(implode(' · ', $detalle) ?: 'Resumen del seguimiento del curso');
-                    ?>
-                </p>
+                <div class="cengi-seg-kpi-val"><?php echo $resumenAprobados; ?><?php if ($conNota): ?> <small><?php echo $pctAprobados; ?>%</small><?php endif; ?></div>
+                <div class="cengi-seg-kpi-label"><?php echo $conNota ? 'Aprobados de los evaluados' : 'Aprobados · sin notas aún'; ?></div>
+                <span class="cengi-seg-kpi-bar"><span style="width:<?php echo $pctAprobados; ?>%"></span></span>
             </div>
-            <a class="btn btn-default" href="ver_participante_curso.php?id=<?php echo (int) $cursoId; ?>"><span class="glyphicon glyphicon-list-alt"></span> Abrir seguimiento del curso</a>
         </div>
-        <div class="cengi-psum-kpis">
-            <div class="cengi-psum-kpi"><span>Participantes</span><strong><?php echo count($filas); ?></strong><small><?php echo count($conNota); ?> con nota final</small></div>
-            <div class="cengi-psum-kpi is-ok"><span>Aprobados</span><strong><?php echo $resumenAprobados; ?></strong><small><?php echo $conNota ? round($resumenAprobados / count($conNota) * 100) . '% de los evaluados' : 'Sin notas aún'; ?></small></div>
-            <div class="cengi-psum-kpi"><span>Asistencia promedio</span><strong><?php echo $resumenAsistencia !== null ? round($resumenAsistencia) . '%' : '—'; ?></strong><small>Acumulada del curso</small></div>
-            <div class="cengi-psum-kpi"><span>Nota final promedio</span><strong><?php echo $resumenNota !== null ? cengi_part_nota($resumenNota) : '—'; ?></strong><small><?php echo $cursoConModulos ? 'Promedio de módulos por horas' : 'Sobre 100 puntos'; ?></small></div>
-            <div class="cengi-psum-kpi"><span>Diplomas</span><strong><?php echo $resumenDiplomas; ?><em>/<?php echo count($filas); ?></em></strong><small><?php echo count($filas) - $resumenDiplomas; ?> pendiente<?php echo count($filas) - $resumenDiplomas === 1 ? '' : 's'; ?></small></div>
+        <div class="cengi-seg-kpi is-info">
+            <span class="cengi-seg-kpi-icon"><span class="glyphicon glyphicon-check"></span></span>
+            <div>
+                <div class="cengi-seg-kpi-val"><?php echo $resumenAsistencia !== null ? round($resumenAsistencia) . '%' : '—'; ?></div>
+                <div class="cengi-seg-kpi-label">Asistencia promedio</div>
+                <span class="cengi-seg-kpi-bar"><span style="width:<?php echo $resumenAsistencia !== null ? round(min(100, $resumenAsistencia)) : 0; ?>%"></span></span>
+            </div>
         </div>
-    </section>
+        <div class="cengi-seg-kpi is-gold">
+            <span class="cengi-seg-kpi-icon"><span class="glyphicon glyphicon-star"></span></span>
+            <div>
+                <div class="cengi-seg-kpi-val"><?php echo $resumenNota !== null ? cengi_part_nota($resumenNota) . ' <small>pts</small>' : '—'; ?></div>
+                <div class="cengi-seg-kpi-label"><?php echo $cursoConModulos ? 'Nota final · promedio de módulos' : 'Nota final promedio'; ?></div>
+                <span class="cengi-seg-kpi-bar"><span style="width:<?php echo $resumenNota !== null ? round(min(100, $resumenNota)) : 0; ?>%"></span></span>
+            </div>
+        </div>
+        <div class="cengi-seg-kpi is-violet">
+            <span class="cengi-seg-kpi-icon"><span class="glyphicon glyphicon-education"></span></span>
+            <div>
+                <div class="cengi-seg-kpi-val"><?php echo $resumenDiplomas; ?> <small>/ <?php echo $totalFilas; ?></small></div>
+                <div class="cengi-seg-kpi-label">Diplomas · <?php echo $totalFilas - $resumenDiplomas; ?> pendiente<?php echo $totalFilas - $resumenDiplomas === 1 ? '' : 's'; ?></div>
+                <span class="cengi-seg-kpi-bar"><span style="width:<?php echo $pctDiplomas; ?>%"></span></span>
+            </div>
+        </div>
+    </div>
     <?php endif; ?>
 
     <section class="cengi-participants-table-card cengi-psum-table">
+        <div class="cengi-part-toolbar">
+            <nav class="cengi-part-estados" aria-label="Filtrar por estado">
+                <?php foreach ($pestanasEstado as $valor => $texto): ?>
+                    <a href="<?php echo cengi_part_html($urlEstado($valor)); ?>" class="cengi-part-estado<?php echo $estado === $valor ? ' is-active' : ''; ?>"<?php echo $estado === $valor ? ' aria-current="true"' : ''; ?>>
+                        <?php echo cengi_part_html($texto); ?> <b><?php echo (int) ($conteoEstados[$valor] ?? 0); ?></b>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+            <form method="get" class="cengi-part-buscar" id="participant-filters" role="search">
+                <input type="hidden" name="curso_id" value="<?php echo (int) $cursoId; ?>">
+                <input type="hidden" name="estado" value="<?php echo cengi_part_html($estado); ?>">
+                <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+                <input type="search" class="form-control" name="q" value="<?php echo cengi_part_html($busqueda); ?>" placeholder="Buscar por nombre, CUI, ingenio o área" aria-label="Buscar participantes">
+                <?php if ($busqueda !== ''): ?>
+                    <a href="<?php echo cengi_part_html('participantes.php?' . http_build_query(['curso_id' => $cursoId, 'estado' => $estado])); ?>" class="cengi-part-limpiar" aria-label="Limpiar búsqueda">&times;</a>
+                <?php endif; ?>
+            </form>
+            <div class="cengi-part-acciones">
+                <?php if ($puedeCalificar): ?>
+                    <button type="button" class="btn btn-default btn-sm" data-toggle="modal" data-target="#bulk-grades-modal"><span class="glyphicon glyphicon-upload"></span> Calificaciones (CSV)</button>
+                <?php endif; ?>
+                <?php if ($puedeCargar): ?>
+                    <button type="button" class="btn btn-default btn-sm" data-toggle="modal" data-target="#bulk-participants-modal"><span class="glyphicon glyphicon-user"></span> Cargar participantes</button>
+                <?php endif; ?>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-primary btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" <?php echo $cursoId > 0 ? '' : 'disabled'; ?>>
+                        <span class="glyphicon glyphicon-download-alt"></span> Descargar <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-right">
+                        <li><a href="<?php echo cengi_part_html($urlExportacion . '&format=pdf'); ?>" download><span class="glyphicon glyphicon-file"></span> Listado en PDF</a></li>
+                        <li><a href="<?php echo cengi_part_html($urlExportacion . '&format=excel'); ?>" download><span class="glyphicon glyphicon-list-alt"></span> Listado en Excel</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <?php if ($busqueda !== ''): ?>
+            <div class="cengi-part-busqueda-aviso">
+                <?php echo $totalFilas; ?> resultado<?php echo $totalFilas === 1 ? '' : 's'; ?> para «<?php echo cengi_part_html($busqueda); ?>»
+            </div>
+        <?php endif; ?>
         <div class="table-responsive">
             <table class="table cengi-participants-table">
                 <thead>
@@ -379,7 +456,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                                 </span>
                             </div>
                         </td>
-                        <td><span class="cengi-participant-cui"><?php echo cengi_part_html($fila['cui_participantes']); ?></span></td>
+                        <td><span class="cengi-participant-cui"><?php echo cengi_part_html($fila['cui_participantes']); ?></span><?php if (cengi_cui_nd_es_generado($fila['cui_participantes'])): ?> <small class="cengi-cui-sd" title="Código de referencia asignado por el sistema: reemplázalo por su documento cuando lo tenga">Sin documento</small><?php endif; ?></td>
                         <td><span class="cengi-psum-chip"><?php echo cengi_part_html($fila['nombre_ingenios']); ?></span></td>
                         <td>
                             <div class="cengi-psum-attendance<?php echo $claseAsistencia; ?>">
@@ -452,7 +529,7 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
                 <input type="hidden" name="id" id="participant-edit-id"><input type="hidden" name="curso_id" value="<?php echo $cursoId; ?>">
                 <div class="cengi-participant-modal-grid">
                     <div class="form-group"><label for="participant-edit-name">Nombre completo</label><input class="form-control" id="participant-edit-name" name="nombre_participantes" required></div>
-                    <div class="form-group"><label for="participant-edit-cui">CUI</label><input class="form-control" id="participant-edit-cui" name="cui_participantes" required></div>
+                    <div class="form-group"><label for="participant-edit-cui">Documento (DPI, pasaporte u otro)</label><input class="form-control" id="participant-edit-cui" name="cui_participantes" maxlength="25" placeholder="En blanco: se conserva el actual" title="Reemplaza el código de referencia (NNNND) por su documento cuando lo tenga: el anterior queda en el historial."></div>
                     <div class="form-group"><label for="participant-edit-company">Ingenio</label><select class="form-control" id="participant-edit-company" name="ingenio" required><?php foreach ($ingenios as $ingenio): ?><option value="<?php echo (int) $ingenio['id']; ?>"><?php echo cengi_part_html($ingenio['nombre_ingenios']); ?></option><?php endforeach; ?></select></div>
                     <div class="form-group"><label for="participant-edit-area">Área</label><input class="form-control" id="participant-edit-area" name="area_participantes" required></div>
                     <div class="form-group"><label for="participant-edit-position">Puesto</label><input class="form-control" id="participant-edit-position" name="puesto_participantes" required></div>
@@ -584,11 +661,8 @@ $urlExportacion = 'exportarparticipantes.php?' . http_build_query($parametrosExp
 (function () {
     'use strict';
     var CENGI_CURSO_ID = <?php echo (int) $cursoId; ?>;
-    var filters = document.getElementById('participant-filters');
-    ['curso_id', 'estado'].forEach(function (id) {
-        var field = document.getElementById(id);
-        if (field) field.addEventListener('change', function () { filters.submit(); });
-    });
+    // El selector de curso se envía solo (onchange en su propio formulario) y el estado
+    // se elige con las pestañas, que son enlaces.
 
     $('#participant-edit-modal').on('show.bs.modal', function (event) {
         var trigger = event.relatedTarget;

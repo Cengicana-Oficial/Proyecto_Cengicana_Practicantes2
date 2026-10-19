@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/planificacion_helpers.php';
-require_once __DIR__ . '/menu.php';
+require_once __DIR__ . '/calendario_ics_helpers.php';
+require_once __DIR__ . '/revisar_permisos.php';
 
 cengi_require_admin();
 
@@ -14,7 +15,7 @@ const CENGI_PLAN_MENSAJES = [
     'actualizado' => 'Planificación actualizada.',
     'aprobado' => 'Planificación aprobada: la convocatoria está abierta en el formulario de inscripción. El curso pasa a Cursos al completar el cupo mínimo de inscripciones validadas.',
     'curso_abierto' => 'Curso abierto: ya aparece en Cursos.',
-    'reprogramado' => 'Curso reprogramado. Revisa la bitácora para notificar a los inscritos.',
+    'reprogramado' => 'Curso reprogramado. Avisa a los inscritos desde Comunicaciones → Por avisar.',
     'cancelado' => 'Planificación cancelada.',
     'reactivado' => 'Planificación reactivada como planificada.',
     'eliminado' => 'Planificación eliminada.',
@@ -23,7 +24,7 @@ const CENGI_PLAN_MENSAJES = [
 ];
 
 /** Lee y valida el formulario de planificacion. */
-function cengi_plan_leer_form(PDO $db)
+function cengi_plan_leer_form(PDO $db, $vinculado = false)
 {
     $texto = static function ($campo, $max) {
         $valor = trim((string) ($_POST[$campo] ?? ''));
@@ -94,6 +95,16 @@ function cengi_plan_leer_form(PDO $db)
     if ($v['cupo_maximo'] !== null && ($v['cupo_maximo'] < $v['cupo_minimo'] || $v['cupo_maximo'] > 10000)) {
         $errores[] = 'El cupo máximo no puede ser menor que el mínimo.';
     }
+    // Módulos: todos con su número de sesiones (se asignan solos por número de sesión) o ninguno.
+    // Con el curso creado los módulos se editan en el curso, así que aquí no se validan.
+    $modulos = cengi_pp_parse_modulos($v['modulos']);
+    $conSesiones = count(array_filter(array_column($modulos, 'sesiones')));
+    if (!$vinculado && $conSesiones && $conSesiones < count($modulos)) {
+        $errores[] = 'Indica el número de sesiones de todos los módulos (o de ninguno).';
+    } elseif (!$vinculado && $conSesiones && array_sum(array_column($modulos, 'sesiones')) !== $v['sesiones_planificadas']) {
+        $errores[] = 'Los módulos suman ' . array_sum(array_column($modulos, 'sesiones')) . ' sesiones y el plan indica ' . $v['sesiones_planificadas'] . '. Ajusta los módulos o el número de sesiones.';
+    }
+    $v['modulos'] = $vinculado ? $v['modulos'] : cengi_pp_serializar_modulos($modulos);
     if ($errores) {
         throw new InvalidArgumentException(implode('<br>', array_map('cengi_pp_h', $errores)));
     }
@@ -131,7 +142,7 @@ function cengi_plan_diferencias(PDO $db, array $p, array $v)
         ['Edición', 'Categoría', $nombre('categorias_cursos', 'descripcion_categorias_cursos', $p['categoria_curso_id']), $nombre('categorias_cursos', 'descripcion_categorias_cursos', $v['categoria_curso_id'])],
         ['Edición', 'Área técnica', $p['area_tecnica'], $v['area_tecnica']],
         ['Edición', 'Tipo de actividad', $p['actividad_tipo'], $v['actividad_tipo']],
-        ['Edición', 'Módulos', trim((string) $p['modulos']), trim((string) $v['modulos'])],
+        ['Edición', 'Módulos', cengi_pp_serializar_modulos(cengi_pp_parse_modulos($p['modulos'])), cengi_pp_serializar_modulos(cengi_pp_parse_modulos($v['modulos']))],
         ['Edición', 'Observaciones', trim((string) $p['observaciones']) ?: '—', trim((string) $v['observaciones']) ?: '—'],
         ['Edición', 'Año', cengi_pp_anio_texto($p['anio']), cengi_pp_anio_texto($v['anio'])],
     ];
@@ -153,9 +164,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id > 0 && !$plan) {
             throw new InvalidArgumentException('La planificación ya no existe.');
         }
+        // Reprogramar, cancelar o eliminar mueve o quita sesiones: se actualizan los calendarios ya invitados.
+        $icsAntes = $plan && in_array($accion, ['reprogramar', 'cancelar', 'eliminar', 'guardar'], true) ? cengi_ics_instantanea($db, [], $plan['id']) : [];
 
         if ($accion === 'guardar') {
-            $v = cengi_plan_leer_form($db);
+            if (!empty($plan['curso_id'])) {
+                // Con el curso creado, esos datos se editan en Gestión de cursos: se ignora lo que llegue del formulario.
+                foreach (CENGI_PP_CAMPOS_CURSO as $campo) {
+                    $_POST[$campo] = (string) $plan[$campo];
+                }
+            }
+            $v = cengi_plan_leer_form($db, !empty($plan['curso_id']));
             $aprobar = !empty($_POST['aprobar']);
             if (!$plan) {
                 $v['creado_por'] = cengi_usuario_actual_id() ?: null;
@@ -188,7 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 })) {
                     $db->prepare("UPDATE planificacion_cursos SET estado = 'reprogramado' WHERE id = ?")->execute([$id]);
                 }
-                cengi_pp_sincronizar_curso($db, $id);
+                cengi_pp_asignar_modulos($db, $id);
                 $plan = cengi_pp_plan($db, $id);
                 $codigoMensaje = $diferencias ? 'actualizado' : 'sin_cambios';
             }
@@ -215,20 +234,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($fi === $plan['fecha_inicio'] && $ff === $plan['fecha_fin']) {
                 throw new InvalidArgumentException('Las fechas son iguales a las actuales.');
             }
-            $desplazamiento = cengi_pp_dias_entre($plan['fecha_inicio'], $fi);
-            $movidas = 0;
-            if (!empty($_POST['mover_sesiones']) && $desplazamiento !== 0) {
-                $stmt = $db->prepare("UPDATE curso_sesiones SET fecha = DATE_ADD(fecha, INTERVAL ? DAY) WHERE planificacion_id = ? AND estado = 'programada' AND liquidacion_id IS NULL");
-                $stmt->execute([$desplazamiento, $id]);
-                $movidas = $stmt->rowCount();
+            $movidas = ['movidas' => 0, 'fijas' => 0, 'dias' => 0, 'primera' => null];
+            if (!empty($_POST['mover_sesiones'])) {
+                $movidas = cengi_pp_mover_sesiones($db, $id, $plan['fecha_inicio'], $fi, !empty($_POST['mismo_dia']));
+                // Que el plan cubra todas las sesiones pendientes ya movidas.
+                $ultima = $db->prepare('SELECT MAX(s.fecha) FROM curso_sesiones s WHERE s.planificacion_id = ? AND ' . CENGI_PP_SESION_MOVIBLE);
+                $ultima->execute([$id]);
+                $ultima = (string) $ultima->fetchColumn();
+                if ($ultima !== '' && $ultima > $ff) {
+                    $ff = $ultima;
+                }
             }
+            $extra += ['mov' => $movidas['movidas'], 'fijas' => $movidas['fijas']];
             $db->prepare("UPDATE planificacion_cursos SET fecha_inicio = ?, fecha_fin = ?, estado = IF(estado IN ('aprobado', 'reprogramado'), 'reprogramado', estado) WHERE id = ?")
                 ->execute([$fi, $ff, $id]);
-            cengi_pp_log($db, $plan, 'Reprogramación', 'Fechas del curso' . ($movidas ? ' (' . $movidas . ' sesión(es) movidas ' . sprintf('%+d', $desplazamiento) . ' días)' : ''), [
+            cengi_pp_log($db, $plan, 'Reprogramación', 'Fechas del curso' . cengi_pp_texto_movidas($movidas), [
                 'antes' => cengi_pp_fecha($plan['fecha_inicio']) . ' – ' . cengi_pp_fecha($plan['fecha_fin']),
                 'despues' => cengi_pp_fecha($fi) . ' – ' . cengi_pp_fecha($ff), 'motivo' => $motivo,
             ]);
-            cengi_pp_sincronizar_curso($db, $id);
+            cengi_pp_sincronizar_fechas_curso($db, $id);
+            cengi_pp_asignar_modulos($db, $id);
             $codigoMensaje = 'reprogramado';
         } elseif ($accion === 'cancelar') {
             if ($motivo === '') {
@@ -273,7 +298,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $copia['anio'] = (int) $plan['anio'] + 1;
             $copia['fecha_inicio'] = cengi_pp_sumar_dias($plan['fecha_inicio'], 364);
             $copia['fecha_fin'] = cengi_pp_sumar_dias($plan['fecha_fin'], 364);
-            $copia['modulos'] = implode("\n", array_diff(cengi_pp_modulos_plan($db, $plan), ['Sesión única']));
+            $copia['modulos'] = cengi_pp_serializar_modulos(cengi_pp_estructura_modulos($db, $plan));
             $copia['creado_por'] = cengi_usuario_actual_id() ?: null;
             $copia['creado_por_nombre'] = cengi_pp_usuario_nombre();
             $columnas = array_keys($copia);
@@ -288,6 +313,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $db->commit();
+        $extra += cengi_ics_parametros(cengi_ics_sincronizar($db, $icsAntes));
         if (function_exists('cengi_ins_enviar_cola')) {
             // Aprobar puede completar el cupo de inscripciones ya validadas y asignarlas.
             cengi_ins_enviar_cola($db);
@@ -311,6 +337,16 @@ if ($mensaje === '' && ($_GET['msg'] ?? '') === 'importado') {
     $mensaje = 'Carga masiva aplicada: ' . (int) ($_GET['n'] ?? 0) . ' plan(es) importado(s) como planificados.';
 } elseif ($mensaje === '' && isset(CENGI_PLAN_MENSAJES[$_GET['msg'] ?? ''])) {
     $mensaje = CENGI_PLAN_MENSAJES[$_GET['msg']];
+    if ($_GET['msg'] === 'reprogramado' && isset($_GET['mov'])) {
+        $mensaje .= ' Sesiones movidas: ' . (int) $_GET['mov'] . '.';
+        if ((int) ($_GET['fijas'] ?? 0)) {
+            $mensaje .= ' ' . (int) $_GET['fijas'] . ' sesión(es) impartidas o incluidas en una liquidación de pago se conservaron en su fecha: si el curso no se impartió, revísalas en Programa de sesiones.';
+            $mensajeTipo = 'warning';
+        }
+    }
+}
+if ($mensaje !== '' && $mensajeTipo === 'success' && ($resumenIcs = cengi_ics_resumen_envio(cengi_ics_desde_parametros($_GET))) !== '') {
+    $mensaje .= ' ' . $resumenIcs;
 }
 
 // ---------------------------------------------------------------- datos
@@ -318,13 +354,15 @@ $anio = (int) ($_GET['anio'] ?? cengi_pp_anio_actual());
 if ($anio < 2000 || $anio > 2100) {
     $anio = cengi_pp_anio_actual();
 }
-$estadoFiltro = array_key_exists($_GET['estado'] ?? '', CENGI_PP_ESTADOS_PLAN) ? $_GET['estado'] : '';
+// "ejecucion" no es un estado guardado: son los planes que ya tienen curso (y no están cancelados).
+$estadoFiltro = array_key_exists($_GET['estado'] ?? '', CENGI_PP_ESTADOS_PLAN) || ($_GET['estado'] ?? '') === 'ejecucion' ? $_GET['estado'] : '';
 $modalidadFiltro = trim((string) ($_GET['modalidad'] ?? ''));
 $busqueda = trim((string) ($_GET['q'] ?? ''));
 
 $stmt = $db->prepare("
     SELECT p.*, cc.descripcion_categorias_cursos AS categoria_nombre, i.nombre AS instructor_nombre, c.codigo_curso,
            COALESCE(s.activas, 0) AS sesiones_activas, COALESCE(s.impartidas, 0) AS sesiones_impartidas,
+           COALESCE(s.movibles, 0) AS sesiones_movibles, s.primera_movible, COALESCE(s.fijas, 0) AS sesiones_fijas,
            COALESCE(s.fuera, 0) AS sesiones_fuera, s.fechas_fuera,
            (SELECT COUNT(*) FROM planificacion_cambios pc WHERE pc.planificacion_id = p.id) AS cambios
     FROM planificacion_cursos p
@@ -335,6 +373,9 @@ $stmt = $db->prepare("
         SELECT s.planificacion_id,
                SUM(s.estado <> 'cancelada') AS activas,
                SUM(s.estado = 'impartida') AS impartidas,
+               SUM(s.estado = 'programada' AND s.liquidacion_id IS NULL AND s.liquidacion_soporte_id IS NULL) AS movibles,
+               MIN(IF(s.estado = 'programada' AND s.liquidacion_id IS NULL AND s.liquidacion_soporte_id IS NULL, s.fecha, NULL)) AS primera_movible,
+               SUM(s.estado <> 'cancelada' AND NOT (s.estado = 'programada' AND s.liquidacion_id IS NULL AND s.liquidacion_soporte_id IS NULL)) AS fijas,
                SUM(s.estado <> 'cancelada' AND (s.fecha < pl.fecha_inicio OR s.fecha > pl.fecha_fin)) AS fuera,
                GROUP_CONCAT(IF(s.estado <> 'cancelada' AND (s.fecha < pl.fecha_inicio OR s.fecha > pl.fecha_fin), DATE_FORMAT(s.fecha, '%d/%m'), NULL) ORDER BY s.fecha) AS fechas_fuera
         FROM curso_sesiones s INNER JOIN planificacion_cursos pl ON pl.id = s.planificacion_id
@@ -348,21 +389,39 @@ $planesAnio = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $inscritos = cengi_pp_conteo_inscritos($db);
 $pendientes = cengi_pp_conteo_pendientes($db);
 
+/** Texto en el que busca el filtro de la tabla (el mismo en el navegador y en la exportación). */
+function cengi_plan_texto_busqueda(array $p)
+{
+    return implode(' ', [$p['nombre'], $p['codigo_curso'], $p['categoria_nombre'], $p['instructor_nombre'], $p['area_tecnica'],
+        $p['dirigido_a'], $p['modalidad'], $p['observaciones']]);
+}
+
+/** Estado que se muestra y filtra: un plan con curso abierto (no cancelado) está "en ejecución". */
+function cengi_plan_estado_vista(array $p)
+{
+    return $p['curso_id'] && $p['estado'] !== 'cancelado' ? 'ejecucion' : $p['estado'];
+}
+
+// La tabla muestra todo el año y filtra en el navegador; este filtro aplica a la exportación.
 $planes = array_values(array_filter($planesAnio, static function ($p) use ($estadoFiltro, $modalidadFiltro, $busqueda) {
-    if ($estadoFiltro !== '' && $p['estado'] !== $estadoFiltro) {
+    if ($estadoFiltro !== '' && cengi_plan_estado_vista($p) !== $estadoFiltro) {
         return false;
     }
     if ($modalidadFiltro !== '' && $p['modalidad'] !== $modalidadFiltro) {
         return false;
     }
     if ($busqueda !== '') {
-        $texto = cengi_texto_normalizado($p['nombre'] . ' ' . $p['codigo_curso'] . ' ' . $p['categoria_nombre']);
-        return strpos($texto, cengi_texto_normalizado($busqueda)) !== false;
+        $texto = cengi_texto_normalizado(cengi_plan_texto_busqueda($p));
+        foreach (preg_split('/\s+/', cengi_texto_normalizado($busqueda)) as $palabra) {
+            if ($palabra !== '' && strpos($texto, $palabra) === false) {
+                return false;
+            }
+        }
     }
     return true;
 }));
 
-if (($_GET['exportar'] ?? '') === 'csv') {
+if (in_array($_GET['exportar'] ?? '', ['xlsx', 'csv'], true)) {
     $filas = [['Código', 'Curso/Diplomado', 'Categoría', 'Área técnica', 'Dirigido a', 'Modalidad', 'Horario', 'Fecha inicial', 'Fecha final',
         'Sesiones planificadas', 'Sesiones programadas', 'Días de desarrollo', 'Cupo mínimo', 'Cupo máximo', 'Costo asociados (Q)',
         'Costo externos (Q)', 'Costo extranjero (US$)', 'Instructor responsable', 'Estado', 'Inscritos', 'Observaciones']];
@@ -372,8 +431,14 @@ if (($_GET['exportar'] ?? '') === 'csv') {
             $p['sesiones_activas'], $p['dias'], $p['cupo_minimo'], $p['cupo_maximo'], $p['costo_asociados'], $p['costo_externos'],
             $p['costo_extranjero'], $p['instructor_nombre'], CENGI_PP_ESTADOS_PLAN[$p['estado']][0], $inscritos[$p['id']] ?? 0, $p['observaciones']];
     }
-    cengi_pp_csv('Planificacion_anio_' . cengi_pp_anio_texto($anio), $filas);
+    require_once __DIR__ . '/classes/export_helpers.php';
+    $encabezados = array_shift($filas);
+    cengi_export_enviar_excel($encabezados, $filas, 'Planificación de cursos',
+        'Planificacion_anio_' . cengi_pp_anio_texto($anio),
+        [18, 50, 28, 28, 30, 20, 25, 18, 18, 24, 24, 30, 18, 18, 24, 24, 24, 35, 20, 18, 55], 'xlsx');
 }
+
+require_once __DIR__ . '/menu.php';
 
 // KPIs
 $vigentes = array_filter($planesAnio, static function ($p) {
@@ -392,42 +457,68 @@ $alertas = [];
 $planesPorId = array_column($planesAnio, null, 'id');
 foreach ($planesAnio as $p) {
     if (!empty($pendientes[$p['id']])) {
-        $alertas[] = ['is-danger', '<b>' . cengi_pp_h($p['nombre']) . '</b>: ' . $pendientes[$p['id']] . ' cambio(s) sin notificar a ' . ($inscritos[$p['id']] ?? 0) . ' inscrito(s).', 'bitacora_cambios.php?plan=' . $p['id'] . '&notificar=1', 'Notificar'];
+        $alertas[] = ['is-danger', '<b>' . cengi_pp_h($p['nombre']) . '</b>: ' . $pendientes[$p['id']] . ' cambio(s) sin notificar a ' . ($inscritos[$p['id']] ?? 0) . ' inscrito(s).', 'comunicaciones.php?tab=avisar&avisar=' . $p['id'], 'Avisar', null, 'notificar', (int) $p['id']];
     }
 }
 $conflictos = cengi_pp_conflictos($db);
 if ($conflictos['pares']) {
     $ids = array_unique(array_merge(...$conflictos['pares']));
-    $stmtSes = $db->query('SELECT s.id, s.planificacion_id, s.tema, s.fecha, s.hora_inicio, s.hora_fin, i.nombre AS instructor FROM curso_sesiones s LEFT JOIN instructores i ON i.id = s.instructor_id WHERE s.id IN (' . implode(',', array_map('intval', $ids)) . ')');
+    $stmtSes = $db->query('SELECT s.id, s.planificacion_id, s.tema, s.fecha, s.hora_inicio, s.hora_fin, s.instructor_id, i.nombre AS instructor, p.nombre AS plan_nombre
+        FROM curso_sesiones s LEFT JOIN instructores i ON i.id = s.instructor_id INNER JOIN planificacion_cursos p ON p.id = s.planificacion_id
+        WHERE s.id IN (' . implode(',', array_map('intval', $ids)) . ')');
     $sesConf = array_column($stmtSes->fetchAll(PDO::FETCH_ASSOC), null, 'id');
-    $stmtNombre = $db->prepare('SELECT nombre FROM planificacion_cursos WHERE id = ?');
+    // Un aviso por instructor y par de planes: cuántos choques y entre qué fechas.
+    $grupos = [];
     foreach ($conflictos['pares'] as [$a, $b]) {
         $sa = $sesConf[$a];
         $sb = $sesConf[$b];
         if (!isset($planesPorId[$sa['planificacion_id']]) && !isset($planesPorId[$sb['planificacion_id']])) {
             continue;
         }
-        $stmtNombre->execute([$sb['planificacion_id']]);
-        $otro = $stmtNombre->fetchColumn();
-        $alertas[] = ['is-danger', '<b>' . cengi_pp_h($sa['instructor']) . '</b> tiene dos sesiones el ' . cengi_pp_fecha_corta($sa['fecha']) . ': “' . cengi_pp_h($sa['tema']) . '” (' . cengi_pp_horario($sa['hora_inicio'], $sa['hora_fin']) . ') y “' . cengi_pp_h($sb['tema']) . '” de ' . cengi_pp_h($otro) . ' (' . cengi_pp_horario($sb['hora_inicio'], $sb['hora_fin']) . ').', 'programa_sesiones.php?editar=' . $b, 'Corregir'];
+        $planes = [(int) $sa['planificacion_id'], (int) $sb['planificacion_id']];
+        sort($planes);
+        $clave = $sa['instructor_id'] . '-' . implode('-', $planes);
+        $g = &$grupos[$clave];
+        $g = $g ?? ['instructor' => $sa['instructor'], 'instructor_id' => (int) $sa['instructor_id'], 'planes' => array_unique([$sa['plan_nombre'], $sb['plan_nombre']]),
+            'plan_id' => (int) $sa['planificacion_id'], 'n' => 0, 'desde' => $sa['fecha'], 'hasta' => $sa['fecha'], 'primera' => $b];
+        $g['n']++;
+        $g['desde'] = min($g['desde'], $sa['fecha']);
+        $g['hasta'] = max($g['hasta'], $sa['fecha']);
+        unset($g);
+    }
+    foreach ($grupos as $g) {
+        $entre = count($g['planes']) > 1 ? 'entre “' . cengi_pp_h($g['planes'][0]) . '” y “' . cengi_pp_h(end($g['planes'])) . '”' : 'dentro de “' . cengi_pp_h($g['planes'][0]) . '”';
+        $cuando = $g['n'] === 1 ? 'el ' . cengi_pp_fecha_corta($g['desde']) : 'del ' . cengi_pp_fecha_corta($g['desde']) . ' al ' . cengi_pp_fecha_corta($g['hasta']);
+        $alertas[] = ['is-danger', '<b>' . cengi_pp_h($g['instructor']) . '</b>: ' . $g['n'] . ' sesión(es) a la misma hora ' . $entre . ' (' . $cuando . ').',
+            $g['n'] === 1 ? 'programa_sesiones.php?editar=' . $g['primera'] : 'programa_sesiones.php?instructor=' . $g['instructor_id'], $g['n'] === 1 ? 'Corregir' : 'Ver sesiones', null, 'conflicto', $g['plan_id']];
     }
 }
+$sinSesionesAun = 0;
+$porProgramar = [];
 foreach ($vigentes as $p) {
     $activas = (int) $p['sesiones_activas'];
     if ($activas < $p['sesiones_planificadas']) {
-        $alertas[] = ['', '<b>' . cengi_pp_h($p['nombre']) . '</b>: ' . $activas . ' de ' . $p['sesiones_planificadas'] . ' sesiones programadas — faltan ' . ($p['sesiones_planificadas'] - $activas) . '.', 'programa_sesiones.php?plan=' . $p['id'] . '&generar=1', 'Programar'];
+        // Aprobado: aviso propio. Por aprobar e inicia en 45 días o menos: va en un solo aviso agrupado.
+        // Por aprobar y lejano: no es alerta (se ve en su barra de sesiones).
+        if (cengi_pp_convocado($p)) {
+            $alertas[] = ['', '<b>' . cengi_pp_h($p['nombre']) . '</b>: ' . $activas . ' de ' . $p['sesiones_planificadas'] . ' sesiones programadas — faltan ' . ($p['sesiones_planificadas'] - $activas) . '.', 'programa_sesiones.php?plan=' . $p['id'] . '&generar=1', 'Programar', null, 'sesiones', (int) $p['id']];
+        } elseif (cengi_pp_dias_entre($hoy, $p['fecha_inicio']) <= 45) {
+            $porProgramar[] = $p;
+        } else {
+            $sinSesionesAun++;
+        }
     } elseif ($activas > $p['sesiones_planificadas']) {
-        $alertas[] = ['is-warn', '<b>' . cengi_pp_h($p['nombre']) . '</b>: hay ' . $activas . ' sesiones programadas y el plan indica ' . $p['sesiones_planificadas'] . '. Ajusta el plan o cancela sesiones.', 'programa_sesiones.php?plan=' . $p['id'], 'Revisar'];
+        $alertas[] = ['is-warn', '<b>' . cengi_pp_h($p['nombre']) . '</b>: hay ' . $activas . ' sesiones programadas y el plan indica ' . $p['sesiones_planificadas'] . '. Ajusta el plan o cancela sesiones.', 'programa_sesiones.php?plan=' . $p['id'], 'Revisar', null, 'sesiones', (int) $p['id']];
     }
     if ((int) $p['sesiones_fuera'] > 0) {
-        $alertas[] = ['is-warn', '<b>' . cengi_pp_h($p['nombre']) . '</b>: ' . $p['sesiones_fuera'] . ' sesión(es) fuera del rango ' . cengi_pp_fecha_corta($p['fecha_inicio']) . ' – ' . cengi_pp_fecha_corta($p['fecha_fin']) . ' (' . cengi_pp_h($p['fechas_fuera']) . ').', 'programa_sesiones.php?plan=' . $p['id'], 'Corregir'];
+        $alertas[] = ['is-warn', '<b>' . cengi_pp_h($p['nombre']) . '</b>: ' . $p['sesiones_fuera'] . ' sesión(es) fuera del rango ' . cengi_pp_fecha_corta($p['fecha_inicio']) . ' – ' . cengi_pp_fecha_corta($p['fecha_fin']) . ' (' . cengi_pp_h($p['fechas_fuera']) . ').', 'programa_sesiones.php?plan=' . $p['id'], 'Corregir', null, 'rango', (int) $p['id']];
     }
     $diasParaIniciar = cengi_pp_dias_entre($hoy, $p['fecha_inicio']);
     if ($diasParaIniciar >= 0 && $diasParaIniciar <= 30) {
         [$color, $etiqueta, $detalle] = cengi_pp_semaforo_cupo($p, $inscritos[$p['id']] ?? 0);
         if ($color !== 'verde') {
             $alertas[] = [$color === 'rojo' ? 'is-danger' : '', '<b>' . cengi_pp_h($p['nombre']) . '</b> inicia en ' . $diasParaIniciar . ' días (' . cengi_pp_fecha_corta($p['fecha_inicio']) . '). ' . cengi_pp_h($etiqueta . ': ' . $detalle),
-                cengi_pp_convocado($p) ? 'solicitudes.php' : null, cengi_pp_convocado($p) ? 'Inscripciones' : null, cengi_pp_convocado($p) ? null : (int) $p['id']];
+                cengi_pp_convocado($p) ? 'inscripciones.php?plan=' . (int) $p['id'] : null, cengi_pp_convocado($p) ? 'Inscripciones' : null, cengi_pp_convocado($p) ? null : (int) $p['id'], 'cupo', (int) $p['id']];
         }
     }
 }
@@ -441,10 +532,35 @@ foreach ($stmtFuturas->fetchAll(PDO::FETCH_ASSOC) as $f) {
     $d = $documentacion[(int) $f['instructor_id']] ?? null;
     if ($d && !$d['completa']) {
         $alertas[] = ['is-warn', '<b>' . cengi_pp_h($f['nombre']) . '</b> tiene ' . (int) $f['n'] . ' sesión(es) programada(s) y ' . ($d['activo'] ? 'su documentación está incompleta (falta ' . cengi_pp_h(implode(', ', $d['faltan'])) . ')' : 'está marcado como inactivo') . '.',
-            'ficha_instructor.php?id=' . (int) $f['instructor_id'] . '&tab=documentos', 'Ver ficha'];
+            'ficha_instructor.php?id=' . (int) $f['instructor_id'] . '&tab=documentos', 'Ver ficha', null, 'documentos'];
     }
 }
+if ($porProgramar) {
+    $items = '';
+    foreach ($porProgramar as $p) {
+        $dias = cengi_pp_dias_entre($hoy, $p['fecha_inicio']);
+        $items .= '<li><a href="programa_sesiones.php?plan=' . (int) $p['id'] . '&amp;generar=1">' . cengi_pp_h($p['nombre']) . '</a> <span>'
+            . ($dias < 0 ? 'debía iniciar el ' : 'inicia ') . cengi_pp_fecha_corta($p['fecha_inicio']) . ' · ' . (int) $p['sesiones_activas'] . '/' . (int) $p['sesiones_planificadas'] . ' sesiones</span></li>';
+    }
+    $atrasados = count(array_filter($porProgramar, static function ($p) use ($hoy) {
+        return $p['fecha_inicio'] < $hoy;
+    }));
+    $proximos = count($porProgramar) - $atrasados;
+    $alertas[] = [$atrasados ? 'is-warn' : '', '<b>' . count($porProgramar) . ' plan(es) por aprobar sin sus sesiones</b>: ' . implode(' y ', array_filter([$atrasados ? $atrasados . ' ya pasaron su fecha de inicio' : '', $proximos ? $proximos . ' inician en 45 días o menos' : ''])) . '. Apruébalos y programa sus sesiones, reprograma su fecha o cancélalos si no se impartirán.'
+        . '<details class="pp-alerta-detalle"><summary>Ver cuáles</summary><ul>' . $items . '</ul></details>', null, null, null, 'sesiones'];
+}
 $nConflictos = count($conflictos['pares']);
+// Orden: lo urgente primero (rojo, naranja, amarillo).
+$prioridad = ['is-danger' => 0, 'is-warn' => 1, '' => 2];
+usort($alertas, static function ($x, $y) use ($prioridad) {
+    return ($prioridad[$x[0]] ?? 2) <=> ($prioridad[$y[0]] ?? 2);
+});
+$alertasPorPlan = [];
+foreach ($alertas as $al) {
+    if (!empty($al[6])) {
+        $alertasPorPlan[$al[6]][] = strip_tags($al[1]);
+    }
+}
 
 $categorias = $db->query('SELECT id, descripcion_categorias_cursos FROM categorias_cursos WHERE estado_categorias_cursos = 1 ORDER BY descripcion_categorias_cursos')->fetchAll(PDO::FETCH_ASSOC);
 $areasTecnicas = $db->query('SELECT nombre FROM areas_tecnicas WHERE estado = 1 ORDER BY nombre')->fetchAll(PDO::FETCH_COLUMN);
@@ -454,29 +570,36 @@ $filtrosActivos = array_filter(['anio' => $anio, 'estado' => $estadoFiltro, 'mod
     return $x !== '';
 });
 
-function cengi_plan_boton($icono, $titulo, array $atributos, $clase = 'is-edit')
+// Opciones del menú desplegable "Acciones" de cada fila.
+function cengi_plan_boton($icono, $titulo, array $atributos, $peligro = false)
 {
-    $html = '<button type="button" class="cengi-action-btn ' . $clase . '" data-tooltip="' . cengi_pp_h($titulo) . '" aria-label="' . cengi_pp_h($titulo) . '"';
+    $html = '<li><a href="#"' . ($peligro ? ' class="is-danger"' : '');
     foreach ($atributos as $nombre => $valor) {
         $html .= ' ' . $nombre . '="' . cengi_pp_h($valor) . '"';
     }
-    return $html . '><span class="glyphicon glyphicon-' . $icono . '"></span></button>';
+    return $html . '><span class="glyphicon glyphicon-' . $icono . '"></span> ' . cengi_pp_h($titulo) . '</a></li>';
 }
 
-function cengi_plan_post($accion, $id, $icono, $titulo, $clase = 'is-view', $confirmar = '')
+function cengi_plan_enlace($href, $icono, $titulo)
 {
-    return '<form method="post" class="cengi-inline-form"' . ($confirmar !== '' ? ' onsubmit="return confirm(' . cengi_pp_h(json_encode($confirmar, JSON_UNESCAPED_UNICODE)) . ');"' : '') . '>'
+    return '<li><a href="' . cengi_pp_h($href) . '"><span class="glyphicon glyphicon-' . $icono . '"></span> ' . cengi_pp_h($titulo) . '</a></li>';
+}
+
+function cengi_plan_post($accion, $id, $icono, $titulo, $peligro = false, $confirmar = '')
+{
+    return '<li><form method="post"' . ($confirmar !== '' ? ' onsubmit="return confirm(' . cengi_pp_h(json_encode($confirmar, JSON_UNESCAPED_UNICODE)) . ');"' : '') . '>'
         . '<input type="hidden" name="accion" value="' . $accion . '"><input type="hidden" name="id" value="' . (int) $id . '">'
-        . '<button type="submit" class="cengi-action-btn ' . $clase . '" data-tooltip="' . cengi_pp_h($titulo) . '" aria-label="' . cengi_pp_h($titulo) . '"><span class="glyphicon glyphicon-' . $icono . '"></span></button></form>';
+        . '<button type="submit"' . ($peligro ? ' class="is-danger"' : '') . '><span class="glyphicon glyphicon-' . $icono . '"></span> ' . cengi_pp_h($titulo) . '</button></form></li>';
 }
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head><?php cengi_pp_head('Planificación de cursos'); ?></head>
-<body class="cengi-canvas">
+<body class="cengi-canvas cg-tema">
 <?php menu_render(); ?>
 
 <main class="container cengi-organizations-page pp-page">
+    <?php cengi_banner(); ?>
     <?php cengi_pp_subnav('planificacion_cursos.php'); ?>
     <?php cengi_pp_feedback($mensajeTipo === 'error' ? $mensaje : cengi_pp_h($mensaje), $mensajeTipo); ?>
 
@@ -485,51 +608,46 @@ function cengi_plan_post($accion, $id, $icono, $titulo, $clase = 'is-view', $con
         echo cengi_pp_kpi(count($vigentes), 'Cursos en la oferta', $aprobados . ' aprobados · ' . (count($vigentes) - $aprobados) . ' por aprobar', '#3E7A12', 'calendar');
         echo cengi_pp_kpi($sesProg . '<small class="pp-kpi-detalle"> / ' . $sesPlan . '</small>', 'Sesiones programadas / planificadas', $sesImp . ' ya impartidas', '#8A6600', 'list', '#FFF6DA');
         echo cengi_pp_kpi(cengi_pp_q($ingresoMinimo), 'Ingreso mínimo proyectado', 'Cupo mínimo × costo de asociados', '#1f5632', 'usd');
-        echo cengi_pp_kpi(count($alertas), 'Alertas de programación', $nConflictos ? $nConflictos . ' conflicto(s) de instructor' : 'Sin conflictos de instructor', count($alertas) ? '#B34E00' : '#5B6459', 'warning-sign', count($alertas) ? '#FFE9D9' : '#EDEFEA');
+        echo '<a href="#pp-alertas" class="pp-kpi-enlace" data-abrir-alertas>' . cengi_pp_kpi(count($alertas), 'Alertas por atender', $nConflictos ? $nConflictos . ' choque(s) de horario de instructor' : 'Sin choques de instructor', count($alertas) ? '#B34E00' : '#5B6459', 'warning-sign', count($alertas) ? '#FFE9D9' : '#EDEFEA') . '</a>';
         ?>
     </div>
 
-    <section class="pp-card">
-        <form class="pp-toolbar" method="get">
-            <div class="pp-toolbar-group">
-                <select name="anio" aria-label="Año" onchange="this.form.submit()">
-                    <?php foreach ($anios as $z): ?>
-                        <option value="<?php echo $z; ?>" <?php echo $z === $anio ? 'selected' : ''; ?>>Año <?php echo cengi_pp_anio_texto($z); ?></option>
+    <?php
+    // Alertas: resumen por tipo (chips) y solo las primeras visibles; el resto con "Ver todas".
+    $tiposAlerta = [
+        'notificar' => ['Cambios sin notificar', 'is-danger'],
+        'conflicto' => ['Conflictos de instructor', 'is-danger'],
+        'cupo' => ['Cupos en riesgo', 'is-warn'],
+        'sesiones' => ['Sesiones por ajustar', 'is-yellow'],
+        'rango' => ['Sesiones fuera de rango', 'is-warn'],
+        'documentos' => ['Documentación de instructores', 'is-warn'],
+    ];
+    $conteoAlertas = array_count_values(array_column($alertas, 5));
+    $alertasIniciales = 5;
+    ?>
+    <section class="pp-alertas-barra<?php echo $alertas ? '' : ' is-ok'; ?>" id="pp-alertas">
+        <div class="pp-alertas-cab">
+            <button type="button" class="pp-alertas-abrir" id="pp-alertas-abrir" aria-expanded="false" aria-controls="pp-alertas-lista"<?php echo $alertas ? '' : ' disabled'; ?>>
+                <span class="glyphicon glyphicon-<?php echo $alertas ? 'bell' : 'ok-circle'; ?>" aria-hidden="true"></span>
+                <b><?php echo $alertas ? count($alertas) . ' alerta(s) por atender' : 'Sin alertas'; ?></b>
+                <?php if ($alertas): ?><span class="pp-alertas-ver">Ver <span class="glyphicon glyphicon-menu-down" aria-hidden="true"></span></span><?php endif; ?>
+            </button>
+            <?php if ($alertas): ?>
+                <div class="pp-alertas-resumen" role="group" aria-label="Filtrar alertas por tipo">
+                    <?php foreach ($tiposAlerta as $tipo => [$texto, $clase]): if (empty($conteoAlertas[$tipo])) continue; ?>
+                        <button type="button" class="pp-chip <?php echo $clase; ?>" data-alerta-filtro="<?php echo $tipo; ?>" aria-pressed="false"><?php echo $texto; ?> <b><?php echo $conteoAlertas[$tipo]; ?></b></button>
                     <?php endforeach; ?>
-                </select>
-                <select name="estado" aria-label="Estado" onchange="this.form.submit()">
-                    <option value="">Todos los estados</option>
-                    <?php foreach (CENGI_PP_ESTADOS_PLAN as $clave => [$texto]): ?>
-                        <option value="<?php echo $clave; ?>" <?php echo $estadoFiltro === $clave ? 'selected' : ''; ?>><?php echo $texto; ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="modalidad" aria-label="Modalidad" onchange="this.form.submit()">
-                    <option value="">Todas las modalidades</option>
-                    <?php foreach (CENGI_PP_MODALIDADES as $m): ?>
-                        <option <?php echo $modalidadFiltro === $m ? 'selected' : ''; ?>><?php echo $m; ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <input type="search" name="q" value="<?php echo cengi_pp_h($busqueda); ?>" placeholder="Buscar curso o código..." aria-label="Buscar">
-            </div>
-            <div class="pp-toolbar-group">
-                <a class="btn btn-default btn-sm" href="planificacion_cursos.php?<?php echo cengi_pp_h(http_build_query($filtrosActivos + ['exportar' => 'csv'])); ?>"><span class="glyphicon glyphicon-download-alt"></span> Exportar</a>
-                <a class="btn btn-default btn-sm" href="carga_masiva_planificacion.php?tipo=plan&amp;destino=<?php echo (int) $anio; ?>"><span class="glyphicon glyphicon-upload"></span> Cargar Excel/CSV</a>
-                <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#plan-modal"><span class="glyphicon glyphicon-plus"></span> Nueva planificación</button>
-            </div>
-        </form>
-    </section>
-
-    <section class="pp-card">
-        <div class="pp-card-head">
-            <div><h3>Alertas de programación</h3><span class="pp-sub">Conflictos de instructor, sesiones pendientes o fuera de rango, cupos en riesgo y cambios sin notificar</span></div>
-            <span class="pp-chip<?php echo $alertas ? ' is-warn' : ''; ?>"><?php echo count($alertas); ?></span>
-        </div>
-        <div class="pp-card-body">
-            <?php if (!$alertas): ?>
-                <span class="pp-sub">Todo en orden: no hay conflictos ni sesiones pendientes para este año.</span>
+                </div>
+            <?php else: ?>
+                <span class="pp-sub">No hay choques de horario, cambios sin notificar ni sesiones pendientes urgentes en <?php echo cengi_pp_anio_texto($anio); ?>.</span>
             <?php endif; ?>
-            <?php foreach ($alertas as $alerta): ?>
-                <div class="pp-alert <?php echo $alerta[0]; ?>"><span class="pp-dot"></span><div><?php echo $alerta[1]; ?></div>
+        </div>
+        <div class="pp-alertas-lista" id="pp-alertas-lista" hidden>
+            <?php if ($sinSesionesAun): ?>
+                <p class="pp-alertas-nota"><span class="glyphicon glyphicon-info-sign"></span> <?php echo $sinSesionesAun; ?> plan(es) por aprobar aún no tienen todas sus sesiones. No es alerta: se programan al aprobarlos (lo indica su barra de sesiones).</p>
+            <?php endif; ?>
+            <?php foreach ($alertas as $i => $alerta): ?>
+                <div class="pp-alert <?php echo $alerta[0]; ?>" data-alerta-tipo="<?php echo cengi_pp_h($alerta[5] ?? ''); ?>"<?php echo $i >= $alertasIniciales ? ' hidden' : ''; ?>><span class="pp-dot"></span><div><?php echo $alerta[1]; ?></div>
                     <?php if (!empty($alerta[2])): ?>
                         <a class="pp-link" href="<?php echo cengi_pp_h($alerta[2]); ?>"><?php echo cengi_pp_h($alerta[3]); ?></a>
                     <?php elseif (!empty($alerta[4])): ?>
@@ -540,87 +658,165 @@ function cengi_plan_post($accion, $id, $icono, $titulo, $clase = 'is-view', $con
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>
+            <?php if (count($alertas) > $alertasIniciales): ?>
+                <button type="button" class="pp-link pp-alertas-mas" id="pp-alertas-mas" data-total="<?php echo count($alertas); ?>">Ver todas (<?php echo count($alertas); ?>)</button>
+            <?php endif; ?>
         </div>
     </section>
 
-    <section class="cengi-courses-section">
-        <div class="pp-table-wrap">
-            <table class="cengi-org-table">
+    <?php
+    $estadosVista = ['planificado' => 'Planificado', 'aprobado' => 'Aprobado', 'reprogramado' => 'Reprogramado', 'ejecucion' => 'En ejecución', 'cancelado' => 'Cancelado'];
+    $conteoEstados = array_count_values(array_map('cengi_plan_estado_vista', $planesAnio));
+    ?>
+    <section class="pp-card pp-planes">
+        <form class="pp-toolbar" method="get" id="pp-filtros">
+            <div class="pp-toolbar-group">
+                <select name="anio" aria-label="Año" onchange="this.form.submit()">
+                    <?php foreach ($anios as $z): ?>
+                        <option value="<?php echo $z; ?>" <?php echo $z === $anio ? 'selected' : ''; ?>>Año <?php echo cengi_pp_anio_texto($z); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <label class="pp-search">
+                    <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+                    <input type="search" name="q" id="pp-q" value="<?php echo cengi_pp_h($busqueda); ?>" placeholder="Buscar curso, código, instructor, área..." aria-label="Buscar" autocomplete="off">
+                </label>
+                <select name="modalidad" id="pp-modalidad" aria-label="Modalidad">
+                    <option value="">Todas las modalidades</option>
+                    <?php foreach (CENGI_PP_MODALIDADES as $m): ?>
+                        <option <?php echo $modalidadFiltro === $m ? 'selected' : ''; ?>><?php echo $m; ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <input type="hidden" name="estado" id="pp-estado" value="<?php echo cengi_pp_h($estadoFiltro); ?>">
+            </div>
+            <div class="pp-toolbar-group">
+                <a class="btn btn-default btn-sm" id="pp-exportar" href="planificacion_cursos.php?<?php echo cengi_pp_h(http_build_query($filtrosActivos + ['exportar' => 'xlsx'])); ?>"><span class="glyphicon glyphicon-download-alt"></span> Exportar</a>
+                <a class="btn btn-default btn-sm" href="carga_masiva_planificacion.php?tipo=plan&amp;destino=<?php echo (int) $anio; ?>"><span class="glyphicon glyphicon-upload"></span> Cargar Excel/CSV</a>
+                <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#plan-modal"><span class="glyphicon glyphicon-plus"></span> Nueva planificación</button>
+            </div>
+        </form>
+        <div class="pp-estados" role="group" aria-label="Filtrar por estado">
+            <button type="button" class="pp-estado-chip" data-estado="">Todos <b data-conteo=""><?php echo count($planesAnio); ?></b></button>
+            <?php foreach ($estadosVista as $clave => $texto): ?>
+                <button type="button" class="pp-estado-chip is-<?php echo $clave; ?>" data-estado="<?php echo $clave; ?>"><?php echo $texto; ?> <b data-conteo="<?php echo $clave; ?>"><?php echo (int) ($conteoEstados[$clave] ?? 0); ?></b></button>
+            <?php endforeach; ?>
+            <span class="pp-resultados" id="pp-resultados" aria-live="polite"></span>
+            <button type="button" class="pp-link" id="pp-limpiar" hidden>Limpiar filtros</button>
+        </div>
+        <div class="pp-table-wrap" id="pp-tabla-wrap">
+            <table class="cengi-org-table pp-plan-table">
                 <thead>
                     <tr>
-                        <th>Curso / Diplomado</th><th>Modalidad</th><th>Horario</th><th>Fecha inicial</th><th>Fecha final</th>
-                        <th>Sesiones prog. / plan.</th><th>Cupo mín.</th><th>Asociados</th><th>Externos</th><th>Extranjero</th><th>Estado</th>
+                        <th>Curso / Diplomado</th><th>Fechas y modalidad</th><th>Sesiones</th><th>Cupo y costo</th><th>Estado</th>
                         <th class="is-actions"><span class="sr-only">Acciones</span></th>
                     </tr>
                 </thead>
-                <tbody>
-                    <?php if (!$planes): ?>
-                        <tr><td colspan="12" class="pp-empty"><?php echo $planesAnio ? 'Ningún plan coincide con los filtros.' : 'Aún no hay planificación para el año ' . cengi_pp_anio_texto($anio) . '. Usa “Nueva planificación”.'; ?></td></tr>
+                <tbody id="pp-planes">
+                    <?php if (!$planesAnio): ?>
+                        <tr><td colspan="6" class="pp-empty">Aún no hay planificación para el año <?php echo cengi_pp_anio_texto($anio); ?>. Usa “Nueva planificación”.</td></tr>
                     <?php endif; ?>
-                    <?php foreach ($planes as $p):
+                    <tr id="pp-sin-resultados" hidden><td colspan="6" class="pp-empty">Ningún plan coincide con la búsqueda o los filtros.</td></tr>
+                    <?php
+                    $mesActual = null;
+                    $planesPorMes = array_count_values(array_map(static function ($p) {
+                        return substr($p['fecha_inicio'], 0, 7);
+                    }, $planesAnio));
+                    foreach ($planesAnio as $p):
+                        $mes = substr($p['fecha_inicio'], 0, 7);
+                        if ($mes !== $mesActual):
+                            $mesActual = $mes;
+                    ?>
+                        <tr class="pp-mes" data-mes="<?php echo cengi_pp_h($mes); ?>">
+                            <th colspan="6"><button type="button" class="pp-mes-toggle" aria-expanded="true">
+                                <span class="glyphicon glyphicon-menu-down" aria-hidden="true"></span>
+                                <?php echo CENGI_PP_MESES[(int) substr($mes, 5, 2)] . ' ' . substr($mes, 0, 4); ?>
+                                <span class="pp-mes-n"><?php echo $planesPorMes[$mes] . ($planesPorMes[$mes] === 1 ? ' plan' : ' planes'); ?></span>
+                            </button></th>
+                        </tr>
+                    <?php endif;
                         $activas = (int) $p['sesiones_activas'];
                         $pct = min(100, (int) round($activas * 100 / max(1, $p['sesiones_planificadas'])));
                         $claseProg = $activas < $p['sesiones_planificadas'] ? 'is-incomplete' : ($activas > $p['sesiones_planificadas'] ? 'is-over' : '');
                         $convocado = cengi_pp_convocado($p);
                         $datosPlan = array_intersect_key($p, array_flip(['id', 'anio', 'nombre', 'categoria_curso_id', 'area_tecnica', 'actividad_tipo', 'modalidad', 'dirigido_a',
                             'fecha_inicio', 'fecha_fin', 'dias', 'sesiones_planificadas', 'cupo_minimo', 'cupo_maximo', 'costo_asociados', 'costo_externos',
-                            'costo_extranjero', 'instructor_id', 'modulos', 'observaciones', 'estado', 'codigo_curso']));
+                            'costo_extranjero', 'instructor_id', 'modulos', 'observaciones', 'estado', 'codigo_curso', 'curso_id']));
+                        $enEjecucion = $p['curso_id'] && $p['estado'] !== 'cancelado';
                         $datosPlan['hora_inicio'] = substr($p['hora_inicio'], 0, 5);
                         $datosPlan['hora_fin'] = substr($p['hora_fin'], 0, 5);
                     ?>
-                        <tr class="<?php echo $p['estado'] === 'cancelado' ? 'pp-muted-row' : ''; ?>">
-                            <td class="cengi-org-name" style="min-width:220px;">
+                        <tr class="pp-plan-row<?php echo $p['estado'] === 'cancelado' ? ' pp-muted-row' : ''; ?>" data-mes="<?php echo cengi_pp_h($mes); ?>"
+                            data-estado="<?php echo cengi_plan_estado_vista($p); ?>" data-modalidad="<?php echo cengi_pp_h($p['modalidad']); ?>"
+                            data-buscar="<?php echo cengi_pp_h(cengi_texto_normalizado(cengi_plan_texto_busqueda($p))); ?>">
+                            <td class="cengi-org-name pp-plan-name">
                                 <strong><?php echo cengi_pp_h($p['nombre']); ?></strong>
-                                <span class="pp-sub"><?php echo $p['codigo_curso'] ? '<span class="pp-mono">' . cengi_pp_h($p['codigo_curso']) . '</span> · ' : ''; ?><?php echo cengi_pp_h(($p['categoria_nombre'] ?: 'Sin categoría') . ' · ' . $p['dirigido_a']); ?></span>
+                                <?php if ($p['estado'] === 'cancelado' && $p['motivo_cancelacion'] !== ''): ?>
+                                    <span class="glyphicon glyphicon-info-sign pp-nota" title="<?php echo cengi_pp_h('Motivo de cancelación: ' . $p['motivo_cancelacion']); ?>" aria-label="Motivo de cancelación"></span>
+                                <?php elseif (trim((string) $p['observaciones']) !== ''): ?>
+                                    <span class="glyphicon glyphicon-comment pp-nota" title="<?php echo cengi_pp_h($p['observaciones']); ?>" aria-label="Observaciones"></span>
+                                <?php endif; ?>
+                                <?php if (!empty($alertasPorPlan[$p['id']])): ?>
+                                    <a href="#pp-alertas" class="pp-fila-alerta" data-abrir-alertas title="<?php echo cengi_pp_h(implode("\n", $alertasPorPlan[$p['id']])); ?>"><span class="glyphicon glyphicon-bell"></span><?php echo count($alertasPorPlan[$p['id']]); ?></a>
+                                <?php endif; ?>
                                 <span class="pp-sub">
+                                    <?php echo $p['codigo_curso'] ? '<span class="pp-mono">' . cengi_pp_h($p['codigo_curso']) . '</span> · ' : ''; ?><?php echo cengi_pp_h($p['categoria_nombre'] ?: 'Sin categoría'); ?>
                                     <?php if (cengi_pp_convocado($p) && !$p['curso_id']): ?>
-                                        <a href="inscripciones.php?plan=<?php echo (int) $p['id']; ?>">Convocatoria abierta · <?php echo (int) ($inscritos[$p['id']] ?? 0); ?>/<?php echo (int) $p['cupo_minimo']; ?> validadas</a> ·
+                                        · <a href="inscripciones.php?plan=<?php echo (int) $p['id']; ?>"><?php echo (int) ($inscritos[$p['id']] ?? 0); ?>/<?php echo (int) $p['cupo_minimo']; ?> validadas</a>
                                     <?php elseif ($p['curso_id']): ?>
-                                        <a href="inscripciones.php?plan=<?php echo (int) $p['id']; ?>"><?php echo (int) ($inscritos[$p['id']] ?? 0); ?> inscrito(s)</a> ·
+                                        · <a href="inscripciones.php?plan=<?php echo (int) $p['id']; ?>"><?php echo (int) ($inscritos[$p['id']] ?? 0); ?> inscrito(s)</a>
                                     <?php endif; ?>
-                                    <a href="bitacora_cambios.php?plan=<?php echo (int) $p['id']; ?>"><?php echo (int) $p['cambios']; ?> cambio(s)</a>
                                     <?php if (!empty($pendientes[$p['id']])): ?>
-                                        <a class="pp-chip is-warn" href="bitacora_cambios.php?plan=<?php echo (int) $p['id']; ?>&notificar=1"><?php echo $pendientes[$p['id']]; ?> sin notificar</a>
+                                        <a class="pp-chip is-warn" href="comunicaciones.php?tab=avisar&amp;avisar=<?php echo (int) $p['id']; ?>"><?php echo $pendientes[$p['id']]; ?> por avisar</a>
                                     <?php endif; ?>
                                 </span>
-                                <?php if ($p['estado'] === 'cancelado' && $p['motivo_cancelacion'] !== ''): ?>
-                                    <span class="pp-sub"><i>Motivo: <?php echo cengi_pp_h($p['motivo_cancelacion']); ?></i></span>
-                                <?php elseif (trim((string) $p['observaciones']) !== ''): ?>
-                                    <span class="pp-sub"><i><?php echo cengi_pp_h(mb_strimwidth($p['observaciones'], 0, 120, '…', 'UTF-8')); ?></i></span>
+                            </td>
+                            <td class="pp-num" title="<?php echo cengi_pp_h(trim(cengi_pp_horario($p['hora_inicio'], $p['hora_fin']) . ($p['dias'] !== '' ? ' · ' . $p['dias'] : '') . ($p['dirigido_a'] ? ' · ' . $p['dirigido_a'] : ''))); ?>"><?php echo cengi_pp_fecha_corta($p['fecha_inicio']) . ' – ' . cengi_pp_fecha_corta($p['fecha_fin']); ?>
+                                <span class="pp-sub"><?php echo cengi_pp_h($p['modalidad']); ?> · <?php echo cengi_pp_horario($p['hora_inicio'], $p['hora_fin']); ?></span></td>
+                            <td><a class="pp-prog <?php echo $claseProg; ?>" href="programa_sesiones.php?plan=<?php echo (int) $p['id']; ?>" title="<?php echo $activas . ' de ' . $p['sesiones_planificadas']; ?> sesiones programadas"><span class="pp-prog-track"><span style="width:<?php echo $pct; ?>%"></span></span><span class="pp-num"><?php echo $activas . ' / ' . (int) $p['sesiones_planificadas']; ?></span></a></td>
+                            <td class="pp-num" title="Cupo mínimo<?php echo $p['cupo_maximo'] ? ' – máximo' : ''; ?>. Costo asociados / externos<?php echo (float) $p['costo_extranjero'] > 0 ? ' / extranjero US$' . number_format((float) $p['costo_extranjero']) : ''; ?>"><?php echo (int) $p['cupo_minimo'] . ($p['cupo_maximo'] ? '–' . (int) $p['cupo_maximo'] : '+'); ?> personas
+                                <span class="pp-sub"><?php echo cengi_pp_q($p['costo_asociados']) . ' asoc. · ' . cengi_pp_q($p['costo_externos']) . ' ext.'; ?></span></td>
+                            <td>
+                                <?php if ($enEjecucion): ?>
+                                    <span class="cengi-status-badge is-running"><i></i>En ejecución</span>
+                                    <span class="pp-sub"><a href="ver_participante_curso.php?id=<?php echo (int) $p['curso_id']; ?>" class="pp-mono"><?php echo cengi_pp_h($p['codigo_curso']); ?></a><?php echo $p['estado'] === 'reprogramado' ? ' · reprogramado' : ''; ?></span>
+                                <?php else: ?>
+                                    <?php echo cengi_pp_badge(CENGI_PP_ESTADOS_PLAN, $p['estado']); ?>
                                 <?php endif; ?>
                             </td>
-                            <td><?php echo cengi_pp_h($p['modalidad']); ?></td>
-                            <td class="pp-num"><?php echo cengi_pp_horario($p['hora_inicio'], $p['hora_fin']); ?><span class="pp-sub"><?php echo cengi_pp_h($p['dias']); ?></span></td>
-                            <td class="pp-num"><?php echo cengi_pp_fecha($p['fecha_inicio']); ?></td>
-                            <td class="pp-num"><?php echo cengi_pp_fecha($p['fecha_fin']); ?></td>
-                            <td><a class="pp-prog <?php echo $claseProg; ?>" href="programa_sesiones.php?plan=<?php echo (int) $p['id']; ?>" title="<?php echo $activas . ' de ' . $p['sesiones_planificadas']; ?> sesiones programadas"><span class="pp-prog-track"><span style="width:<?php echo $pct; ?>%"></span></span><span class="pp-num"><?php echo $activas . ' / ' . (int) $p['sesiones_planificadas']; ?></span></a></td>
-                            <td><?php echo (int) $p['cupo_minimo']; ?><?php echo $p['cupo_maximo'] ? '<span class="pp-sub">máx. ' . (int) $p['cupo_maximo'] . '</span>' : ''; ?></td>
-                            <td class="pp-num"><?php echo cengi_pp_q($p['costo_asociados']); ?></td>
-                            <td class="pp-num"><?php echo cengi_pp_q($p['costo_externos']); ?></td>
-                            <td class="pp-num"><?php echo (float) $p['costo_extranjero'] > 0 ? 'US$' . number_format((float) $p['costo_extranjero']) : '—'; ?></td>
-                            <td><?php echo cengi_pp_badge(CENGI_PP_ESTADOS_PLAN, $p['estado']); ?></td>
                             <td class="is-actions">
-                                <div class="cengi-row-actions">
+                                <div class="dropdown cengi-psum-actions">
+                                    <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                        Acciones <span class="caret"></span>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-right">
                                     <?php
-                                    echo cengi_plan_boton('pencil', 'Editar', ['data-toggle' => 'modal', 'data-target' => '#plan-modal', 'data-plan' => json_encode($datosPlan, JSON_UNESCAPED_UNICODE)]);
+                                    if ($p['curso_id']) {
+                                        echo cengi_plan_enlace('ver_participante_curso.php?id=' . (int) $p['curso_id'], 'eye-open', 'Ver curso');
+                                        echo cengi_plan_enlace(cengi_pp_url_editar_curso($p), 'pencil', 'Editar datos y módulos del curso');
+                                        echo cengi_plan_boton('usd', 'Editar costos y cupo del plan', ['data-toggle' => 'modal', 'data-target' => '#plan-modal', 'data-plan' => json_encode($datosPlan, JSON_UNESCAPED_UNICODE)]);
+                                    } else {
+                                        echo cengi_plan_boton('pencil', 'Editar', ['data-toggle' => 'modal', 'data-target' => '#plan-modal', 'data-plan' => json_encode($datosPlan, JSON_UNESCAPED_UNICODE)]);
+                                    }
                                     if ($p['estado'] === 'planificado') {
-                                        echo cengi_plan_post('aprobar', $p['id'], 'ok', $p['curso_id'] ? 'Aprobar' : 'Aprobar y abrir convocatoria', 'is-view', '¿Aprobar “' . $p['nombre'] . '”? ' . ($p['curso_id'] ? 'Se vinculará al curso ' . $p['codigo_curso'] . '.' : 'Se abre la convocatoria en el formulario de inscripción. El curso se crea al completar ' . (int) $p['cupo_minimo'] . ' inscripciones validadas.'));
+                                        echo cengi_plan_post('aprobar', $p['id'], 'ok', $p['curso_id'] ? 'Aprobar' : 'Aprobar y abrir convocatoria', false, '¿Aprobar “' . $p['nombre'] . '”? ' . ($p['curso_id'] ? 'Se vinculará al curso ' . $p['codigo_curso'] . '.' : 'Se abre la convocatoria en el formulario de inscripción. El curso se crea al completar ' . (int) $p['cupo_minimo'] . ' inscripciones validadas.'));
                                     }
                                     if ($convocado) {
-                                        echo cengi_plan_boton('time', 'Reprogramar', ['data-toggle' => 'modal', 'data-target' => '#accion-modal', 'data-accion' => 'reprogramar', 'data-id' => $p['id'], 'data-nombre' => $p['nombre'], 'data-fi' => $p['fecha_inicio'], 'data-ff' => $p['fecha_fin']]);
+                                        echo cengi_plan_boton('time', 'Reprogramar', ['data-toggle' => 'modal', 'data-target' => '#accion-modal', 'data-accion' => 'reprogramar', 'data-id' => $p['id'], 'data-nombre' => $p['nombre'], 'data-fi' => $p['fecha_inicio'], 'data-ff' => $p['fecha_fin'],
+                                            'data-movibles' => (int) $p['sesiones_movibles'], 'data-primera' => (string) $p['primera_movible'], 'data-fijas' => (int) $p['sesiones_fijas'], 'data-impartidas' => (int) $p['sesiones_impartidas'], 'data-plan-url' => 'programa_sesiones.php?plan=' . (int) $p['id']]);
                                     }
-                                    echo '<a class="cengi-action-btn is-edit" href="programa_sesiones.php?plan=' . (int) $p['id'] . '" data-tooltip="Programa de sesiones" aria-label="Programa de sesiones"><span class="glyphicon glyphicon-list"></span></a>';
-                                    echo '<a class="cengi-action-btn is-edit" href="bitacora_cambios.php?plan=' . (int) $p['id'] . '" data-tooltip="Historial de cambios" aria-label="Historial de cambios"><span class="glyphicon glyphicon-dashboard"></span></a>';
-                                    echo cengi_plan_post('duplicar', $p['id'], 'duplicate', 'Duplicar para el año siguiente', 'is-edit', '¿Duplicar “' . $p['nombre'] . '” en el año ' . cengi_pp_anio_texto($p['anio'] + 1) . ' (mismas fechas, un año después)?');
+                                    echo cengi_plan_enlace('programa_sesiones.php?plan=' . (int) $p['id'], 'list', 'Programa de sesiones');
+                                    echo cengi_plan_enlace('bitacora_cambios.php?plan=' . (int) $p['id'], 'dashboard', 'Historial de cambios');
+                                    echo cengi_plan_post('duplicar', $p['id'], 'duplicate', 'Duplicar para el año siguiente', false, '¿Duplicar “' . $p['nombre'] . '” en el año ' . cengi_pp_anio_texto($p['anio'] + 1) . ' (mismas fechas, un año después)?');
+                                    echo '<li role="separator" class="divider"></li>';
                                     if ($p['estado'] === 'cancelado') {
                                         echo cengi_plan_post('reactivar', $p['id'], 'repeat', 'Reactivar como planificado');
                                     } else {
-                                        echo cengi_plan_boton('ban-circle', 'Cancelar', ['data-toggle' => 'modal', 'data-target' => '#accion-modal', 'data-accion' => 'cancelar', 'data-id' => $p['id'], 'data-nombre' => $p['nombre'], 'data-fi' => $p['fecha_inicio'], 'data-ff' => $p['fecha_fin'], 'data-curso' => $p['codigo_curso'] ?? ''], 'is-delete');
+                                        echo cengi_plan_boton('ban-circle', 'Cancelar', ['data-toggle' => 'modal', 'data-target' => '#accion-modal', 'data-accion' => 'cancelar', 'data-id' => $p['id'], 'data-nombre' => $p['nombre'], 'data-fi' => $p['fecha_inicio'], 'data-ff' => $p['fecha_fin'], 'data-curso' => $p['codigo_curso'] ?? ''], true);
                                     }
                                     if (!$p['curso_id']) {
-                                        echo cengi_plan_post('eliminar', $p['id'], 'trash', 'Eliminar', 'is-delete', '¿Eliminar “' . $p['nombre'] . '” y sus sesiones? Esta acción no se puede deshacer.');
+                                        echo cengi_plan_post('eliminar', $p['id'], 'trash', 'Eliminar', true, '¿Eliminar “' . $p['nombre'] . '” y sus sesiones? Esta acción no se puede deshacer.');
                                     }
                                     ?>
+                                    </ul>
                                 </div>
                             </td>
                         </tr>
@@ -644,6 +840,7 @@ function cengi_plan_post($accion, $id, $icono, $titulo, $clase = 'is-view', $con
                 <input type="hidden" name="accion" value="guardar">
                 <input type="hidden" name="id" id="pf-id" value="">
                 <div class="pp-form-msg is-visible is-warn" id="pf-aviso-aprobar">Al <b>aprobar</b> se abre la convocatoria en el formulario público de inscripción. Cuando las inscripciones validadas llegan al <b>cupo mínimo</b>, el sistema crea el curso en Cursos con estos datos (no se vuelven a capturar) y asigna a los participantes.</div>
+                <div class="pp-form-msg is-warn" id="pf-aviso-curso">Este plan ya tiene el curso <b id="pf-curso-codigo"></b> en ejecución. El nombre, la categoría, las fechas, el horario, la modalidad, el instructor, el cupo máximo y los módulos se editan en <a id="pf-curso-link" href="#">Gestión de cursos</a> (los cambios se reflejan aquí y quedan en la bitácora). Para mover fechas avisando a los inscritos usa <b>Reprogramar</b>.</div>
                 <div class="cengi-course-modal-grid">
                     <div class="form-group is-full">
                         <label for="pf-nombre">Curso / diplomado</label>
@@ -738,8 +935,14 @@ function cengi_plan_post($accion, $id, $icono, $titulo, $clase = 'is-view', $con
                         </select>
                     </div>
                     <div class="form-group is-full">
-                        <label for="pf-modulos">Módulos <small>(uno por línea; se crean en el curso al aprobar)</small></label>
-                        <textarea class="form-control" id="pf-modulos" name="modulos" rows="3" placeholder="Agronomía cañera&#10;Riego y drenaje"></textarea>
+                        <label>Módulos <small>(nombre y número de sesiones; se copian al curso cuando se abre)</small></label>
+                        <div class="pp-mod-editor" id="pf-mod-editor" aria-label="Módulos del plan"></div>
+                        <div class="pp-mod-pie">
+                            <button type="button" class="btn btn-default btn-xs" id="pf-mod-add"><span class="glyphicon glyphicon-plus"></span> Agregar módulo</button>
+                            <span class="pp-sub" id="pf-mod-suma"></span>
+                        </div>
+                        <!-- Se guarda como "Nombre|sesiones" por línea (cengi_pp_parse_modulos). -->
+                        <textarea id="pf-modulos" name="modulos" hidden></textarea>
                     </div>
                     <div class="form-group is-full">
                         <label for="pf-obs">Observaciones</label>
@@ -784,7 +987,9 @@ function cengi_plan_post($accion, $id, $icono, $titulo, $clase = 'is-view', $con
                         <input type="date" class="form-control" id="accion-ff" name="fecha_fin">
                     </div>
                     <div class="form-group is-full">
-                        <label><input type="checkbox" name="mover_sesiones" value="1" checked> Mover también las sesiones programadas los mismos días</label>
+                        <label><input type="checkbox" name="mover_sesiones" id="accion-mover" value="1" checked> Mover también las sesiones programadas</label>
+                        <label><input type="checkbox" name="mismo_dia" id="accion-mismo-dia" value="1" checked> Conservar el día de la semana de cada sesión</label>
+                        <div class="pp-form-msg is-visible" id="accion-sesiones"></div>
                     </div>
                 </div>
                 <div class="form-group">
@@ -821,6 +1026,7 @@ function cengi_plan_post($accion, $id, $icono, $titulo, $clase = 'is-view', $con
             'pf-ses': 'sesiones_planificadas', 'pf-dias': 'dias', 'pf-cupo': 'cupo_minimo', 'pf-cupomax': 'cupo_maximo', 'pf-asoc': 'costo_asociados',
             'pf-ext': 'costo_externos', 'pf-extr': 'costo_extranjero', 'pf-instr': 'instructor_id', 'pf-modulos': 'modulos', 'pf-obs': 'observaciones' };
         if (editando) Object.keys(campos).forEach(function (id) { set(id, p[campos[id]]); });
+        pintarModulos();
         $id('plan-modal-title').textContent = editando ? 'Editar planificación' : 'Nueva planificación de curso';
         $id('plan-modal-sub').textContent = editando ? ((p.codigo_curso ? p.codigo_curso + ' · ' : '') + 'Estado actual: ' + p.estado) : '';
         $id('pf-guardar').style.display = convocado ? 'none' : '';
@@ -829,9 +1035,67 @@ function cengi_plan_post($accion, $id, $icono, $titulo, $clase = 'is-view', $con
         $id('pf-aprobar').style.display = p.estado === 'cancelado' ? 'none' : '';
         $id('pf-aviso-aprobar').style.display = convocado ? 'none' : '';
         $id('pf-motivo-wrap').style.display = convocado ? '' : 'none';
+        // Con el curso creado, sus datos se editan en Gestión de cursos (el servidor también los ignora).
+        var vinculado = editando && !!p.curso_id;
+        ['pf-nombre', 'pf-categoria', 'pf-area', 'pf-actividad', 'pf-modalidad', 'pf-fi', 'pf-ff', 'pf-hi', 'pf-hf', 'pf-dias', 'pf-cupomax', 'pf-instr', 'pf-modulos']
+            .forEach(function (id) { $id(id).disabled = vinculado; });
+        $id('pf-mod-editor').querySelectorAll('input, button').forEach(function (el) { el.disabled = vinculado; });
+        $id('pf-mod-add').disabled = vinculado;
+        $id('pf-aviso-curso').classList.toggle('is-visible', vinculado);
+        if (vinculado) {
+            $id('pf-curso-codigo').textContent = p.codigo_curso || '';
+            $id('pf-curso-link').href = 'ver_cursos.php?' + new URLSearchParams({ q: p.codigo_curso || '', anio: 'todos', editar: p.curso_id });
+            $id('plan-modal-title').textContent = 'Editar costos y cupo del plan';
+        }
         $id('pf-ff').min = $id('pf-fi').value;
         avisos();
     });
+
+    // ---- Módulos del plan: filas "nombre + sesiones" guardadas en el textarea oculto como "Nombre|6" por línea.
+    function filaModulo(nombre, sesiones) {
+        var fila = document.createElement('div');
+        fila.className = 'pp-mod-fila';
+        fila.innerHTML = '<input type="text" class="form-control" maxlength="255" placeholder="Nombre del módulo" aria-label="Nombre del módulo">' +
+            '<input type="number" class="form-control" min="1" max="999" placeholder="Sesiones" aria-label="Sesiones del módulo">' +
+            '<button type="button" class="pp-mod-quitar" aria-label="Quitar módulo"><span class="glyphicon glyphicon-remove"></span></button>';
+        fila.children[0].value = nombre || '';
+        fila.children[1].value = sesiones || '';
+        fila.children[2].addEventListener('click', function () { fila.remove(); guardarModulos(); });
+        [fila.children[0], fila.children[1]].forEach(function (el) { el.addEventListener('input', guardarModulos); });
+        $id('pf-mod-editor').appendChild(fila);
+        return fila;
+    }
+    function pintarModulos() {
+        $id('pf-mod-editor').innerHTML = '';
+        var texto = $id('pf-modulos').value.trim(), lineas = texto.indexOf('|') >= 0 || /\n/.test(texto) ? texto.split(/\r?\n/) : texto.split(',');
+        lineas.forEach(function (l) {
+            var partes = l.split('|'), nombre = partes[0].trim();
+            if (nombre && nombre !== 'Sin identificar') filaModulo(nombre, (partes[1] || '').trim());
+        });
+        guardarModulos();
+    }
+    function guardarModulos() {
+        var filas = [].slice.call($id('pf-mod-editor').children), total = 0, conSesiones = 0, nombres = 0;
+        $id('pf-modulos').value = filas.map(function (f) {
+            var nombre = f.children[0].value.trim().replace(/\|/g, '/'), n = parseInt(f.children[1].value, 10);
+            if (!nombre) return '';
+            nombres++;
+            if (n > 0) { total += n; conSesiones++; }
+            return nombre + (n > 0 ? '|' + n : '');
+        }).filter(Boolean).join('\n');
+        var planificadas = +$id('pf-ses').value || 0, suma = $id('pf-mod-suma');
+        suma.className = 'pp-sub';
+        if (!nombres) {
+            suma.textContent = 'Sin módulos: las sesiones quedan como “Sesión única”.';
+        } else if (conSesiones < nombres) {
+            suma.textContent = 'Indica las sesiones de cada módulo para que se asignen solas a las sesiones del curso.';
+        } else {
+            suma.textContent = 'Los módulos suman ' + total + ' de ' + planificadas + ' sesiones.';
+            if (total !== planificadas) suma.className = 'pp-sub is-warn';
+        }
+    }
+    $id('pf-mod-add').addEventListener('click', function () { filaModulo().children[0].focus(); guardarModulos(); });
+    $id('pf-ses').addEventListener('input', guardarModulos);
 
     // Avisos no bloqueantes (el servidor valida lo obligatorio).
     function avisos() {
@@ -862,13 +1126,176 @@ function cengi_plan_post($accion, $id, $icono, $titulo, $clase = 'is-view', $con
         var curso = t.getAttribute('data-curso');
         $id('accion-aviso').innerHTML = repro ? '' : 'Las sesiones programadas pendientes pasarán a “cancelada”; las impartidas se conservan para el pago.' + (curso ? ' El curso ' + curso + ' se conserva en Gestión de cursos con sus inscritos.' : '');
         $id('accion-aviso').classList.toggle('is-visible', !repro);
+        reproDatos = repro ? { movibles: +t.getAttribute('data-movibles') || 0, fijas: +t.getAttribute('data-fijas') || 0, impartidas: +t.getAttribute('data-impartidas') || 0, primera: t.getAttribute('data-primera') || '', url: t.getAttribute('data-plan-url') } : null;
+        previaSesiones();
     });
     $id('accion-fi').addEventListener('change', function () {
         if (!this.value) return;
         set('accion-ff', addDays(this.value, +this.getAttribute('data-duracion') || 0));
         var d = diffDays(this.getAttribute('data-original'), this.value);
         $id('accion-delta').textContent = d ? '(' + (d > 0 ? '+' : '') + d + ' días)' : '';
+        previaSesiones();
     });
+    // Vista previa de lo que pasara con las sesiones (misma regla que cengi_pp_mover_sesiones).
+    var reproDatos = null;
+    function fechaCorta(iso) { var p = iso.split('-'); var dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']; return dias[new Date(+p[0], p[1] - 1, +p[2]).getDay()] + ' ' + p[2] + '/' + p[1] + '/' + p[0]; }
+    function previaSesiones() {
+        var caja = $id('accion-sesiones');
+        var repro = reproDatos;
+        if (!repro) { caja.innerHTML = ''; return; }
+        var html = [], fi = $id('accion-fi').value;
+        if (!repro.movibles && !repro.fijas) html.push('El plan aún no tiene sesiones en Programa de sesiones.');
+        if (repro.movibles) {
+            if (!$id('accion-mover').checked) html.push('<b>' + repro.movibles + ' sesión(es) pendientes NO se moverán.</b>');
+            else if (fi) {
+                var d = diffDays(repro.impartidas ? $id('accion-fi').getAttribute('data-original') : repro.primera, fi);
+                if ($id('accion-mismo-dia').checked) { var r = ((d % 7) + 7) % 7; if (r) d += 7 - r; }
+                html.push(d ? '<b>' + repro.movibles + ' sesión(es) pendientes se moverán ' + (d > 0 ? '+' : '') + d + ' días</b>: la primera queda el ' + fechaCorta(addDays(repro.primera, d)) + '.'
+                    : repro.movibles + ' sesión(es) pendientes quedan en su fecha.');
+            }
+        }
+        if (repro.fijas) html.push('⚠ ' + repro.fijas + ' sesión(es) ya impartidas o incluidas en una liquidación de pago <b>no se mueven</b>. Si el curso no se impartió, revísalas en <a href="' + repro.url + '" target="_blank">Programa de sesiones</a>.');
+        caja.innerHTML = html.join('<br>');
+        caja.className = 'pp-form-msg is-visible' + (repro.fijas ? ' is-warn' : '');
+    }
+    $id('accion-mover').addEventListener('change', previaSesiones);
+    $id('accion-mismo-dia').addEventListener('change', previaSesiones);
+
+    // El menú "Acciones" vive dentro de .pp-table-wrap (overflow): se posiciona
+    // fijo respecto a la ventana para que no se recorte en las últimas filas.
+    $(document).on('shown.bs.dropdown', '.cengi-psum-actions', function () {
+        var menu = this.querySelector('.dropdown-menu');
+        var r = this.querySelector('.dropdown-toggle').getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.right = 'auto';
+        menu.style.left = Math.max(8, r.right - menu.offsetWidth) + 'px';
+        var top = r.bottom + 4;
+        if (top + menu.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - menu.offsetHeight - 4);
+        menu.style.top = top + 'px';
+    }).on('hidden.bs.dropdown', '.cengi-psum-actions', function () {
+        this.querySelector('.dropdown-menu').removeAttribute('style');
+    });
+    function cerrarMenus() { $('.cengi-psum-actions.open .dropdown-toggle').dropdown('toggle'); }
+    $(window).on('scroll resize', cerrarMenus);
+    $('#pp-tabla-wrap').on('scroll', cerrarMenus);
+
+    // ---- Filtro instantáneo de la tabla (búsqueda, estado, modalidad) y grupos por mes.
+    var filas = [].slice.call(document.querySelectorAll('#pp-planes .pp-plan-row'));
+    var meses = [].slice.call(document.querySelectorAll('#pp-planes .pp-mes'));
+    var chips = [].slice.call(document.querySelectorAll('.pp-estado-chip'));
+    var q = $id('pp-q'), estado = $id('pp-estado'), modalidad = $id('pp-modalidad'), colapsados = {}, espera;
+    var normalizar = function (s) { return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); };
+
+    function filtrar() {
+        var palabras = normalizar(q.value).split(/\s+/).filter(Boolean), est = estado.value, mod = modalidad.value;
+        var visibles = 0, porMes = {}, porEstado = { '': 0 };
+        filas.forEach(function (tr) {
+            var coincideTexto = palabras.every(function (p) { return tr.getAttribute('data-buscar').indexOf(p) !== -1; });
+            var base = coincideTexto && (!mod || tr.getAttribute('data-modalidad') === mod);
+            if (base) {
+                porEstado[''] += 1;
+                porEstado[tr.getAttribute('data-estado')] = (porEstado[tr.getAttribute('data-estado')] || 0) + 1;
+            }
+            var ok = base && (!est || tr.getAttribute('data-estado') === est);
+            tr.setAttribute('data-coincide', ok ? '1' : '0');
+            if (ok) {
+                visibles++;
+                porMes[tr.getAttribute('data-mes')] = (porMes[tr.getAttribute('data-mes')] || 0) + 1;
+            }
+        });
+        meses.forEach(function (m) {
+            var n = porMes[m.getAttribute('data-mes')] || 0;
+            m.hidden = !n;
+            m.querySelector('.pp-mes-n').textContent = n + (n === 1 ? ' plan' : ' planes');
+        });
+        filas.forEach(function (tr) {
+            tr.hidden = tr.getAttribute('data-coincide') !== '1' || !!colapsados[tr.getAttribute('data-mes')];
+        });
+        chips.forEach(function (c) {
+            var clave = c.getAttribute('data-estado');
+            c.classList.toggle('is-active', clave === est);
+            c.setAttribute('aria-pressed', clave === est ? 'true' : 'false');
+            c.querySelector('b').textContent = porEstado[clave] || 0;
+        });
+        if (filas.length) {
+            $id('pp-resultados').textContent = visibles === filas.length ? filas.length + ' planes' : 'Mostrando ' + visibles + ' de ' + filas.length;
+        }
+        $id('pp-sin-resultados').hidden = visibles > 0 || !filas.length;
+        $id('pp-limpiar').hidden = !(palabras.length || est || mod);
+
+        // La URL y "Exportar" llevan los mismos filtros (recargar o exportar da lo mismo que se ve).
+        var params = new URLSearchParams(location.search);
+        [['anio', $id('pp-filtros').elements.anio.value], ['q', q.value.trim()], ['estado', est], ['modalidad', mod]].forEach(function (par) {
+            if (par[1]) { params.set(par[0], par[1]); } else { params.delete(par[0]); }
+        });
+        params.delete('msg'); params.delete('exportar');
+        var consulta = params.toString();
+        params.set('exportar', 'xlsx');
+        $id('pp-exportar').href = 'planificacion_cursos.php?' + params;
+        try { history.replaceState(null, '', location.pathname + (consulta ? '?' + consulta : '')); } catch (e) {}
+    }
+
+    q.addEventListener('input', function () { clearTimeout(espera); espera = setTimeout(filtrar, 120); });
+    modalidad.addEventListener('change', filtrar);
+    chips.forEach(function (c) {
+        c.addEventListener('click', function () { estado.value = c.getAttribute('data-estado'); filtrar(); });
+    });
+    $id('pp-limpiar').addEventListener('click', function () { q.value = ''; estado.value = ''; modalidad.value = ''; filtrar(); q.focus(); });
+    // El formulario solo se envía al cambiar de año; Enter en la búsqueda no recarga la página.
+    $id('pp-filtros').addEventListener('submit', function (e) { e.preventDefault(); filtrar(); });
+    meses.forEach(function (m) {
+        var boton = m.querySelector('.pp-mes-toggle');
+        boton.addEventListener('click', function () {
+            var clave = m.getAttribute('data-mes');
+            colapsados[clave] = !colapsados[clave];
+            boton.setAttribute('aria-expanded', colapsados[clave] ? 'false' : 'true');
+            m.classList.toggle('is-colapsado', colapsados[clave]);
+            filtrar();
+        });
+    });
+    filtrar();
+
+    // ---- Alertas: chips por tipo y "Ver todas".
+    var alertas = [].slice.call(document.querySelectorAll('#pp-alertas .pp-alert'));
+    var filtrosAlerta = [].slice.call(document.querySelectorAll('[data-alerta-filtro]'));
+    var masAlertas = $id('pp-alertas-mas'), tipoAlerta = '', todasAlertas = false;
+    function mostrarAlertas() {
+        alertas.forEach(function (a, i) {
+            a.hidden = tipoAlerta ? a.getAttribute('data-alerta-tipo') !== tipoAlerta : (!todasAlertas && i >= 5);
+        });
+        filtrosAlerta.forEach(function (b) {
+            var activo = b.getAttribute('data-alerta-filtro') === tipoAlerta;
+            b.classList.toggle('is-active', activo);
+            b.setAttribute('aria-pressed', activo ? 'true' : 'false');
+        });
+        if (masAlertas) {
+            masAlertas.hidden = !!tipoAlerta;
+            masAlertas.textContent = todasAlertas ? 'Ver menos' : 'Ver todas (' + masAlertas.getAttribute('data-total') + ')';
+        }
+    }
+    var lista = $id('pp-alertas-lista'), abrir = $id('pp-alertas-abrir');
+    function abrirAlertas(si) {
+        if (!lista) return;
+        lista.hidden = !si;
+        abrir.setAttribute('aria-expanded', si ? 'true' : 'false');
+        $id('pp-alertas').classList.toggle('is-abierta', si);
+        try { sessionStorage.setItem('ppAlertas', si ? '1' : ''); } catch (e) {}
+    }
+    if (abrir) abrir.addEventListener('click', function () { abrirAlertas(lista.hidden); });
+    [].slice.call(document.querySelectorAll('[data-abrir-alertas]')).forEach(function (a) {
+        a.addEventListener('click', function () { abrirAlertas(true); });
+    });
+    try { if (sessionStorage.getItem('ppAlertas') === '1') abrirAlertas(true); } catch (e) {}
+    filtrosAlerta.forEach(function (b) {
+        b.addEventListener('click', function () {
+            tipoAlerta = tipoAlerta === b.getAttribute('data-alerta-filtro') ? '' : b.getAttribute('data-alerta-filtro');
+            if (tipoAlerta) abrirAlertas(true);
+            mostrarAlertas();
+        });
+    });
+    if (masAlertas) {
+        masAlertas.addEventListener('click', function () { todasAlertas = !todasAlertas; mostrarAlertas(); });
+    }
 })();
 </script>
 </body>

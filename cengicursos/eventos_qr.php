@@ -8,6 +8,11 @@ require_once __DIR__ . "/eventos_acuerdo_helpers.php"; // incluye eventos_pagos_
 if (!cengi_evp_puede_validar()) {
     cengi_require_ver_eventos();
 }
+// La evaluación de eventos tiene página propia (antes era la pestaña ?tab=evaluacion).
+if (($_GET['tab'] ?? '') === 'evaluacion') {
+    header('Location: eventos_evaluacion.php');
+    exit;
+}
 $db = conectar();
 $puedeGestionar = cengi_puede_gestionar_eventos();
 // Administracion valida pagos (validar_pagos_cengi); Capacitacion (gestion de eventos) confirma
@@ -18,6 +23,13 @@ $mensaje = '';
 $mensajeTipo = 'success';
 $eventoReabrirId = (int) ($_GET['evento_id'] ?? 0);
 $avisos = [];
+// Resultado de la última acción (las acciones POST redirigen para que recargar no las repita).
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['cengi_evt_flash'])) {
+    $mensaje = (string) ($_SESSION['cengi_evt_flash']['m'] ?? '');
+    $mensajeTipo = ($_SESSION['cengi_evt_flash']['t'] ?? '') === 'error' ? 'error' : 'success';
+    $avisos = (array) ($_SESSION['cengi_evt_flash']['a'] ?? []);
+    unset($_SESSION['cengi_evt_flash']);
+}
 
 const CENGI_EVT_CARGA_MASIVA_MAX_FILAS = 500;
 const CENGI_EVT_CARGA_MASIVA_MAX_BYTES = 5 * 1024 * 1024;
@@ -298,7 +310,11 @@ if (($_GET['accion'] ?? '') === 'exportar_participantes') {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $accion = trim((string) ($_POST['accion'] ?? ''));
-    if (($accion === 'crear_evento' || $accion === 'guardar_evento') && $puedeGestionar) {
+    if (!$_POST && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+        // El archivo superó post_max_size: PHP descarta todo el formulario.
+        $mensaje = 'El archivo es demasiado grande para el servidor (máximo ' . ini_get('post_max_size') . '). Divide el archivo o reduce su tamaño.';
+        $mensajeTipo = 'error';
+    } elseif (($accion === 'crear_evento' || $accion === 'guardar_evento') && $puedeGestionar) {
         // Nuevo evento y "Editar evento" (prototipo SIGEC v29, ppEvGuardarEvento).
         $eventoEditarId = (int) ($_POST['evento_id'] ?? 0);
         $nombre = trim((string) ($_POST['nombre'] ?? ''));
@@ -489,7 +505,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($eventoId > 0 && $nombre !== '') {
             // Evento gratuito: queda confirmado (QR listo). Evento pagado: el pago queda
             // pendiente o, si se registra como invitado, exonerado; en ambos casos la
-            // participacion la confirma Capacitacion desde "Por confirmar participación".
+            // invitado queda como participante de inmediato; con pago pendiente pasa a participante al validarlo Administración.
             $modalidadEvento = cengi_evt_modalidad_evento($db, $eventoId);
             $pagoEstado = $modalidadEvento === 'Pagado' ? (($_POST['pago_estado'] ?? '') === 'exonerado' ? 'exonerado' : 'pendiente') : null;
             $categoria = in_array($_POST['categoria_gafete'] ?? '', CENGI_EVP_CATEGORIAS, true) ? $_POST['categoria_gafete'] : 'Participante';
@@ -500,10 +516,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$eventoId, $nombre, $cui, $correoInvitado !== '' ? $correoInvitado : null, mb_substr(trim((string) ($_POST['telefono_invitado'] ?? '')), 0, 30, 'UTF-8') ?: null,
                 $ingenioId > 0 ? $ingenioId : null, $codigo, $pagoEstado === 'exonerado' ? 1 : 0, $pagoEstado, $origen, $categoria,
                 $pagoEstado === 'exonerado' ? cengi_pp_usuario_nombre() : null, $pagoEstado === 'exonerado' ? date('Y-m-d H:i:s') : null,
-                $pagoEstado === null ? date('Y-m-d H:i:s') : null, $pagoEstado === null ? cengi_pp_usuario_nombre() : null]);
+                $pagoEstado !== 'pendiente' ? date('Y-m-d H:i:s') : null, $pagoEstado !== 'pendiente' ? cengi_pp_usuario_nombre() : null]);
             $mensaje = $pagoEstado === null
                 ? "Participante registrado. Su código QR es {$codigo}."
-                : 'Participante registrado. ' . ($pagoEstado === 'exonerado' ? 'Como invitado ya puede confirmarse su participación.' : 'Queda con pago pendiente: al validarse el pago se confirma su participación.');
+                : 'Participante registrado. ' . ($pagoEstado === 'exonerado' ? 'Como invitado ya es participante del evento (código QR ' . $codigo . ').' : 'Queda como inscrito con pago pendiente: al validar Administración el pago pasa a participante.');
         } else {
             $mensaje = 'Escribe el nombre del participante.';
             $mensajeTipo = 'error';
@@ -689,6 +705,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $mensajeTipo = 'error';
             }
         }
+    } elseif ($accion === 'finalizar_pasados' && $puedeGestionar) {
+        // El link público acepta inscripciones mientras el evento no esté Finalizado/Cancelado.
+        $stmt = $db->prepare("UPDATE eventos SET estado = 'Finalizado' WHERE fecha < ? AND estado IN ('Planificado', 'En curso')");
+        $stmt->execute([date('Y-m-d')]);
+        $mensaje = $stmt->rowCount() . ' evento(s) con fecha pasada quedaron como Finalizado.';
     } elseif ($accion === 'eliminar_evento' && $puedeGestionar) {
         $eventoId = (int) ($_POST['evento_id'] ?? 0);
         if ($eventoId <= 0) {
@@ -753,6 +774,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+
+    // Post/Redirect/Get: el resultado se muestra tras redirigir, así recargar la página no
+    // vuelve a registrar participantes, cargar el archivo o marcar ingresos.
+    $_SESSION['cengi_evt_flash'] = ['m' => $mensaje, 't' => $mensajeTipo, 'a' => $avisos];
+    header('Location: eventos_qr.php' . ($eventoReabrirId > 0 ? '?evento_id=' . $eventoReabrirId : ''));
+    exit;
 }
 
 // Busqueda de la tabla de eventos: tambien por participante (nombre, CUI, correo o QR).
@@ -798,15 +825,26 @@ $ingeniosLista = $db->query("SELECT id, nombre_ingenios FROM ingenios ORDER BY n
 $pagosPorValidar = $db->query(cengi_evp_select() . " WHERE e.modalidad_pago = 'Pagado' AND ep.pago_estado = 'por_validar' ORDER BY ep.creado, ep.id")->fetchAll(PDO::FETCH_ASSOC);
 $porConfirmar = $db->query(cengi_evp_select() . " WHERE ep.confirmado_en IS NULL AND (e.modalidad_pago <> 'Pagado' OR ep.pago_estado IN ('validado', 'exonerado'))
     ORDER BY e.fecha, e.id, nombre")->fetchAll(PDO::FETCH_ASSOC);
+// Pestaña "Inscritos": todas las inscripciones de eventos recientes y próximos con su situación.
+// Gratuito: participante al inscribirse. Pagado: participante cuando Administración valida el pago.
+$inscritosEv = $db->query(cengi_evp_select() . " WHERE e.fecha >= CURDATE() - INTERVAL 90 DAY
+    ORDER BY e.fecha DESC, e.id, (ep.confirmado_en IS NOT NULL), nombre")->fetchAll(PDO::FETCH_ASSOC);
+$inscritosPendientes = count(array_filter($inscritosEv, static function ($p) {
+    return !$p['confirmado_en'];
+}));
 $cobrosEventos = cengi_evp_cobros($db);
 $soportePagos = cengi_evento_soporte_pagos($db);
 
 // Indicadores (como en el prototipo, cambian segun "Ver como").
 $k = ['proximos' => 0, 'pagados_ev' => 0, 'gratuitos_ev' => 0, 'por_validar' => 0, 'sin_pago' => 0, 'por_confirmar' => 0, 'confirmados' => 0, 'ingresos' => 0,
-    'activos_pagados' => 0];
+    'activos_pagados' => 0, 'hoy' => 0, 'sin_cerrar' => 0];
+$hoyEvt = date('Y-m-d');
 foreach ($eventos as $eventoFila) {
     $activo = !in_array($eventoFila['estado'], ['Finalizado', 'Cancelado'], true);
     $k['proximos'] += $activo ? 1 : 0;
+    $k['hoy'] += $activo && (string) $eventoFila['fecha'] === $hoyEvt ? 1 : 0;
+    // Evento con fecha pasada que sigue "Planificado" o "En curso": falta cerrarlo.
+    $k['sin_cerrar'] += $activo && (string) $eventoFila['fecha'] !== '' && (string) $eventoFila['fecha'] < $hoyEvt ? 1 : 0;
     $k[$eventoFila['modalidad_pago'] === 'Pagado' ? 'pagados_ev' : 'gratuitos_ev']++;
     $k['activos_pagados'] += $activo && $eventoFila['modalidad_pago'] === 'Pagado' ? 1 : 0;
     foreach (['por_validar', 'por_confirmar', 'confirmados', 'ingresos'] as $campo) {
@@ -825,7 +863,7 @@ $k['pendiente_usd'] = array_sum(array_column($cobrosEventos, 'pendiente_usd'));
 // Vista por rol: Administracion (validar pagos) y Capacitacion (gestion de eventos).
 $rolesVista = array_values(array_filter([$puedeValidar && $puedeGestionar ? 'todos' : null, $puedeValidar ? 'admin' : null, $puedeGestionar ? 'cap' : null]));
 $rolInicial = $rolesVista[0] ?? 'consulta';
-$tabInicial = in_array($_GET['tab'] ?? '', ['eventos', 'pagos', 'confirmar', 'cobros', 'evaluacion'], true) ? $_GET['tab'] : '';
+$tabInicial = in_array($_GET['tab'] ?? '', ['eventos', 'pagos', 'inscritos', 'cobros'], true) ? $_GET['tab'] : (($_GET['tab'] ?? '') === 'confirmar' ? 'inscritos' : '');
 
 /* Fecha corta como en el prototipo: "31 jul 2026". */
 function cengi_evt_fecha_corta($fecha)
@@ -851,16 +889,19 @@ function cengi_evt_fmt_q($valor)
 
 /* Tarjeta KPI; $roles indica en que vista ("Ver como") se muestra. $tono: true (verde),
    'naranja' | 'amarillo' | 'rojo' o false (gris, sin pendientes). */
-function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHtml = false)
+function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHtml = false, $irTab = '')
 {
-    $tonos = ['verde' => ['#3E7A12', '#EAF6DD'], 'naranja' => ['var(--cengi-naranja)', '#FFE9D9'], 'amarillo' => ['#8A6600', '#FFF6DA'], 'rojo' => ['#B23223', '#FBE3E0'], 'gris' => ['#5B6459', '#EDEFEA']];
+    $tonos = ['verde' => ['#3E7A12', '#EAF6DD'], 'naranja' => ['#B34E00', '#FFEEE0'], 'amarillo' => ['#7A5C00', '#FFF7D6'], 'rojo' => ['#B23223', '#FBE3E0'], 'gris' => ['#5B6459', '#F1F3F4']];
     [$color, $fondo] = $tonos[$tono === true ? 'verde' : ($tono ?: 'gris')];
-    return '<div class="cengi-kpi" data-roles="' . cengi_evt_html($roles) . '"><div class="cengi-kpi-bar" style="background:' . ($tono ? $color : '#CED2D5') . ';"></div>'
+    $barra = ['verde' => '#73BC25', 'naranja' => '#FF6B00', 'amarillo' => '#FFCC00', 'rojo' => '#E4544A'][$tono === true ? 'verde' : ($tono ?: '')] ?? '#CED2D5';
+    $enlace = $irTab !== '' ? ' is-link" role="button" tabindex="0" data-ir-tab="' . cengi_evt_html($irTab) . '" title="Ir a la pestaña' : '';
+    return '<div class="cengi-kpi' . $enlace . '" data-roles="' . cengi_evt_html($roles) . '"><div class="cengi-kpi-bar" style="background:' . $barra . ';"></div>'
         . '<div class="cengi-kpi-icon" style="background:' . $fondo . ';color:' . $color . ';">' . cengi_evt_icono($icono) . '</div>'
         . '<div class="cengi-kpi-val">' . ($valorEsHtml ? $valor : cengi_evt_html($valor)) . '</div><div class="cengi-kpi-label">' . cengi_evt_html($label) . '</div>'
         . '<div class="cengi-kpi-delta">' . cengi_evt_html($delta) . '</div></div>';
 }
 ?>
+<!DOCTYPE html>
 <html lang="es">
 <?php include('head.php'); ?>
 <style>
@@ -1033,6 +1074,8 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
 .cengi-eventos-qr-page .cengi-ev-tabs { display: flex; gap: 4px; padding: 2px 18px 0; border-bottom: 1px solid var(--cengi-border); }
 .cengi-eventos-qr-page .cengi-ev-tab { margin-right: 18px; padding: 11px 4px; border: 0; border-bottom: 2px solid transparent; background: none; color: #4B5A45; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .cengi-eventos-qr-page .cengi-ev-tab.active { color: #3E7A12; border-bottom-color: var(--cengi-primary); }
+.cengi-eventos-qr-page .cengi-ev-tab-ir { order: 99; flex: none; margin-left: auto; padding: 11px 4px; border-bottom: 2px solid transparent; color: #3E7A12; font-size: 12.5px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.cengi-eventos-qr-page .cengi-ev-tab-ir:hover { color: #1f5632; border-bottom-color: var(--cengi-border); text-decoration: none; }
 .cengi-eventos-qr-page .cengi-ev-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--cengi-border); }
 .cengi-eventos-qr-page .cengi-ev-section-head h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--cengi-ink); }
 .cengi-eventos-qr-page .cengi-ev-hint { margin-top: 3px; color: #4B5A45; font-size: 11.5px; }
@@ -1337,9 +1380,11 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
     .cengi-eventos-qr-page .cengi-kpi-grid { grid-template-columns: 1fr; }
 }
 </style>
-<body class="cengi-canvas cengi-eventos-qr-page">
+<link rel="stylesheet" href="css/eventos_qr.css?v=<?php echo (int) (@filemtime(__DIR__ . '/css/eventos_qr.css') ?: 1); ?>">
+<body class="cengi-canvas cengi-eventos-qr-page cg-tema">
 <?php menu_render(); ?>
 <div class="container">
+    <header class="ins-process-header"><small>CAPACITACIÓN · EVENTOS</small><h1>Eventos y pagos</h1><p>Inscripción, validación del pago, confirmación de participación, ingreso QR y cobranza en una sola sección.</p></header>
     <?php if ($mensaje !== ''): ?>
         <div class="cengi-feedback<?php echo $mensajeTipo === 'error' ? ' is-error' : ''; ?>">
             <div class="cengi-feedback-icon"><span class="glyphicon glyphicon-<?php echo $mensajeTipo === 'error' ? 'warning-sign' : 'ok'; ?>"></span></div>
@@ -1353,10 +1398,20 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
         </div>
     <?php endif; ?>
 
-    <div class="cengi-notice cengi-ev-intro">
-        <?php echo cengi_evt_icono('<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>'); ?>
-        <div><b>Evento gratuito:</b> al inscribirse se genera el QR de ingreso. <b>Evento pagado:</b> la persona se inscribe y adjunta su comprobante → la gestora de Administración <b>valida el pago</b> → Capacitación <b>confirma la participación</b> y en ese momento se habilita el QR y se envía el gafete. Solo los participantes confirmados pueden registrar su ingreso.</div>
-    </div>
+    <section class="evq-flujo" aria-label="Cómo funciona">
+        <ol>
+            <li><span class="evq-paso is-verde">1</span><div><b>Inscripción</b><small>Link público, registro manual o carga masiva</small></div></li>
+            <li><span class="evq-paso is-naranja">2</span><div><b>Validación del pago</b><small>Solo eventos pagados · Administración</small></div></li>
+            <li><span class="evq-paso is-amarillo">3</span><div><b>Confirmación</b><small>Capacitación habilita el QR y envía el gafete</small></div></li>
+            <li><span class="evq-paso is-verde2">4</span><div><b>Ingreso con QR</b><small>Cámara, búsqueda o enlace de la puerta</small></div></li>
+        </ol>
+        <p>En eventos <b>gratuitos</b> la persona queda confirmada al inscribirse (pasos 1 → 4). Solo los participantes confirmados pueden registrar su ingreso.</p>
+    </section>
+    <?php if ($puedeGestionar && $k['sin_cerrar']): ?>
+        <div class="evq-alerta"><span class="glyphicon glyphicon-time"></span><div><b><?php echo (int) $k['sin_cerrar']; ?> evento(s) con fecha pasada siguen abiertos.</b> Cámbialos a “Finalizado” para que dejen de contar como próximos y no reciban más inscripciones por error.</div>
+            <button type="button" class="btn btn-default btn-sm" data-evq-filtro="sin_cerrar">Ver cuáles</button>
+            <form method="POST" onsubmit="return confirm('¿Marcar como Finalizado los <?php echo (int) $k['sin_cerrar']; ?> evento(s) con fecha pasada? Su link de inscripción dejará de recibir registros.');"><input type="hidden" name="accion" value="finalizar_pasados"><button type="submit" class="btn btn-primary btn-sm">Finalizarlos</button></form></div>
+    <?php endif; ?>
 
     <?php if (count($rolesVista) > 1): ?>
     <div class="cengi-ev-rol" role="group" aria-label="Vista por rol"><span>Ver como:</span>
@@ -1368,12 +1423,12 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
 
     <div class="cengi-kpi-grid cengi-event-stats" id="evKpis" aria-label="Indicadores de eventos">
         <?php
-        echo cengi_evt_kpi('todos admin cap consulta', $k['proximos'], 'Eventos próximos o en curso', $k['pagados_ev'] . ' pagados · ' . $k['gratuitos_ev'] . ' gratuitos', true, '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v5M16 2v5"/>');
-        echo cengi_evt_kpi('todos admin cap', $k['por_validar'], 'Comprobantes por validar', 'Depósitos y transferencias', $k['por_validar'] > 0 ? 'naranja' : false, '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>');
-        echo cengi_evt_kpi('admin', cengi_evt_fmt_q($k['cobrado_q']) . ($k['cobrado_usd'] > 0 ? ' <small>+ US$' . number_format($k['cobrado_usd'], 0) . '</small>' : ''), 'Cobrado en eventos', 'Pendiente: ' . cengi_evt_fmt_q($k['pendiente_q']) . ($k['pendiente_usd'] > 0 ? ' + US$' . number_format($k['pendiente_usd'], 0) : ''), true, '<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/>', true);
-        echo cengi_evt_kpi('admin', $k['sin_pago'], 'Pagos pendientes', 'Inscritos sin pago o con comprobante rechazado', $k['sin_pago'] > 0 ? 'rojo' : false, '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>');
-        echo cengi_evt_kpi('todos cap', $k['por_confirmar'], 'Por confirmar participación', 'Pago validado: falta confirmar y enviar gafete', $k['por_confirmar'] > 0 ? 'amarillo' : false, '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM18 18h3v3"/>');
-        echo cengi_evt_kpi('todos cap consulta', $k['confirmados'], 'Participantes con QR', $k['ingresos'] . ' ingresos registrados', true, '<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/>');
+        echo cengi_evt_kpi('todos admin cap consulta', $k['proximos'], 'Eventos próximos o en curso', $k['pagados_ev'] . ' pagados · ' . $k['gratuitos_ev'] . ' gratuitos' . ($k['hoy'] ? ' · ' . $k['hoy'] . ' hoy' : ''), true, '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v5M16 2v5"/>', false, 'eventos');
+        echo cengi_evt_kpi('todos admin cap', $k['por_validar'], 'Comprobantes por validar', 'Depósitos y transferencias', $k['por_validar'] > 0 ? 'naranja' : false, '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>', false, $puedeVerPagos ? 'pagos' : '');
+        echo cengi_evt_kpi('admin', cengi_evt_fmt_q($k['cobrado_q']) . ($k['cobrado_usd'] > 0 ? ' <small>+ US$' . number_format($k['cobrado_usd'], 0) . '</small>' : ''), 'Cobrado en eventos', 'Pendiente: ' . cengi_evt_fmt_q($k['pendiente_q']) . ($k['pendiente_usd'] > 0 ? ' + US$' . number_format($k['pendiente_usd'], 0) : ''), true, '<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/>', true, $puedeVerPagos ? 'cobros' : '');
+        echo cengi_evt_kpi('admin', $k['sin_pago'], 'Pagos pendientes', 'Inscritos sin pago o con comprobante rechazado', $k['sin_pago'] > 0 ? 'rojo' : false, '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', false, $puedeVerPagos ? 'cobros' : '');
+        echo cengi_evt_kpi('todos cap', $k['por_confirmar'], 'Por confirmar participación', 'Pago validado: falta confirmar y enviar gafete', $k['por_confirmar'] > 0 ? 'amarillo' : false, '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM18 18h3v3"/>', false, $puedeGestionar ? 'inscritos' : '');
+        echo cengi_evt_kpi('todos cap consulta', $k['confirmados'], 'Participantes con QR', $k['ingresos'] . ' ingresos registrados' . ($k['confirmados'] ? ' (' . round($k['ingresos'] / $k['confirmados'] * 100) . '%)' : ''), true, '<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/>', false, 'eventos');
         ?>
     </div>
 
@@ -1401,7 +1456,7 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
     <div class="cengi-ev-section cengi-ev-tareas-box" data-rol="cap">
         <div class="cengi-ev-section-head"><div><h3>Tareas de Gestión de Capacitación</h3><div class="cengi-ev-hint">Administración valida los pagos; Capacitación confirma la participación y controla el ingreso</div></div></div>
         <div class="cengi-ev-tareas">
-            <?php echo $tareaHtml($k['por_confirmar'], '1. Confirmar participación', 'Pagos validados, invitados o eventos gratuitos: al confirmar se habilita el QR y se envía el gafete.', 'Confirmar', 'data-ir-tab="confirmar"', '#8A6600'); ?>
+            <?php echo $tareaHtml($inscritosPendientes, '1. Revisar inscritos', 'Gratuito: participante al inscribirse. Pagado: pasa a participante (QR y gafete) cuando Administración valida el pago.', 'Ver inscritos', 'data-ir-tab="inscritos"', '#8A6600'); ?>
             <?php echo $tareaHtml($k['proximos'], '2. Compartir link y registrar participantes', 'Link de inscripción, registro manual y carga masiva desde cada evento.', 'Ver eventos', 'data-ir-tab="eventos"', '#3E7A12'); ?>
             <?php echo $tareaHtml(max(0, $k['confirmados'] - $k['ingresos']), '3. Registrar ingresos', 'El día del evento: escanea el QR con la cámara, busca por nombre o comparte el enlace de escaneo de la puerta.', 'Ver eventos', 'data-ir-tab="eventos"', '#3E7A12'); ?>
         </div>
@@ -1412,20 +1467,22 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
         <div class="cengi-ev-tabs" role="tablist">
             <button type="button" class="cengi-ev-tab" data-evtab="eventos" role="tab">Eventos</button>
             <?php if ($puedeVerPagos): ?><button type="button" class="cengi-ev-tab" data-evtab="pagos" role="tab">Pagos por validar <span class="cengi-ev-chip"><?php echo count($pagosPorValidar); ?></span></button><?php endif; ?>
-            <?php if ($puedeGestionar): ?><button type="button" class="cengi-ev-tab" data-evtab="confirmar" role="tab">Por confirmar participación <span class="cengi-ev-chip"><?php echo count($porConfirmar); ?></span></button><?php endif; ?>
+            <?php if ($puedeGestionar || $puedeVerPagos): ?><button type="button" class="cengi-ev-tab" data-evtab="inscritos" role="tab">Inscritos <span class="cengi-ev-chip" title="Inscritos que aún no son participantes"><?php echo $inscritosPendientes; ?></span></button><?php endif; ?>
             <?php if ($puedeVerPagos): ?><button type="button" class="cengi-ev-tab" data-evtab="cobros" role="tab">Cobros por evento</button><?php endif; ?>
-            <button type="button" class="cengi-ev-tab" data-evtab="evaluacion" role="tab">Evaluación de eventos</button>
+            <a class="cengi-ev-tab-ir" href="eventos_evaluacion.php" title="Abre la página de evaluación de eventos">Evaluación de eventos <span aria-hidden="true">→</span></a>
         </div>
         <div class="cengi-ev-section-body">
             <div class="cengi-ev-toolbar">
                 <div class="cengi-ev-toolbar-group">
                     <input type="search" class="form-control cengi-ev-search" id="evBuscar" placeholder="Buscar evento, participante, CUI, correo o código QR..." aria-label="Buscar evento o participante">
+                    <?php $porEstado = array_count_values(array_column($eventos, 'estado')); ?>
                     <select class="form-control cengi-ev-filter" id="evEstadoF" aria-label="Estado">
-                        <option value="">Todos los estados</option>
-                        <option value="Planificado">Planificado</option>
-                        <option value="En curso">En curso</option>
-                        <option value="Finalizado">Finalizado</option>
-                        <option value="Cancelado">Cancelado</option>
+                        <option value="">Todos los eventos (<?php echo count($eventos); ?>)</option>
+                        <option value="activos">Próximos y en curso (<?php echo $k['proximos']; ?>)</option>
+                        <?php if ($k['sin_cerrar']): ?><option value="sin_cerrar">Fecha pasada sin cerrar (<?php echo $k['sin_cerrar']; ?>)</option><?php endif; ?>
+                        <?php foreach (CENGI_EVT_ESTADOS as $estadoOpcion): ?>
+                            <option value="<?php echo cengi_evt_html($estadoOpcion); ?>"><?php echo cengi_evt_html($estadoOpcion) . ' (' . (int) ($porEstado[$estadoOpcion] ?? 0) . ')'; ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="cengi-ev-toolbar-group">
@@ -1454,10 +1511,21 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
                     $pct = $confirmadosEvt > 0 ? (int) round(($ingresosEvt / $confirmadosEvt) * 100) : 0;
                     $esPagadoEvt = $evt['modalidad_pago'] === 'Pagado';
                     $aliadosEvt = $evt['en_colaboracion'] ? ($aliadosPorEvento[(int) $evt['id']] ?? []) : [];
+                    $abiertoEvt = !in_array($evt['estado'], ['Finalizado', 'Cancelado'], true);
+                    $fechaEvt = (string) $evt['fecha'];
+                    $esHoyEvt = $abiertoEvt && $fechaEvt === $hoyEvt;
+                    $sinCerrarEvt = $abiertoEvt && $fechaEvt !== '' && $fechaEvt < $hoyEvt;
+                    $diasEvt = $abiertoEvt && $fechaEvt > $hoyEvt ? (int) ((strtotime($fechaEvt) - strtotime($hoyEvt)) / 86400) : null;
+                    $colorEvt = preg_match('/^#[0-9a-fA-F]{6}$/', (string) $evt['color']) ? $evt['color'] : '#73BC25';
+                    $cupoLleno = $evt['cupo'] && $registradosEvt >= (int) $evt['cupo'];
                     ?>
-                    <tr class="cengi-ev-row" data-estado="<?php echo cengi_evt_html($evt['estado']); ?>" data-buscar="<?php echo cengi_evt_html(cengi_texto_normalizado($evt['nombre'] . ' ' . $evt['tipo'] . ' ' . $evt['lugar'] . ' ' . $evt['buscar_participantes'])); ?>">
-                        <td class="cengi-ev-name"><button type="button" class="cengi-ev-link" onclick="cengiEvtAbrirParticipantes(<?php echo (int) $evt['id']; ?>)"><?php echo cengi_evt_html($evt['nombre']); ?></button><div class="cengi-ev-sub"><?php echo cengi_evt_html($evt['tipo'] . (trim((string) $evt['lugar']) !== '' ? ' · ' . $evt['lugar'] : '')); ?></div></td>
-                        <td class="cengi-ev-num ev-td-fecha"><?php echo cengi_evt_html(cengi_evt_fecha_corta($evt['fecha'])); ?><?php if (trim((string) $evt['hora']) !== ''): ?><div class="cengi-ev-sub"><?php echo cengi_evt_html($evt['hora']); ?></div><?php endif; ?></td>
+                    <tr class="cengi-ev-row<?php echo $esHoyEvt ? ' is-hoy' : ''; ?>" data-estado="<?php echo cengi_evt_html($evt['estado']); ?>" data-abierto="<?php echo $abiertoEvt ? 1 : 0; ?>" data-sin-cerrar="<?php echo $sinCerrarEvt ? 1 : 0; ?>" data-buscar="<?php echo cengi_evt_html(cengi_texto_normalizado($evt['nombre'] . ' ' . $evt['tipo'] . ' ' . $evt['lugar'] . ' ' . $evt['buscar_participantes'])); ?>">
+                        <td class="cengi-ev-name"><span class="evq-color" style="background:<?php echo cengi_evt_html($colorEvt); ?>;" aria-hidden="true"></span><button type="button" class="cengi-ev-link" onclick="cengiEvtAbrirParticipantes(<?php echo (int) $evt['id']; ?>)"><?php echo cengi_evt_html($evt['nombre']); ?></button><div class="cengi-ev-sub"><?php echo cengi_evt_html($evt['tipo'] . (trim((string) $evt['lugar']) !== '' ? ' · ' . $evt['lugar'] : '')); ?></div></td>
+                        <td class="cengi-ev-num ev-td-fecha"><?php echo cengi_evt_html(cengi_evt_fecha_corta($evt['fecha'])); ?><?php if (trim((string) $evt['hora']) !== ''): ?><div class="cengi-ev-sub"><?php echo cengi_evt_html($evt['hora']); ?></div><?php endif; ?>
+                            <?php if ($esHoyEvt): ?><div><span class="evq-chip is-hoy">Hoy</span></div>
+                            <?php elseif ($sinCerrarEvt): ?><div><span class="evq-chip is-pasado" title="La fecha ya pasó y el evento sigue abierto">Fecha pasada</span></div>
+                            <?php elseif ($diasEvt !== null && $diasEvt <= 14): ?><div><span class="evq-chip is-pronto"><?php echo $diasEvt === 1 ? 'Mañana' : 'En ' . $diasEvt . ' días'; ?></span></div><?php endif; ?>
+                        </td>
                         <td class="ev-td-acceso">
                             <?php if ($aliadosEvt): ?>
                                 <div style="margin-bottom:3px;"><span class="cengi-status-badge is-active"><i></i>Colaboración</span></div>
@@ -1469,7 +1537,10 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
                             <?php if ($esPagadoEvt): ?><div class="cengi-ev-sub"><?php echo cengi_evt_html(cengi_evt_fmt_q($evt['costo'])); ?></div><?php endif; ?>
                             <?php endif; ?>
                         </td>
-                        <td class="cengi-ev-num ev-td-dato" data-label="Registrados"><strong><?php echo $registradosEvt; ?></strong><span class="cengi-ev-sub"> / <?php echo $evt['cupo'] ? (int) $evt['cupo'] : '—'; ?></span></td>
+                        <td class="cengi-ev-num ev-td-dato" data-label="Registrados"><strong><?php echo $registradosEvt; ?></strong><span class="cengi-ev-sub"> / <?php echo $evt['cupo'] ? (int) $evt['cupo'] : 'sin cupo'; ?></span>
+                            <?php if ($evt['cupo']): ?><div class="evq-cupo<?php echo $cupoLleno ? ' is-lleno' : ''; ?>" title="Ocupación del cupo"><span style="width:<?php echo min(100, round($registradosEvt / (int) $evt['cupo'] * 100)); ?>%"></span></div><?php endif; ?>
+                            <?php if ($cupoLleno && $abiertoEvt): ?><div><span class="cengi-ev-pill is-naranja">Cupo lleno</span></div><?php endif; ?>
+                        </td>
                         <td class="cengi-ev-num ev-td-dato" data-label="Pagos">
                             <?php if ($esPagadoEvt): ?>
                                 <?php echo (int) $evt['pagados']; ?> pagados
@@ -1487,6 +1558,9 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
                         <td class="ev-td-estado"><span class="cengi-status-badge <?php echo cengi_evt_estado_badge($evt['estado']); ?>"><i></i><?php echo cengi_evt_html($evt['estado']); ?></span></td>
                         <td class="ev-td-acc">
                             <?php $idEvt = (int) $evt['id']; ?>
+                            <?php if ($esHoyEvt && $puedeGestionar): ?>
+                                <button type="button" class="btn btn-primary btn-sm evq-ingreso-rapido" data-ingreso="<?php echo $idEvt; ?>" data-ingreso-nombre="<?php echo cengi_evt_html($evt['nombre']); ?>" title="Escanear QR o buscar por nombre"><?php echo cengi_evt_icono('<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/>'); ?> Ingreso</button>
+                            <?php endif; ?>
                             <div class="dropdown cengi-ev-acciones">
                                 <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Acciones <span class="caret"></span></button>
                                 <ul class="dropdown-menu dropdown-menu-right">
@@ -1556,28 +1630,61 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
     </div>
     <?php endif; ?>
 
-    <?php if ($puedeGestionar): ?>
-    <div class="cengi-ev-section" id="evPanelConfirmar" style="display:none;">
-        <div class="cengi-ev-section-head"><div><h3>Confirmar participación</h3><div class="cengi-ev-hint">Para Capacitación: al confirmar se habilita el código QR para el ingreso y se envía el gafete por correo</div></div>
-            <button type="button" class="btn btn-primary btn-sm" data-confirmar-todos="1"<?php echo $porConfirmar ? '' : ' disabled'; ?>>Confirmar todos (<?php echo count($porConfirmar); ?>)</button></div>
+    <?php if ($puedeGestionar || $puedeVerPagos): ?>
+    <?php /* Inscritos: gratuito = participante al inscribirse; pagado = participante cuando Administración valida el pago. */ ?>
+    <div class="cengi-ev-section" id="evPanelInscritos" style="display:none;">
+        <div class="cengi-ev-section-head"><div><h3>Inscritos en eventos</h3><div class="cengi-ev-hint">Evento gratuito: la persona es participante al inscribirse. Evento pagado: pasa a participante (QR y gafete) cuando Administración valida su pago. Eventos de los últimos 90 días y próximos.</div></div>
+            <?php if ($porConfirmar && $puedeGestionar): ?><button type="button" class="btn btn-default btn-sm" data-confirmar-todos="1">Confirmar listos (<?php echo count($porConfirmar); ?>)</button><?php endif; ?></div>
         <div class="cengi-table-wrap">
             <table class="table cengi-events-table cengi-ev-lista">
-                <thead><tr><th>Participante</th><th>Evento</th><th>Pago</th><th></th></tr></thead>
+                <thead><tr><th>Inscrito</th><th>Evento</th><th>Pago</th><th>Situación</th><th></th></tr></thead>
                 <tbody>
-                <?php if (!$porConfirmar): ?><tr><td colspan="4" class="cengi-ev-empty">No hay participaciones pendientes de confirmar.</td></tr><?php endif; ?>
-                <?php foreach ($porConfirmar as $pc): ?>
-                    <tr data-buscar="<?php echo cengi_evt_html(cengi_texto_normalizado($pc['nombre'] . ' ' . $pc['cui_invitado'] . ' ' . $pc['correo'] . ' ' . $pc['evento_nombre'])); ?>">
-                        <td><strong><?php echo cengi_evt_html($pc['nombre']); ?></strong><div class="cengi-ev-sub"><?php echo cengi_evt_html($pc['ingenio'] . ' · ' . ($pc['correo'] ?: 'sin correo: entregar gafete impreso')); ?></div></td>
-                        <td><?php echo cengi_evt_html($pc['evento_nombre']); ?><div class="cengi-ev-sub"><?php echo cengi_evt_html(cengi_evt_fecha_corta($pc['evento_fecha'])); ?></div></td>
+                <?php if (!$inscritosEv): ?><tr><td colspan="5" class="cengi-ev-empty">No hay inscripciones en eventos recientes ni próximos.</td></tr><?php endif; ?>
+                <?php foreach ($inscritosEv as $in):
+                    $pagadoEv = $in['modalidad_pago'] === 'Pagado';
+                    $estadoEv = (string) $in['pago_estado'];
+                    $usdIn = cengi_evp_es_usd($in);
+                ?>
+                    <tr data-buscar="<?php echo cengi_evt_html(cengi_texto_normalizado($in['nombre'] . ' ' . $in['cui_invitado'] . ' ' . $in['correo'] . ' ' . $in['evento_nombre'] . ' ' . $in['pago_boleta'])); ?>">
+                        <td><strong><?php echo cengi_evt_html($in['nombre']); ?></strong><div class="cengi-ev-sub"><?php echo cengi_evt_html($in['ingenio'] . ' · ' . ($in['correo'] ?: 'sin correo')); ?></div></td>
+                        <td><?php echo cengi_evt_html($in['evento_nombre']); ?><div class="cengi-ev-sub"><?php echo cengi_evt_html(cengi_evt_fecha_corta($in['evento_fecha'])); ?> · inscrito <?php echo cengi_evt_html(date('d/m/Y', strtotime($in['creado']))); ?></div></td>
                         <td style="font-size:12px;"><?php
-                            if ($pc['modalidad_pago'] !== 'Pagado') {
-                                echo 'Evento gratuito';
-                            } elseif ($pc['pago_estado'] === 'exonerado') {
+                            if (!$pagadoEv) {
+                                echo 'Gratuito';
+                            } elseif ($estadoEv === 'exonerado') {
                                 echo 'Invitado / exonerado';
                             } else {
-                                echo '<b>Validado por ' . cengi_evt_html($pc['pago_validado_por'] ?: 'Administración') . '</b><div class="cengi-ev-sub">' . cengi_evt_html($pc['pago_validado_en'] ? date('d/m/Y H:i', strtotime($pc['pago_validado_en'])) : '') . '</div>';
+                                echo cengi_evt_html(cengi_evp_dinero(cengi_evp_monto_esperado($in), $usdIn));
+                                if ($in['pago_boleta']) {
+                                    echo '<div class="cengi-ev-sub mono">Boleta ' . cengi_evt_html($in['pago_boleta']) . '</div>';
+                                }
+                                if ($in['recibo_pago'] && $puedeVerPagos) {
+                                    echo '<div><a class="cengi-ev-linkbtn" href="eventos_pagos_api.php?recibo=' . (int) $in['id'] . '" target="_blank" rel="noopener">Ver comprobante</a></div>';
+                                }
                             } ?></td>
-                        <td style="text-align:right;"><button type="button" class="btn btn-primary btn-sm" data-confirmar="<?php echo (int) $pc['id']; ?>" data-evento="<?php echo (int) $pc['evento_id']; ?>">Confirmar y enviar gafete</button></td>
+                        <td><?php
+                            if ($in['confirmado_en']) {
+                                echo '<span class="cengi-status-badge is-active"><i></i>Participante</span><div class="cengi-ev-sub">' . ($in['gafete_enviado_en'] ? 'Gafete enviado' : 'QR listo') . ($in['ingreso_en'] ? ' · ingresó' : '') . '</div>';
+                            } elseif (cengi_evp_listo($in)) {
+                                echo '<span class="cengi-status-badge is-pending"><i></i>Listo para confirmar</span><div class="cengi-ev-sub">Registro anterior al cambio</div>';
+                            } elseif ($estadoEv === 'por_validar') {
+                                echo '<span class="cengi-status-badge is-pending"><i></i>Pago por validar</span><div class="cengi-ev-sub">Lo valida Administración</div>';
+                            } elseif ($estadoEv === 'rechazado') {
+                                echo '<span class="cengi-status-badge is-rejected"><i></i>Comprobante rechazado</span>' . ($in['pago_nota'] ? '<div class="cengi-ev-sub">' . cengi_evt_html($in['pago_nota']) . '</div>' : '');
+                            } else {
+                                echo '<span class="cengi-status-badge is-upcoming"><i></i>Esperando pago</span><div class="cengi-ev-sub">Aún no envía comprobante</div>';
+                            } ?></td>
+                        <td style="text-align:right;white-space:nowrap;"><?php
+                            if (!$in['confirmado_en']) {
+                                if (cengi_evp_listo($in) && $puedeGestionar) {
+                                    echo '<button type="button" class="btn btn-default btn-sm" data-confirmar="' . (int) $in['id'] . '" data-evento="' . (int) $in['evento_id'] . '">Confirmar y enviar gafete</button>';
+                                } elseif ($pagadoEv && $puedeValidar) {
+                                    echo '<button type="button" class="btn ' . ($estadoEv === 'por_validar' ? 'btn-primary' : 'btn-default') . ' btn-sm" data-pago="' . (int) $in['id'] . '">' . ($estadoEv === 'por_validar' ? 'Validar pago' : 'Registrar pago') . '</button>';
+                                }
+                                if ($pagadoEv && in_array($estadoEv, ['pendiente', 'rechazado', ''], true) && ($puedeGestionar || $puedeValidar)) {
+                                    echo ' <button type="button" class="cengi-ev-linkbtn" data-recordar="' . (int) $in['id'] . '">Recordar pago</button>';
+                                }
+                            } ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -1633,21 +1740,6 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
     </div>
     <?php endif; ?>
 
-    <div id="evPanelEvaluacion" style="display:none;">
-        <div class="cengi-kpi-grid cengi-event-stats" id="evEvalKpis"></div>
-        <div class="cengi-ev-section">
-            <div class="cengi-ev-section-head">
-                <div><h3>Evaluación de eventos</h3><div class="cengi-ev-hint">Percepción de participantes y evaluación de las empresas aliadas en eventos de colaboración. Abre el informe para ver temas, fortalezas y recomendaciones.</div></div>
-                <a class="btn btn-default btn-sm" href="eventos_gestion.php?accion=exportar_consolidado">Descargar consolidado</a>
-            </div>
-            <div class="cengi-table-wrap">
-                <table class="table cengi-events-table cengi-eval-table">
-                    <thead><tr><th>Evento</th><th>Asistentes</th><th>Percepción de participantes</th><th>Tema de mejora principal</th><th>Colaboración (empresas aliadas)</th><th></th></tr></thead>
-                    <tbody id="tablaEvEval"><tr><td colspan="6" class="cengi-ev-empty">Cargando…</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
 </div>
 
 <div class="modal" id="modalEventoParticipantes" tabindex="-1" role="dialog" aria-hidden="true">
@@ -1744,12 +1836,12 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
             <div class="modal-header"><button class="close" type="button" data-dismiss="modal" aria-hidden="true">&times;</button><h4 class="modal-title">QR del participante</h4></div>
             <div class="modal-body cengi-qr-detail-body">
                 <div class="cengi-badge-card cengi-individual-badge">
-                    <div class="bc-top"><div class="cengi-badge-eyebrow">CENGICAÑA · Evento técnico</div><div class="cengi-badge-event" id="qrDetalleEvento"></div></div>
-                    <div class="bc-body"><div class="cengi-badge-name" id="qrDetalleNombre"></div><div class="cengi-badge-company" id="qrDetalleIngenio"></div><div class="cengi-qr-box cengi-qr-box-large" id="qrDetalleImagen"></div><div class="mono cengi-badge-code" id="qrDetalleCodigo"></div></div>
+                    <div class="bc-top" id="qrDetalleBanda"><div class="cengi-badge-logo" id="qrDetalleLogo" hidden><img alt=""></div><div class="cengi-badge-eyebrow" id="qrDetalleTipo">CENGICAÑA · Evento</div><div class="cengi-badge-event" id="qrDetalleEvento"></div><div class="cengi-badge-det" id="qrDetalleDet"></div></div>
+                    <div class="bc-body"><span class="cengi-badge-cat" id="qrDetalleCat"></span><div class="cengi-badge-name" id="qrDetalleNombre"></div><div class="cengi-badge-company" id="qrDetalleIngenio"></div><div class="cengi-qr-box cengi-qr-box-large" id="qrDetalleImagen"></div><div class="mono cengi-badge-code" id="qrDetalleCodigo"></div></div>
                 </div>
                 <p class="cengi-qr-help">Al escanear este QR se obtiene el código único asignado a esta persona.</p>
             </div>
-            <div class="modal-footer cengi-qr-detail-actions"><button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button><button type="button" class="btn btn-primary" id="qrDescargar"><span class="glyphicon glyphicon-download-alt"></span> Descargar QR</button></div>
+            <div class="modal-footer cengi-qr-detail-actions"><button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button><button type="button" class="btn btn-default" id="qrImprimirGafete" title="Imprime el gafete con el diseño del evento"><span class="glyphicon glyphicon-print"></span> Gafete</button><button type="button" class="btn btn-default" id="qrDescargar" title="Vectorial, para imprenta"><span class="glyphicon glyphicon-download-alt"></span> SVG</button><button type="button" class="btn btn-primary" id="qrDescargarPng" title="Imagen para enviar por WhatsApp o correo"><span class="glyphicon glyphicon-download-alt"></span> Descargar QR (PNG)</button></div>
         </div>
     </div>
 </div>
@@ -1765,7 +1857,19 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
                     <label class="control-label">URL para compartir con los participantes</label>
                     <input type="text" id="eivUrl" class="form-control" readonly onclick="this.select();">
                 </div>
-                <div class="cengi-notice cengi-qr-notice"><span class="glyphicon glyphicon-info-sign"></span><span>Quien tenga este enlace podrá completar el formulario y recibirá un código QR único.</span></div>
+                <div class="evq-link-qr">
+                    <div class="evq-link-qr-img" id="eivQr" aria-label="QR del enlace de inscripción"></div>
+                    <div class="evq-link-qr-txt">
+                        <b>QR para afiches y presentaciones</b>
+                        <span>Al escanearlo con el celular se abre el formulario de inscripción.</span>
+                        <div class="evq-link-acciones">
+                            <button type="button" class="btn btn-default btn-sm" data-evq-png="eivQr" data-evq-nombre="QR-inscripcion"><span class="glyphicon glyphicon-download-alt"></span> Descargar QR (PNG)</button>
+                            <a class="btn btn-default btn-sm" id="eivAbrir" href="#" target="_blank" rel="noopener"><span class="glyphicon glyphicon-new-window"></span> Abrir formulario</a>
+                            <a class="btn btn-default btn-sm evq-whatsapp" id="eivWhatsapp" href="#" target="_blank" rel="noopener">WhatsApp</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="cengi-notice cengi-qr-notice"><span class="glyphicon glyphicon-info-sign"></span><span>Quien tenga este enlace podrá completar el formulario y recibirá un código QR único. Deja de recibir inscripciones cuando el evento pasa a Finalizado o Cancelado.</span></div>
                 <span id="eivCopiarFeedback" class="text-success" style="display:none;"></span>
             </div>
             <div class="modal-footer">
@@ -1785,6 +1889,16 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
                 <div class="form-group">
                     <label class="control-label">URL para abrir en el celular de la puerta</label>
                     <input type="text" id="eevUrl" class="form-control" readonly onclick="this.select();">
+                </div>
+                <div class="evq-link-qr">
+                    <div class="evq-link-qr-img" id="eevQr" aria-label="QR del enlace de escaneo"></div>
+                    <div class="evq-link-qr-txt">
+                        <b>Ábrelo en el celular de la puerta</b>
+                        <span>Escanea este QR con el celular del personal de ingreso: abre el escáner sin iniciar sesión.</span>
+                        <div class="evq-link-acciones">
+                            <a class="btn btn-default btn-sm" id="eevAbrir" href="#" target="_blank" rel="noopener"><span class="glyphicon glyphicon-new-window"></span> Abrir escáner</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="cengi-notice cengi-qr-notice"><span class="glyphicon glyphicon-warning-sign"></span><span>No compartas este enlace públicamente: cualquiera con el link puede marcar asistencia en este evento.</span></div>
                 <span id="eevCopiarFeedback" class="text-success" style="display:none;"></span>
@@ -1979,6 +2093,9 @@ window.CENGI_EVT = <?php echo json_encode([
     'estadosPago' => CENGI_EVP_ESTADOS,
     'rolInicial' => $rolInicial,
     'tabInicial' => $tabInicial,
+    // Enlaces desde eventos_evaluacion.php: abren el informe o las encuestas de un evento.
+    'abrirInforme' => max(0, (int) ($_GET['informe'] ?? 0)),
+    'abrirEncuestas' => max(0, (int) ($_GET['encuestas'] ?? 0)),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
 <script src="js/eventos_gestion.js?v=<?php echo (int) @filemtime(__DIR__ . '/js/eventos_gestion.js'); ?>"></script>
@@ -2295,13 +2412,23 @@ window.CENGI_EVT = <?php echo json_encode([
             });
     };
 
+    var qrParticipante = null;
+    $('#qrImprimirGafete').on('click', function () { if (qrParticipante && window.cengiEvtImprimirGafetes) window.cengiEvtImprimirGafetes([qrParticipante]); });
     window.cengiEvtVerQr = function (indice) {
         var p = participantes[indice];
         if (!p || !eventoActual) return;
         qrActual = p.codigo_qr;
-        $('#qrDetalleEvento').text(eventoActual.nombre || 'Evento técnico');
+        qrParticipante = p;
+        // Mismo diseno que el gafete del correo y el impreso: color, logo, tipo, fecha/lugar y categoria del evento.
+        var ev = eventoActual, fecha = /^\d{4}-\d{2}-\d{2}$/.test(ev.fecha || '') ? ev.fecha.split('-').reverse().join('/') : (ev.fecha || '');
+        $('#qrDetalleBanda').css('background', /^#[0-9a-fA-F]{6}$/.test(ev.color || '') ? ev.color : '');
+        $('#qrDetalleLogo').prop('hidden', !ev.logo).find('img').attr('src', ev.logo || '');
+        $('#qrDetalleTipo').text('CENGICAÑA · ' + (ev.tipo || 'Evento'));
+        $('#qrDetalleEvento').text(ev.nombre || 'Evento');
+        $('#qrDetalleDet').text([fecha, ev.hora, ev.lugar].filter(Boolean).join(' · '));
+        $('#qrDetalleCat').text(p.categoria_gafete || 'Participante');
         $('#qrDetalleNombre').text(p.nombre);
-        $('#qrDetalleIngenio').text((p.categoria_gafete && p.categoria_gafete !== 'Participante' ? p.categoria_gafete + ' · ' : '') + p.ingenio);
+        $('#qrDetalleIngenio').text(p.ingenio);
         $('#qrDetalleCodigo').text(p.codigo_qr);
         crearQr(p.codigo_qr, 'qrDetalleImagen', true);
         $('#modalQrParticipante').modal('show');
@@ -2337,7 +2464,11 @@ window.CENGI_EVT = <?php echo json_encode([
         var visibles = 0;
         $('#tablaEventos tr.cengi-ev-row').each(function () {
             var $fila = $(this);
-            var coincide = (!estado || $fila.attr('data-estado') === estado)
+            var pasaEstado = !estado
+                || (estado === 'activos' && $fila.attr('data-abierto') === '1')
+                || (estado === 'sin_cerrar' && $fila.attr('data-sin-cerrar') === '1')
+                || $fila.attr('data-estado') === estado;
+            var coincide = pasaEstado
                 && (!texto || ($fila.attr('data-buscar') || '').indexOf(texto) !== -1);
             $fila.toggle(coincide);
             if (coincide) visibles++;
@@ -2346,6 +2477,16 @@ window.CENGI_EVT = <?php echo json_encode([
     }
     $('#evBuscar').on('input', filtrarEventos);
     $('#evEstadoF').on('change', filtrarEventos);
+    $('[data-evq-filtro]').on('click', function () {
+        $('.cengi-ev-tab[data-evtab="eventos"]').trigger('click');
+        $('#evEstadoF').val($(this).attr('data-evq-filtro')).trigger('change');
+        var panel = document.getElementById('evPanelEventos');
+        if (panel && panel.scrollIntoView) panel.scrollIntoView({behavior: 'smooth', block: 'start'});
+    });
+    // Indicadores con clic también con teclado.
+    $(document).on('keydown', '.cengi-kpi.is-link', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(this).trigger('click'); }
+    });
     $('#evpMostrarRegistro').on('click', function () { $('#evpCargaMasivaForm').slideUp(150); resetearFormularioRegistro(); $('#evpRegistroForm').slideDown(150); });
     $('#evpCancelarRegistro').on('click', function () { $('#evpRegistroForm').slideUp(150); resetearFormularioRegistro(); });
     $('#evpMostrarCargaMasiva').on('click', function () { $('#evpRegistroForm').slideUp(150); resetearFormularioRegistro(); $('#evpCargaMasivaForm').slideDown(150); });
@@ -2432,6 +2573,50 @@ window.CENGI_EVT = <?php echo json_encode([
         URL.revokeObjectURL(enlace.href);
     });
 
+    // Convierte el SVG del QR en PNG (fondo blanco, 1024 px) para WhatsApp, correo o Word.
+    function descargarPng(contenedorId, nombre) {
+        var svg = document.querySelector('#' + contenedorId + ' svg');
+        if (!svg) return;
+        var img = new Image();
+        var url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], {type: 'image/svg+xml;charset=utf-8'}));
+        img.onload = function () {
+            var lado = 1024, canvas = document.createElement('canvas');
+            canvas.width = lado;
+            canvas.height = lado;
+            var ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, lado, lado);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0, lado, lado);
+            URL.revokeObjectURL(url);
+            canvas.toBlob(function (blob) {
+                var enlace = document.createElement('a');
+                enlace.href = URL.createObjectURL(blob);
+                enlace.download = String(nombre || 'QR').replace(/[^A-Za-z0-9_-]/g, '-') + '.png';
+                document.body.appendChild(enlace);
+                enlace.click();
+                document.body.removeChild(enlace);
+                setTimeout(function () { URL.revokeObjectURL(enlace.href); }, 1000);
+            }, 'image/png');
+        };
+        img.src = url;
+    }
+    $('#qrDescargarPng').on('click', function () { if (qrActual) descargarPng('qrDetalleImagen', 'QR-' + qrActual); });
+    $(document).on('click', '[data-evq-png]', function () { descargarPng($(this).attr('data-evq-png'), $(this).attr('data-evq-nombre')); });
+
+    // QR y accesos del enlace mostrado en los modales de inscripción y escaneo.
+    function mostrarEnlace(prefijo, url, nombreEvento) {
+        $('#' + prefijo + 'Url').val(url);
+        crearQr(url, prefijo + 'Qr', true);
+        $('#' + prefijo + 'Abrir').attr('href', url);
+        $('#' + prefijo + 'Whatsapp').attr('href', 'https://wa.me/?text=' + encodeURIComponent('Inscríbete en ' + nombreEvento + ': ' + url));
+        $('[data-evq-png="' + prefijo + 'Qr"]').attr('data-evq-nombre', 'QR-inscripcion-' + normalizar(nombreEvento).slice(0, 40));
+    }
+    function limpiarEnlace(prefijo) {
+        $('#' + prefijo + 'Qr').empty();
+        $('#' + prefijo + 'Abrir, #' + prefijo + 'Whatsapp').attr('href', '#');
+    }
+
     var ejemplo = document.getElementById('cengiQrEjemplo');
     if (ejemplo) crearQr(ejemplo.getAttribute('data-codigo'), ejemplo, true);
 
@@ -2443,6 +2628,7 @@ window.CENGI_EVT = <?php echo json_encode([
         window.cengiEvtEnlaceInscripcion = function (eventoId) {
             $('#eivNombreEvento').text('Cargando…');
             $('#eivUrl').val('');
+            limpiarEnlace('eiv');
             $('#eivCopiarFeedback').hide();
             $('#modalEnlaceInscripcion').modal('show');
             $.getJSON('eventos_qr.php', {accion: 'enlace_inscripcion', evento_id: eventoId})
@@ -2452,7 +2638,7 @@ window.CENGI_EVT = <?php echo json_encode([
                         return;
                     }
                     $('#eivNombreEvento').text(respuesta.evento_nombre);
-                    $('#eivUrl').val(window.location.origin + '/cengicursos/inscripcion_evento.php?token=' + encodeURIComponent(respuesta.token));
+                    mostrarEnlace('eiv', window.location.origin + '/cengicursos/inscripcion_evento.php?token=' + encodeURIComponent(respuesta.token), respuesta.evento_nombre);
                 })
                 .fail(function () {
                     $('#eivNombreEvento').text('No fue posible generar el enlace. Intenta nuevamente.');
@@ -2477,6 +2663,7 @@ window.CENGI_EVT = <?php echo json_encode([
         window.cengiEvtEnlaceEscaneo = function (eventoId) {
             $('#eevNombreEvento').text('Cargando…');
             $('#eevUrl').val('');
+            limpiarEnlace('eev');
             $('#eevCopiarFeedback').hide();
             $('#modalEnlaceEscaneo').modal('show');
             $.getJSON('eventos_qr.php', {accion: 'enlace_escaneo', evento_id: eventoId})
@@ -2486,7 +2673,7 @@ window.CENGI_EVT = <?php echo json_encode([
                         return;
                     }
                     $('#eevNombreEvento').text(respuesta.evento_nombre);
-                    $('#eevUrl').val(window.location.origin + '/cengicursos/escanear_evento.php?token=' + encodeURIComponent(respuesta.token));
+                    mostrarEnlace('eev', window.location.origin + '/cengicursos/escanear_evento.php?token=' + encodeURIComponent(respuesta.token), respuesta.evento_nombre);
                 })
                 .fail(function () {
                     $('#eevNombreEvento').text('No fue posible generar el enlace. Intenta nuevamente.');
@@ -2509,7 +2696,15 @@ window.CENGI_EVT = <?php echo json_encode([
         });
     }
 
-    <?php if ($eventoReabrirId > 0): ?>cengiEvtAbrirParticipantes(<?php echo (int) $eventoReabrirId; ?>);<?php endif; ?>
+    <?php if ($eventoReabrirId > 0): ?>
+    cengiEvtAbrirParticipantes(<?php echo (int) $eventoReabrirId; ?>);
+    // Se quita ?evento_id de la barra para que recargar después no vuelva a abrir la ventana.
+    if (window.history && history.replaceState) {
+        var eventoUrl = new URL(window.location.href);
+        eventoUrl.searchParams.delete('evento_id');
+        history.replaceState(null, '', eventoUrl.pathname + eventoUrl.search + eventoUrl.hash);
+    }
+    <?php endif; ?>
 }());
 </script>
 <script src="js/jsQR.js"></script>

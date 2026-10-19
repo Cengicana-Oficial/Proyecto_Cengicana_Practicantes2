@@ -1,6 +1,7 @@
 <?php
-session_start();
-require_once "../config/conexion.php";
+require_once __DIR__ . '/../config/session.php';
+cengi_session_start();
+require_once __DIR__ . '/../config/conexion.php';
 
 if (!isset($_SESSION['id_usuario'])) {
     header("Location: ../login.php");
@@ -42,6 +43,14 @@ $idUsuario = (int) $_SESSION['id_usuario'];
 $esSuperadmin = (int) ($_SESSION['es_superadmin'] ?? 0) === 1;
 $scope = $_GET['scope'] ?? '';
 $scopeConfig = user_scope_config($scope);
+$cengiAltaLimitada = false;
+if (strtolower(trim((string) $scope)) === 'cursos') {
+    require_once __DIR__ . '/../../cengicursos/revisar_permisos.php';
+    require_once __DIR__ . '/../../cengicursos/accesos_helpers.php';
+    if (!cengi_puede_gestionar_usuarios()) { http_response_code(403); exit('No tienes permiso para crear usuarios de Cursos.'); }
+    $cengiAltaLimitada = !cengi_ve_todo_por_rol_o_ingenio();
+    if ($cengiAltaLimitada && cengi_ingenio_id_actual() <= 0) { http_response_code(403); exit('Asigna un ingenio a esta cuenta antes de crear usuarios.'); }
+}
 
 if (!$esSuperadmin && !$scopeConfig) {
     header("Location: usuarios.php");
@@ -97,15 +106,22 @@ require_once __DIR__ . '/_modulos_roles.php';
 $modulosPermitidos = array_map(static fn($m) => (int) $m['id'], $modulosDisponibles);
 $nombresModulos = array_column($modulosDisponibles, 'nombre', 'id');
 $rolesPorModulo = usr_roles_por_modulo($conn, $modulosDisponibles, $esSuperadmin);
+if (strtolower(trim((string) $scope)) === 'cursos') {
+    $permitidosCursos = array_column(array_filter(cengi_acc_roles_cursos($conn), 'cengi_acc_puede_asignar_rol'), 'id');
+    foreach ($rolesPorModulo as &$opciones) $opciones = array_intersect_key($opciones, array_flip($permitidosCursos));
+    unset($opciones);
+}
 $pidePlataforma = $esSuperadmin && !$scopeConfig;
 $modulosElegidos = [];
 
+if (empty($_SESSION['crear_usuario_csrf'])) $_SESSION['crear_usuario_csrf'] = bin2hex(random_bytes(32));
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!hash_equals($_SESSION['crear_usuario_csrf'], (string) ($_POST['csrf'] ?? ''))) { http_response_code(403); exit('Recarga el formulario antes de crear el usuario.'); }
     $nombre = trim($_POST['nombre'] ?? '');
     $correo = trim($_POST['correo'] ?? '');
     $contrasenaPlano = trim($_POST['contrasena'] ?? '');
     $rolId = $pidePlataforma ? (int) ($_POST['rol_id'] ?? 0) : 0;
-    $ingenioId = $_POST['ingenio_id'] !== '' ? (int) $_POST['ingenio_id'] : null;
+    $ingenioId = $cengiAltaLimitada ? cengi_ingenio_id_actual() : (($_POST['ingenio_id'] ?? '') !== '' ? (int) $_POST['ingenio_id'] : null);
     $esSuperadminNuevo = $pidePlataforma && $rolId === 1 ? 1 : 0;
 
     try {
@@ -123,6 +139,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // mensaje del selector de modulos
     } elseif ($nombre === '' || $correo === '' || $contrasenaPlano === '' || $ingenioId === null) {
         $error = "Completa todos los campos obligatorios.";
+    } elseif (!filter_var($correo, FILTER_VALIDATE_EMAIL) || strlen($contrasenaPlano) < 8 || !preg_match('/[A-Za-z]/', $contrasenaPlano) || !preg_match('/[0-9]/', $contrasenaPlano)) {
+        $error = 'Indica un correo válido y una contraseña de al menos 8 caracteres con letras y números.';
     } elseif (!$esSuperadminNuevo && !$modulosElegidos) {
         $error = "Activa al menos un módulo y elige el rol del usuario en él.";
     } elseif (array_diff($moduloIdsForzados, $moduloIdsSeleccionados)) {
@@ -178,6 +196,7 @@ $actualesModulos = $_SERVER['REQUEST_METHOD'] === 'POST'
 
 $stmtIngenios = $conn->query("SELECT id, nombre_ingenio FROM ingenios ORDER BY nombre_ingenio");
 $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
+if ($cengiAltaLimitada) $ingenios = array_values(array_filter($ingenios, static function ($i) { return (int) $i['id'] === cengi_ingenio_id_actual(); }));
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -206,6 +225,7 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
     <?php endif; ?>
 
     <form method="POST" class="form-card form-card-wide">
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['crear_usuario_csrf'], ENT_QUOTES, 'UTF-8') ?>">
         <h1>Crear usuario</h1>
         <p class="form-sub">Registra un nuevo usuario y asígnale un rol, ingenio y módulos.</p>
 

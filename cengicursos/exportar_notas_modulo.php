@@ -105,7 +105,7 @@ $stmt = $db->prepare($sql);
 $stmt->execute($params);
 $filas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, $moduloId);
+$prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, $moduloId, cengi_curso_solo_asistencia($db, $cursoId));
 $nombreCurso = (string) ($modulo['nombre_cursos'] ?? 'Curso sin nombre');
 $nombreModulo = (string) ($modulo['nombre'] ?? 'Modulo sin nombre');
 $codigoCurso = trim((string) ($modulo['codigo_curso'] ?? ''));

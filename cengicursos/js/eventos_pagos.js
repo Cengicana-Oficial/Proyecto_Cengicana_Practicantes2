@@ -75,7 +75,8 @@
     $('.cengi-table-wrap').on('scroll', reubicar);
 
     /* ---------- vista por rol y pestañas ---------- */
-    var PESTANAS = {todos: ['eventos', 'pagos', 'confirmar', 'cobros', 'evaluacion'], admin: ['pagos', 'cobros', 'eventos'], cap: ['eventos', 'confirmar', 'evaluacion'], consulta: ['eventos', 'pagos', 'cobros', 'evaluacion']};
+    // La evaluación de eventos es página aparte (enlace .cengi-ev-tab-ir al final de las pestañas).
+    var PESTANAS = {todos: ['eventos', 'inscritos', 'pagos', 'cobros'], admin: ['pagos', 'inscritos', 'cobros', 'eventos'], cap: ['eventos', 'inscritos'], consulta: ['eventos', 'inscritos', 'pagos', 'cobros']};
     function aplicarRol(rol, tab) {
         $('[data-evrol]').removeClass('sel').filter('[data-evrol="' + rol + '"]').addClass('sel');
         $('#evKpis .cengi-kpi').each(function () { $(this).toggle((' ' + $(this).attr('data-roles') + ' ').indexOf(' ' + rol + ' ') !== -1); });
@@ -86,6 +87,7 @@
             $(this).toggle(visibles.indexOf(t) !== -1).css('order', visibles.indexOf(t));
         });
         $('#evBtnNuevo').toggle(rol !== 'admin');
+        $('.cengi-ev-tab-ir').toggle(rol !== 'admin');
         $('.cengi-ev-tab[data-evtab="' + (tab && visibles.indexOf(tab) !== -1 ? tab : visibles[0]) + '"]').trigger('click');
         try { localStorage.setItem('cengiEvtRol', rol); } catch (e) { /* sin almacenamiento */ }
     }
@@ -184,7 +186,7 @@
             '¿Confirmar la participación? Se habilita su código QR para el ingreso y se le envía el gafete por correo.');
     });
     $(document).on('click', '[data-confirmar-todos]', function () {
-        var n = $('#evPanelConfirmar [data-confirmar]').length;
+        var n = $('#evPanelInscritos [data-confirmar]').length;
         confirmar({todos: 1}, 'Se confirmarán ' + n + ' participación(es): se habilita su código QR y se envía el gafete. ¿Continuar?');
     });
 
@@ -231,10 +233,16 @@
         return q.createSvgTag({cellSize: 4, margin: 0, scalable: true});
     }
     $('#evpImprimirGafetes').on('click', function () {
-        var ev = window.cengiEvtEventoActual(), sel = window.cengiEvtParticipantesSeleccionados();
+        var sel = window.cengiEvtParticipantesSeleccionados();
         var listos = sel.filter(function (p) { return !!p.confirmado_en; });
         if (!listos.length) { window.alert('Solo se imprimen gafetes de participantes con la participación confirmada.'); return; }
         if (listos.length < sel.length && !window.confirm((sel.length - listos.length) + ' seleccionado(s) aún no tienen la participación confirmada y no se imprimirán. ¿Continuar con ' + listos.length + '?')) return;
+        imprimirGafetes(listos);
+    });
+    // Gafetes con el diseno del evento (color, logo, tipo, fecha y lugar): tambien lo usa el modal "QR del participante".
+    window.cengiEvtImprimirGafetes = imprimirGafetes;
+    function imprimirGafetes(listos) {
+        var ev = window.cengiEvtEventoActual();
         var detalle = [ev.fecha, ev.hora, ev.lugar].filter(Boolean).join(' · ');
         var colorBanda = /^#[0-9a-fA-F]{6}$/.test(ev.color || '') ? ev.color : '#1f5632';
         var logo = ev.logo ? '<div class="l"><img src="' + esc(ev.logo) + '" alt=""></div>' : '';
@@ -267,7 +275,7 @@
         var faltan = pendientes.length;
         pendientes.forEach(function (i) { i.onload = i.onerror = function () { if (--faltan <= 0) setTimeout(imprimir, 150); }; });
         setTimeout(faltan ? imprimir : function () { setTimeout(imprimir, 150); }, faltan ? 4000 : 0);
-    });
+    }
 
     /* ---------- soporte de pagos ---------- */
     $(document).on('click', '[data-soporte]', function () { $('#etMsg').removeClass('is-err').empty(); $('#modalEvSoporte').modal('show'); });

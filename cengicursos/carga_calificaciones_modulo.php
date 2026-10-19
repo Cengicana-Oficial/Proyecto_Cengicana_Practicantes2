@@ -70,6 +70,9 @@ try {
     // opcionales: pueden faltar o venir vacias sin marcar error de validacion, y
     // su valor no se guarda (queda NULL), igual que en la carga manual
     // (ver_participante_curso.php / guardar_control.php).
+    if (cengi_curso_solo_asistencia($db, $cursoId)) {
+        throw new RuntimeException('Este curso dura menos de ' . CENGI_HORAS_MIN_EVALUACION . ' horas: solo se registra la asistencia.');
+    }
     $prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, $moduloId);
     $requierePre = $prePostVisibles['pre'];
     $requierePost = $prePostVisibles['post'];

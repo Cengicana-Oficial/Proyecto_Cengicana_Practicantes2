@@ -15,7 +15,8 @@ cengi_require_aprobar_solicitudes('solicitudes.php');
 
 $db = conectar();
 
-$id = (int)($_GET['id'] ?? 0);
+// Solo por POST desde la ventana de confirmación de solicitudes.php.
+$id = $_SERVER['REQUEST_METHOD'] === 'POST' ? (int) ($_POST['id'] ?? 0) : 0;
 
 if ($id <= 0) {
     header("Location: solicitudes.php");

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/revisar_permisos.php';
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/menu.php';
+if (cengi_es_estudiante()) { header('Location: mi_aula.php'); exit; }
 require_once __DIR__ . '/dashboard_helpers.php';
 $year = filter_input(INPUT_GET, 'anio', FILTER_VALIDATE_INT);
 $year = $year && $year >= 2000 && $year <= (int) date('Y') + 5 ? $year : (int) date('Y');
@@ -21,9 +22,10 @@ foreach ($monthly ?? [] as $row) { $months[(int) $row['mes'] - 1] = (int) $row['
     <link rel="stylesheet" href="css/bootstrap.min.css">
     <link rel="stylesheet" href="css/bootstrap-theme.css">
     <link rel="stylesheet" href="css/proyecto.css?v=<?php echo filemtime(__DIR__ . '/css/proyecto.css'); ?>">
+    <link rel="stylesheet" href="css/cengi-tema.css?v=<?php echo filemtime(__DIR__ . '/css/cengi-tema.css'); ?>">
     <link rel="stylesheet" href="css/dashboard.css?v=<?php echo filemtime(__DIR__ . '/css/dashboard.css'); ?>">
 </head>
-<body class="cengi-canvas cengi-dashboard-page">
+<body class="cengi-canvas cg-tema cengi-dashboard-page">
 <?php menu_render(); ?>
 <main class="container">
     <div class="dash-heading">
@@ -38,8 +40,8 @@ foreach ($monthly ?? [] as $row) { $months[(int) $row['mes'] - 1] = (int) $row['
             <article class="dash-metric"><span class="glyphicon glyphicon-<?php echo $icon; ?>" aria-hidden="true"></span><span><?php echo $label; ?></span><strong><?php echo cengi_dash_n($row, $key); ?></strong><small><?php echo $help; ?></small></article>
         <?php endforeach; ?>
     </div>
-    <div class="dash-grid">
-        <section class="dash-panel"><h2>Ejecución de la capacitación</h2>
+    <div class="dash-grid<?php echo $showEvents ? ' dash-grid-events' : ''; ?>">
+        <section class="dash-panel dash-execution"><h2>Ejecución de la capacitación</h2>
             <div class="dash-states">
                 <?php foreach (['proximos' => 'Por iniciar', 'activos' => 'En curso', 'finalizados' => 'Finalizados por fecha'] as $key => $label): ?><div><strong><?php echo cengi_dash_n($courses, $key); ?></strong><span><?php echo $label; ?></span></div><?php endforeach; ?>
             </div>
@@ -49,7 +51,7 @@ foreach ($monthly ?? [] as $row) { $months[(int) $row['mes'] - 1] = (int) $row['
             <p class="dash-note"><?php echo cengi_dash_n($sessions, 'pendientes'); ?> sesiones con fecha pasada aún sin marcar como impartidas.</p>
             <?php if (cengi_puede_gestionar()): ?><a class="dash-link" href="programa_sesiones.php">Revisar programa de sesiones →</a><?php endif; ?>
         </section>
-        <section class="dash-panel"><h2>Inicio de cursos por mes</h2><p>Distribución de la oferta registrada en <?php echo $year; ?>.</p>
+        <section class="dash-panel dash-distribution"><h2>Inicio de cursos por mes</h2><p>Distribución de la oferta registrada en <?php echo $year; ?>.</p>
             <?php if ($monthly === null): ?><p class="dash-empty">Indicador no disponible.</p><?php elseif (!array_sum($months)): ?><p class="dash-empty">No hay cursos con inicio registrado en este año.</p><?php else: ?>
                 <div class="dash-months" role="list" aria-label="Cantidad de cursos por mes">
                     <?php foreach (['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'] as $i => $label): ?><div role="listitem" aria-label="<?php echo $label . ': ' . $months[$i] . ' cursos'; ?>"><b><?php echo $months[$i]; ?></b><div class="dash-bar-track"><span style="height:<?php echo round(100 * $months[$i] / max($months)); ?>%"></span></div><small><?php echo $label; ?></small></div><?php endforeach; ?>
@@ -57,7 +59,7 @@ foreach ($monthly ?? [] as $row) { $months[(int) $row['mes'] - 1] = (int) $row['
             <?php endif; ?>
         </section>
         <?php if ($showEvents): ?>
-        <section class="dash-panel"><h2>Eventos del año <small>Alcance institucional</small></h2>
+        <section class="dash-panel dash-events"><h2>Eventos del año <small>Alcance institucional</small></h2>
             <div class="dash-states"><div><strong><?php echo cengi_dash_n($events, 'total'); ?></strong><span>No cancelados</span></div><div><strong><?php echo cengi_dash_n($events, 'transcurridos'); ?></strong><span>Con fecha pasada</span></div><div><strong><?php echo cengi_dash_n($events, 'proximos'); ?></strong><span>Desde hoy</span></div></div>
             <div class="dash-progress-label"><strong>Asistencia registrada</strong><b><?php echo $attendancePct === null ? '—' : $attendancePct . '%'; ?></b></div>
             <progress class="dash-event-progress" max="100" value="<?php echo $attendancePct ?? 0; ?>" aria-label="Porcentaje de registros con ingreso a eventos"></progress>
@@ -65,10 +67,11 @@ foreach ($monthly ?? [] as $row) { $months[(int) $row['mes'] - 1] = (int) $row['
             <p class="dash-note">Se cuentan participaciones por evento, no personas únicas.</p><a class="dash-link" href="eventos_qr.php">Ver eventos y asistencia →</a>
         </section>
         <?php endif; ?>
-        <section class="dash-panel"><h2>Próximas actividades <small>Hasta 5 por tipo · <?php echo $year; ?></small></h2>
+        <section class="dash-panel dash-upcoming"><h2>Próximas actividades <small>Hasta 5 por tipo · <?php echo $year; ?></small></h2>
             <?php foreach (array_merge([['Cursos', $nextCourses]], $showEvents ? [['Eventos', $nextEvents]] : []) as [$title, $items]): ?>
-                <h3><?php echo $title; ?></h3>
+                <div class="dash-agenda-group"><h3><?php echo $title; ?></h3>
                 <?php if (!$items): ?><p class="dash-empty"><?php echo $items === null ? 'No se pudo cargar la agenda.' : 'Sin próximas actividades en el año seleccionado.'; ?></p><?php else: ?><ul class="dash-agenda"><?php foreach ($items as $item): ?><li><time datetime="<?php echo cengi_dash_h($item['fecha']); ?>"><?php echo date('d/m', strtotime($item['fecha'])); ?></time><span><?php echo cengi_dash_h($item['nombre']); ?></span></li><?php endforeach; ?></ul><?php endif; ?>
+                </div>
             <?php endforeach; ?>
         </section>
     </div>
