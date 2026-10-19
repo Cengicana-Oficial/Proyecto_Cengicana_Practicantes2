@@ -96,6 +96,12 @@ function inf_mutar(PDO $pdo,array $u,string $action,array $d,array $files=[]):st
             }else throw new RuntimeException('Acción no válida.');
             $current=inf_fila($pdo,$id);$log[]=['accion'=>$label,'actor'=>$u['nombre'],'rol'=>$u['nombre_rol'] ?? 'Administrador','fecha'=>date('Y-m-d H:i:s'),'observaciones'=>$obs,'archivos'=>inf_archivos($pdo,$current)];
             $pdo->prepare('UPDATE informes_cuatrimestrales SET flujo=?,evaluacion=?,pendientes=?,bitacora=?,observaciones=?,revision=revision+1 WHERE id=?')->execute([$state,$state==='revisado'?'Satisfactorio':($state==='observado'?'Con observaciones':'En revision'),json_encode($pending,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),json_encode($log,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),$obs,$id]);
+            if($state!==($r['flujo'] ?? 'pendiente')&&function_exists('correo_evento')){
+                $abiertos=implode("\n",array_map(static fn($p)=>'• '.$p['texto'],array_filter($pending,static fn($p)=>$p['estado']!=='resuelto')));
+                $vars=['area'=>$area['nombre'],'periodo'=>['','I','II','III'][$c].' cuatrimestre '.$y,'observaciones'=>trim($abiertos."\n".$obs)];$responsable=[['email'=>(string)$area['correo'],'nombre'=>'']];
+                $evento=match($state){'entregado','atendido'=>'inf_entregado','observado'=>'inf_observado','revisado'=>'inf_revisado',default=>null};
+                if($evento)correo_evento($pdo,$evento,$evento==='inf_entregado'?[]:$responsable,$vars,'index.php?view=informes');
+            }
         }
         $pdo->commit();return $msg;
     }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();foreach($new as $a){$p=inf_ruta($a['ruta']);if($p)unlink($p);}throw $e;}

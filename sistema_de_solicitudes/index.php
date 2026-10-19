@@ -5,6 +5,7 @@ session_start();
 
 require __DIR__ . '/config/database.php';
 require __DIR__ . '/includes/functions.php';
+require __DIR__ . '/includes/mailer.php';
 
 if (isset($_GET['logout'])) {
     session_destroy();
@@ -94,6 +95,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$programId]);
 
             header('Location: index.php?view=programas&message=' . urlencode('Programa eliminado correctamente.'));
+            exit;
+        }
+
+        if ($action === 'guardar_config_correo') {
+            if (!can_manage_mail_settings($user)) {
+                throw new RuntimeException('No tienes permiso para modificar la configuracion de correos.');
+            }
+
+            $invalidEmails = [];
+            $copyEmails = parse_mail_list((string) ($_POST['correos_copia'] ?? ''), $invalidEmails);
+            if ($invalidEmails) {
+                throw new RuntimeException('Revisa estos correos en copia: ' . implode(', ', $invalidEmails));
+            }
+
+            save_mail_settings($pdo, [
+                'activo' => isset($_POST['activo']) ? '1' : '0',
+                'nueva_destino' => isset($_POST['nueva_destino']) ? '1' : '0',
+                'nueva_direccion' => isset($_POST['nueva_direccion']) ? '1' : '0',
+                'correos_copia' => implode(', ', $copyEmails),
+                'avance_estados' => implode(',', array_intersect(MAIL_STATUSES, (array) ($_POST['avance_estados'] ?? []))),
+            ]);
+
+            header('Location: index.php?view=correos&message=' . urlencode('Configuracion de correos guardada.'));
+            exit;
+        }
+
+        if ($action === 'probar_correo') {
+            if (!can_manage_mail_settings($user)) {
+                throw new RuntimeException('No tienes permiso para enviar correos de prueba.');
+            }
+
+            $testEmail = trim((string) ($_POST['correo_prueba'] ?? ''));
+            if (!filter_var($testEmail, FILTER_VALIDATE_EMAIL)) {
+                throw new RuntimeException('Escribe un correo valido para la prueba.');
+            }
+
+            $sample = mail_sample_request($pdo, $menuDbName);
+            [$subject, $html] = ($_POST['plantilla'] ?? '') === 'avance'
+                ? mail_request_progress($sample, (string) $user['nombre'], 'proceso', 'Comentario de ejemplo del seguimiento.')
+                : mail_new_request($sample, (string) $user['nombre']);
+            $mailError = send_request_mail($pdo, 'prueba', (string) $sample['codigo'], $testEmail, (string) $user['nombre'], '[Prueba] ' . $subject, $html);
+            if ($mailError !== '') {
+                throw new RuntimeException('No se pudo enviar el correo de prueba: ' . $mailError);
+            }
+
+            header('Location: index.php?view=correos&message=' . urlencode("Correo de prueba enviado a {$testEmail}. Revisa tu bandeja (y la carpeta de spam)."));
             exit;
         }
 
@@ -245,6 +292,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             guardar_adjuntos($pdo, $requestId, $code, $adjuntosValidos);
 
+            notify_new_request($pdo, $menuPdo, $menuDbName, $user, $requestId);
+
             header('Location: index.php?view=mis&message=' . urlencode("Solicitud {$code} creada correctamente."));
             exit;
         }
@@ -267,12 +316,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $adjuntosValidos = validar_adjuntos($_FILES['seguimiento_adjuntos'] ?? null);
 
+            $observation = trim($_POST['observacion'] ?? '');
             $pdo->prepare('UPDATE solicitudes SET estado = ? WHERE id = ?')->execute([$status, $requestId]);
             $pdo->prepare(
                 'INSERT INTO seguimientos (solicitud_id, usuario_id, estado, observacion) VALUES (?, ?, ?, ?)'
-            )->execute([$requestId, (int) $user['id'], $status, trim($_POST['observacion'] ?? '') ?: null]);
+            )->execute([$requestId, (int) $user['id'], $status, $observation ?: null]);
 
             guardar_adjuntos($pdo, $requestId, $request['codigo'] . '_seguimiento', $adjuntosValidos);
+
+            notify_request_progress($pdo, $menuDbName, $user, $requestId, $status, $observation);
 
             header('Location: index.php?view=detalle&id=' . $requestId . '&message=' . urlencode('Estado actualizado correctamente.'));
             exit;
@@ -346,6 +398,19 @@ if ($view === 'panel') {
     );
     $urgentStmt->execute($visibleParams);
     $urgentRequests = $urgentStmt->fetchAll();
+}
+
+$mailSettings = [];
+$mailLog = [];
+$mailPreviews = [];
+if ($view === 'correos' && can_manage_mail_settings($user)) {
+    $mailSettings = mail_settings($pdo);
+    $mailLog = $pdo->query('SELECT * FROM correo_registro ORDER BY id DESC LIMIT 25')->fetchAll();
+    $sample = mail_sample_request($pdo, $menuDbName);
+    $mailPreviews = [
+        'nueva' => mail_new_request($sample, 'Jefe del programa destino'),
+        'avance' => mail_request_progress($sample, (string) $user['nombre'], 'proceso', 'Comentario de ejemplo del seguimiento.'),
+    ];
 }
 
 $programUsage = [];
@@ -518,6 +583,7 @@ $sidebarTitles = [
     'recibidas' => ['Recibidas', 'Solicitudes recibidas por tu programa'],
     'usuarios' => ['Usuarios', 'Usuarios del modulo'],
     'programas' => ['Programas', 'Programas y direcciones'],
+    'correos' => ['Correos', 'Avisos por correo de las solicitudes'],
     'nueva' => ['Nueva solicitud', 'Registra una nueva solicitud'],
     'detalle' => ['Detalle de solicitud', 'Seguimiento de la solicitud'],
     'buzon' => ['Buzon de ideas', 'Ideas y sugerencias enviadas desde el formulario publico'],
@@ -582,7 +648,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                 <?php endif; ?>
             </div>
 
-            <?php if (can_view_users($user) || can_view_programs($user)): ?>
+            <?php if (can_view_users($user) || can_view_programs($user) || can_manage_mail_settings($user)): ?>
                 <div class="sidebar-nav-group">
                     <div class="sidebar-nav-label">Administracion</div>
                     <?php if (can_view_users($user)): ?>
@@ -593,6 +659,11 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                     <?php if (can_view_programs($user)): ?>
                         <a href="index.php?view=programas" class="sidebar-nav-item <?= e($active('programas')) ?>">
                             <i class="ti ti-building"></i><span>Programas</span>
+                        </a>
+                    <?php endif; ?>
+                    <?php if (can_manage_mail_settings($user)): ?>
+                        <a href="index.php?view=correos" class="sidebar-nav-item <?= e($active('correos')) ?>">
+                            <i class="ti ti-mail-cog"></i><span>Correos</span>
                         </a>
                     <?php endif; ?>
                 </div>
@@ -1276,6 +1347,143 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                 <div class="panel-empty hidden" id="lista-ideas-vacio"><i class="ti ti-search-off"></i>Ninguna idea coincide con el filtro.</div>
                 <?php if (!$ideas): ?>
                     <div class="panel-empty"><i class="ti ti-bulb-off"></i>Todavia no se han recibido ideas. Comparte el link del formulario.</div>
+                <?php endif; ?>
+            <?php endif; ?>
+        <?php endif; ?>
+
+        <?php if ($view === 'correos'): ?>
+            <?php if (!can_manage_mail_settings($user)): ?>
+                <div class="alert error">No tienes permiso para configurar los correos.</div>
+            <?php else: ?>
+                <?php
+                $mailSender = mail_smtp_sender();
+                $progressStatuses = explode(',', $mailSettings['avance_estados']);
+                ?>
+                <div class="section-header">
+                    <div>
+                        <div class="section-title">Avisos por correo</div>
+                        <div class="section-sub">Elige quien recibe un correo cuando llega una solicitud y cuando avanza.</div>
+                    </div>
+                </div>
+
+                <div class="mail-status">
+                    <span class="mail-status-item <?= $mailSender !== '' ? 'is-ok' : 'is-bad' ?>">
+                        <i class="ti <?= $mailSender !== '' ? 'ti-circle-check' : 'ti-alert-triangle' ?>"></i>
+                        <?= $mailSender !== '' ? 'Servidor de correo listo · remitente ' . e($mailSender) : 'Falta configurar el servidor de correo (MAIL_* en login/.env)' ?>
+                    </span>
+                    <?php if (!mail_env_enabled()): ?>
+                        <span class="mail-status-item is-bad"><i class="ti ti-mail-off"></i>Apagado desde el servidor (SOLICITUDES_CORREO_ACTIVO=0)</span>
+                    <?php endif; ?>
+                </div>
+
+                <form class="form-card mail-card" method="post" action="index.php?view=correos">
+                    <input type="hidden" name="action" value="guardar_config_correo">
+
+                    <label class="mail-switch">
+                        <input type="checkbox" name="activo" value="1" <?= $mailSettings['activo'] === '1' ? 'checked' : '' ?>>
+                        <span><strong>Enviar avisos por correo</strong><small>Si lo apagas, solo queda la campana dentro del sistema.</small></span>
+                    </label>
+
+                    <div class="mail-block">
+                        <div class="mail-block-title"><i class="ti ti-inbox"></i>Cuando llega una solicitud nueva</div>
+                        <label class="permission-option">
+                            <input type="checkbox" name="nueva_destino" value="1" <?= $mailSettings['nueva_destino'] === '1' ? 'checked' : '' ?>>
+                            Avisar a los jefes del programa que la recibe
+                        </label>
+                        <label class="permission-option">
+                            <input type="checkbox" name="nueva_direccion" value="1" <?= $mailSettings['nueva_direccion'] === '1' ? 'checked' : '' ?>>
+                            Enviar copia a Direccion y superadmin
+                        </label>
+                        <div class="form-group">
+                            <label class="form-label" for="correos_copia">Correos adicionales en copia</label>
+                            <textarea class="form-control mail-textarea" id="correos_copia" name="correos_copia" placeholder="compras@cengicana.org, soporte@cengicana.org"><?= e($mailSettings['correos_copia']) ?></textarea>
+                            <div class="form-hint">Reciben todas las solicitudes nuevas. Separa varios con coma.</div>
+                        </div>
+                    </div>
+
+                    <div class="mail-block">
+                        <div class="mail-block-title"><i class="ti ti-progress-check"></i>Cuando la solicitud avanza, avisar al solicitante si pasa a</div>
+                        <div class="permissions-grid">
+                            <?php foreach (MAIL_STATUSES as $statusOption): ?>
+                                <label class="permission-option">
+                                    <input type="checkbox" name="avance_estados[]" value="<?= e($statusOption) ?>" <?= in_array($statusOption, $progressStatuses, true) ? 'checked' : '' ?>>
+                                    <?= e(estado_label($statusOption)) ?>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="form-hint">El correo incluye la observacion que escribio quien actualizo la solicitud.</div>
+                    </div>
+
+                    <div class="actions">
+                        <button class="btn-primary" type="submit"><i class="ti ti-device-floppy"></i>Guardar configuracion</button>
+                    </div>
+                </form>
+
+                <div class="section-header users-section-header">
+                    <div>
+                        <div class="section-title">Probar envio</div>
+                        <div class="section-sub">Envia un ejemplo con los datos de la ultima solicitud registrada.</div>
+                    </div>
+                </div>
+                <form class="form-card mail-test" method="post" action="index.php?view=correos">
+                    <input type="hidden" name="action" value="probar_correo">
+                    <div class="form-group">
+                        <label class="form-label" for="correo_prueba">Enviar a</label>
+                        <input class="form-control" type="email" id="correo_prueba" name="correo_prueba" value="<?= e((string) $user['correo']) ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="plantilla">Plantilla</label>
+                        <select class="form-control" id="plantilla" name="plantilla" onchange="document.querySelectorAll('[data-mail-preview]').forEach(function (f) { f.hidden = f.dataset.mailPreview !== this.value; }, this)">
+                            <option value="nueva">Solicitud nueva (al que recibe)</option>
+                            <option value="avance">Avance (al solicitante)</option>
+                        </select>
+                    </div>
+                    <button class="btn-primary" type="submit"><i class="ti ti-send"></i>Enviar prueba</button>
+                </form>
+                <div class="mail-preview">
+                    <?php foreach ($mailPreviews as $previewKey => [$previewSubject, $previewHtml]): ?>
+                        <div data-mail-preview="<?= e($previewKey) ?>" <?= $previewKey === 'nueva' ? '' : 'hidden' ?>>
+                            <div class="mail-preview-subject"><span>Asunto</span><?= e($previewSubject) ?></div>
+                            <iframe class="mail-preview-frame" title="Vista previa del correo" sandbox srcdoc="<?= e('<body style="margin:16px;background:#fff">' . $previewHtml . '</body>') ?>"></iframe>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="section-header users-section-header">
+                    <div>
+                        <div class="section-title">Ultimos envios</div>
+                        <div class="section-sub">Los 25 correos mas recientes enviados por el modulo.</div>
+                    </div>
+                </div>
+                <?php if (!$mailLog): ?>
+                    <div class="panel-empty"><i class="ti ti-mail"></i>Todavia no se ha enviado ningun correo.</div>
+                <?php else: ?>
+                    <div class="table-card table-wrap">
+                        <table>
+                            <thead>
+                                <tr><th>Fecha</th><th>Tipo</th><th>Solicitud</th><th>Para</th><th>Asunto</th><th>Resultado</th></tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($mailLog as $logRow): ?>
+                                    <tr>
+                                        <td><?= e(date('d/m/Y H:i', strtotime((string) $logRow['creado_en']))) ?></td>
+                                        <td><?= e(['nueva' => 'Nueva', 'avance' => 'Avance', 'prueba' => 'Prueba'][$logRow['tipo']] ?? $logRow['tipo']) ?></td>
+                                        <td><?= e((string) $logRow['solicitud_codigo']) ?></td>
+                                        <td><?= e($logRow['destinatario']) ?></td>
+                                        <td><?= e($logRow['asunto']) ?></td>
+                                        <td>
+                                            <?php if ($logRow['estado'] === 'enviado'): ?>
+                                                <span class="badge badge-completado">Enviado</span>
+                                            <?php else: ?>
+                                                <span class="badge badge-rechazado" title="<?= e((string) $logRow['error']) ?>">Fallido</span>
+                                                <div class="form-hint"><?= e((string) $logRow['error']) ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 <?php endif; ?>
             <?php endif; ?>
         <?php endif; ?>

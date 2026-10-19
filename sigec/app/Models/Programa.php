@@ -13,6 +13,11 @@ class Programa extends Model
         return $this->hasMany(Proyecto::class, 'programa_id', 'id');
     }
 
+    public function ensayos()
+    {
+        return $this->hasManyThrough(Ensayo::class, Proyecto::class, 'programa_id', 'proyecto_id', 'id', 'id');
+    }
+
     public function usuarios()
     {
         return $this->belongsToMany(User::class, 'programa_usuario', 'programa_id', 'usuario_id');

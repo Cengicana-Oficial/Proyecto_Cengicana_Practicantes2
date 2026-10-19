@@ -43,6 +43,8 @@ COPY dockerfiles/modulos-app/sigec-proxy.conf /etc/apache2/conf-available/sigec-
 RUN a2enconf sigec-proxy
 
 COPY dockerfiles/modulos-app/uploads.ini /usr/local/etc/php/conf.d/zz-uploads.ini
+COPY dockerfiles/modulos-app/errores.ini /usr/local/etc/php/conf.d/zz-errores.ini
+COPY dockerfiles/modulos-app/timezone.ini /usr/local/etc/php/conf.d/zz-timezone.ini
 
 WORKDIR /var/www/html
 COPY . /var/www/html

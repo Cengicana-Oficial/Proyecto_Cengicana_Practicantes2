@@ -2,6 +2,7 @@
 require_once 'revisar_permisos.php';
 require_once 'conexion.php';
 require_once 'curso_form_helpers.php';
+require_once __DIR__ . '/vendor/autoload.php';
 
 cengi_require_calificador('participantes.php');
 
@@ -33,8 +34,9 @@ try {
     if ((int) ($_FILES['archivo']['size'] ?? 0) > 5 * 1024 * 1024) {
         throw new RuntimeException('El archivo supera el límite de 5 MB.');
     }
-    if (strtolower(pathinfo((string) $_FILES['archivo']['name'], PATHINFO_EXTENSION)) !== 'csv') {
-        throw new RuntimeException('La carga de calificaciones requiere un archivo CSV.');
+    $extension = strtolower(pathinfo((string) $_FILES['archivo']['name'], PATHINFO_EXTENSION));
+    if (!in_array($extension, ['xlsx', 'csv'], true)) {
+        throw new RuntimeException('La carga requiere un archivo Excel (.xlsx) o CSV.');
     }
 
     $sqlCurso = 'SELECT c.id FROM cursos c WHERE c.id = ?';
@@ -62,7 +64,7 @@ try {
     $stmtModulosCurso = $db->prepare('SELECT * FROM curso_modulos WHERE curso_id = ? ORDER BY orden');
     $stmtModulosCurso->execute([$cursoId]);
     $modulosCurso = $stmtModulosCurso->fetchAll(PDO::FETCH_ASSOC);
-    $prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, 0);
+    $prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, 0, cengi_curso_solo_asistencia($db, $cursoId));
     // Curso con modulos: la nota se carga por modulo (Seguimiento por curso) y la del
     // curso se calcula; aqui solo se carga la asistencia acumulada.
     $conModulos = (bool) $modulosCurso;
@@ -70,9 +72,19 @@ try {
     $requierePost = !$conModulos && $prePostVisibles['post'];
     $columnasMinimas = $requierePost ? 4 : ($requierePre ? 3 : 2);
 
-    $archivo = fopen($_FILES['archivo']['tmp_name'], 'r');
+    if ($extension === 'xlsx') {
+        $lector = new \PhpOffice\PhpSpreadsheet\Reader\Xlsx();
+        $lector->setReadDataOnly(true);
+        $libro = $lector->load($_FILES['archivo']['tmp_name']);
+        $archivo = fopen('php://temp', 'w+');
+        foreach ($libro->getSheet(0)->toArray(null, true, false, false) as $datos) fputcsv($archivo, $datos);
+        $libro->disconnectWorksheets();
+        rewind($archivo);
+    } else {
+        $archivo = fopen($_FILES['archivo']['tmp_name'], 'r');
+    }
     if ($archivo === false) {
-        throw new RuntimeException('No fue posible leer el archivo CSV.');
+        throw new RuntimeException('No fue posible leer el archivo.');
     }
     $muestra = fgets($archivo);
     rewind($archivo);
@@ -107,6 +119,13 @@ try {
         }
         $cui = preg_replace('/[^0-9A-Za-z-]/', '', trim((string) $fila[0]));
         if ($filaNumero === 1 && in_array(strtolower($cui), ['cui', 'dpi'], true)) {
+            // Encabezado: la columna SESIONES_ASISTIDAS es opcional (plantilla de asistencia).
+            $colSesiones = null;
+            foreach ($fila as $k => $titulo) {
+                if (strtoupper(preg_replace('/[^A-Za-z_]/', '', (string) $titulo)) === 'SESIONES_ASISTIDAS') {
+                    $colSesiones = $k;
+                }
+            }
             continue;
         }
         if ($cui === '') {
@@ -129,10 +148,15 @@ try {
         }
 
         $stmtExiste->execute([$asignacionId]);
-        if ($conModulos) {
-            $db->prepare($stmtExiste->fetchColumn()
-                ? 'UPDATE control_cursos SET asistencia = ? WHERE asignacion_id = ?'
-                : "INSERT INTO control_cursos (asistencia, asignacion_id, diploma) VALUES (?, ?, '')")->execute([$asistencia, $asignacionId]);
+        if ($conModulos || (!$requierePre && !$requierePost)) {
+            // Solo asistencia: no toca las notas que ya existan.
+            $sesiones = isset($colSesiones) && $colSesiones !== null && trim((string) ($fila[$colSesiones] ?? '')) !== '' && is_numeric($fila[$colSesiones]) ? max(0, (int) $fila[$colSesiones]) : null;
+            if ($stmtExiste->fetchColumn()) {
+                $db->prepare('UPDATE control_cursos SET asistencia = ?' . ($sesiones !== null ? ', sesiones_asistidas = ?' : '') . ' WHERE asignacion_id = ?')
+                    ->execute($sesiones !== null ? [$asistencia, $sesiones, $asignacionId] : [$asistencia, $asignacionId]);
+            } else {
+                $db->prepare("INSERT INTO control_cursos (asistencia, sesiones_asistidas, asignacion_id, diploma) VALUES (?, ?, ?, '')")->execute([$asistencia, $sesiones, $asignacionId]);
+            }
         } elseif ($stmtExiste->fetchColumn()) {
             $stmtActualizar->execute([$asistencia, $pre, $post, $asignacionId]);
         } else {

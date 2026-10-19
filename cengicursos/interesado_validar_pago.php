@@ -1,0 +1,56 @@
+<?php
+require_once __DIR__.'/menu.php';require_once __DIR__.'/interesado_pago_helpers.php';require_once __DIR__.'/administracion_nav.php';
+$via=($_GET['via']??'')==='capacitacion'?'capacitacion':'administracion';
+if(!($via==='capacitacion'?(cengi_ins_delega_cengicana()||cengi_es_admin()):cengi_ins_puede_validar_pagos())){http_response_code(403);exit('No tienes permiso para aceptar este pago.');}
+$db=conectar();$id=(int)($_GET['id']??0);$s=cengi_ins_solicitud($db,$id);$limite=cengi_ins_ingenio_limitado();
+if(!$s||$s['tipo_pago']!=='Propio'||($limite!==null&&cengi_texto_normalizado($limite)!==cengi_texto_normalizado($s['nombre_ingenios']))){http_response_code(403);exit('Interesado no disponible.');}
+if(empty($_SESSION['ins_csrf']))$_SESSION['ins_csrf']=bin2hex(random_bytes(32));$error='';
+if($_SERVER['REQUEST_METHOD']==='POST')try {
+    if(!hash_equals($_SESSION['ins_csrf'],(string)($_POST['csrf']??'')))throw new InvalidArgumentException('Actualiza la página.');
+    $db->beginTransaction();$s=cengi_ins_solicitud($db,$id,true);
+    if($via==='administracion'&&($_POST['accion']??'')==='rechazar') {
+        if($s['pago_estado']!=='en revisión')throw new InvalidArgumentException('Solo se rechazan pagos pendientes de revisión.');
+        $nota=mb_substr(trim((string)($_POST['nota']??'')),0,500);if($nota==='')throw new InvalidArgumentException('Indica por qué no se pudo confirmar el depósito.');
+        $por=cengi_pp_usuario_nombre().' (Administración)';$db->prepare("UPDATE solicitudes_inscripcion SET pago_estado='rechazado',pago_verificado_por=?,pago_verificado_en=NOW(),pago_nota=? WHERE id_solicitud=?")->execute([$por,$nota,$id]);
+        $db->prepare('INSERT INTO inscripcion_historial(solicitud_id,accion,usuario,motivo,antes,despues) VALUES(?,?,?,?,?,?)')->execute([$id,'deposito_no_confirmado',$por,$nota,json_encode($s,JSON_UNESCAPED_UNICODE),json_encode(cengi_ins_solicitud($db,$id),JSON_UNESCAPED_UNICODE)]);
+        $db->commit();header('Location: inscripciones.php?vista=interesados');exit;
+    }
+    cengi_interesado_aceptar_pago($db,$s,$_POST,cengi_pp_usuario_nombre().' ('.($via==='capacitacion'?'Capacitacion':'Administración').')',$_FILES['archivo']??null,$via);
+    if($via==='administracion' && $s['planificacion_id'])cengi_ins_procesar_plan($db,$s['planificacion_id']);else if($via==='administracion' && $s['estado']!=='Aprobado')cengi_ins_asignar($db,cengi_ins_solicitud($db,$id),cengi_pp_usuario_nombre());
+    $db->commit();cengi_ins_enviar_cola($db);header('Location: inscripciones.php?vista='.($via==='capacitacion'?'pagos':'inscripciones'));exit;
+}catch(Throwable $e){if($db->inTransaction())$db->rollBack();$error=$e instanceof InvalidArgumentException?$e->getMessage():'No fue posible aceptar el pago.';if(!($e instanceof InvalidArgumentException))error_log($e->getMessage());}
+?>
+<!doctype html>
+<html lang="es"><head><?php cengi_pp_head('Revisión del pago'); ?><link rel="stylesheet" href="css/interesado_pago.css?v=<?= (int)filemtime(__DIR__.'/css/interesado_pago.css') ?>"></head>
+<body class="cengi-canvas cg-tema"><?php menu_render(); ?>
+<main class="container pp-page pago-review-page">
+<header class="ins-process-header"><small>PAGO PROPIO · <?= $via==='capacitacion'?'CARGA DE BOLETA (CAPACITACIÓN)':'VALIDACIÓN DEL PAGO (ADMINISTRACIÓN)' ?></small><h1><?= $via==='capacitacion'?'Cargar la boleta del participante':'Validar el pago del participante' ?></h1><p><?= $via==='capacitacion'?'Registra la boleta que el participante entregó por otro medio. Administración valida el pago.':'Revisa la boleta y los datos del depósito antes de confirmar el pago y la inscripción.' ?></p></header>
+<?php cengi_ins_nav($via==='administracion'&&($s['pago_validado_rol']??'')==='capacitacion'?'pagos':'interesados');cengi_pp_feedback($error,'error'); ?>
+<section class="pago-person-card"><div class="pago-person-icon"><span class="glyphicon glyphicon-user" aria-hidden="true"></span></div><div class="pago-person-info"><small>INTERESADO #<?= $id ?></small><h2><?= cengi_pp_h($s['nombre_participante']) ?></h2><p><?= cengi_pp_h($s['plan_nombre']) ?></p></div><div class="pago-fee"><small>Cuota del curso</small><strong><?= $s['monto']===null?'Por definir':cengi_ins_dinero($s['monto'],$s['moneda']) ?></strong><span><?= cengi_pp_h($s['pago_estado']?:'Pendiente') ?></span></div></section>
+<div class="pago-review-layout">
+<aside class="pago-review-aside">
+<section class="pp-card pago-document-card"><div class="pago-card-heading"><span class="glyphicon glyphicon-file" aria-hidden="true"></span><div><h2>Constancia de depósito</h2><p><?= $s['comprobante_ruta']?'Documento recibido para revisión':'Aún no hay un documento adjunto' ?></p></div></div>
+<?php if($s['comprobante_ruta']): $isImage=in_array(strtolower(pathinfo($s['comprobante_nombre']?:$s['comprobante_ruta'],PATHINFO_EXTENSION)),['jpg','jpeg','png'],true); ?>
+<div class="pago-document-preview"><?php if($isImage): ?><a href="comprobante_inscripcion.php?s=<?= $id ?>" target="_blank" rel="noopener"><img src="comprobante_inscripcion.php?s=<?= $id ?>" alt="Constancia de depósito del interesado"></a><?php else: ?><iframe src="comprobante_inscripcion.php?s=<?= $id ?>#toolbar=0" title="Constancia de depósito" loading="lazy"></iframe><?php endif; ?></div>
+<div class="pago-document-footer"><span><?= cengi_pp_h($s['comprobante_nombre']?:'Comprobante adjunto') ?></span><a target="_blank" rel="noopener" href="comprobante_inscripcion.php?s=<?= $id ?>">Abrir documento <span aria-hidden="true">↗</span></a></div>
+<?php else: ?><div class="pago-document-empty"><span class="glyphicon glyphicon-cloud-upload" aria-hidden="true"></span><strong>Constancia pendiente</strong><p>Adjunta la boleta desde el formulario o comparte el enlace con el participante.</p></div><?php endif; ?>
+</section>
+<?php if(!$s['comprobante_ruta']&&!in_array($s['pago_estado'],['pagado','validado'],true)): ?><section class="pp-card pago-share-card"><h2>Solicitar la boleta</h2><p>El participante puede adjuntarla mediante este enlace seguro.</p><label for="pago-link">Enlace para el participante</label><div class="pago-link-group"><input id="pago-link" readonly value="<?= cengi_pp_h(cengi_cob_url_comprobante($db,$s)) ?>"><button type="button" id="pago-copy" aria-label="Copiar enlace">Copiar</button></div><span id="pago-copy-status" role="status"></span></section><?php endif; ?>
+<?php if(($s['pago_validado_rol']??'')==='capacitacion'): ?><section class="pp-card pago-prior-card"><h2>Validación de Capacitacion</h2><strong><?= cengi_pp_h($s['pago_validado_por']) ?></strong><small><?= cengi_pp_h($s['pago_validado_en']) ?></small><p><?= nl2br(cengi_pp_h($s['pago_validacion_evidencia'])) ?></p></section><?php endif; ?>
+</aside>
+<section class="pp-card pago-form-card"><div class="pago-card-heading"><span class="glyphicon glyphicon-check" aria-hidden="true"></span><div><h2><?= $via==='capacitacion'?'Datos de la boleta':'Validación del pago' ?></h2><p>Comprueba que los datos coincidan con la constancia.</p></div></div>
+<div class="pago-reviewer"><small><?= $via==='capacitacion'?'CARGADO POR':'VALIDADO POR' ?></small><strong><?= cengi_pp_h(cengi_pp_usuario_nombre()) ?></strong><span><?= $via==='capacitacion'?'Capacitacion':'Administración' ?></span></div>
+<?php if($via==='capacitacion'): ?><p class="pago-info-note">La boleta queda registrada y pasa a Administración, que valida el pago y confirma la inscripción.</p><?php endif; ?>
+<form method="post" enctype="multipart/form-data" class="pago-review-form"><input type="hidden" name="csrf" value="<?= cengi_pp_h($_SESSION['ins_csrf']) ?>">
+<fieldset><legend>Datos del depósito</legend><div class="pago-fields-grid">
+<label for="pago-boleta">Boleta o referencia <span>*</span><input id="pago-boleta" name="boleta" required maxlength="60" value="<?= cengi_pp_h($_POST['boleta']??$s['boleta']) ?>" placeholder="Número de depósito o transferencia"></label>
+<label for="pago-fecha">Fecha de pago <span>*</span><input id="pago-fecha" name="fecha" type="date" required max="<?= cengi_pp_h(cengi_pp_hoy()) ?>" value="<?= cengi_pp_h($_POST['fecha']??$s['pago_fecha']) ?>"></label>
+<label for="pago-monto">Monto recibido (<?= cengi_pp_h($s['moneda']) ?>) <span>*</span><input id="pago-monto" name="monto" type="number" min="0.01" step="0.01" required value="<?= cengi_pp_h($_POST['monto']??($s['monto_comprobante']??$s['monto'])) ?>"></label>
+<?php if($s['monto']===null): ?><label for="pago-cuota">Cuota del curso <span>*</span><input id="pago-cuota" name="cuota" type="number" min="0.01" step="0.01" required value="<?= cengi_pp_h($_POST['cuota']??'') ?>"></label><?php endif; ?></div></fieldset>
+<fieldset><legend>Documento de respaldo</legend><div class="pago-file-box"><label for="pago-archivo"><?= $s['comprobante_ruta']?'Reemplazar constancia, si corresponde':'Adjuntar constancia de depósito' ?></label><input id="pago-archivo" name="archivo" type="file" accept="application/pdf,image/jpeg,image/png"><small>PDF, JPG o PNG · hasta 5 MB. <?= $s['comprobante_ruta']?'Si no eliges un archivo, se conserva el documento recibido.':'La constancia es obligatoria para completar la validación.' ?></small></div></fieldset>
+<fieldset><legend><?= $via==='capacitacion'?'Observación':'Evidencia de la revisión' ?></legend><label for="pago-nota">Observación <?= $via==='capacitacion'?'(opcional)':'<span>*</span>' ?><textarea id="pago-nota" name="nota" maxlength="500" <?= $via==='capacitacion'?'':'required' ?> rows="4" placeholder="<?= $via==='capacitacion'?'Cómo se recibió la boleta (correo, entregada en persona...).':'Describe qué verificaste y el resultado de la revisión.' ?>"><?= cengi_pp_h($_POST['nota']??'') ?></textarea></label><p class="pago-muted">Se guardarán tu nombre, la fecha y esta observación en el historial.</p></fieldset>
+<div class="pago-form-actions"><button class="btn btn-primary" type="submit"><?= $via==='capacitacion'?'Cargar boleta y enviar a Administración':'Validar pago y confirmar inscripción' ?></button><a class="btn btn-default" href="inscripciones.php?vista=<?= $via==='administracion'&&($s['pago_validado_rol']??'')==='capacitacion'?'pagos':'interesados' ?>">Volver</a></div>
+<?php if($via==='administracion'&&$s['pago_estado']==='en revisión'): ?><div class="pago-reject-area"><p>Si el depósito no se recibió, explica el motivo en la observación.</p><button class="btn btn-default" type="submit" name="accion" value="rechazar">Devolver a Interesados · depósito no confirmado</button></div><?php endif; ?>
+</form></section></div></main>
+<script>(function(){var button=document.getElementById('pago-copy'),input=document.getElementById('pago-link'),status=document.getElementById('pago-copy-status');if(!button)return;button.addEventListener('click',async function(){try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(input.value);}else{input.select();if(!document.execCommand('copy'))throw new Error('copy');}status.textContent='Enlace copiado';}catch(e){input.select();status.textContent='Selecciona y copia el enlace.';}});})();</script>
+</body></html>

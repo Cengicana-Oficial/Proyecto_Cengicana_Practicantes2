@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="app-base" content="{{ url('/') }}">
     <title>@yield('page_title', $title ?? 'Experimentos') · CENGICANA</title>
 
     <link rel="icon" type="image/png" href="{{ asset('img/cengicana-logo.png') }}">
@@ -25,9 +26,9 @@
     $pageTitle = trim($__env->yieldContent('page_title', $title ?? 'Experimentos'));
     $pageSubtitles = [
         'Dashboard' => 'Resumen general de investigacion y ensayos',
-        'Programas' => 'Lineas y programas de investigacion',
+        'Programas de investigacion' => 'Areas tematicas que agrupan los proyectos de Cengicana',
         'Proyectos' => 'Planificacion y seguimiento de proyectos',
-        'Ensayos' => 'Gestion de ensayos experimentales',
+        'Ensayos experimentales' => 'Detalle de ensayos en campo, tratamientos y parcelas',
         'Variables' => 'Catalogo de variables de evaluacion',
         'Evaluaciones' => 'Registro y consulta de resultados de campo',
         'Laboratorio' => 'Recepcion y seguimiento de muestras',

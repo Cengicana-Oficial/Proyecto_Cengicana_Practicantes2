@@ -10,6 +10,8 @@
  */
 require_once __DIR__ . '/proformas_helpers.php';
 require_once __DIR__ . '/menu.php';
+require_once __DIR__ . '/administracion_nav.php';
+require_once __DIR__ . '/proforma_revision_helpers.php';
 
 if (!cengi_ins_puede_ver_pagos()) {
     header('Location: index.php');
@@ -17,6 +19,8 @@ if (!cengi_ins_puede_ver_pagos()) {
 }
 
 $db = conectar();
+if(empty($_SESSION['ins_csrf']))$_SESSION['ins_csrf']=bin2hex(random_bytes(32));
+ob_start('cengi_ins_post_tokens');
 $hoy = cengi_pp_hoy();
 $puedeGestionar = cengi_ins_puede_validar_pagos();
 $limitado = cengi_ins_ingenio_limitado();
@@ -44,6 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $accion = (string) ($_POST['accion'] ?? '');
     $planes = [];
     try {
+        if(!hash_equals($_SESSION['ins_csrf'],(string)($_POST['csrf']??'')))throw new InvalidArgumentException('Recarga la página antes de gestionar la proforma.');
         if (!$puedeGestionar) {
             throw new InvalidArgumentException('Solo Administración puede gestionar las proformas.');
         }
@@ -146,6 +151,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $pf = $cargar();
         $activa = in_array($pf['estado'], ['emitida', 'enviada'], true);
+        if($accion==='actualizar') {
+            cengi_pf_actualizar($db,$pf,$_POST);$db->commit();
+            header('Location: proforma.php?id='.(int)$pf['id']);exit;
+        }
         if ($accion === 'enviar') {
             if (!$activa) {
                 throw new InvalidArgumentException('Solo se envía una proforma emitida o enviada.');
@@ -355,11 +364,8 @@ $volverAqui = $nueva ? 'proforma.php?nueva=1' . ($ingenioSel ? '&ingenio=' . $in
 <?php menu_render(); ?>
 
 <main class="container cengi-organizations-page pp-page">
-    <nav class="pp-subnav pf-no-print">
-        <a href="inscripciones.php"><span class="glyphicon glyphicon-inbox"></span>Inscripciones</a>
-        <a href="pagos_inscripcion.php?tab=proformas" class="is-active"><span class="glyphicon glyphicon-credit-card"></span>Pagos de inscripción</a>
-        <a href="planificacion_cursos.php"><span class="glyphicon glyphicon-calendar"></span>Planificación</a>
-    </nav>
+    <?php cengi_banner(); ?>
+    <?php cengi_ins_nav('pagos'); ?>
     <?php cengi_pp_feedback($mensaje, $mensajeTipo); ?>
 
 <?php if ($nueva): ?>
@@ -492,7 +498,7 @@ $volverAqui = $nueva ? 'proforma.php?nueva=1' . ($ingenioSel ? '&ingenio=' . $in
     <div class="pf-layout" style="grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);">
         <div class="pf-doc-wrap"><?php echo cengi_pf_html($pf, $cuentas); ?></div>
         <section class="pp-card pf-no-print" style="margin:0;">
-            <div class="pp-card-head"><div><h3>Participantes amarrados</h3><span class="pp-sub">✓ = validado. Al registrar el pago, todos quedan validados y cuentan para el cupo del curso.<?php echo $libresTotal && $pf['estado'] !== 'anulada' ? ' Los cupos libres se llenan solos cuando el ingenio inscribe con “Lo paga mi ingenio”.' : ''; ?></span></div></div>
+            <div class="pp-card-head"><div><h3>Participantes amarrados</h3><span class="pp-sub">✓ = validado. La aceptación del ingenio confirma la inscripción; el pago de esta proforma liquida el cobro del grupo.<?php echo $libresTotal && $pf['estado'] !== 'anulada' ? ' Los cupos libres se llenan solos cuando el ingenio inscribe con “Lo paga mi ingenio”.' : ''; ?></span></div></div>
             <div class="pp-card-body">
                 <?php foreach ($pf['lineas'] as $l): $libres = max(0, (int) $l['cantidad'] - count($l['inscritos'])); ?>
                     <div class="pf-amarre">
@@ -503,7 +509,7 @@ $volverAqui = $nueva ? 'proforma.php?nueva=1' . ($ingenioSel ? '&ingenio=' . $in
                         <div class="pp-sub"><?php echo $l['inscritos'] ? cengi_pp_h(implode(', ', array_map(static function ($s) {
                             return $s['nombre_participante'] . ($s['validacion_ingenio'] === 'validada' ? ' ✓' : '');
                         }, $l['inscritos']))) : 'Aún sin participantes.'; ?></div>
-                        <?php if ($puedeGestionar && $libres && $pf['estado'] !== 'anulada' && $l['grupo_pago_id']):
+                        <?php if (($_GET['contexto']??'')==='pagos' && $puedeGestionar && $libres && $pf['estado'] !== 'anulada' && $l['grupo_pago_id']):
                             $cands = array_values(array_filter(cengi_pf_candidatos($db, $pf['ingenio_id'], $l['planificacion_id'])[(int) $l['planificacion_id']] ?? [], static function ($c) { return !$c['en_proforma']; })); ?>
                             <?php if ($cands): ?>
                                 <form method="post" style="margin-top:6px;"><input type="hidden" name="accion" value="amarrar"><input type="hidden" name="id" value="<?php echo (int) $pf['id']; ?>"><input type="hidden" name="linea" value="<?php echo (int) $l['id']; ?>">
@@ -519,11 +525,16 @@ $volverAqui = $nueva ? 'proforma.php?nueva=1' . ($ingenioSel ? '&ingenio=' . $in
                 <?php foreach ($pf['historial'] as $h): ?>
                     <div class="pp-sub"><?php echo date('d/m/Y H:i', strtotime($h['creado'])) . ' · <b>' . cengi_pp_h($h['texto']) . '</b> · ' . cengi_pp_h($h['por']) . ($h['detalle'] !== '' ? ' — ' . cengi_pp_h($h['detalle']) : ''); ?></div>
                 <?php endforeach; ?>
+                <?php $versiones=$db->prepare('SELECT revision,motivo,por,creado FROM proforma_versiones WHERE proforma_id=? ORDER BY revision DESC');$versiones->execute([$pf['id']]); ?>
+                <h4>Versiones del documento</h4><?php foreach($versiones->fetchAll(PDO::FETCH_ASSOC) as $v): ?><p class="pp-sub"><a href="proforma_revision.php?id=<?= (int)$pf['id'] ?>&amp;revision=<?= (int)$v['revision'] ?>" target="_blank" rel="noopener">PDF · revisión <?= (int)$v['revision'] ?></a> · <?= cengi_pp_h($v['por'].' · '.$v['creado'].' · '.$v['motivo']) ?></p><?php endforeach; ?>
             </div>
         </section>
     </div>
 
     <?php if ($puedeGestionar && $activa): ?>
+    <details class="pp-card pf-no-print"><summary>Actualizar proforma con motivo</summary><p>Se conservan las versiones anteriores. Después de actualizar, comparte el documento vigente con el ingenio.</p><form method="post"><input type="hidden" name="accion" value="actualizar"><input type="hidden" name="id" value="<?= (int)$pf['id'] ?>"><div class="pp-toolbar"><label>Dirigida a<input name="dirigido" required maxlength="255" value="<?= cengi_pp_h($pf['dirigido']) ?>"></label><label>Correo<input type="email" name="correo" required value="<?= cengi_pp_h($pf['correo']) ?>"></label><label>Vencimiento<input type="date" name="vence" required value="<?= cengi_pp_h($pf['vence']) ?>"></label></div>
+    <?php foreach($pf['lineas'] as $l): ?><fieldset class="pp-card"><legend><?= cengi_pp_h($l['descripcion']) ?></legend><div class="pp-toolbar"><label>Participantes / cupos<input type="number" min="<?= max(1,count($l['inscritos'])) ?>" max="500" name="lineas[<?= (int)$l['id'] ?>][cantidad]" required value="<?= (int)$l['cantidad'] ?>"></label><label>Precio unitario<input type="number" min="0" step="0.01" name="lineas[<?= (int)$l['id'] ?>][precio]" required value="<?= cengi_pp_h($l['precio']) ?>"></label><label>Descuento unitario<input type="number" min="0" step="0.01" name="lineas[<?= (int)$l['id'] ?>][descuento]" required value="<?= cengi_pp_h($l['desc_unit']) ?>"></label></div></fieldset><?php endforeach; ?>
+    <label>Observaciones<textarea class="form-control" name="obs" maxlength="500"><?= cengi_pp_h($pf['obs']) ?></textarea></label><label>Motivo obligatorio<textarea class="form-control" name="motivo" maxlength="500" required></textarea></label><button class="btn btn-primary">Guardar nueva revisión</button></form></details>
     <div class="modal fade cengi-course-form-modal pp-modal" id="pago-pf-modal" tabindex="-1" role="dialog" aria-labelledby="pago-pf-title">
         <div class="modal-dialog" role="document"><div class="modal-content"><form method="post">
             <input type="hidden" name="accion" value="pago"><input type="hidden" name="id" value="<?php echo (int) $pf['id']; ?>">

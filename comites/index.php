@@ -20,6 +20,7 @@ require __DIR__ . '/includes/redes.php';
 require __DIR__ . '/includes/redes-api.php';
 require __DIR__ . '/includes/usuarios.php';
 require __DIR__ . '/includes/notificaciones.php';
+require __DIR__ . '/includes/correo-eventos.php';
 $_SESSION['tableros_csrf'] ??= bin2hex(random_bytes(32));
 
 if (isset($_GET['logout'])) {
@@ -38,6 +39,12 @@ if (!user_has_module_access($user, $menuPdo)) {
     header('Location: ../login/Menu.php');
     exit;
 }
+
+// Notificaciones por correo: al terminar la peticion se envia lo encolado por los
+// eventos y, una vez al dia, se generan los recordatorios de plazos.
+register_shutdown_function(static function () use ($pdo): void {
+    correo_al_terminar($pdo);
+});
 
 $view = $_GET['view'] ?? 'dashboard';
 
@@ -59,6 +66,7 @@ $sections = [
     'publicaciones' => ['label' => 'Redes sociales', 'icon' => 'ti-share', 'group' => 'Comunicacion'],
     'estadisticas' => ['label' => 'Estadisticas', 'icon' => 'ti-chart-pie', 'group' => 'Comunicacion'],
     'config' => ['label' => 'Configuracion', 'icon' => 'ti-settings', 'group' => 'Administración'],
+    'notificaciones' => ['label' => 'Notificaciones por correo', 'icon' => 'ti-mail-cog', 'group' => 'Administración'],
     'usuarios' => ['label' => 'Usuarios y programas', 'icon' => 'ti-user-cog', 'group' => 'Administración'],
 ];
 
@@ -82,6 +90,7 @@ $recursoPorVista = [
     'publicaciones' => 'publicaciones',
     'estadisticas' => 'estadisticas',
     'config' => 'configuracion',
+    'notificaciones' => 'configuracion',
     'usuarios' => 'usuarios',
 ];
 
@@ -90,7 +99,7 @@ $seccionesImplementadas = [
     'eventos',
     'comites',
     'contactos', 'reuniones', 'acuerdos', 'documentos', 'biblioteca_interna',
-    'correos', 'tableros', 'informes', 'memorias', 'publicaciones', 'estadisticas', 'config', 'usuarios',
+    'correos', 'tableros', 'informes', 'memorias', 'publicaciones', 'estadisticas', 'config', 'notificaciones', 'usuarios',
 ];
 
 $puedeVerSeccionActual = $view === 'dashboard'
@@ -156,6 +165,7 @@ if ($view === 'memorias' || ($_SERVER['REQUEST_METHOD']==='POST' && (str_starts_
 if ($view === 'biblioteca_interna' || ($_SERVER['REQUEST_METHOD']==='POST' && in_array($_POST['accion'] ?? '', ['documento_guardar','documento_eliminar','documento_revisar','carpeta_crear'], true) && ($_POST['ambito'] ?? '')==='interna')) { require __DIR__ . '/includes/interna-controlador.php'; }
 if ($view === 'documentos' || ($_SERVER['REQUEST_METHOD']==='POST' && in_array($_POST['accion'] ?? '', ['documento_guardar','documento_eliminar','documento_revisar','carpeta_crear'], true) && ($_POST['ambito'] ?? 'ingenios')!=='interna')) { require __DIR__ . '/includes/biblioteca-controlador.php'; }
 if ($view === 'contactos') { require __DIR__ . '/includes/directorio-controlador.php'; }
+if ($view === 'notificaciones') { require __DIR__ . '/includes/notificaciones-correo-controlador.php'; }
 if (in_array($view, ['reuniones', 'eventos'], true)) { require __DIR__ . '/includes/agenda-controlador.php'; }
 
 // Descargas de plantillas (deben salir antes de cualquier output HTML).
@@ -1021,6 +1031,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $flashMessage = $_GET['msg'] ?? '';
+if ($view === 'notificaciones' && $flashError === '' && isset($_GET['error'])) {
+    $flashError = (string) $_GET['error'];
+}
 if (isset($_SESSION['usuarios_flash'])) {
     $flashMessage = (string) $_SESSION['usuarios_flash'];
     unset($_SESSION['usuarios_flash']);
@@ -2527,6 +2540,8 @@ $notificaciones = notif_obtener($pdo, $user);
                     </div>
                 </div>
 
+            <?php elseif ($view === 'notificaciones'): ?>
+                <?php require __DIR__ . '/includes/notificaciones-correo-vista.php'; ?>
             <?php elseif ($view === 'config'): ?>
                 <div class="table-card">
                     <div class="table-wrap">

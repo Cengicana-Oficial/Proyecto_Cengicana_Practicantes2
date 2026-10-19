@@ -41,6 +41,9 @@ WORKDIR /var/www/html/sigec
 COPY sigec/. /var/www/html/sigec
 
 RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+# public/vendor (AdminLTE, Bootstrap, jQuery, Font Awesome) no se versiona (.gitignore):
+# el layout lo carga con asset('vendor/...'), asi que se publica desde el paquete al construir.
+RUN php artisan adminlte:install --only=assets --force --no-interaction
 
 RUN chown -R www-data:www-data /var/www/html/sigec
 

@@ -16,6 +16,7 @@ services:
       - ./deploy/env/cengicursos.env:/var/www/html/cengicursos/.env:ro
       - ./deploy/env/laboratorio.env:/var/www/html/laboratorio/.env:ro
       - ./deploy/env/visitas.env:/var/www/html/Pruebas/.env:ro
+      - ./dockerfiles/modulos-app/timezone.ini:/usr/local/etc/php/conf.d/zz-timezone.ini:ro
       - ./uploads:/var/www/html/uploads
       # Adjuntos que suben modulos que no escriben bajo /var/www/html/uploads:
       # cartas/listados de "Solicitud de visitas" (Pruebas/) y adjuntos de
@@ -43,13 +44,32 @@ services:
     depends_on:
       - mysql
 
+  recibos-worker:
+    image: cengicana-ui-new-app
+    container_name: cengicana-ui-new-recibos-worker
+    restart: unless-stopped
+    command: ["php", "/var/www/html/cengicursos/cron_recibos_contables.php", "--loop"]
+    environment:
+      TZ: America/Guatemala
+      CENGICURSOS_ENV_FILE: /run/cengicursos.env
+      LOGIN_ENV_FILE: /run/login.env
+    volumes:
+      - ./cengicursos:/var/www/html/cengicursos:ro
+      - ./login:/var/www/html/login:ro
+      - ./deploy/env/login.env:/run/login.env:ro
+      - ./dockerfiles/modulos-app/timezone.ini:/usr/local/etc/php/conf.d/zz-timezone.ini:ro
+      - ./deploy/env/cengicursos.env:/run/cengicursos.env:ro
+      - ./uploads:/var/www/html/uploads
+    depends_on:
+      - mysql
+
   mysql:
     image: mysql:8.0
     container_name: cengicana-ui-new-mysql
     restart: unless-stopped
     env_file:
       - ./deploy/env/mysql.env
-    command: --default-authentication-plugin=mysql_native_password
+    command: --default-authentication-plugin=mysql_native_password --default-time-zone=-06:00
     ports:
       - "127.0.0.1:33063:3306"
     volumes:

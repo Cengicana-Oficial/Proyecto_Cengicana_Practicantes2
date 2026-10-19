@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+// Los plazos y la bitácora usan la fecha local de Guatemala, también fuera de Docker.
+date_default_timezone_set('America/Guatemala');
+
 // Modulo: Comites, Transferencia y Comunicacion.
 // Mismo patron que sistema_de_solicitudes/config/database.php: se conecta a la
 // base central `usuarios_menu` (menuPdo) para autenticacion/menu, y crea/usa
@@ -422,6 +425,47 @@ function app_bootstrap_database(PDO $pdo): void
             PRIMARY KEY (usuario_id, clave)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    // Notificaciones por correo (includes/correo-eventos.php): configuracion por evento,
+    // ajustes generales y cola de envio.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS correo_eventos (
+            evento VARCHAR(60) NOT NULL PRIMARY KEY,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            asunto VARCHAR(250) NOT NULL DEFAULT '',
+            cuerpo TEXT NULL,
+            destinatarios TEXT NULL,
+            dias INT NULL,
+            actualizado_por VARCHAR(180) NULL,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS correo_ajustes (
+            clave VARCHAR(60) NOT NULL PRIMARY KEY,
+            valor TEXT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS correo_cola (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            evento VARCHAR(60) NOT NULL,
+            destinatario VARCHAR(190) NOT NULL,
+            destinatario_original VARCHAR(190) NOT NULL,
+            nombre VARCHAR(180) NOT NULL DEFAULT '',
+            asunto VARCHAR(250) NOT NULL,
+            cuerpo_html MEDIUMTEXT NOT NULL,
+            enlace VARCHAR(500) NOT NULL DEFAULT '',
+            referencia VARCHAR(190) NOT NULL DEFAULT '',
+            estado ENUM('pendiente','enviando','enviado','error') NOT NULL DEFAULT 'pendiente',
+            intentos TINYINT NOT NULL DEFAULT 0,
+            error VARCHAR(250) NULL,
+            creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            enviado_en DATETIME NULL,
+            KEY idx_correo_estado (estado, id),
+            KEY idx_correo_referencia (evento, destinatario_original, referencia)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
     // Conexiones directas por API: configuracion visible y credenciales cifradas (AES-256-GCM).
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS redes_conexiones (
@@ -644,6 +688,7 @@ try {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
         PDO::ATTR_TIMEOUT => 10,
+        PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '-06:00'",
     ];
 
     $serverPdo = new PDO(

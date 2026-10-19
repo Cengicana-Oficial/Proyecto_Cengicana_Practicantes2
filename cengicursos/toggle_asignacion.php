@@ -1,6 +1,7 @@
 <?php
 require_once "revisar_permisos.php";
 require_once "conexion.php";
+require_once __DIR__ . '/inscripcion_registro.php';
 
 cengi_require_admin('ver_cursos.php');
 
@@ -29,7 +30,11 @@ if ($id > 0 && $cursoId > 0) {
                 SET estado_asignaciones = ?, actualizado = NOW()
                 WHERE id = ? AND cursos_id = ?
             ");
-            $stmt->execute([$nuevoEstado, $id, $cursoId]);
+            if ($nuevoEstado === 1) {
+                cengi_ins_alta_curso($db, $participanteId, $cursoId);
+            } else {
+                $stmt->execute([$nuevoEstado, $id, $cursoId]);
+            }
 
             if ($nuevoEstado === 1) {
                 $stmtParticipante = $db->prepare("

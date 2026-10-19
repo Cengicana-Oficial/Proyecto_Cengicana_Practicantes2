@@ -197,10 +197,17 @@ function cengi_evp_resolver_pago(PDO $db, $id, $estado, array $datos)
             $recibo ?: null, $nota ?: null, $resuelto ? cengi_pp_usuario_nombre() : null, $resuelto ? date('Y-m-d H:i:s') : null, (int) $id]);
 
     $evento = $p['evento_nombre'];
+    // Pago validado (o invitado/exonerado): la persona pasa de inmediato a participante del
+    // evento; se confirma su participación y se le envía el gafete con el QR de ingreso.
+    if (in_array($estado, ['validado', 'exonerado'], true) && !$p['confirmado_en']) {
+        $fila = cengi_evp_participantes($db, [(int) $id]);
+        $r = $fila ? cengi_evp_confirmar($db, $fila) : ['confirmados' => 0, 'enviados' => 0, 'sin_correo' => [], 'fallidos' => []];
+        $gafete = $r['enviados'] ? ' Se le envió su gafete con el código QR.'
+            : ($r['sin_correo'] ? ' No tiene correo: entrégale el gafete impreso.' : ($r['fallidos'] ? ' No se pudo enviar el gafete (revisa Comunicaciones).' : ''));
+        return $p['nombre'] . ($estado === 'validado' ? ': pago validado; ya es participante del evento.' : ' quedó como invitado / exonerado y ya es participante del evento.') . $gafete;
+    }
     if ($estado === 'validado') {
-        $avisado = cengi_evp_avisar($db, $p, 'Pago validado: ' . $evento,
-            "Hola {nombre}:\n\nValidamos tu pago para {$evento} (" . cengi_evp_fecha($p['evento_fecha']) . ").\n\nEn breve confirmaremos tu participación y te enviaremos tu gafete con el código QR de ingreso.");
-        return 'Pago de ' . $p['nombre'] . ' validado; pasa a “Por confirmar participación”.' . cengi_evp_texto_aviso($avisado);
+        return 'Pago de ' . $p['nombre'] . ' actualizado.';
     }
     if ($estado === 'rechazado') {
         $avisado = cengi_evp_avisar($db, $p, 'Comprobante no válido: ' . $evento,
@@ -208,7 +215,7 @@ function cengi_evp_resolver_pago(PDO $db, $id, $estado, array $datos)
         return 'Comprobante de ' . $p['nombre'] . ' rechazado.' . cengi_evp_texto_aviso($avisado, ' con el motivo');
     }
     if ($estado === 'exonerado') {
-        return $p['nombre'] . ' quedó como invitado / exonerado; ya se puede confirmar su participación.';
+        return $p['nombre'] . ' quedó como invitado / exonerado.';
     }
     return $estado === 'por_validar' ? 'Comprobante registrado; queda por validar.' : 'El pago quedó pendiente.';
 }

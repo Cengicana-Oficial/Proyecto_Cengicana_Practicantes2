@@ -1,8 +1,9 @@
 /*
  * Eventos y control QR (cengicursos/eventos_qr.php): "Editar evento", "Difusión",
- * "Encuestas y evaluación", informe por evento y pestaña "Evaluación de eventos".
+ * "Encuestas y evaluación" e informe por evento (la evaluación consolidada está en
+ * eventos_evaluacion.php, que abre el informe y las encuestas con ?informe=ID / ?encuestas=ID).
  * Port de las funciones del prototipo SIGEC v29 (ppEvAbrirEvento, ppDifRender,
- * ppEvAbrirEncuestas, ppEvAnalisis, ppConclusiones, ppEvInformeHTML, renderEvaluacion).
+ * ppEvAbrirEncuestas, ppEvAnalisis, ppConclusiones, ppEvInformeHTML).
  * Los datos vienen de eventos_gestion.php?accion=datos y las acciones se guardan con
  * POST AJAX a eventos_gestion.php.
  */
@@ -313,7 +314,7 @@
             enviar({accion: 'enviar_colab', evento_id: encuestasEv, aliado_id: $(this).attr('data-enviar-colab')}, renderEncuestas, $(this));
         })
         .on('click', '#eeEnviarPercep', function () {
-            enviar({accion: 'enviar_percep', evento_id: encuestasEv}, function () { renderEncuestas(); renderEvaluacion(); }, $(this));
+            enviar({accion: 'enviar_percep', evento_id: encuestasEv}, renderEncuestas, $(this));
         })
         .on('click', '#eeImprimirQr', function () {
             var e = ev(encuestasEv), url = urlEncuesta(e.token_percepcion);
@@ -415,46 +416,16 @@
             enviar({accion: 'dif_bitacora_quitar', evento_id: difEv, id: $(this).attr('data-quitar-bit')}, renderDifusion);
         });
 
-    /* ---------- pestaña "Evaluación de eventos" (renderEvaluacion) ---------- */
-    function kpi(val, label, delta, color, bg, icono) {
-        return '<div class="cengi-kpi"><div class="cengi-kpi-bar" style="background:' + color + ';"></div><div class="cengi-kpi-icon" style="background:' + bg + ';color:' + color + ';">' + ICON(icono) + '</div>' +
-            '<div class="cengi-kpi-val">' + val + '</div><div class="cengi-kpi-label">' + label + '</div><div class="cengi-kpi-delta">' + delta + '</div></div>';
-    }
-    function renderEvaluacion() {
-        if (!DATOS || !$('#tablaEvEval').length) return;
-        var evs = DATOS.map(function (e) { return {e: e, a: analisis(e)}; }).sort(function (x, y) { return String(y.e.fecha).localeCompare(String(x.e.fecha)); });
-        var conP = evs.filter(function (x) { return x.a.percep.n; }), conC = evs.filter(function (x) { return x.a.colab.resp; });
-        var promP = prom(conP.map(function (x) { return x.a.percep.prom; })), promC = prom(conC.map(function (x) { return x.a.colab.indice; }));
-        var totR = evs.reduce(function (s, x) { return s + x.a.percep.n + x.a.colab.resp; }, 0);
-        var pendC = evs.reduce(function (s, x) { return s + (x.a.colab.activo ? x.a.colab.empresas - x.a.colab.resp : 0); }, 0);
-        $('#evEvalKpis').html(
-            kpi(promP != null ? promP.toFixed(1) + ' ★' : '—', 'Percepción promedio de participantes', conP.length + ' evento(s) evaluados', 'var(--cengi-primary,#73BC25)', '#EAF6DD', '<path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/>') +
-            kpi(promC != null ? promC.toFixed(1) + ' ★' : '—', 'Índice de colaboración', conC.length + ' evento(s) con respuesta de aliados', '#3E7A12', '#EAF6DD', '<path d="M16 11a4 4 0 1 0-8 0"/><path d="M3 21v-1a7 7 0 0 1 18 0v1"/>') +
-            kpi(totR, 'Respuestas recibidas', 'Participantes y empresas aliadas', 'var(--cengi-amarillo,#FFCC00)', '#FFF6DA', '<path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/>') +
-            kpi(pendC, 'Encuestas de colaboración pendientes', 'Empresas aliadas que no han respondido', pendC ? 'var(--cengi-naranja,#FF6B00)' : '#CED2D5', pendC ? '#FFE9D9' : '#EDEFEA', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')
-        );
-        $('#tablaEvEval').html(evs.length ? evs.map(function (x) {
-            var e = x.e, a = x.a, t = a.percep.temas.filter(function (z) { return z[0] !== 'Otros'; })[0];
-            return '<tr><td class="cengi-ev-name">' + esc(e.nombre) + '<div class="cengi-ev-sub">' + fmtFecha(e.fecha) + ' · ' + esc(e.tipo) + '</div></td>' +
-                '<td class="cengi-ev-num ev-td-dato" data-label="Asistentes">' + a.asist + '<span class="cengi-ev-sub"> / ' + a.conf + '</span></td>' +
-                '<td class="ev-td-dato" data-label="Percepción">' + (a.percep.n ? estr(a.percep.prom) + '<div class="cengi-ev-sub">' + a.percep.n + ' resp. · ' + Math.round(a.percep.satisf) + '% satisfechos</div>' : '<span class="cengi-ev-sub">Sin respuestas</span>') + '</td>' +
-                '<td class="ev-td-dato" data-label="Tema de mejora" style="font-size:12px;">' + (t ? esc(t[0]) : '—') + '</td>' +
-                '<td class="ev-td-dato" data-label="Colaboración">' + (a.colab.activo ? (a.colab.resp ? estr(a.colab.indice) + '<div class="cengi-ev-sub">' + a.colab.resp + ' de ' + a.colab.empresas + ' aliada(s)</div>' : '<span class="cengi-ev-sub">' + a.colab.empresas + ' aliada(s), sin respuesta</span>') : '<span class="cengi-ev-sub">No es colaboración</span>') + '</td>' +
-                '<td class="ev-td-acc" style="text-align:right;white-space:nowrap;"><button type="button" class="btn btn-default btn-sm" data-encuestas="' + e.id + '">Encuestas</button> <button type="button" class="btn btn-primary btn-sm" data-informe="' + e.id + '">Informe</button></td></tr>';
-        }).join('') : '<tr><td colspan="6" class="cengi-ev-empty">No hay eventos registrados todavía.</td></tr>');
-    }
-    $('#tablaEvEval')
-        .on('click', '[data-encuestas]', function () { abrirEncuestas($(this).attr('data-encuestas')); })
-        .on('click', '[data-informe]', function () { abrirInforme($(this).attr('data-informe')); });
-
     $('.cengi-ev-tab').on('click', function () {
         var t = $(this).attr('data-evtab');
         $('.cengi-ev-tab').removeClass('active').filter(this).addClass('active');
+        $('.cengi-ev-tab').attr('aria-selected','false').filter(this).attr('aria-selected','true');
+        if(window.history && history.replaceState) {
+            var url=new URL(window.location.href);url.searchParams.set('tab',t);history.replaceState(null,'',url.pathname+url.search+url.hash);
+        }
         // Pestañas de pagos, confirmacion y cobros: ver js/eventos_pagos.js (la busqueda filtra cada lista).
-        $.each({eventos: '#evPanelEventos', pagos: '#evPanelPagos', confirmar: '#evPanelConfirmar', cobros: '#evPanelCobros', evaluacion: '#evPanelEvaluacion'}, function (k, sel) { $(sel).toggle(k === t); });
+        $.each({eventos: '#evPanelEventos', pagos: '#evPanelPagos', inscritos: '#evPanelInscritos', cobros: '#evPanelCobros'}, function (k, sel) { $(sel).toggle(k === t); });
         $('#evEstadoF').toggle(t === 'eventos');
-        $('#evBuscar').toggle(t !== 'evaluacion');
-        if (t === 'evaluacion') cargar(renderEvaluacion);
     });
 
     /* ---------- nuevo / editar evento (ppEvAbrirEvento / ppEvGuardarEvento) ---------- */
@@ -620,4 +591,22 @@
     window.cengiEvtDifusion = abrirDifusion;
     window.cengiEvtEncuestas = abrirEncuestas;
     window.cengiEvtInforme = abrirInforme;
+
+    /* ---------- enlaces desde eventos_evaluacion.php (?informe=ID / ?encuestas=ID) ---------- */
+    if (CFG.abrirInforme || CFG.abrirEncuestas) {
+        if (window.history && history.replaceState) {
+            var urlIr = new URL(window.location.href);
+            urlIr.searchParams.delete('informe');
+            urlIr.searchParams.delete('encuestas');
+            history.replaceState(null, '', urlIr.pathname + urlIr.search + urlIr.hash);
+        }
+        if (CFG.abrirInforme) {
+            cargar(function () {
+                if (ev(CFG.abrirInforme)) abrirInforme(CFG.abrirInforme);
+                else toast('El evento ya no existe.', true);
+            });
+        } else {
+            abrirEncuestas(CFG.abrirEncuestas);
+        }
+    }
 }(jQuery));

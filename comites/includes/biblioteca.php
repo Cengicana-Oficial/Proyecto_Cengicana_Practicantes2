@@ -34,6 +34,16 @@ function biblioteca_fila(PDO $pdo,int $id,bool $lock=false): array
 function biblioteca_log(PDO $pdo,array $r,array $u,string $accion,string $etapa='',string $obs='',array $archivo=[]): void
 {
     $pdo->prepare('INSERT INTO documento_historial(documento_id,estado,actor,fecha,observaciones,accion,etapa,rol,version,archivo_nombre,archivo_ruta,enlace) VALUES (?,?,?,CURDATE(),?,?,?,?,?,?,?,?)')->execute([$r['id'],BIB_ESTADOS[$r['flujo']] ?? $r['estado'],mb_substr((string)$u['nombre'],0,180),$obs,$accion,$etapa,mb_substr((string)($u['nombre_rol'] ?? 'Administrador'),0,180),(int)$r['version'],$archivo['nombre'] ?? null,$archivo['ruta'] ?? null,$archivo['enlace'] ?? null]);
+    if(in_array($accion,['enviado','reenviado','aprobado','devuelto','rechazado'],true))biblioteca_correo($pdo,$r,$obs);
+}
+/** Notificación por correo según el estado al que llegó el documento (boletín u otro). */
+function biblioteca_correo(PDO $pdo,array $r,string $obs): void
+{
+    $evento=match($r['flujo']){'rev1','rev2'=>'doc_transferencia','rev3'=>'doc_direccion','devuelto'=>'doc_devuelto','aprobado'=>'doc_aprobado','rechazado'=>'doc_rechazado',default=>null};
+    if(!$evento||!function_exists('correo_evento'))return;
+    $autor=correo_usuario((int)($r['cargado_por_id'] ?? 0));
+    $vars=['titulo'=>$r['titulo'],'tipo'=>mb_strtolower(BIB_TIPOS[$r['tipo']] ?? 'documento'),'cargado_por'=>$r['cargado_por_nombre'] ?: 'el equipo','observaciones'=>$obs,'etapa'=>mb_strtolower(BIB_ETAPAS[$r['flujo']]['nombre'] ?? 'revisión')];
+    correo_evento($pdo,$evento,$autor?[$autor]:[],$vars,'index.php?view=documentos');
 }
 function biblioteca_estado(PDO $pdo,int $id,string $flujo,?string $devuelto=null,?string $reenviar=null): void
 {

@@ -1,0 +1,29 @@
+/* Áreas técnicas (areas_tecnicas.php). Reutiliza la estructura .ing-* de ingenios.css
+   (encabezado, indicadores, lista) con la paleta Cengicaña; aquí solo lo propio. */
+
+body.cg-tema .at-kpis a { text-decoration: none; transition: box-shadow .15s, transform .15s; }
+body.cg-tema .at-kpis a:hover { box-shadow: 0 6px 16px rgba(31, 86, 50, .08); transform: translateY(-1px); text-decoration: none; }
+body.cg-tema .at-kpis a.is-activo { border-color: var(--cg-verde); box-shadow: var(--cg-foco); }
+
+body.cg-tema .at-conteo { color: var(--cg-gris-text); font-size: 12px; }
+body.cg-tema .at-fila { grid-template-columns: minmax(220px, 1.4fr) minmax(130px, .8fr) minmax(110px, .7fr) minmax(150px, .9fr) minmax(250px, auto); }
+body.cg-tema .ing-fila.is-libre { border-left-color: var(--cg-amarillo); }
+body.cg-tema .at-estado { display: inline-block; margin-top: 2px; padding: 2px 8px; border-radius: 10px; font-size: 10.5px; font-weight: 700; }
+body.cg-tema .at-estado.is-activa { background: var(--cg-verde-soft); color: var(--cg-verde-text); }
+body.cg-tema .at-estado.is-inactiva { background: var(--cg-gris-soft); color: var(--cg-gris-text); }
+body.cg-tema .ing-fila.is-sin strong { color: var(--cg-gris-text); }
+body.cg-tema .ing-aviso form { align-self: center; margin: 0; }
+
+body.cg-tema .at-huerfanas { margin-top: 16px; border-left: 4px solid var(--cg-naranja); }
+body.cg-tema .at-panel-titulo { padding: 14px 16px 10px; border-bottom: 1px solid var(--cg-line); }
+body.cg-tema .at-panel-titulo h2 { display: flex; align-items: baseline; gap: 8px; margin: 0; color: var(--cg-deep); font-size: 15px; font-weight: 700; }
+body.cg-tema .at-panel-titulo h2 b { padding: 1px 8px; border-radius: 10px; background: var(--cg-naranja-soft); color: var(--cg-naranja-text); font-size: 11px; }
+body.cg-tema .at-panel-titulo p { margin: 4px 0 0; color: var(--cg-gris-text); font-size: 12.5px; }
+body.cg-tema .at-fila-simple { grid-template-columns: 1fr auto !important; }
+
+@media (max-width: 1100px) {
+    body.cg-tema .at-fila { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+    body.cg-tema .at-fila { grid-template-columns: 1fr; }
+}

@@ -16,16 +16,21 @@ use PHPMailer\PHPMailer\Exception;
  *   ['contenido' => <bytes crudos del archivo>, 'nombre' => 'archivo.pdf', 'tipo' => 'application/pdf']
  * Se agrega con PHPMailer::addStringAttachment() (no hace falta guardar el
  * archivo en disco primero).
+ *
+ * $ical (opcional): contenido iCalendar con METHOD:REQUEST o CANCEL. Se envía como parte
+ * text/calendar para que Outlook lo muestre como invitación (ver calendario_ics_helpers.php).
  */
 function cengi_enviar_correo(
     string $destinatario,
     string $nombre,
     string $asunto,
     string $contenidoHtml,
-    array $adjuntos = []
+    array $adjuntos = [],
+    string $ical = '',
+    string $replyTo = ''
 ): bool {
     try {
-        $ok = cengi_enviar_correo_smtp($destinatario, $nombre, $asunto, $contenidoHtml, $adjuntos);
+        $ok = cengi_enviar_correo_smtp($destinatario, $nombre, $asunto, $contenidoHtml, $adjuntos, $ical, $replyTo);
     } catch (Throwable $e) {
         cengi_correo_registrar($destinatario, $nombre, $asunto, false, $e->getMessage());
         throw $e;
@@ -70,7 +75,9 @@ function cengi_enviar_correo_smtp(
     string $nombre,
     string $asunto,
     string $contenidoHtml,
-    array $adjuntos = []
+    array $adjuntos = [],
+    string $ical = '',
+    string $replyTo = ''
 ): bool {
 
     $env = cengicursos_env();
@@ -123,6 +130,7 @@ function cengi_enviar_correo_smtp(
                 $fromName
             );
 
+            if ($replyTo !== '') $mail->addReplyTo($replyTo);
             $mail->addAddress(
                 $destinatario,
                 $nombre
@@ -130,8 +138,13 @@ function cengi_enviar_correo_smtp(
 
             $logoPath = __DIR__ . '/css/images/cengi.png';
 
-            if (file_exists($logoPath)) {
+            // PHPMailer solo incluye la parte text/calendar en correos sin imágenes embebidas.
+            if ($ical === '' && file_exists($logoPath)) {
                 $mail->addEmbeddedImage($logoPath, 'logo_cengicana');
+            }
+
+            if ($ical !== '') {
+                $mail->Ical = $ical;
             }
 
             $mail->isHTML(true);

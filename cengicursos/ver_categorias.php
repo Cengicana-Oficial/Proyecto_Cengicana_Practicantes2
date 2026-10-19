@@ -76,7 +76,7 @@ $resultado->execute($params);
 						<td><?php echo $row['id']; ?></td>
 						<td><?php echo $row['descripcion_categorias_cursos']; ?></td>
 						<td>
-							<div class="cengi-row-actions">
+							<div class="cengi-row-actions" data-actions-title="Gestionar categoría">
 								<a class="cengi-action-btn is-edit" href="modificar_categorias.php?id=<?php echo $row['id']; ?>" data-tooltip="Editar" aria-label="Editar"><span class="glyphicon glyphicon-pencil"></span><span class="sr-only">Editar</span></a>
 								<a class="cengi-action-btn is-delete" href="#" data-href="eliminar_categorias.php?id=<?php echo $row['id']; ?>" data-toggle="modal" data-target="#confirm-delete" data-tooltip="Eliminar" aria-label="Eliminar"><span class="glyphicon glyphicon-trash"></span><span class="sr-only">Eliminar</span></a>
 							</div>

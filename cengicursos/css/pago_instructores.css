@@ -1,0 +1,612 @@
+/* Pago a instructores (pago_instructores.php). Variables --cg-* de cengi-tema.css; filtros
+   .ses-* de planificacion.css. Prefijo .pg-*. */
+
+/* ---------- flujo del pago (indicadores enlazados) ---------- */
+.pg-flujo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 8px; }
+.pg-paso { position: relative; display: flex; align-items: center; gap: 11px; min-width: 0; padding: 12px 14px; border: 1px solid var(--cg-line); border-radius: 12px; background: #fff; color: inherit; text-decoration: none !important; box-shadow: 0 1px 2px rgba(16, 40, 24, .05); transition: border-color .15s ease, transform .15s ease; }
+.pg-paso::before { content: ""; position: absolute; top: 0; right: 14px; left: 14px; height: 3px; border-radius: 0 0 3px 3px; background: var(--pg-tono); }
+.pg-paso + .pg-paso::after { content: "›"; position: absolute; top: 50%; left: -10px; color: #B5BCB3; font-size: 18px; line-height: 0; }
+.pg-paso:hover, .pg-paso:focus { border-color: var(--pg-tono); transform: translateY(-1px); }
+.pg-paso.is-activo { border-color: var(--pg-tono); box-shadow: 0 0 0 2px var(--pg-suave); }
+.pg-paso.is-amarillo { --pg-tono: var(--cg-amarillo); --pg-suave: var(--cg-amarillo-soft); --pg-texto: var(--cg-amarillo-text); }
+.pg-paso.is-verde2 { --pg-tono: var(--cg-verde-2); --pg-suave: var(--cg-verde2-soft); --pg-texto: var(--cg-verde2-text); }
+.pg-paso.is-naranja { --pg-tono: var(--cg-naranja); --pg-suave: var(--cg-naranja-soft); --pg-texto: var(--cg-naranja-text); }
+.pg-paso.is-verde { --pg-tono: var(--cg-verde); --pg-suave: var(--cg-verde-soft); --pg-texto: var(--cg-verde-text); }
+.pg-paso-icono { display: inline-flex; flex: 0 0 36px; align-items: center; justify-content: center; height: 36px; border-radius: 10px; background: var(--pg-suave); color: var(--pg-texto); }
+.pg-paso-txt { display: flex; flex-direction: column; min-width: 0; }
+.pg-paso-txt small { color: var(--cg-gris-text); font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.pg-paso-txt b { color: #1E2A1A; font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 19px; line-height: 1.2; }
+.pg-paso-txt em { overflow: hidden; color: var(--cengi-muted); font-size: 11px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.pg-ayuda { display: flex; align-items: center; gap: 6px; margin: 0 0 14px; color: var(--cg-gris-text); font-size: 11.5px; }
+.pg-ayuda .glyphicon { color: var(--cg-verde); }
+
+/* ---------- panel ---------- */
+.pg-panel { overflow: hidden; }
+.pg-cabecera { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--cg-line); background: #FAFBF8; }
+.pg-cabecera .pp-tabs { border-bottom: 0; }
+.pg-herramientas { display: flex; gap: 6px; padding: 0 14px 8px; }
+.pg-panel .ses-filtros-form { padding: 12px 16px; border-bottom: 1px solid var(--cg-line); }
+.pg-rango { display: inline-flex; gap: 10px; }
+.pg-rango[hidden], .ses-campo[hidden] { display: none !important; }
+.pg-rango input[type="date"] { height: 36px; padding: 4px 8px; border: 1px solid var(--cg-gris); border-radius: 9px; font-size: 12.5px; }
+
+.pg-meses { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 9px 16px; border-bottom: 1px solid var(--cg-line); background: #FFFDF2; font-size: 12px; }
+.pg-meses-t { display: inline-flex; align-items: center; gap: 6px; margin-right: 4px; color: #5f4700; font-weight: 600; }
+.pg-meses-t .glyphicon { color: var(--cg-amarillo-text); }
+.pg-mes { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border: 1px solid #F5E39A; border-radius: 99px; background: #fff; color: #5f4700; font-weight: 600; text-decoration: none !important; }
+.pg-mes b { padding: 0 6px; border-radius: 99px; background: var(--cg-amarillo); color: #3b2f00; font-size: 10.5px; }
+.pg-mes:hover { border-color: var(--cg-amarillo); }
+.pg-mes.is-activo { border-color: var(--cg-deep); background: var(--cg-deep); color: #fff; }
+
+.pg-aviso { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 16px; border-bottom: 1px solid var(--cg-line); background: var(--cg-amarillo-soft); color: #5f4700; font-size: 12.5px; }
+.pg-aviso > .glyphicon { margin-top: 2px; color: var(--cg-amarillo-text); }
+.pg-aviso.is-error { background: #FDF0EE; color: #8E2419; }
+.pg-aviso.is-error > .glyphicon { color: #B23223; }
+.pg-liq-modal .pg-aviso { margin-bottom: 14px; border: 0; border-radius: 10px; }
+
+.pg-sin-marcar { margin: 0; border-bottom: 1px solid var(--cg-line); background: #FFF8F2; }
+.pg-sin-marcar-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; }
+.pg-sin-marcar-cab > .glyphicon { color: var(--cg-naranja); font-size: 15px; }
+.pg-sin-marcar-cab > div { flex: 1 1 300px; }
+.pg-sin-marcar-cab b { display: block; color: #7a3500; font-size: 12.5px; }
+.pg-sin-marcar-cab small { color: #8a5a35; font-size: 11.5px; }
+.pg-sin-marcar ul { max-height: 170px; margin: 0; padding: 0 16px 10px 42px; overflow-y: auto; list-style: none; }
+.pg-sin-marcar li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; border-top: 1px dashed #F3D9C4; font-size: 12px; }
+.pg-sin-marcar li label { display: flex; align-items: center; gap: 7px; margin: 0; font-weight: 400; cursor: pointer; }
+.pg-sin-marcar li input { margin: 0; accent-color: var(--cg-verde); }
+.pg-falta { color: var(--cg-naranja-text); font-weight: 600; }
+small.pg-falta { display: block; font-size: 10.5px; }
+
+/* ---------- tablas ---------- */
+.pg-tabla { font-size: 12.5px; }
+.pg-tabla > thead > tr > th { padding: 9px 12px; white-space: nowrap; }
+.pg-tabla > tbody > tr > td { padding: 9px 12px; vertical-align: middle; }
+.pg-tabla .pg-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pg-tabla td.pg-num small { display: block; color: var(--cengi-muted); font-size: 10.5px; }
+.pg-col-check { width: 34px; text-align: center; }
+.pg-col-check input { accent-color: var(--cg-verde); }
+.pg-tabla tr.is-excluida > td { opacity: .45; }
+.pg-tabla tr.is-excluida > td.pg-col-check { opacity: 1; }
+.pg-tabla tr.is-sin-tarifa .pp-input-inline { border-color: var(--cg-naranja); background: var(--cg-naranja-soft); }
+.pg-persona { display: flex; align-items: center; gap: 9px; min-width: 190px; }
+.pg-persona > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.pg-persona a, .pg-persona b { color: #1E2A1A; font-weight: 700; }
+.pg-persona a:hover { color: var(--cg-verde-text); }
+.pg-persona small, .pg-sub { display: block; color: var(--cengi-muted); font-size: 11px; }
+.pg-avatar { display: inline-flex; flex: 0 0 32px; align-items: center; justify-content: center; height: 32px; border-radius: 10px; background: var(--cg-verde-soft); color: var(--cg-verde-text); font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 11.5px; font-weight: 700; }
+.pg-avatar.is-soporte { background: var(--cg-amarillo-soft); color: var(--cg-amarillo-text); }
+.pg-curso { color: #1E2A1A; }
+.pg-curso:hover { color: var(--cg-verde-text); }
+.pg-ses { display: inline-block; min-width: 26px; padding: 1px 8px; border-radius: 99px; background: var(--cg-verde2-soft); color: var(--cg-verde2-text); font-weight: 700; text-align: center; }
+.pg-fechas { display: block; max-width: 170px; margin-left: auto; overflow: hidden; color: var(--cengi-muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.pg-fechas-celda { max-width: 220px; color: var(--cg-gris-text); font-size: 11px; }
+.pg-q { display: inline-flex; align-items: center; gap: 3px; color: var(--cg-gris-text); }
+.pg-q .pp-input-inline { width: 92px; text-align: right; }
+.pg-tabla .pp-input-inline:focus, .pg-tabla .pp-input-obs:focus { border-color: var(--cg-verde); box-shadow: var(--cg-foco); outline: none; }
+.pg-tabla .pp-input-obs { width: 100%; min-width: 140px; }
+.pg-total { color: var(--cg-deep); font-weight: 700; }
+.pg-vacio { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 30px 12px; color: var(--cengi-muted); text-align: center; }
+.pg-vacio .glyphicon { margin-bottom: 4px; color: var(--cg-verde); font-size: 24px; }
+.pg-vacio b { color: #1E2A1A; }
+
+/* Barra de totales fija al pie mientras se revisa la tabla */
+.pg-barra { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--cg-line); background: var(--cg-banda); color: #fff; }
+.pg-barra-datos { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; font-size: 12px; color: rgba(255, 255, 255, .8); }
+.pg-barra-datos b { color: #fff; font-variant-numeric: tabular-nums; }
+.pg-barra-total b { color: var(--cg-verde-2); font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 18px; }
+.cg-tema .pg-barra .btn-primary { border-color: var(--cg-verde); background: var(--cg-verde); }
+.pg-nota-modal { margin: 4px 0 0; color: var(--cengi-muted); font-size: 11.5px; }
+
+/* Liquidaciones */
+.pg-estados { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--cg-line); }
+.pg-estados a { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--cg-line); border-radius: 99px; background: #fff; color: var(--cg-gris-text); font-size: 12px; font-weight: 600; text-decoration: none !important; }
+.pg-estados a b { padding: 0 7px; border-radius: 99px; background: var(--cg-gris-soft); font-size: 11px; }
+.pg-estados a.is-enviada b { background: var(--cg-verde2-soft); color: var(--cg-verde2-text); }
+.pg-estados a.is-aprobada b { background: var(--cg-naranja-soft); color: var(--cg-naranja-text); }
+.pg-estados a.is-pagada b { background: var(--cg-verde-soft); color: var(--cg-verde-text); }
+.pg-estados a:hover { border-color: var(--cg-verde); color: var(--cg-deep); }
+.pg-estados a.is-activo { border-color: var(--cg-deep); background: var(--cg-deep); color: #fff; }
+.pg-liq-num { color: #1E2A1A; font-family: Consolas, 'Courier New', monospace; font-weight: 700; }
+.pg-liq-num:hover { color: var(--cg-verde-text); }
+.pg-avance { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.pg-avance i { width: 18px; height: 5px; border-radius: 99px; background: var(--cg-gris-soft); box-shadow: inset 0 0 0 1px var(--cg-gris); }
+.pg-avance i.is-ok { background: var(--cg-verde); box-shadow: none; }
+.pg-avance em { margin-left: 4px; color: var(--cg-gris-text); font-size: 11px; font-style: normal; }
+.pg-acciones { white-space: nowrap; text-align: right; }
+.pg-icono { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-left: 4px; border: 1px solid var(--cg-line); border-radius: 8px; color: var(--cg-gris-text); vertical-align: middle; }
+.pg-icono:hover { border-color: var(--cg-verde); background: var(--cg-verde-soft); color: var(--cg-verde-text); }
+
+/* ---------- detalle de la liquidación ---------- */
+.pg-pasos-liq { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; }
+.pg-pasos-liq li { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border: 1px solid var(--cg-line); border-radius: 10px; background: #fff; color: var(--cengi-muted); }
+.pg-pasos-liq li > span { display: inline-flex; flex: 0 0 26px; align-items: center; justify-content: center; height: 26px; border-radius: 50%; background: var(--cg-gris-soft); color: var(--cg-gris-text); font-weight: 700; }
+.pg-pasos-liq li b { display: block; color: #1E2A1A; font-size: 12.5px; }
+.pg-pasos-liq li small { font-size: 11px; }
+.pg-pasos-liq li.is-ok > span { background: var(--cg-verde); color: #fff; }
+.pg-pasos-liq li.is-actual { border-color: var(--cg-amarillo); background: var(--cg-amarillo-soft); }
+.pg-pasos-liq li.is-actual > span { background: var(--cg-amarillo); color: #3b2f00; }
+.pg-subtitulo { margin: 16px 0 8px; color: var(--cg-deep); font-weight: 700; }
+.pg-personas { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+.pg-personas > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border: 1px solid var(--cg-line); border-radius: 9px; font-size: 12px; }
+.pg-personas small { display: block; color: var(--cengi-muted); font-size: 10.5px; }
+.pg-personas b { color: var(--cg-deep); font-variant-numeric: tabular-nums; }
+.pg-form-accion { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--cg-line); border-left: 4px solid var(--cg-verde); border-radius: 10px; background: #FAFBF8; }
+.pg-form-accion.is-peligro { border-left-color: #E4544A; background: #FFF8F7; }
+.pg-check { display: flex; align-items: flex-start; gap: 7px; margin: 4px 0 0; font-size: 12.5px; font-weight: 500; cursor: pointer; }
+.pg-check input { margin: 3px 0 0; accent-color: var(--cg-verde); }
+.pg-check small { color: var(--cengi-muted); }
+.pg-anular { margin-right: auto; color: #B23223 !important; }
+
+/* Corrección y versiones */
+.pg-version { display: inline-block; padding: 1px 8px; border-radius: 99px; background: var(--cg-amarillo-soft); color: var(--cg-amarillo-text); font-family: 'Inter', sans-serif; font-size: 10.5px; font-weight: 700; vertical-align: 2px; }
+.pg-form-accion.is-corregir { border-left-color: var(--cg-amarillo); background: #FFFDF5; }
+.pg-subtitulo small { color: var(--cengi-muted); font-weight: 400; }
+.pg-tabla tr.is-cambiada > td { background: var(--cg-amarillo-soft); }
+#cg-diferencia { color: var(--cg-naranja-text); font-weight: 600; }
+.pg-versiones { display: flex; flex-direction: column; gap: 6px; }
+.pg-version-item { border: 1px solid var(--cg-line); border-radius: 10px; background: #fff; }
+.pg-version-item > summary, .pg-version-item.is-origen { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; list-style: none; }
+.pg-version-item > summary::-webkit-details-marker { display: none; }
+.pg-version-item > summary::after { content: "▸"; margin-left: 6px; color: var(--cengi-muted); }
+.pg-version-item[open] > summary::after { content: "▾"; }
+.pg-version-item.is-origen { cursor: default; background: #FAFBF8; }
+.pg-version-num { display: inline-flex; flex: 0 0 34px; align-items: center; justify-content: center; height: 26px; border-radius: 8px; background: var(--cg-verde-soft); color: var(--cg-verde-text); font-size: 11.5px; font-weight: 700; }
+.pg-version-item.is-origen .pg-version-num { background: var(--cg-gris-soft); color: var(--cg-gris-text); }
+.pg-version-txt { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.pg-version-txt b { color: #1E2A1A; font-size: 12.5px; }
+.pg-version-txt small { color: var(--cengi-muted); font-size: 11px; }
+.pg-version-total { color: var(--cg-gris-text); font-size: 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pg-version-total b { color: var(--cg-deep); }
+.pg-version-total small { display: block; font-weight: 700; }
+.pg-version-total small.is-sube { color: var(--cg-naranja-text); }
+.pg-version-total small.is-baja { color: var(--cg-verde-text); }
+.pg-version-cambios { margin: 0; padding: 4px 14px 8px 58px; font-size: 12px; }
+.pg-version-cambios li { margin: 2px 0; }
+.pg-version-copia { margin: 0 12px 12px; padding: 8px 10px; border: 1px dashed var(--cg-gris); border-radius: 8px; background: #FAFBF8; }
+.pg-version-copia-cab { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; margin-bottom: 6px; color: var(--cg-gris-text); font-size: 11.5px; }
+.pg-version-tabla { width: 100%; font-size: 11.5px; }
+.pg-version-tabla td { padding: 3px 4px; border-top: 1px solid #EEF1EA; }
+.pg-version-tabla small { color: var(--cengi-muted); }
+
+@media (max-width: 1100px) {
+    .pg-flujo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pg-paso + .pg-paso::after { display: none; }
+}
+@media (max-width: 600px) {
+    .pg-flujo, .pg-pasos-liq { grid-template-columns: minmax(0, 1fr); }
+    .pg-herramientas { padding: 8px 12px; }
+    .pg-barra { position: static; }
+}
+
+/* Impresión de la liquidación (botón "Imprimir" del detalle) */
+@media print {
+    body.cg-tema { background: #fff !important; }
+    body.cg-tema > *:not(#liq-modal) { display: none !important; }
+    body.modal-open .modal-backdrop { display: none !important; }
+    #liq-modal { position: static !important; display: block !important; overflow: visible !important; opacity: 1 !important; }
+    #liq-modal .modal-dialog { width: 100% !important; max-width: none !important; margin: 0 !important; transform: none !important; }
+    #liq-modal .modal-content { border: 0 !important; box-shadow: none !important; }
+    #liq-modal .modal-footer, #liq-modal .close, #liq-modal form { display: none !important; }
+    #liq-modal a { color: inherit !important; text-decoration: none !important; }
+}
+
+/* ---------- comprobante, firma del Jefe y configuración ---------- */
+.pg-flujo.is-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.pg-link { padding: 0; border: 0; background: none; color: var(--cg-verde-text); font-weight: 700; text-decoration: underline; cursor: pointer; }
+.pg-link:hover { color: var(--cg-deep); }
+.pg-aviso-suelto { margin-bottom: 14px; border: 1px solid #F5E39A; border-radius: 10px; }
+.pg-estados a.is-por_firmar b { background: var(--cg-naranja-soft); color: var(--cg-naranja-text); }
+select.pg-comp { height: 30px; padding: 2px 6px; border: 1px solid var(--cg-gris); border-radius: 7px; background: #fff; font-size: 12px; }
+select.pg-comp:focus { border-color: var(--cg-verde); box-shadow: var(--cg-foco); outline: none; }
+.pg-comp-chip { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.pg-comp-chip.is-factura { background: var(--cg-verde-soft); color: var(--cg-verde-text); }
+.pg-comp-chip.is-recibo { background: var(--cg-amarillo-soft); color: var(--cg-amarillo-text); }
+.pg-tabla-tarifas select, .pg-tabla-tarifas .pg-dpi { height: 30px; padding: 2px 8px; border: 1px solid var(--cg-gris); border-radius: 7px; font-size: 12px; }
+.pg-tabla-tarifas .pg-dpi { width: 150px; font-family: Consolas, 'Courier New', monospace; }
+.pg-tabla tr.pg-grupo > td { padding: 6px 12px; background: #FAFBF8; color: var(--cg-gris-text); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+
+.pg-firma-bloque { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 0 0 14px; padding: 12px 16px; border: 1px solid #CFE9B3; border-left: 5px solid var(--cg-verde); border-radius: 10px; background: var(--cg-verde-soft); }
+.pg-firma-bloque img { max-width: 200px; max-height: 70px; padding: 4px 8px; border-radius: 6px; background: #fff; }
+.pg-firma-bloque > div { display: flex; flex: 1 1 260px; flex-direction: column; gap: 1px; }
+.pg-firma-bloque b { color: #1E2A1A; }
+.pg-firma-bloque span, .pg-firma-bloque small { color: var(--cg-gris-text); font-size: 12px; }
+.pg-firma-codigo b { font-family: Consolas, 'Courier New', monospace; }
+.pg-firma-codigo .is-ok { color: var(--cg-verde-text); font-weight: 700; }
+.pg-firma-codigo .is-mal { color: #B23223; font-weight: 700; }
+.pg-firma-bloque.is-invalida { border-color: #F3C6C0; border-left-color: #E4544A; background: #FDF0EE; }
+.pg-form-accion.is-firmar { margin-top: 0; margin-bottom: 14px; border-left-color: var(--cg-naranja); background: #FFF8F2; }
+.pg-firmar-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: center; }
+.pg-firmar-grid img { width: 100%; max-height: 90px; object-fit: contain; padding: 6px; border: 1px dashed var(--cg-gris); border-radius: 8px; background: #fff; }
+.pg-facturas { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 12px; margin: 6px 0 10px; }
+.pg-facturas > span { grid-column: 1 / -1; color: var(--cg-gris-text); font-size: 11.5px; font-weight: 700; }
+.pg-facturas label { display: flex; flex-direction: column; gap: 3px; margin: 0; font-size: 11.5px; font-weight: 600; }
+
+.pg-firma-config { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 12px; }
+.pg-firma-config span { display: block; margin-bottom: 4px; color: var(--cg-gris-text); font-size: 11px; font-weight: 700; }
+.pg-firma-actual img { display: block; max-width: 100%; max-height: 90px; padding: 6px; border: 1px solid var(--cg-line); border-radius: 8px; background: #fff; }
+.pg-firma-actual em { color: var(--cengi-muted); font-size: 12px; }
+#cf-firma-lienzo { display: block; width: 100%; height: auto; aspect-ratio: 520 / 170; border: 1.5px dashed var(--cg-verde); border-radius: 8px; background: #fff; cursor: crosshair; touch-action: none; }
+.pg-firma-acciones { display: flex; gap: 6px; margin-top: 6px; }
+.pg-firma-acciones label { margin: 0; cursor: pointer; }
+
+/* ---------- recibo imprimible (pago_instructores.php?recibos=1) ---------- */
+.pg-recibos-pagina { margin: 0; padding: 20px; background: #EEF0EC; color: #111; font-family: Arial, Helvetica, sans-serif; }
+.pg-recibos-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; max-width: 760px; margin: 0 auto 14px; padding: 10px 14px; border-radius: 10px; background: #1f5632; color: #fff; font-size: 13px; }
+.pg-recibos-barra button { margin-left: auto; padding: 6px 16px; border: 0; border-radius: 8px; background: #73BC25; color: #fff; font-weight: 700; cursor: pointer; }
+.pg-recibos-aviso { padding: 2px 8px; border-radius: 99px; background: #FFCC00; color: #3b2f00; font-size: 11px; font-weight: 700; }
+.pg-recibos-vacio { max-width: 760px; margin: 0 auto; padding: 20px; background: #fff; }
+.pg-recibo { max-width: 760px; margin: 0 auto 18px; padding: 22px 26px; border: 1.5px solid #222; background: #fff; page-break-inside: avoid; }
+.pg-recibo-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pg-recibo-tabla th { width: 130px; padding: 10px 8px 4px 0; font-style: italic; font-weight: 700; text-align: left; vertical-align: bottom; white-space: nowrap; }
+.pg-recibo-tabla td { padding: 10px 4px 4px; vertical-align: bottom; }
+.pg-recibo-linea { border-bottom: 1px solid #222; }
+.pg-recibo-linea small { display: block; margin-top: 2px; color: #555; font-size: 10.5px; }
+.pg-recibo-tabla th.pg-recibo-q { width: 40px; padding-left: 24px; }
+.pg-recibo-monto { width: 170px; font-weight: 700; text-align: right; }
+.pg-recibo-espacio td { height: 18px; border-bottom: 1px solid #ccc; }
+.pg-recibo-firma-espacio { display: flex; align-items: flex-end; justify-content: center; height: 64px; }
+.pg-recibo-firma-espacio img { max-width: 220px; max-height: 62px; }
+.pg-recibo-firma-linea { margin-bottom: 4px; padding-top: 3px; border-top: 1px solid #222; color: #444; font-size: 11px; }
+.pg-recibo-codigo { margin-top: 4px; color: #555; font-size: 9.5px; }
+@media print {
+    .pg-recibos-pagina { padding: 0; background: #fff; }
+    .pg-recibos-barra { display: none; }
+    .pg-recibo { margin: 0 0 14mm; border-color: #000; }
+    @page { size: letter; margin: 12mm; }
+}
+@media (max-width: 860px) {
+    .pg-flujo.is-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pg-firmar-grid, .pg-firma-config { grid-template-columns: minmax(0, 1fr); }
+    .pg-pasos-liq { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Recibos enviados para firmar: estado por fila */
+.pg-rec-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; }
+.pg-rec-chip { display: inline-block; padding: 2px 8px; border-radius: 99px; background: #F1F3F4; color: #5B6459; font-weight: 700; }
+.pg-rec-chip.is-enviado { background: #FFF7D6; color: #7A5C00; }
+.pg-rec-chip.is-firmado { background: #EEF7E3; color: #3E7A12; }
+.pg-rec-form { display: inline; margin: 0; }
+.pg-rec-subir { display: inline-block; }
+.pg-rec-subir summary { color: #3E7A12; cursor: pointer; font-weight: 600; }
+.pg-rec-subir form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+.pg-rec-subir input[type=file] { max-width: 210px; font-size: 11px; }
+
+/* ---------- Trámite de recibos: enviar → firma la persona → valida el Jefe → pago ---------- */
+.pg-flujo[style*="--n"] { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.pg-pasos-liq[style*="--n"] { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+@media (max-width: 1100px) { .pg-flujo[style*="--n"], .pg-pasos-liq[style*="--n"] { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .pg-flujo[style*="--n"], .pg-pasos-liq[style*="--n"] { grid-template-columns: minmax(0, 1fr); } }
+
+.pg-rec-chip.is-sin_enviar { background: #F1F3F4; color: #5B6459; }
+.pg-rec-chip.is-enviado { background: #FFF7D6; color: #7A5C00; }
+.pg-rec-chip.is-monto_cambio { background: #FFEEE0; color: #B34E00; }
+.pg-rec-chip.is-firmado { background: #EEF7E3; color: #3E7A12; }
+.pg-rec-chip.is-validado { background: #F4FAD9; color: #4d6400; }
+.pg-rec-chip.is-pagado { background: #1f5632; color: #fff; }
+.pg-estados a.is-esperando { border-style: dashed; }
+
+/* Bloque de recibos dentro de la liquidación */
+.pg-recibos-bloque { margin: 16px 0; border: 1px solid #F3D9A8; border-left: 5px solid #FFCC00; border-radius: 12px; background: #FFFDF5; }
+.pg-recibos-bloque.is-listo { border-color: #D6EBBE; border-left-color: #73BC25; background: #FAFDF6; }
+.pg-recibos-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px dashed #EADBB0; }
+.pg-recibos-bloque.is-listo .pg-recibos-cab { border-bottom-color: #D6EBBE; }
+.pg-recibos-cab b { color: #1f5632; font-size: 13.5px; }
+.pg-recibos-cab small { display: block; margin-top: 2px; color: #5B6459; font-size: 12px; }
+.pg-recibos-cuenta { margin-left: 6px; padding: 1px 8px; border-radius: 10px; background: #fff; color: #5B6459; font-size: 11px; }
+.pg-recibos-acc { display: flex; flex-wrap: wrap; gap: 6px; }
+.pg-recibos-lista, .pg-repo-lista { margin: 0; padding: 0; list-style: none; }
+.pg-recibos-lista li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 14px; border-bottom: 1px solid #EEF1EA; }
+.pg-recibos-lista li:last-child { border-bottom: 0; }
+.pg-recibos-quien { flex: 1 1 220px; min-width: 0; }
+.pg-recibos-quien b { display: block; color: #1E2A1A; font-size: 13px; }
+.pg-recibos-quien small, .pg-recibos-estado small, .pg-repo-persona small, .pg-repo-estado small { display: block; color: #5B6459; font-size: 11.5px; }
+.pg-recibos-estado { flex: 0 1 220px; }
+.pg-recibos-acciones, .pg-repo-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.pg-rec-subir { position: relative; }
+.pg-rec-subir summary { display: inline-block; padding: 1px 7px; border: 1px solid #CED2D5; border-radius: 3px; background: #fff; font-size: 12px; list-style: none; }
+.pg-rec-subir summary::-webkit-details-marker { display: none; }
+.pg-rec-subir[open] form { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+.pg-rec-subir input[type="file"] { max-width: 210px; font-size: 11.5px; }
+
+/* Repositorio de recibos (pestaña Recibos) */
+.pg-repo-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px 4px; }
+.pg-repo-cab b { color: #1f5632; font-size: 14px; }
+.pg-repo-cab small { display: block; max-width: 760px; margin-top: 2px; color: #5B6459; font-size: 12px; }
+.pg-repo-buscar { margin-left: auto; }
+.pg-repo-buscar input { min-width: 240px; padding: 5px 10px; border: 1px solid #CED2D5; border-radius: 8px; font-size: 12.5px; }
+.pg-repo-buscar input:focus { border-color: #73BC25; outline: 0; box-shadow: 0 0 0 3px rgba(115, 188, 37, .22); }
+.pg-repo-fila { display: grid; grid-template-columns: 130px minmax(220px, 1.4fr) minmax(200px, 1fr) auto; gap: 12px; align-items: center; padding: 11px 18px; border-left: 4px solid #CED2D5; border-bottom: 1px solid #EEF1EA; }
+.pg-repo-fila:nth-child(even) { background: #FBFCFA; }
+.pg-repo-fila:hover { background: #EEF7E3; }
+.pg-repo-fila.is-enviado { border-left-color: #FFCC00; }
+.pg-repo-fila.is-firmado { border-left-color: #73BC25; }
+.pg-repo-fila.is-validado { border-left-color: #A3D300; }
+.pg-repo-fila.is-pagado { border-left-color: #1f5632; }
+.pg-repo-num span { display: block; color: #5B6459; font-size: 11.5px; }
+.pg-repo-num b { color: #1E2A1A; font-size: 15px; }
+.pg-repo-persona b { display: block; color: #1E2A1A; font-size: 13px; }
+.pg-repo-acciones { justify-content: flex-end; }
+@media (max-width: 900px) { .pg-repo-fila { grid-template-columns: 1fr 1fr; } .pg-repo-acciones { grid-column: 1 / -1; justify-content: flex-start; } }
+
+/* Recibo (vista e impresión): encabezado con la paleta, datos, detalle y dos firmas en orden */
+.pg-recibo { max-width: 760px; margin: 0 auto 18px; padding: 0; border: 1px solid #CED2D5; border-radius: 10px; background: #fff; overflow: hidden; page-break-inside: avoid; }
+.pg-recibo-cab { width: 100%; border-collapse: collapse; background: #1f5632; color: #fff; }
+.pg-recibo-cab td { padding: 14px 18px; vertical-align: middle; }
+.pg-recibo-org img { float: left; width: 50px; height: 50px; margin-right: 12px; padding: 3px; border-radius: 8px; background: #fff; object-fit: contain; }
+.pg-recibo-org b { display: block; font-size: 16px; }
+.pg-recibo-org span, .pg-recibo-num span, .pg-recibo-total span { display: block; color: #D9F2A6; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+.pg-recibo-num { width: 140px; text-align: center; }
+.pg-recibo-num b { font-family: Consolas, monospace; font-size: 15px; }
+.pg-recibo-total { width: 170px; background: #73BC25; text-align: right; }
+.pg-recibo-total span { color: #fff; }
+.pg-recibo-total b { font-size: 22px; }
+.pg-recibo-franja { height: 5px; background: linear-gradient(90deg, #73BC25 0 25%, #A3D300 25% 50%, #FFCC00 50% 75%, #FF6B00 75% 100%); }
+.pg-recibo-tabla { width: calc(100% - 22px); margin: 12px 22px 4px 0; border-collapse: collapse; font-size: 13px; }
+.pg-recibo-tabla th { width: 140px; padding: 10px 8px 4px 22px; color: #5B6459; font-style: italic; font-weight: 400; text-align: left; vertical-align: bottom; white-space: nowrap; }
+.pg-recibo-tabla td { padding: 10px 4px 4px; vertical-align: bottom; }
+.pg-recibo-linea { border-bottom: 1px solid #CED2D5; }
+.pg-recibo-detalle { width: calc(100% - 44px); margin: 14px 22px; border-collapse: collapse; font-size: 12.5px; }
+.pg-recibo-detalle th { padding: 7px 10px; background: #F1F3F4; color: #5B6459; font-size: 11px; text-align: left; }
+.pg-recibo-detalle th small { font-weight: 400; }
+.pg-recibo-detalle td { padding: 8px 10px; border-bottom: 1px solid #E4E7E1; }
+/* Firmas: dos tarjetas iguales, una al lado de la otra, en el orden del trámite. */
+.pg-recibo-firmas { display: table; width: 100%; table-layout: fixed; margin: 8px 0 14px; border-collapse: separate; border-spacing: 16px 0; font-size: 12px; }
+.pg-recibo-firmas td { display: table-cell; width: 50%; padding: 12px 18px 14px; border: 1px solid #E4E7E1; border-radius: 10px; background: #fff; text-align: center; vertical-align: top; }
+.pg-recibo-firmas td.is-validado { border-color: #D6EBBE; background: #F6FBF0; }
+.pg-recibo-paso { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 2px; color: #3E7A12; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.pg-recibo-paso span { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #73BC25; color: #fff; font-size: 10px; letter-spacing: 0; }
+.pg-recibo-firma-espacio { display: flex; align-items: flex-end; justify-content: center; height: 72px; }
+.pg-recibo-firma-espacio img { max-width: 220px; max-height: 66px; }
+.pg-recibo-firma-linea { margin: 0 18px 6px; border-top: 1px solid #1E2A1A; }
+.pg-recibo-firma-nombre { display: block; color: #1E2A1A; font-size: 13px; }
+.pg-recibo-firma-dato { display: block; color: #5B6459; font-size: 11.5px; }
+.pg-recibo-sello { margin-top: 10px; padding: 6px 10px; border-radius: 7px; background: #F1F3F4; color: #5B6459; font-size: 10.5px; line-height: 1.4; }
+.pg-recibo-sello.is-ok { background: #EEF7E3; color: #3E7A12; font-weight: 600; }
+.pg-recibo-sello.is-mal { background: #FFEEE0; color: #B34E00; }
+@media (max-width: 560px) { .pg-recibo-firmas, .pg-recibo-firmas tr, .pg-recibo-firmas td { display: block; width: auto; } .pg-recibo-firmas td { margin: 0 12px 10px; } }
+.pg-recibo-codigo { margin-top: 4px; color: #5B6459; font-size: 10px; }
+.pg-recibo-pie { padding: 8px 22px; border-top: 1px solid #E4E7E1; color: #5B6459; font-size: 10.5px; }
+@media print {
+    .pg-recibo { border-radius: 0; }
+    .pg-recibo-cab, .pg-recibo-total, .pg-recibo-franja, .pg-recibo-firmas td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* ---------- Expediente del recibo y validación del Jefe por recibo ---------- */
+.pg-rec-chip.is-validado { background: #F4FAD9; color: #4d6400; }
+.pg-repo-fila.is-firmado { border-left-color: #FF6B00; }
+.pg-recibos-lista li.is-validado { background: #FAFDF6; }
+.pg-rec-check { display: inline-flex; align-items: center; margin: 0; cursor: pointer; }
+.pg-rec-check input { width: 17px; height: 17px; accent-color: #73BC25; }
+
+.pg-expediente { flex-basis: 100%; margin-top: 2px; }
+.pg-expediente summary { display: inline-flex; align-items: center; gap: 5px; color: #3E7A12; font-size: 12px; font-weight: 600; cursor: pointer; list-style: none; }
+.pg-expediente summary::-webkit-details-marker { display: none; }
+.pg-expediente summary b { padding: 0 6px; border-radius: 8px; background: #EEF7E3; font-size: 10.5px; }
+.pg-expediente ol { margin: 8px 0 2px; padding: 0 0 0 4px; list-style: none; border-left: 2px solid #E4E7E1; }
+.pg-expediente li { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 5px 0 5px 16px; border: 0 !important; background: none !important; }
+.pg-expediente li > .glyphicon { position: absolute; left: -10px; top: 8px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #fff; color: #5B6459; font-size: 9px; box-shadow: 0 0 0 2px #E4E7E1; }
+.pg-expediente li.is-enviado > .glyphicon { color: #7A5C00; box-shadow: 0 0 0 2px #FFCC00; }
+.pg-expediente li.is-firmado > .glyphicon, .pg-expediente li.is-reemplazado > .glyphicon { color: #3E7A12; box-shadow: 0 0 0 2px #73BC25; }
+.pg-expediente li.is-validado > .glyphicon { background: #73BC25; color: #fff; box-shadow: 0 0 0 2px #73BC25; }
+.pg-expediente li.is-validacion_retirada > .glyphicon { color: #B34E00; box-shadow: 0 0 0 2px #FF6B00; }
+.pg-expediente li.is-pagado > .glyphicon { background: #1f5632; color: #fff; box-shadow: 0 0 0 2px #1f5632; }
+.pg-expediente li > div { flex: 1 1 260px; min-width: 0; }
+.pg-expediente li b { display: block; color: #1E2A1A; font-size: 12px; }
+.pg-expediente li small { display: block; color: #5B6459; font-size: 11px; }
+.pg-repo-exp { grid-column: 1 / -1; }
+.pg-repo-exp:empty { display: none; }
+
+.pg-validar-recibos { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 0; padding: 12px 14px; border-top: 1px dashed #D6EBBE; background: #F6FBF0; }
+.pg-validar-recibos.is-repo { margin: 6px 18px 10px; border: 1px solid #D6EBBE; border-radius: 10px; }
+.pg-validar-recibos img { max-width: 150px; max-height: 54px; padding: 4px 8px; border: 1px solid #E4E7E1; border-radius: 8px; background: #fff; }
+.pg-validar-recibos > div { flex: 1 1 300px; }
+.pg-validar-recibos b { display: block; color: #1f5632; font-size: 13px; }
+.pg-validar-fila { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.pg-validar-fila input { max-width: 220px; }
+.pg-validar-falta { margin: 0; padding: 10px 14px; }
+
+.pg-comprobantes-nota { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 0; padding: 10px 14px; border-radius: 10px; background: #F1F3F4; color: #3d453b; font-size: 12.5px; }
+.pg-comprobantes-nota > .glyphicon { margin-top: 2px; color: #5B6459; }
+.pg-firma-anterior { margin: 10px 0; }
+.pg-firma-anterior summary { color: #5B6459; font-size: 12px; cursor: pointer; }
+.pg-firma-anterior .pg-firma-bloque { margin-top: 8px; }
+
+/* ---------- Liquidación por tipo (instructores / soporte técnico) y nota del comprobante ---------- */
+.pg-clases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 14px 18px 4px; }
+.pg-clases a { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #E4E7E1; border-radius: 12px; background: #fff; color: #1E2A1A; text-decoration: none; }
+.pg-clases a:hover { border-color: #73BC25; background: #F6FBF0; text-decoration: none; }
+.pg-clases a.is-activo { border-color: #73BC25; background: #EEF7E3; box-shadow: 0 0 0 3px rgba(115, 188, 37, .2); }
+.pg-clases .glyphicon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: #F1F3F4; color: #5B6459; font-size: 15px; }
+.pg-clases a.is-activo .glyphicon { background: #73BC25; color: #fff; }
+.pg-clases b { display: block; font-size: 14px; }
+.pg-clases small { display: block; color: #5B6459; font-size: 11.5px; }
+.pg-comp-nota { display: block; max-width: 230px; margin-top: 4px; color: #5B6459; font-size: 11px; line-height: 1.35; white-space: normal; }
+.pg-clase-chip { display: inline-block; margin-right: 4px; padding: 0 7px; border-radius: 9px; background: #EEF7E3; color: #3E7A12; font-size: 10.5px; font-weight: 700; }
+.pg-clase-chip.is-soporte { background: #FFF7D6; color: #7A5C00; }
+.pg-clase-chip.is-mixta { background: #F1F3F4; color: #5B6459; }
+@media (max-width: 640px) { .pg-clases { grid-template-columns: 1fr; } }
+
+/* ---------- Esquema del proceso de pago (factura / recibo) ---------- */
+.pg-proceso { margin: 0 0 14px; border: 1px solid #E4E7E1; border-radius: 12px; background: #fff; }
+.pg-proceso > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 14px; color: #3d453b; font-size: 12.5px; cursor: pointer; list-style: none; }
+.pg-proceso > summary::-webkit-details-marker { display: none; }
+.pg-proceso > summary .glyphicon { color: #73BC25; }
+.pg-proceso > summary .pg-link { margin-left: auto; }
+.pg-proceso[open] > summary { border-bottom: 1px dashed #E4E7E1; }
+.pg-proceso-cuerpo { padding: 12px 14px 14px; }
+.pg-proceso-inicio { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
+.pg-proceso-inicio > span { display: grid; place-items: center; flex: 0 0 26px; height: 26px; border-radius: 50%; background: #1f5632; color: #fff; font-weight: 700; }
+.pg-proceso-inicio b { color: #1f5632; }
+.pg-proceso-inicio small { display: block; color: #5B6459; font-size: 12px; }
+.pg-carriles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-left: 36px; }
+.pg-carril { padding: 10px 12px; border: 1px solid #E4E7E1; border-top: 4px solid #73BC25; border-radius: 10px; background: #FBFCFA; }
+.pg-carril.is-factura { border-top-color: #A3D300; }
+.pg-carril.is-recibo { border-top-color: #FFCC00; }
+.pg-carril > b { display: block; margin-bottom: 4px; color: #1E2A1A; font-size: 13px; }
+.pg-carril ol { margin: 0; padding-left: 18px; color: #3d453b; font-size: 12px; line-height: 1.5; }
+@media (max-width: 760px) { .pg-carriles { grid-template-columns: 1fr; margin-left: 0; } }
+
+/* Bloque de facturas en la liquidación */
+.pg-recibos-bloque.is-facturas { border-left-color: #A3D300; border-color: #E4E7E1; background: #FCFDF9; }
+.pg-recibos-bloque.is-facturas.is-listo { border-left-color: #73BC25; }
+.pg-rec-subir[open] form { flex-wrap: wrap; }
+.pg-rec-subir form .form-control { max-width: 160px; }
+
+/* ---------- Repositorio de recibos: cada recibo con los 5 pasos del trámite ---------- */
+.pg-repo-fila { display: block !important; padding: 12px 16px 10px !important; }
+.pg-repo-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 0 !important; }
+.pg-repo-cab .pg-repo-num { flex: 0 0 120px; }
+.pg-repo-cab .pg-repo-persona { flex: 1 1 260px; min-width: 0; }
+.pg-repo-cab > .pg-rec-chip { margin-left: auto; }
+.pg-tramite { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 10px 0 2px; padding: 0; list-style: none; counter-reset: none; }
+.pg-tramite > li { position: relative; display: flex; gap: 8px; align-items: flex-start; min-width: 0; padding: 9px 10px; border: 1px solid #E4E7E1; border-radius: 10px; background: #fff; }
+.pg-tramite > li:not(:last-child)::after { content: ""; position: absolute; top: 22px; right: -9px; width: 10px; height: 2px; background: #CED2D5; }
+.pg-tramite > li.is-hecho:not(:last-child)::after { background: #73BC25; }
+.pg-tramite-n { display: grid; place-items: center; flex: 0 0 24px; height: 24px; border-radius: 50%; background: #F1F3F4; color: #5B6459; font-size: 12px; font-weight: 700; }
+.pg-tramite > li > div { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.pg-tramite b { color: #1E2A1A; font-size: 12px; line-height: 1.25; }
+.pg-tramite small { color: #5B6459; font-size: 11px; line-height: 1.3; overflow-wrap: anywhere; }
+.pg-tramite .btn-xs { padding: 2px 7px; }
+.pg-tramite > li.is-hecho { border-color: #D6EBBE; background: #F6FBF0; }
+.pg-tramite > li.is-hecho .pg-tramite-n { background: #73BC25; color: #fff; }
+.pg-tramite > li.is-actual { border-color: #FFCC00; background: #FFFBEA; box-shadow: 0 0 0 3px rgba(255, 204, 0, .18); }
+.pg-tramite > li.is-actual .pg-tramite-n { background: #FFCC00; color: #3b2f00; }
+.pg-tramite > li.is-espera { opacity: .62; }
+.pg-tramite .pg-rec-subir summary.is-principal { border-color: #73BC25; background: #73BC25; color: #fff; }
+.pg-tramite .pg-rec-subir[open] form { flex-direction: column; align-items: flex-start; }
+.pg-tramite .pg-rec-subir input[type="file"] { max-width: 100%; }
+@media (max-width: 1100px) { .pg-tramite { grid-template-columns: repeat(3, minmax(0, 1fr)); } .pg-tramite > li::after { display: none; } }
+@media (max-width: 640px) { .pg-tramite { grid-template-columns: 1fr; } }
+
+/* ---------- Recibo en una fila: progreso + menú "Acciones" con los pasos ---------- */
+.pg-repo-fila { padding: 10px 16px !important; }
+.pg-repo-cab > .pg-rec-chip { margin-left: 0; }
+.pg-repo-progreso { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; flex: 0 1 230px; margin-left: auto; }
+.pg-repo-progreso small { color: #5B6459; font-size: 11px; }
+.pg-puntos { display: inline-flex; gap: 4px; }
+.pg-puntos i { width: 16px; height: 6px; border-radius: 3px; background: #E4E7E1; }
+.pg-puntos i.is-hecho { background: #73BC25; }
+.pg-puntos i.is-actual { background: #FFCC00; }
+.pg-acciones-rec { position: relative; flex: 0 0 auto; }
+.pg-acciones-rec > summary { list-style: none; }
+.pg-acciones-rec > summary::-webkit-details-marker { display: none; }
+.pg-acciones-rec[open] > summary { border-color: #73BC25; background: #EEF7E3; color: #1f5632; }
+.pg-acciones-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 360px; max-width: calc(100vw - 40px); max-height: 70vh; overflow-y: auto; padding: 8px; border: 1px solid #E4E7E1; border-radius: 12px; background: #fff; box-shadow: 0 14px 34px -12px rgba(31, 86, 50, .35); }
+.pg-tramite.is-menu { grid-template-columns: 1fr; gap: 6px; margin: 0; }
+.pg-tramite.is-menu > li::after { display: none; }
+.pg-tramite.is-menu > li.is-espera { opacity: .55; }
+.pg-tramite.is-menu > li > div { flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 6px; }
+.pg-tramite.is-menu > li > div > b { flex-basis: 100%; }
+.pg-tramite.is-menu > li > div > small { flex-basis: 100%; }
+.pg-acciones-menu .pg-repo-exp { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #E4E7E1; }
+@media (max-width: 760px) { .pg-repo-progreso { flex-basis: 100%; margin-left: 0; } .pg-acciones-menu { right: auto; left: 0; } }
+/* El menú "Acciones" de los recibos sale del recuadro sin cortarse. */
+.pg-panel { overflow: visible; }
+
+/* Facturas: encabezado del repositorio y acceso al seguimiento desde la liquidación */
+.pg-repo-cab-tab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px 4px; }
+.pg-repo-cab-tab b { color: #1f5632; font-size: 14px; }
+.pg-repo-cab-tab small { display: block; max-width: 760px; margin-top: 2px; color: #5B6459; font-size: 12px; }
+.pg-repo-num small { display: block; color: #5B6459; font-size: 10.5px; }
+.pg-seguimiento { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 14px 0 6px; padding: 10px 14px; border: 1px solid #E4E7E1; border-radius: 10px; background: #FBFCFA; font-size: 12.5px; }
+.pg-seguimiento > .glyphicon { color: #73BC25; }
+.pg-seguimiento > b { color: #1f5632; }
+.pg-seguimiento a { color: #1E2A1A; font-weight: 600; text-decoration: none; }
+.pg-seguimiento a:hover { color: #3E7A12; text-decoration: underline; }
+.pg-tabla .pg-comp-nota { max-width: 260px; }
+
+/* ---------- Liquidación en borrador: se edita sin versión hasta enviarla ---------- */
+.pg-aviso.is-borrador { background: #F1F3F4; color: #3F4A3C; border-left: 4px solid #CED2D5 !important; }
+.pg-aviso.is-borrador > .glyphicon { color: #5B6459; }
+.pg-fila-borrador td { background: #FAFBFA; }
+.pg-fila-borrador .pg-avance em { color: #5B6459; font-style: italic; }
+.pg-estados a.is-borrador { border-style: dashed; }
+.pg-estados a.is-borrador b { background: #F1F3F4; color: #3F4A3C; }
+.pg-envio-checks { margin-top: 6px; padding: 8px 12px; border: 1px dashed #CED2D5; border-radius: 10px; }
+.pg-envio-checks > small { display: block; margin-bottom: 2px; color: #5B6459; font-weight: 600; }
+.pg-form-accion.is-enviar { border-color: #73BC25; }
+.pg-comentario-version { margin: 8px 0 12px; padding: 10px 12px; border-left: 4px solid #FFCC00; border-radius: 8px; background: #FFFBEA; }
+.pg-comentario-version textarea { resize: vertical; }
+
+/* ---------- Lista de liquidaciones: forma de pago, % de avance, detalle y versión ---------- */
+.pg-version.is-original { background: #F1F3F4; color: #5B6459; }
+.pg-liq-motivo { display: block; max-width: 340px; margin-top: 3px; padding: 2px 8px; border-left: 3px solid #FFCC00; border-radius: 4px; background: #FFFBEA; color: #5f4700; font-size: 11px; line-height: 1.35; }
+.pg-liq-motivo.is-anulada { border-left-color: #FF6B00; background: #FFF1E8; color: #8a3a00; }
+.pg-liq-toggle { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; padding: 0; border: 0; background: none; color: #3d7a12; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.pg-liq-toggle .glyphicon { font-size: 9px; transition: transform .15s; }
+.pg-liq-toggle[aria-expanded="true"] .glyphicon { transform: rotate(180deg); }
+.pg-liq-toggle:hover { text-decoration: underline; }
+.pg-forma { min-width: 170px; }
+.pg-forma-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.pg-forma-item + .pg-forma-item { margin-top: 6px; }
+.pg-forma-item small { color: #5B6459; font-size: 11px; }
+.pg-pct { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.pg-pct b { min-width: 38px; color: #1E2A1A; font-size: 13px; text-align: right; }
+.pg-pct-barra { position: relative; display: block; flex: 1 1 auto; height: 8px; overflow: hidden; border-radius: 99px; background: #EEF0F1; box-shadow: inset 0 0 0 1px #CED2D5; }
+.pg-pct-barra > i { position: absolute; inset: 0 auto 0 0; border-radius: 99px; background: linear-gradient(90deg, #A3D300, #73BC25); }
+.pg-pct.is-completo b { color: #3d7a12; }
+.pg-pct-barra.is-mini { width: 90px; height: 6px; flex: 0 0 auto; }
+.pg-pct-txt { display: block; margin-top: 3px; color: #5B6459; font-size: 11px; line-height: 1.3; }
+.pg-liq-detalle > td { padding: 0 12px 12px !important; background: #FAFBFA; }
+.pg-liq-personas { margin: 0; padding: 0; list-style: none; border: 1px solid #E4E7E1; border-radius: 10px; background: #fff; }
+.pg-liq-personas > li { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, .9fr) 110px minmax(0, 1.2fr); align-items: center; gap: 12px; padding: 8px 12px; }
+.pg-liq-personas > li + li { border-top: 1px solid #EEF0F1; }
+.pg-lp-persona { display: flex; flex-direction: column; min-width: 0; }
+.pg-lp-persona small, .pg-lp-total small { color: #5B6459; font-size: 11px; }
+.pg-lp-total { display: flex; flex-direction: column; align-items: flex-end; }
+.pg-lp-avance { display: flex; flex-direction: column; gap: 3px; }
+.pg-lp-avance small { color: #5B6459; font-size: 11px; line-height: 1.25; }
+.pg-lp-avance.is-listo small { color: #3d7a12; font-weight: 600; }
+.pg-lp-avance.is-pagado .pg-pct-barra > i { background: #73BC25; }
+.pg-lp-avance.is-pagado small { color: #3d7a12; }
+td.pg-lp-avance { min-width: 150px; }
+@media (max-width: 760px) { .pg-liq-personas > li { grid-template-columns: 1fr 1fr; } }
+/* Modal: versión vigente con su motivo */
+.pg-version-aviso { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 9px 14px; border: 1px solid #FFE38A; border-left: 4px solid #FFCC00; border-radius: 10px; background: #FFFBEA; color: #3F3300; text-decoration: none !important; }
+.pg-version-aviso:hover { border-color: #FFCC00; }
+.pg-version-aviso > span:nth-child(2) { flex: 1 1 auto; min-width: 0; font-size: 12.5px; }
+.pg-version-aviso small { display: block; color: #6b5a12; font-size: 11px; }
+.pg-version-aviso-ver { flex: 0 0 auto; color: #3d7a12; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.pg-version-orig { margin: 0 0 14px; color: #5B6459; font-size: 12px; }
+.pg-stat-avance .pg-pct-barra { margin-top: 6px; }
+.pg-avance-liq { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: -4px 0 14px; padding: 8px 14px; border: 1px solid #E4E7E1; border-radius: 10px; background: #fff; }
+.pg-avance-liq > span { color: #5B6459; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.pg-avance-liq .pg-pct { flex: 1 1 220px; }
+.pg-avance-liq small { color: #5B6459; font-size: 11.5px; }
+.pg-lp-avance.is-celda { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #E4E7E1; }
+.pg-liq-modal .pg-tabla .pg-fechas-celda { max-width: 130px; min-width: 100px; }
+.pg-liq-modal .pg-tabla th, .pg-liq-modal .pg-tabla td { padding-left: 8px; padding-right: 8px; }
+.pg-liq-modal .pg-tabla td:nth-child(2) { max-width: 120px; }
+.pg-liq-modal .pg-tabla .pg-comp-nota { max-width: 190px; }
+.pg-liq-modal .pp-table-wrap .cengi-org-table.pg-tabla { min-width: 0; }
+
+/* ---------- Avance compacto (anillo), menú de acciones de la liquidación y aprobación del Jefe ---------- */
+.pg-anillo { --p: 0; position: relative; display: inline-grid; place-items: center; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; background: conic-gradient(#73BC25 calc(var(--p) * 1%), #EEF0F1 0); }
+.pg-anillo::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: #fff; }
+.pg-anillo b { position: relative; color: #1E2A1A; font-size: 11.5px; font-weight: 700; letter-spacing: -.02em; }
+.pg-anillo b i { font-size: 8.5px; font-style: normal; font-weight: 600; color: #5B6459; }
+.pg-anillo.is-completo { background: #73BC25; }
+.pg-anillo.is-completo b { color: #3d7a12; }
+.pg-anillo.is-sm { width: 34px; height: 34px; }
+.pg-anillo.is-sm::before { inset: 3.5px; }
+.pg-av { display: flex; align-items: center; gap: 10px; min-width: 190px; max-width: 260px; }
+.pg-av.is-anulada .pg-anillo { opacity: .45; }
+.pg-av-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pg-av-txt b { color: #1E2A1A; font-size: 12px; font-weight: 600; line-height: 1.3; }
+.pg-av-txt small { color: #5B6459; font-size: 11px; }
+.pg-avance-liq { gap: 6px 12px; padding: 6px 14px; }
+.pg-avance-liq .pg-pct { display: none; }
+.pg-forma-item.is-link { text-decoration: none !important; border-radius: 6px; }
+.pg-forma-item.is-link:hover .pg-comp-chip { box-shadow: 0 0 0 2px rgba(115, 188, 37, .25); }
+.pg-forma-nota { display: block; margin-top: 4px; color: #8A938A; font-size: 10.5px; font-style: italic; }
+.pg-acc-celda { width: 1%; white-space: nowrap; text-align: right; }
+.pg-acciones-liq .pg-acciones-menu { width: 380px; text-align: left; white-space: normal; }
+.pg-acc-rapidas { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; padding-bottom: 8px; border-bottom: 1px dashed #E4E7E1; }
+.pg-obs-jefe { display: block; margin-top: 6px; padding: 6px 10px; border-left: 3px solid #FF6B00; border-radius: 6px; background: #FFF1E8; color: #8a3a00; }
+.pg-estados a.is-revision b { background: var(--cg-amarillo-soft); color: var(--cg-amarillo-text); }
+.pg-estados a.is-autorizada b { background: var(--cg-verde2-soft); color: var(--cg-verde2-text); }
+.pg-lp-avance .pg-puntos i { width: 14px; height: 5px; }
+.pg-lp-avance.is-celda { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.pg-recibo-pdf { display: inline-flex; align-items: center; gap: 4px; margin: 4px 0 2px; padding: 2px 8px; border: 1px solid #D6EBBE; border-radius: 99px; background: #F6FBF0; color: #3d7a12 !important; font-size: 11px; font-weight: 600; white-space: nowrap; text-decoration: none !important; }
+.pg-recibo-pdf:hover { border-color: #73BC25; background: #EEF7E3; }
+.pg-lp-forma { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }

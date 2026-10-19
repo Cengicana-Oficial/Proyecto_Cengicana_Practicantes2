@@ -4,7 +4,7 @@ if(PHP_SAPI!=='cli'){http_response_code(404);exit;}
 require dirname(__DIR__).'/config/database.php';
 foreach(['functions','domain','catalogo','directorio','memorias'] as $f)require dirname(__DIR__).'/includes/'.$f.'.php';
 mem_preparar($pdo);
-foreach(['memoria_ediciones','memoria_config','memoria_avisos','memorias_resultados','memoria_track','comite_editorial','contactos','contacto_comite','comites'] as $t){$pdo->exec("CREATE TEMPORARY TABLE prueba_{$t} LIKE {$t}");$pdo->exec("CREATE TEMPORARY TABLE {$t} LIKE prueba_{$t}");}
+foreach(['memoria_carpetas_anio','memoria_ediciones','memoria_config','memoria_avisos','memorias_resultados','memoria_track','comite_editorial','contactos','contacto_comite','comites'] as $t){$pdo->exec("CREATE TEMPORARY TABLE prueba_{$t} LIKE {$t}");$pdo->exec("CREATE TEMPORARY TABLE {$t} LIKE prueba_{$t}");}
 function ok(bool $v,string $msg):void{if(!$v)throw new RuntimeException($msg);echo "OK: $msg\n";}
 function no(callable $fn,string $msg):void{try{$fn();}catch(RuntimeException $e){if($e instanceof PDOException)throw $e;ok(true,$msg);return;}throw new LogicException($msg);}
 $_SESSION['memorias_csrf']='prueba';
@@ -13,6 +13,8 @@ $user=fn($id,$role,$email)=>['id'=>$id,'nombre'=>$role,'nombre_rol'=>$role,'corr
 $author=$user(902,'Autor','autor@example.invalid');$reviewer=$user(903,'Revisor','revisor@example.invalid');$other=$user(904,'Consulta','otro@example.invalid');$diag=$user(905,'Diagramación','diag@example.invalid');$jt=$user(906,'Jefe de Transferencia','jt@example.invalid');$dir=$user(907,'Director General','dir@example.invalid');
 $pdo->exec("INSERT INTO memoria_config(id) VALUES(1)");$pdo->exec("INSERT INTO comites(id,nombre) VALUES('editorial','Editorial')");
 no(fn()=>mem_mutar($pdo,$other,'edicion',['nombre'=>'No']),'Consulta no configura ediciones');
+mem_mutar($pdo,$admin,'carpeta_anio',['anio'=>2028]);
+ok(in_array(2028,mem_datos($pdo,$admin)['carpetas_anio'],true),'Carpeta vacía se conserva antes de crear memorias');
 mem_mutar($pdo,$admin,'edicion',['nombre'=>'Prueba','anio'=>2026,'dias_revision'=>15]);$eid=(int)$pdo->query('SELECT MAX(id) FROM memoria_ediciones')->fetchColumn();
 no(fn()=>mem_mutar($pdo,$admin,'edicion',['id'=>$eid,'revision'=>0,'nombre'=>'Vieja']),'Edición desactualizada rechazada');
 mem_mutar($pdo,$admin,'revisor_nuevo',['nombre'=>'Revisor','email'=>$reviewer['correo']]);$cid=(int)$pdo->query('SELECT MAX(id) FROM contactos')->fetchColumn();
@@ -55,8 +57,57 @@ $act($diag,'mpr_cargar',['aceptar_pendientes'=>true,'observaciones'=>'Correccion
 ok($mpr()['estado']==='revision_final'&&$mpr()['version']===$previous+1,'Corregir documento aprobado crea versión y reinicia aprobaciones');
 no(fn()=>$act($diag,'mpr_publicar',['fecha'=>date('Y-m-d')]),'No publica corrección sin nuevas aprobaciones');
 $act($jt,'mpr_aprobar',['aceptar_pendientes'=>true]);$act($dir,'mpr_aprobar',['aceptar_pendientes'=>true]);
+no(fn()=>mem_mutar($pdo,$author,'entregar',['edicion_id'=>$eid]),'Memoria liberada rechaza nuevos artículos antes de procesar archivos');
+ok(mem_datos($pdo,$author)['ediciones'][0]['admite_articulos']===false,'Autor recibe cierre de entregas sin acceder al consolidado');
 $act($diag,'mpr_publicar',['fecha'=>date('Y-m-d'),'enlace'=>'https://example.invalid/mpr']);ok($mpr()['estado']==='publicado','Publicación solo después de ambas aprobaciones');
+no(fn()=>mem_mutar($pdo,$admin,'entregar',['edicion_id'=>$eid]),'Memoria publicada rechaza nuevos artículos incluso de coordinación');
 no(fn()=>$act($diag,'mpr_cargar'),'Consolidado publicado queda cerrado');
 ok(mem_datos($pdo,$author)['ediciones'][0]['mpr']===null,'Autor no recibe expediente del consolidado');
 mem_mutar($pdo,$admin,'eliminar',['id'=>$id]);ok(count(mem_datos($pdo,$admin)['articulos'])===0,'Eliminación limpia artículo y seguimiento');
+// Siete integrantes: participación individual, correcciones intermedias y recepción corregida.
+$people=[$reviewer];
+for($i=2;$i<=7;$i++){$p=$user(1000+$i,'Revisor','integrante'.$i.'@example.invalid');$p['nombre']='Integrante '.$i;mem_mutar($pdo,$admin,'revisor_nuevo',['nombre'=>$p['nombre'],'email'=>$p['correo']]);$people[]=$p;}
+mem_mutar($pdo,$admin,'edicion',['nombre'=>'Rondas de corrección','anio'=>2026]);$eid=(int)$pdo->query('SELECT MAX(id) FROM memoria_ediciones')->fetchColumn();
+$act=function($u,$action,$d=[])use($pdo,$eid,$upload){mem_mpr_mutar($pdo,$u,$action,['id'=>$eid]+$d,$upload);};$mpr=fn()=>mem_mpr(mem_edicion($pdo,$eid));
+$cal=function(int $active):array{$v=[];foreach(['comite','transferencia','direccion'] as $i=>$key){$offset=($i-$active)*3;$v[$key.'_inicio']=date('Y-m-d',strtotime("$offset days"));$offset+=2;$v[$key.'_limite']=date('Y-m-d',strtotime("$offset days"));}return $v;};
+no(fn()=>$act($reviewer,'mpr_plazos',$cal(0)),'Revisor no configura calendario');
+no(fn()=>$act($admin,'mpr_plazos',['comite_inicio'=>'2026-02-30']+$cal(0)),'Fecha inexistente rechazada');
+no(fn()=>$act($admin,'mpr_plazos',['transferencia_inicio'=>$cal(0)['comite_inicio']]+$cal(0)),'Etapas superpuestas rechazadas');
+$act($admin,'mpr_plazos',$cal(0)+['correccion_comite'=>3,'correccion_transferencia'=>2,'correccion_direccion'=>1]);$act($diag,'mpr_cargar');
+ok($mpr()['fase_revision']==='comite'&&count($mpr()['integrantes_editorial'])===7,'Carga abre revisión editorial para siete integrantes');
+no(fn()=>$act($reviewer,'mpr_aprobar_etapa'),'Un integrante no aprueba por todo el Comité');
+no(fn()=>$act($jt,'mpr_aprobar_etapa'),'Transferencia espera el cierre y las correcciones');
+foreach($people as $i=>$p){$act($p,'mpr_observar',['observaciones'=>'Corrección del integrante '.($i+1)]);if($i<6)ok($mpr()['fase_revision']==='comite','Una observación no cierra la oportunidad de los demás');}
+$m=$mpr();$ids=array_column($m['observaciones'],'id');
+ok($m['fase_revision']==='correccion'&&$m['correccion']['destino']==='transferencia'&&$m['correccion']['limite']===date('Y-m-d',strtotime('+3 days')),'Todos observaron: inicia plazo de corrección antes de Transferencia');
+ok(count(array_unique(array_column($m['observaciones'],'autor_usuario_id')))===7,'Siete revisores conservan observaciones independientes');
+$act($admin,'mpr_plazo_correccion',['dias'=>5]);ok($mpr()['correccion']['dias']===5&&$mpr()['correccion']['limite']===date('Y-m-d',strtotime('+5 days')),'Cada ronda permite configurar sus propios días de corrección');
+ok($mpr()['fechas_etapa']['transferencia']['inicio']===date('Y-m-d',strtotime('+6 days'))&&$mpr()['fechas_etapa']['transferencia']['limite']===date('Y-m-d',strtotime('+8 days'))&&$mpr()['fechas_etapa']['direccion']['inicio']===date('Y-m-d',strtotime('+9 days')),'Reprogramar corrección desplaza todas las etapas siguientes conservando su duración');
+no(fn()=>$act($admin,'mpr_plazo_correccion',['dias'=>0]),'Duración nula de corrección rechazada');
+no(fn()=>$act($jt,'mpr_observar',['observaciones'=>'No debería recibir pendientes']),'Siguiente revisor bloqueado durante correcciones');
+$act($diag,'mpr_cargar',['observaciones'=>'Respuesta general de corrección','atendidas'=>array_slice($ids,0,3),'respuestas'=>[$ids[0]=>'Tabla corregida individualmente']]);
+ok($mpr()['fase_revision']==='correccion'&&count(mem_flujo_pendientes($mpr()))===4,'Corrección parcial conserva bloqueo de Transferencia');
+$act($diag,'mpr_cargar',['observaciones'=>'Se atendieron los restantes','atendidas'=>array_slice($ids,3)]);
+ok($mpr()['fase_revision']==='transferencia'&&$mpr()['version']===3&&$mpr()['revisiones']['transferencia']['version_recibida']===3,'Corrección completa entrega v3 a Transferencia sin reaprobar Comité');
+ok($mpr()['fechas_etapa']['transferencia']['inicio']===date('Y-m-d')&&$mpr()['fechas_etapa']['transferencia']['limite']===date('Y-m-d',strtotime('+2 days'))&&$mpr()['fechas_etapa']['direccion']['inicio']===date('Y-m-d',strtotime('+3 days')),'Entrega anticipada adelanta el calendario completo sin reducir los días de revisión');
+ok($mpr()['observaciones'][0]['respuesta']==='Tabla corregida individualmente'&&$mpr()['observaciones'][0]['atendida_en']===2&&$mpr()['observaciones'][6]['atendida_en']===3,'Respuestas y versiones de atención se conservan');
+$act($jt,'mpr_observar',['observaciones'=>'Ajustar conclusión de transferencia']);$oid=end($mpr()['observaciones'])['id'];
+ok($mpr()['fase_revision']==='correccion'&&$mpr()['correccion']['destino']==='direccion','Observación de Transferencia abre corrección sin exigir su aprobación');
+no(fn()=>$act($dir,'mpr_aprobar_etapa'),'Dirección no recibe documento pendiente de corregir');
+$act($admin,'mpr_plazo_correccion',['dias'=>10]);
+ok($mpr()['fechas_etapa']['direccion']['inicio']===date('Y-m-d',strtotime('+11 days'))&&$mpr()['fechas_etapa']['direccion']['limite']===date('Y-m-d',strtotime('+13 days')),'Reprogramar corrección de Transferencia mueve inicio y límite de Dirección');
+$act($diag,'mpr_cargar',['observaciones'=>'Conclusión ajustada','atendidas'=>[$oid]]);
+ok($mpr()['fechas_etapa']['direccion']['inicio']===date('Y-m-d')&&$mpr()['fechas_etapa']['direccion']['limite']===date('Y-m-d',strtotime('+2 days')),'Corrección anticipada de Transferencia adelanta Dirección conservando su duración');
+ok($mpr()['fase_revision']==='direccion'&&$mpr()['version']===4,'Dirección recibe v4 corregida sin nueva aprobación de Transferencia');
+$act($dir,'mpr_observar',['observaciones'=>'Revisar portada para liberación']);$oid=end($mpr()['observaciones'])['id'];
+ok($mpr()['fase_revision']==='correccion'&&$mpr()['correccion']['destino']==='direccion','Correcciones de Dirección vuelven a Dirección para validación final');
+$act($diag,'mpr_cargar',['observaciones'=>'Portada corregida','atendidas'=>[$oid]]);$act($dir,'mpr_aprobar_etapa');ok($mpr()['estado']==='aprobado','Solo Dirección libera la versión corregida final');
+$act($diag,'mpr_cargar');$test=$mpr();ok(!mem_mpr_automatico($test,date('Y-m-d')),'Integrantes sin observaciones conservan su oportunidad hasta la fecha límite');
+mem_flujo_cerrar($test,'comite');$pdo->prepare('UPDATE memoria_ediciones SET mpr=? WHERE id=?')->execute([json_encode($test),$eid]);ok($mpr()['fase_revision']==='transferencia','Comité sin observaciones pasa directamente a Transferencia al cierre');
+$act($jt,'mpr_aprobar_etapa');ok($mpr()['fase_revision']==='direccion','Transferencia sin observaciones aprueba y envía a Dirección');$act($dir,'mpr_aprobar_etapa');
+$act($diag,'mpr_cargar');$act($people[0],'mpr_observar',['observaciones'=>'Pendiente al cierre editorial']);$test=$mpr();
+ok(!mem_mpr_automatico($test,$cal(0)['comite_limite']),'Día límite editorial se conserva completo');
+ok(mem_mpr_automatico($test,date('Y-m-d',strtotime('+3 days')))&&$test['fase_revision']==='correccion','Vencimiento con observaciones abre corrección, nunca salta al siguiente revisor');
+ok(!mem_mpr_automatico($test,date('Y-m-d',strtotime('+4 days'))),'Corrección pendiente no avanza por vencimiento de otras etapas');
+$test=$mpr();unset($test['dias_correccion']);mem_flujo_cerrar($test,'comite');ok($test['fase_revision']==='correccion'&&$test['correccion']['limite']===null,'Sin duración configurada se exige asignar fecha de corrección');
 echo "Pruebas en tablas temporales completadas, sin correos enviados.\n";

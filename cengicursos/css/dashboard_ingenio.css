@@ -55,3 +55,83 @@
 #dbi-course-table tbody{display:block;padding:12px}#dbi-course-table tbody tr{display:grid;grid-template-columns:1fr 1fr;border:1px solid #dfe6d8;border-radius:12px;margin-bottom:12px;overflow:hidden;background:white}#dbi-course-table td{display:block;padding:12px;border-bottom:1px solid #eef1e9}#dbi-course-table td::before{content:attr(data-label);display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#677263;margin-bottom:8px}#dbi-course-table td:first-child,#dbi-course-table td:last-child{grid-column:1/-1}#dbi-course-table td:first-child::before{display:none}#dbi-course-table .dbi-course-action button{width:auto;display:inline-block;float:right}#dbi-course-table .dbi-course-action .cengi-status-badge{margin:6px 0}#dbi-course-table .dbi-course-action::before{display:none}
 }
 @media print{#dbi-course-table{min-width:0}#dbi-course-table .dbi-course-name strong{font-size:10px}#dbi-course-table .dbi-course-action button{display:none!important}}
+
+/* ===== Paleta Cengicaña: encabezado, indicadores con semaforo, avance de sesiones y diplomas ===== */
+.dbi-hero{position:relative;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin:4px 0 16px;padding:22px 24px 26px;border-radius:14px;background:var(--cg-banda);color:#fff;overflow:hidden}
+.dbi-hero::after{content:"";position:absolute;left:0;right:0;bottom:0;height:5px;background:var(--cg-franja)}
+.dbi-hero h1{margin:4px 0 6px;font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;color:#fff}
+.dbi-hero-eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#D9F2A6}
+.dbi-hero-sub{display:block;max-width:620px;font-size:13px;line-height:1.55;color:rgba(255,255,255,.86)}
+.dbi-hero-select{display:flex;flex-direction:column;gap:4px;min-width:240px;margin:0}
+.dbi-hero-select label{margin:0;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#D9F2A6}
+.dbi-hero-select select{border:0;border-radius:9px;height:38px;font-weight:600;color:var(--cg-deep);box-shadow:0 0 0 3px rgba(163,211,0,.35)}
+.dbi-actions .dbi-primary{background:var(--cg-verde);border-color:var(--cg-verde);color:#fff}
+.dbi-actions a:hover,.dbi-actions button:hover{border-color:var(--cg-verde);background:var(--cg-verde-soft);color:var(--cg-deep)}
+.dbi-actions .dbi-primary:hover{background:var(--cg-verde-strong);color:#fff}
+.dbi-kpis .cengi-kpi{position:relative;padding:16px 16px 14px;border:1px solid var(--cg-line);border-top:4px solid var(--cg-verde);border-radius:12px;background:#fff}
+.dbi-kpis .cengi-kpi.is-verde2{border-top-color:var(--cg-verde-2)}.dbi-kpis .cengi-kpi.is-amarillo{border-top-color:var(--cg-amarillo)}
+.dbi-kpis .cengi-kpi.is-naranja{border-top-color:var(--cg-naranja)}.dbi-kpis .cengi-kpi.is-gris{border-top-color:var(--cg-gris)}
+.dbi-kpis .cengi-kpi:nth-child(n){border-top-width:4px}
+.dbi-kpi-ico{position:absolute;top:14px;right:14px;display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--cg-verde-soft);color:var(--cg-verde-text);font-size:13px}
+.dbi-kpis .is-verde2 .dbi-kpi-ico{background:var(--cg-verde2-soft);color:var(--cg-verde2-text)}.dbi-kpis .is-amarillo .dbi-kpi-ico{background:var(--cg-amarillo-soft);color:var(--cg-amarillo-text)}
+.dbi-kpis .is-naranja .dbi-kpi-ico{background:var(--cg-naranja-soft);color:var(--cg-naranja-text)}.dbi-kpis .is-gris .dbi-kpi-ico{background:var(--cg-gris-soft);color:var(--cg-gris-text)}
+.dbi-kpis .cengi-kpi-val{color:var(--cg-deep);padding-right:34px}
+.dbi-kpis .cengi-kpi.is-bien .cengi-kpi-val{color:var(--cg-verde-text)}.dbi-kpis .cengi-kpi.is-medio .cengi-kpi-val{color:var(--cg-amarillo-text)}.dbi-kpis .cengi-kpi.is-bajo .cengi-kpi-val{color:var(--cg-naranja-text)}
+.dbi-kpis .cengi-kpi-label small{color:var(--cg-gris-text);font-size:10px}
+.dbi-summary{background:var(--cg-verde-soft);border-color:#D6EBBE;border-left:5px solid var(--cg-verde)}
+.dbi-summary strong{color:var(--cg-deep)}
+.cengi-ingenio-page .panel-success>.panel-heading{background:#fff;border-bottom:3px solid var(--cg-verde);color:var(--cg-deep)}
+.cengi-ingenio-page .panel-success>.panel-heading .panel-title{font-weight:700;color:var(--cg-deep)}
+.cengi-ingenio-page .panel-success{border-color:var(--cg-line);border-radius:14px;overflow:hidden}
+.cengi-ingenio-page .cengi-charts-row .panel-heading{border-bottom-color:var(--cg-verde-2)}
+.dbi-chip{display:inline-block;min-width:44px;padding:2px 8px;border-radius:7px;background:var(--cg-gris-soft);color:var(--cg-gris-text);font-weight:700;text-align:center;white-space:nowrap}
+.dbi-chip.is-bien{background:var(--cg-verde-soft);color:var(--cg-verde-text)}.dbi-chip.is-medio{background:var(--cg-amarillo-soft);color:var(--cg-amarillo-text)}
+.dbi-chip.is-bajo{background:var(--cg-naranja-soft);color:var(--cg-naranja-text)}.dbi-chip.is-diploma{background:var(--cg-verde2-soft);color:var(--cg-verde2-text)}
+.dbi-muted{color:#9aa39a}
+.dbi-attendance-track.is-medio span{background:var(--cg-amarillo)}.dbi-attendance-track.is-bajo span{background:var(--cg-naranja)}
+.dbi-avance{margin-top:8px;font-size:11px;color:var(--cg-gris-text)}.dbi-avance b{color:var(--cg-deep)}
+.dbi-avance-track{height:5px;margin-top:4px;border-radius:8px;background:#EEF0EA;overflow:hidden}.dbi-avance-track i{display:block;height:100%;border-radius:8px;background:linear-gradient(90deg,var(--cg-verde),var(--cg-verde-2))}
+#dbi-course-table th{background:var(--cg-gris-soft)!important;color:var(--cg-deep)}
+#dbi-course-table tbody tr:hover{background:var(--cg-verde-soft)}
+.dbi-code{color:var(--cg-verde-text)}
+.cengi-ingenio-page .cengi-directory-avatar,.cengi-ingenio-page .cengi-directory-profile-avatar{background:var(--cg-verde-soft);color:var(--cg-verde-text)}
+.cengi-ingenio-page .cengi-directory-table thead th{background:var(--cg-gris-soft);color:var(--cg-deep)}
+.cengi-ingenio-page .cengi-directory-table tbody tr:hover{background:#F8FBF4}
+.cengi-ingenio-page .cengi-directory-profile-button{border-color:#D6EBBE;background:var(--cg-verde-soft);color:var(--cg-verde-text)}
+.cengi-ingenio-page .cengi-directory-profile-button:hover{border-color:var(--cg-verde);background:#E2F0D0}
+.cengi-ingenio-page .cengi-directory-profile-head{background:var(--cg-banda);color:#fff;border-bottom:4px solid var(--cg-amarillo)}
+.cengi-ingenio-page .cengi-directory-profile-head h2{color:#fff}.cengi-ingenio-page .cengi-directory-profile-head p{color:rgba(255,255,255,.82)}
+.cengi-ingenio-page .cengi-directory-modal-close{color:#fff}
+.cengi-ingenio-page .cengi-directory-course-metric.is-bien strong{color:var(--cg-verde-text)}.cengi-ingenio-page .cengi-directory-course-metric.is-medio strong{color:var(--cg-amarillo-text)}.cengi-ingenio-page .cengi-directory-course-metric.is-bajo strong{color:var(--cg-naranja-text)}
+.cengi-ingenio-page .cengi-directory-diploma-link{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:7px;background:var(--cg-verde2-soft);color:var(--cg-verde2-text);font-weight:600}
+@media(max-width:700px){.dbi-hero{padding:18px 16px 22px}.dbi-hero h1{font-size:21px}.dbi-hero-select{min-width:0;width:100%}}
+@media print{.dbi-hero{background:#1f5632!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.dbi-hero-select{display:none!important}.dbi-kpi-ico{display:none}}
+
+/* ===== Cursos del ingenio: filas legibles y boton de participantes ===== */
+#dbi-cursos .cengi-table-wrap{max-height:none;overflow-x:auto;overflow-y:visible}
+#dbi-cursos .cengi-table-wrap thead th{position:static}
+#dbi-course-table th:nth-child(1){width:30%}#dbi-course-table th:nth-child(2){width:21%}#dbi-course-table th:nth-child(3){width:16%}#dbi-course-table th:nth-child(4){width:18%}#dbi-course-table th:nth-child(5){width:15%}
+#dbi-course-table th{text-transform:uppercase}#dbi-course-table th small{display:block;margin-top:2px;font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--cg-gris-text)}
+#dbi-course-table td{padding:16px}
+#dbi-course-table tbody tr.dbi-curso-fila{box-shadow:inset 4px 0 0 var(--cg-verde)}
+#dbi-course-table tbody tr.dbi-curso-fila.is-finished{box-shadow:inset 4px 0 0 var(--cg-gris)}
+#dbi-course-table tbody tr.dbi-curso-fila.is-upcoming{box-shadow:inset 4px 0 0 var(--cg-amarillo)}
+.dbi-curso-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.dbi-curso-top .cengi-status-badge{margin:0!important;font-size:10px}
+#dbi-course-table .dbi-course-name strong{margin:6px 0 3px;font-size:14.5px}
+.dbi-periodo{font-size:12px;font-weight:600;color:var(--cg-deep);white-space:nowrap}.dbi-periodo .glyphicon{color:var(--cg-verde-text);font-size:11px}.dbi-flecha{color:var(--cg-gris-text);font-weight:400}
+.dbi-avance{display:flex;justify-content:space-between;gap:8px;margin-top:10px}.dbi-avance-pct{font-weight:700;color:var(--cg-verde-text)}
+.dbi-asis{display:flex;flex-direction:column;gap:1px;margin-bottom:7px}
+.dbi-asis-val{font-family:'Space Grotesk',sans-serif;font-size:22px;line-height:1.1;color:var(--cg-gris-text)}
+.dbi-asis-val.is-bien{color:var(--cg-verde-text)}.dbi-asis-val.is-medio{color:var(--cg-amarillo-text)}.dbi-asis-val.is-bajo{color:var(--cg-naranja-text)}
+.dbi-asis span{font-size:11px;color:var(--cg-gris-text)}
+.dbi-attendance-track{height:6px}
+#dbi-course-table .dbi-result{align-items:center;margin-bottom:8px}
+.dbi-btn-participantes{display:flex!important;align-items:center;gap:10px;width:100%;padding:9px 10px!important;border:1px solid var(--cg-verde)!important;border-radius:11px!important;background:#fff!important;color:var(--cg-deep)!important;text-align:left!important;cursor:pointer;transition:background .15s,box-shadow .15s,transform .15s}
+.dbi-btn-participantes:hover,.dbi-btn-participantes:focus-visible{background:var(--cg-verde)!important;color:#fff!important;box-shadow:0 6px 14px rgba(115,188,37,.28);transform:translateY(-1px)}
+.dbi-btn-num{display:grid;place-items:center;flex:0 0 34px;height:34px;border-radius:9px;background:var(--cg-verde);color:#fff;font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700}
+.dbi-btn-participantes:hover .dbi-btn-num{background:#fff;color:var(--cg-verde-text)}
+.dbi-btn-txt{display:flex;flex:1;flex-direction:column;min-width:0;line-height:1.25}.dbi-btn-txt b{font-size:12px}.dbi-btn-txt small{font-size:10px;opacity:.75}
+.dbi-btn-participantes .glyphicon{font-size:11px;opacity:.7}
+@media screen and (max-width:760px){#dbi-course-table .dbi-course-action .dbi-btn-participantes{width:100%;float:none}#dbi-course-table td:nth-child(5)::before{display:none}}
+@media print{.dbi-btn-participantes{display:none!important}#dbi-course-table tbody tr.dbi-curso-fila{box-shadow:none}}

@@ -571,18 +571,14 @@ $mensajeError = trim($_GET['mensaje'] ?? '');
 
         <form action="carga_inscripcion.php" method="POST" enctype="multipart/form-data" id="formCargaMasiva">
 
+<div class="mt-5"><label class="label-form">Cuota del grupo</label><select name="cuota" class="input-form" required><option value="asociado">Asociado</option><option value="externo">Externo</option><option value="extranjero">Extranjero</option></select><p class="text-sm text-gray-500 mt-2">Cada participante quedará por validar. El pago propio lo revisa Administración; el ingenio valida y paga mediante proforma grupal.</p></div>
             <div class="mt-5">
                 <label class="label-form">Curso</label>
-                <select name="curso_id" class="input-form" required <?php echo !$cursos ? 'disabled' : ''; ?>>
-                    <option value="">
-                        <?php echo $cursos ? 'Seleccione' : 'No hay cursos disponibles por el momento'; ?>
-                    </option>
-                    <?php foreach ($cursos as $curso): ?>
-                        <option value="<?php echo (int) $curso['id']; ?>">
-                            <?php echo htmlspecialchars(cengi_curso_etiqueta($curso)); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <select name="destino" class="input-form" required <?php echo !$hayDestinos?'disabled':''; ?>>
+<option value="">Seleccione curso o convocatoria</option>
+<?php foreach($convocatorias as $p): ?><option value="p:<?php echo (int)$p['id']; ?>"><?php echo htmlspecialchars($p['nombre'].' · '.date('d/m/Y',strtotime($p['fecha_inicio']))); ?></option><?php endforeach; ?>
+<?php foreach($cursos as $curso): ?><option value="c:<?php echo (int)$curso['id']; ?>"><?php echo htmlspecialchars(cengi_curso_etiqueta($curso)); ?></option><?php endforeach; ?>
+</select>
             </div>
 
             <div class="mt-5">

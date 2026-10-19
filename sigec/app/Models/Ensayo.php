@@ -42,6 +42,16 @@ class Ensayo extends Model
         return $this->hasMany(Bitacora::class, 'ensayo_id', 'id');
     }
 
+    public function archivos()
+    {
+        return $this->hasMany(Archivo::class, 'ensayo_id', 'id');
+    }
+
+    public function ndvi()
+    {
+        return $this->hasMany(NdviRegistro::class, 'ensayo_id', 'id');
+    }
+
     /**
      * Ensayos visibles para el usuario, portado de ensayosVisibles() del
      * prototipo: se acota primero por los proyectos visibles y, para el
