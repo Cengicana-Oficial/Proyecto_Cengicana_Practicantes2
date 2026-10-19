@@ -1,1 +1,175 @@
-.mem-editions{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px}.mem-edition{text-align:left;border:1px solid #e2e4e6;border-radius:16px;background:white;padding:18px;color:#3d4247}.mem-edition:hover{border-color:#abd77c}.mem-edition strong{display:block;margin-bottom:8px}.mem-edition .bib-row{margin:10px 0 0}.bib-badge.entregado{background:#edf6bf;color:#5a7500}.bib-badge.revision,.bib-badge.revision_final,.bib-badge.aprobado_jt{background:#fff5cc;color:#7a6100}.bib-badge.observaciones{background:#ffe1cc;color:#b34b00}.bib-badge.listo,.bib-badge.diagramacion,.bib-badge.publicado{background:#e3f2d3;color:#3d6614}.mem-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}.mem-summary>div{background:#f8f9f9;border-radius:10px;padding:12px;font-size:12px}.mem-summary strong{display:block;margin-bottom:6px}.mem-late{color:#b34b00;font-weight:600}.mem-stage{display:flex;overflow:auto;gap:8px;margin:20px 0}.mem-stage>div{flex:1;min-width:120px;text-align:center;font-size:11px;color:#5f666c}.mem-stage b{display:flex;width:32px;height:32px;border:2px solid #ced2d5;border-radius:50%;align-items:center;justify-content:center;margin:0 auto 6px;color:#8b9298}.mem-stage .complete b{background:#73bc25;border-color:#73bc25;color:white}.mem-stage .current b{background:#fff5cc;border-color:#ffcc00;color:#7a6100}.mem-stage strong{display:block;color:#3d4247;font-size:12px}.mem-reviewer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px;border-bottom:1px solid #f0f1f2}.mem-reviewer small{display:block;color:#5f666c}.mem-files{display:flex;gap:8px;flex-wrap:wrap}.mem-fields-note{grid-column:1/-1;font-size:12px;color:#5f666c;white-space:pre-wrap}#mem-notices .bib-notice{display:flex;justify-content:space-between;align-items:center;gap:12px}#mem-actions{justify-content:flex-end}@media(max-width:700px){.mem-editions,.mem-summary{grid-template-columns:1fr}}
+.mem-editions{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px}.mem-edition{text-align:left;border:1px solid #e2e4e6;border-radius:16px;background:white;padding:18px;color:#3d4247}.mem-edition:hover{border-color:#abd77c}.mem-edition strong{display:block;margin-bottom:8px}.mem-edition .bib-row{margin:10px 0 0}.bib-badge.entregado{background:#edf6bf;color:#5a7500}.bib-badge.revision,.bib-badge.revision_final,.bib-badge.aprobado_jt{background:#fff5cc;color:#7a6100}.bib-badge.observaciones{background:#ffe1cc;color:#b34b00}.bib-badge.listo,.bib-badge.diagramacion,.bib-badge.publicado{background:#e3f2d3;color:#3d6614}.mem-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}.mem-summary>div{background:#f8f9f9;border-radius:10px;padding:12px;font-size:12px}.mem-summary strong{display:block;margin-bottom:6px}.mem-late{color:#b34b00;font-weight:600}.mem-stage{display:flex;overflow:auto;gap:8px;margin:20px 0}.mem-stage>div{flex:1;min-width:120px;text-align:center;font-size:11px;color:#5f666c}.mem-stage b{display:flex;width:32px;height:32px;border:2px solid #ced2d5;border-radius:50%;align-items:center;justify-content:center;margin:0 auto 6px;color:#8b9298}.mem-stage .complete b{background:#73bc25;border-color:#73bc25;color:white}.mem-stage .current b{background:#fff5cc;border-color:#ffcc00;color:#7a6100}.mem-stage strong{display:block;color:#3d4247;font-size:12px}.mem-reviewer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px;border-bottom:1px solid #f0f1f2}.mem-reviewer small{display:block;color:#5f666c}.mem-files{display:flex;gap:8px;flex-wrap:wrap}.mem-fields-note{grid-column:1/-1;font-size:12px;color:#5f666c;white-space:pre-wrap}#mem-notices .bib-notice{display:flex;justify-content:space-between;align-items:center;gap:12px}@media(max-width:700px){.mem-editions,.mem-summary{grid-template-columns:1fr}}
+
+/* Consolidado: documento, siguiente acción y transición desde los artículos. */
+.mem-mpr{padding:22px;border-top:3px solid #73bc25}
+.mem-mpr-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.mem-mpr h2,.mem-articles-heading h2{font-size:18px;margin:5px 0 8px;color:#303c2d}
+.mem-mpr-heading .bib-badge{flex-shrink:0;margin-top:5px}
+.mem-eyebrow{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#687561}
+.mem-mpr-stages{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));list-style:none;padding:0;margin:22px 0;gap:8px}
+.mem-mpr-stages li{display:flex;align-items:center;gap:8px;padding:10px 8px;border-radius:9px;background:#f6f7f5;color:#667060;font-size:12px;border:1px solid transparent}
+.mem-mpr-stages b{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#e8ebe5}
+.mem-mpr-stages small{display:block;font-size:10px;margin-top:3px;color:#687561}
+.mem-mpr-stages .complete b{background:#73bc25;color:white}
+.mem-mpr-stages .current{border-color:#c4dcae;background:#f1f8e9;color:#36571e;font-weight:600}
+.mem-mpr-stages .current b{background:#3f6e22;color:white}
+.mem-mpr-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:16px}
+.mem-mpr-document,.mem-mpr-next{padding:18px;border:1px solid #e2e7dd;border-radius:12px;min-width:0}
+.mem-mpr-document h3,.mem-mpr-next h3{margin:8px 0 12px;font-size:15px}
+.mem-mpr-document>.bib-btn{max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left}
+.mem-mpr-history{margin-top:12px}
+.mem-mpr-next{background:#f8faf5}
+.mem-mpr-next p,.mem-mpr-bridge p{font-size:12px;line-height:1.65;margin:8px 0 14px}
+.mem-mpr-next .bib-row{margin:14px 0 0}
+.mem-mpr-bridge{display:flex;align-items:center;justify-content:space-between;gap:24px;border-top:1px solid #e8ebe5;margin-top:20px;padding-top:18px}
+.mem-mpr-bridge>div:first-child{max-width:650px}
+.mem-mpr-bridge h3{margin:0;font-size:13px}
+.mem-mpr-bridge p:last-child{margin-bottom:0}
+.mem-mpr-counts{display:flex;gap:20px;flex-shrink:0}
+.mem-mpr-counts span{font-size:11px;color:#687561;text-align:center}
+.mem-mpr-counts b{display:block;font-size:21px;color:#36571e;margin-bottom:4px}
+.mem-mpr-observation-count{display:flex;align-items:center;gap:10px;margin-top:18px}
+.mem-mpr-observations{margin-top:12px;border:1px solid #e5e8e0;border-radius:9px;font-size:12px}
+.mem-mpr-observations summary{cursor:pointer;padding:12px;font-weight:600}
+.mem-mpr-observations article{padding:14px;border-top:1px solid #e5e8e0}
+.mem-mpr-observations .bib-meta{display:block;color:#687561;margin:5px 0 10px}
+.mem-mpr-observations p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
+.mem-articles-heading{margin:24px 0 14px}
+@media(max-width:1100px){.mem-mpr-stages{grid-template-columns:repeat(3,minmax(0,1fr))}.mem-mpr-bridge{align-items:flex-start;flex-direction:column}.mem-mpr-counts{gap:28px}}
+@media(max-width:700px){.mem-mpr{padding:15px}.mem-mpr-heading{flex-direction:column;gap:4px}.mem-mpr-grid{grid-template-columns:1fr}.mem-mpr-stages{grid-template-columns:1fr 1fr}.mem-mpr-next .bib-btn{white-space:normal}.mem-mpr-counts{flex-wrap:wrap}.mem-mpr-observation-count{flex-wrap:wrap}}
+.mem-deadlines{margin:18px 0;border:1px solid #e2e7dd;border-radius:12px;padding:16px}
+.mem-deadlines-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.mem-deadlines-heading h3{margin:0}
+.mem-deadlines-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.mem-deadlines-grid>div{padding:14px;background:#f8faf5;border-radius:8px}
+.mem-deadlines-grid p{font-size:12px;line-height:1.5;min-height:36px;margin:8px 0}
+.mem-deadlines-grid strong{display:block;font-size:17px}
+.mem-deadlines-grid small{display:block;margin-top:7px;font-size:11px}
+.mem-deadlines>.bib-note{line-height:1.6;margin-bottom:0}
+@media(max-width:700px){.mem-deadlines-grid{grid-template-columns:1fr}.mem-deadlines-heading{align-items:flex-start;flex-direction:column}}
+.mem-deadlines-grid>.mem-review-card{display:flex;flex-direction:column;border:1px solid #e2e7dd;position:relative}
+.mem-deadlines-grid>.mem-review-card.is-active{border-color:#73bc25;background:#f1f8e9;box-shadow:inset 0 3px 0 #73bc25}
+.mem-review-actions{display:flex;flex-wrap:wrap;gap:8px;padding-top:16px;margin-top:auto}
+.mem-review-actions .bib-btn{white-space:normal;text-align:center;min-height:34px}
+.mem-review-card>small:last-child{line-height:1.5;min-height:32px}
+.mem-review-card:not(:last-child)::after{content:'→';position:absolute;right:-14px;top:50%;z-index:1;background:white;border-radius:50%;color:#5e9b1d;font-size:17px}
+@media(max-width:700px){.mem-review-card:not(:last-child)::after{content:'↓';right:50%;top:auto;bottom:-15px}}
+.mem-document-upload{margin:16px 0 12px;padding-top:14px;border-top:1px solid #e2e7dd}
+.mem-document-upload>.bib-btn{white-space:normal}
+.mem-observation-groups{margin-top:18px}
+.mem-observation-groups>h3{margin-bottom:6px}
+.mem-observation-response{padding:12px;margin:12px 0;background:#f1f8e9;border-radius:8px}
+.mem-observation-response p{margin:6px 0}
+.mem-correction-item{border-bottom:1px solid #e2e7dd;padding:8px}
+.mem-correction-item>label:last-child{display:block;padding:8px;border:0}
+.mem-correction-item .bib-input{font-size:12px}
+.mem-version-entry{padding:14px 0;border-bottom:1px solid #e2e7dd}
+.mem-version-entry:last-child{border-bottom:0}
+.mem-version-entry li{font-size:12px;line-height:1.6;margin-bottom:8px}
+.mem-version-entry li p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0}
+.mem-approval-note{margin-top:12px;padding:10px;background:#e7f3da;border:1px solid #c5dfa9;border-radius:8px;font-size:12px}
+.mem-approval-note>strong{font-size:12px;color:#36571e}
+.mem-approval-note p{min-height:0;margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.mem-correction-panel{margin:16px 0;padding:18px;border:1px solid #efc878;border-left:4px solid #da990d;border-radius:10px;background:#fff9ea;font-size:12px;line-height:1.7}
+.mem-correction-panel h3{margin:0}
+.mem-editorial-participation{margin:12px 0;padding:10px;border:1px solid #dce5d4;border-radius:8px;font-size:12px}
+.mem-editorial-participation>strong{font-size:12px}
+.mem-editorial-participation small{display:block;line-height:1.6}
+
+/* Rediseño compacto: barra de navegación, filtros, encabezado de memoria, tabla y etapas. */
+.mem-page [hidden]{display:none!important}
+.mem-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.mem-toolbar .bib-breadcrumb{margin:0;gap:4px;font-size:13px;min-width:0}
+.mem-toolbar .bib-breadcrumb button{padding:4px 6px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;font-weight:600}
+.mem-toolbar .bib-breadcrumb button:hover{background:#f1f8e9}
+.mem-toolbar .bib-breadcrumb>span{color:#ced2d5}
+.mem-toolbar .bib-breadcrumb>b{padding:4px 6px;color:#3d4247;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mem-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.mem-filterbar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.mem-search{position:relative;flex:0 1 320px;min-width:220px}
+.mem-search i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#8b9298;font-size:15px;pointer-events:none}
+.mem-search .bib-input{padding-left:33px;height:36px}
+.mem-chips{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0;padding:2px 0}
+.mem-chip{flex-shrink:0;padding:6px 11px}
+.mem-chip.is-empty{color:#8b9298;border-color:#e2e4e6}
+.mem-chip-count{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:#f0f1f2;color:#5f666c;font-size:10.5px;font-weight:700;text-align:center;line-height:17px}
+.mem-chip.primary .mem-chip-count{background:#ffffff40;color:white}
+.mem-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 12px}
+.mem-section-head h2{font-size:16px;margin:0;color:#303c2d;display:flex;align-items:center;gap:8px}
+.mem-count{font-size:11px;font-weight:700;background:#e3f2d3;color:#3d6614;border-radius:9px;padding:2px 8px}
+/* Carpetas por año y tarjetas de memoria */
+.mem-folders{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.mem-folder{display:flex;align-items:center;gap:12px;text-align:left;background:white;border:1px solid #e2e4e6;border-radius:12px;padding:14px 16px;color:#3d4247}
+.mem-folder:hover,.mem-page .mem-edition:hover{border-color:#abd77c;background:#fbfdf8;box-shadow:0 4px 14px #73bc251a}
+.mem-folder>i{font-size:28px;color:#73bc25}
+.mem-folder strong{display:block;font-size:16px}
+.mem-folder small{color:#5f666c;font-size:12px}
+.mem-page .mem-editions{grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.mem-page .mem-edition{display:flex;flex-direction:column;gap:9px;padding:14px 16px;border-radius:12px;border-left:4px solid #73bc25}
+.mem-edition-name{font-weight:700;font-size:14px;display:flex;gap:6px;align-items:center;color:#303c2d}
+.mem-edition-name i{color:#5e9b1d}
+.mem-edition-mpr{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#687561;letter-spacing:.04em}
+.mem-edition-mpr .bib-badge{letter-spacing:0;font-weight:500}
+.mem-edition-states{display:flex;flex-wrap:wrap;gap:5px}
+.mem-meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:#5f666c}
+.mem-meta>span{display:inline-flex;align-items:center;gap:4px}
+.mem-meta i{font-size:14px;color:#8b9298}
+/* Encabezado de una memoria con pestañas integradas */
+.mem-edition-head{background:white;border:1px solid #e2e4e6;border-radius:12px;margin-bottom:14px;overflow:hidden}
+.mem-edition-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:14px 16px 12px}
+.mem-edition-title{min-width:0}
+.mem-edition-title h2{font-size:18px;margin:2px 0 6px;color:#303c2d}
+.mem-edition-tools{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.mem-edition-tools .bib-btn{padding:5px 9px;font-size:11.5px}
+.mem-page .mem-tabs{display:flex;gap:2px;margin:0;padding:0 10px;border-top:1px solid #eef0ec;border-bottom:0;background:#fafbf9;overflow-x:auto}
+.mem-tab{display:inline-flex;align-items:center;gap:7px;border:0;background:none;padding:11px 12px;font-size:13px;color:#5f666c;border-bottom:3px solid transparent;white-space:nowrap;font-weight:600}
+.mem-tab:hover{color:#3d6614}
+.mem-tab[aria-selected=true]{color:#3d6614;border-bottom-color:#73bc25}
+.mem-tab .bib-badge{font-weight:500}
+/* Tabla de artículos */
+.mem-page .bib-scroll{border-radius:12px}
+.mem-table th,.mem-table td{padding:10px 14px}
+.mem-table td{vertical-align:middle}
+.mem-table tbody tr:hover{background:#fbfdf8}
+.mem-table tbody tr:last-child td{border-bottom:0}
+.mem-col-actions{text-align:right;width:1%;white-space:nowrap}
+.mem-state{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mem-version{font-size:11px;color:#5f666c;border:1px solid #e2e4e6;border-radius:6px;padding:2px 6px}
+.mem-deadline{display:flex;align-items:center;gap:4px;margin-top:5px;font-size:11.5px;color:#5f666c}
+.mem-deadline.is-soon{color:#7a6100;font-weight:600}
+.mem-page .bib-empty{margin:0;border:0;text-align:center}
+/* Etapas de revisión compactas */
+.mem-page .mem-mpr{padding:18px}
+.mem-page .mem-mpr-stages{margin:16px 0}
+.mem-page .mem-deadlines{margin:14px 0;padding:14px}
+.mem-page .mem-deadlines-grid{gap:14px}
+.mem-page .mem-deadlines-grid>.mem-review-card{padding:12px;gap:8px;background:white}
+.mem-page .mem-deadlines-grid>.mem-review-card.is-done{background:#fafbf9}
+.mem-page .mem-deadlines-grid>.mem-review-card.is-active{background:#f1f8e9}
+.mem-review-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mem-page .mem-deadlines-grid p.mem-range{display:flex;align-items:center;gap:6px;min-height:0;margin:0;font-size:12px;color:#5f666c}
+.mem-page .mem-deadlines-grid .mem-range strong{display:inline;font-size:13px;color:#3d4247}
+.mem-range i{color:#8b9298}
+.mem-status{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 8px;font-size:10.5px;font-weight:600;background:#f0f1f2;color:#5f666c;white-space:nowrap}
+.mem-status::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.7}
+.mem-status.done{background:#e3f2d3;color:#3d6614}
+.mem-status.active{background:#fff5cc;color:#7a6100}
+.mem-status.late{background:#ffe1cc;color:#b34b00}
+.mem-page .mem-deadlines-grid small{margin-top:0}
+.mem-page .mem-review-actions{padding-top:6px}
+.mem-page .mem-review-card>small:last-child{min-height:0}
+.mem-page .mem-editorial-participation{margin:0;padding:8px 10px}
+.mem-editorial-participation summary{cursor:pointer;font-size:12px;color:#5f666c}
+.mem-page .mem-deadlines-grid .mem-editorial-participation summary strong{display:inline;font-size:12px;color:#3d4247}
+.mem-editorial-participation small{padding-left:4px}
+.mem-page .mem-approval-note{margin:0;padding:8px 10px}
+.mem-page .mem-approval-note strong{display:flex;gap:5px;align-items:flex-start;font-size:12px;line-height:1.45;color:#36571e}
+.mem-page .mem-approval-note small{margin-top:4px;color:#5f666c}
+.mem-help{margin-top:10px;font-size:12px;color:#5f666c}
+.mem-help summary{cursor:pointer;display:inline-flex;align-items:center;gap:5px;color:#5e9b1d;font-weight:600;list-style:none}
+.mem-help summary::-webkit-details-marker{display:none}
+.mem-help p{margin:6px 0 0;padding:10px 12px;background:#f8faf5;border-radius:8px;line-height:1.6}
+.mem-page .mem-mpr-bridge{margin-top:16px;padding-top:14px}
+.mem-mpr-counts .is-warn b{color:#b34b00}
+@media(max-width:900px){.mem-filterbar{flex-direction:column;align-items:stretch}.mem-search{flex:auto}.mem-chips{flex-wrap:wrap;overflow:visible}.mem-edition-top{flex-direction:column}.mem-edition-tools{justify-content:flex-start}}
+@media(max-width:700px){.mem-toolbar{flex-direction:column;align-items:stretch}.mem-actions{justify-content:flex-start}.mem-page .mem-editions{grid-template-columns:1fr}.mem-table thead{display:none}.mem-table tr{display:grid;grid-template-columns:1fr auto;border-bottom:1px solid #f0f1f2}.mem-table td{border:0;padding:8px 12px}.mem-table td:first-child,.mem-table td:nth-child(2){grid-column:1/-1;padding-bottom:0}}
