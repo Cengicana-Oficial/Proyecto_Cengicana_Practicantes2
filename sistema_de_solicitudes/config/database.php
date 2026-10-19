@@ -194,6 +194,29 @@ function app_bootstrap_database(PDO $pdo): void
         ) ENGINE=InnoDB"
     );
 
+    // Avisos por correo (includes/mailer.php): que se envia y el historial de envios.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS configuracion_correo (
+            clave VARCHAR(60) NOT NULL PRIMARY KEY,
+            valor TEXT NOT NULL,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB"
+    );
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS correo_registro (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            tipo VARCHAR(20) NOT NULL,
+            solicitud_codigo VARCHAR(20) NULL,
+            destinatario VARCHAR(190) NOT NULL,
+            asunto VARCHAR(255) NOT NULL,
+            estado ENUM('enviado','fallido') NOT NULL,
+            error VARCHAR(255) NULL,
+            creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_correo_registro_creado (creado_en)
+        ) ENGINE=InnoDB"
+    );
+
     if ((int) $pdo->query('SELECT COUNT(*) FROM programas')->fetchColumn() === 0) {
         $pdo->exec(
             "INSERT INTO programas (id, nombre) VALUES
