@@ -14,6 +14,9 @@ deploy/env/*.env
 !sigec/resources/lang/vendor/**
 **/node_modules
 **/_Respaldo
+# Prototipos y plantillas de referencia del equipo: no los usa la aplicacion y Apache los
+# serviria como estaticos sin sesion (AUD-2026-001/C-1).
+Prototipos
 Pruebas/uploads
 laboratorio/outputs
 *.sql.gz
