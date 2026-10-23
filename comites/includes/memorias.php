@@ -6,14 +6,17 @@ const MEM_MPR=['armado'=>'En diagramación','revision_final'=>'En revisión fina
 function mem_preparar(PDO $pdo): void
 {
     directorio_preparar($pdo);
-    $pdo->exec("CREATE TABLE IF NOT EXISTS memoria_carpetas_anio(anio INT PRIMARY KEY,creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS memoria_ediciones(id INT AUTO_INCREMENT PRIMARY KEY,nombre VARCHAR(220) NOT NULL,anio INT NOT NULL,limite_entrega DATE NULL,dias_revision INT NOT NULL DEFAULT 15,criterios TEXT NULL,plantilla TEXT NULL,mpr LONGTEXT NULL,revision INT NOT NULL DEFAULT 1,creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS memoria_config(id INT PRIMARY KEY,comite_id VARCHAR(40) NOT NULL DEFAULT 'editorial') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS memoria_avisos(id INT AUTO_INCREMENT PRIMARY KEY,email VARCHAR(180) NOT NULL,articulo_id INT NULL,mensaje VARCHAR(500) NOT NULL,leido TINYINT(1) NOT NULL DEFAULT 0,creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,INDEX(email)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+    if (defined('ESQUEMA_MIGRANDO')) {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS memoria_carpetas_anio(anio INT PRIMARY KEY,creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS memoria_ediciones(id INT AUTO_INCREMENT PRIMARY KEY,nombre VARCHAR(220) NOT NULL,anio INT NOT NULL,limite_entrega DATE NULL,dias_revision INT NOT NULL DEFAULT 15,criterios TEXT NULL,plantilla TEXT NULL,mpr LONGTEXT NULL,revision INT NOT NULL DEFAULT 1,creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS memoria_config(id INT PRIMARY KEY,comite_id VARCHAR(40) NOT NULL DEFAULT 'editorial') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS memoria_avisos(id INT AUTO_INCREMENT PRIMARY KEY,email VARCHAR(180) NOT NULL,articulo_id INT NULL,mensaje VARCHAR(500) NOT NULL,leido TINYINT(1) NOT NULL DEFAULT 0,creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,INDEX(email)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        foreach(['edicion_id'=>'INT NULL','flujo'=>'VARCHAR(25) NULL','area'=>'VARCHAR(180) NULL','coautores'=>'TEXT NULL','autor_usuario_id'=>'INT NULL','revisor_contacto_id'=>'INT NULL','limite_revision'=>'DATE NULL','revision_nombre'=>'VARCHAR(255) NULL','recomendacion'=>'VARCHAR(60) NULL','descargado_diag'=>'DATETIME NULL','expediente'=>'LONGTEXT NULL','revision_control'=>'INT NOT NULL DEFAULT 1'] as $c=>$d)app_ensure_column($pdo,'memorias_resultados',$c,"{$c} {$d}");
+        app_ensure_column($pdo,'comite_editorial','contacto_id','contacto_id INT NULL');
+    }
     $pdo->exec("INSERT IGNORE INTO memoria_config(id) VALUES (1)");
     $pdo->exec("INSERT IGNORE INTO comites(id,nombre) VALUES ('editorial','Comité Editorial')");
-    foreach(['edicion_id'=>'INT NULL','flujo'=>'VARCHAR(25) NULL','area'=>'VARCHAR(180) NULL','coautores'=>'TEXT NULL','autor_usuario_id'=>'INT NULL','revisor_contacto_id'=>'INT NULL','limite_revision'=>'DATE NULL','revision_nombre'=>'VARCHAR(255) NULL','recomendacion'=>'VARCHAR(60) NULL','descargado_diag'=>'DATETIME NULL','expediente'=>'LONGTEXT NULL','revision_control'=>'INT NOT NULL DEFAULT 1'] as $c=>$d)app_ensure_column($pdo,'memorias_resultados',$c,"{$c} {$d}");
-    app_ensure_column($pdo,'comite_editorial','contacto_id','contacto_id INT NULL');
     foreach($pdo->query('SELECT * FROM comite_editorial WHERE contacto_id IS NULL')->fetchAll() as $old){
         $q=$pdo->prepare('SELECT id FROM contactos WHERE email=? AND email<>? LIMIT 1');$q->execute([trim((string)$old['email']),'']);$cid=$q->fetchColumn();
         if(!$cid){$validEmail=filter_var($old['email'],FILTER_VALIDATE_EMAIL)?$old['email']:'';$cid=directorio_guardar($pdo,['nombre'=>$old['nombre'],'email'=>$validEmail,'cargo'=>$old['cargo'] ?? '','estado'=>$old['estado'],'comites'=>['editorial']],'Migración del comité editorial');$pdo->prepare("UPDATE contactos SET origen_tipo='memoria',origen_detalle='Revisor del comité editorial existente' WHERE id=?")->execute([$cid]);}
@@ -184,7 +187,13 @@ function mem_mpr_automatico(array &$m,?string $hoy=null): bool {
     }
     return $changed;
 }
+// Revisión sin bloqueos: en casi todas las vistas no cambia nada y no hace falta el FOR UPDATE.
+function mem_mpr_hay_cambios(PDO $pdo): bool {
+    foreach($pdo->query('SELECT mpr FROM memoria_ediciones WHERE mpr IS NOT NULL') as $e){$m=mem_mpr($e);$antes=$m;mem_flujo_inicializar($pdo,$m);if(mem_mpr_automatico($m)||$m!==$antes)return true;}
+    return false;
+}
 function mem_mpr_sincronizar(PDO $pdo): void {
+    if(!mem_mpr_hay_cambios($pdo))return;
     $pdo->beginTransaction();try{
         $pdo->query('SELECT id FROM memoria_config WHERE id=1 FOR UPDATE')->fetchColumn();
         foreach($pdo->query('SELECT * FROM memoria_ediciones WHERE mpr IS NOT NULL FOR UPDATE')->fetchAll() as $e){$m=mem_mpr($e);$antes=$m;mem_flujo_inicializar($pdo,$m);$antesCorreo=$m;$auto=mem_mpr_automatico($m);if($auto||$m!==$antes){$pdo->prepare('UPDATE memoria_ediciones SET mpr=?,revision=revision+1 WHERE id=?')->execute([json_encode($m,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),$e['id']]);mem_correo_mpr($pdo,$e,$antesCorreo,$m);}}

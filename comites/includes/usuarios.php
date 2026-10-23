@@ -23,6 +23,7 @@ function usuarios_roles_asignables(): array
 /** Crea las tablas de programas en la base de Solicitudes internas si ese modulo aun no las creo. */
 function usuarios_preparar_programas(PDO $menuPdo): void
 {
+    if (!defined('ESQUEMA_MIGRANDO')) return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
     $db = comites_programas_db();
     $menuPdo->exec("CREATE TABLE IF NOT EXISTS {$db}.programas (id INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(120) NOT NULL UNIQUE, activo TINYINT(1) NOT NULL DEFAULT 1, creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");
     $menuPdo->exec("CREATE TABLE IF NOT EXISTS {$db}.usuario_programa (usuario_id INT NOT NULL PRIMARY KEY, programa_id INT NOT NULL, creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, INDEX idx_usuario_programa_programa (programa_id)) ENGINE=InnoDB");
