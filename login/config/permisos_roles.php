@@ -2,27 +2,31 @@
 
 function asegurar_tablas_permisos(PDO $conn)
 {
-    $conn->exec("
-        CREATE TABLE IF NOT EXISTS permisos (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            nombre_permiso VARCHAR(100) NOT NULL UNIQUE,
-            descripcion VARCHAR(255)
-        )
-    ");
+    // Las tablas las crea deploy/mysql/init/01-usuarios-menu.sql; aqui solo al desplegar
+    // (deploy/mysql/migrar-esquema.php), nunca en una peticion (AUD-2026-001/I-2).
+    if (defined('ESQUEMA_MIGRANDO')) {
+        $conn->exec("
+            CREATE TABLE IF NOT EXISTS permisos (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nombre_permiso VARCHAR(100) NOT NULL UNIQUE,
+                descripcion VARCHAR(255)
+            )
+        ");
 
-    $conn->exec("
-        CREATE TABLE IF NOT EXISTS rol_permiso (
-            rol_id INT NOT NULL,
-            permiso_id INT NOT NULL,
-            PRIMARY KEY (rol_id, permiso_id),
-            CONSTRAINT fk_rol_permiso_rol
-                FOREIGN KEY (rol_id) REFERENCES roles(id)
-                ON DELETE CASCADE,
-            CONSTRAINT fk_rol_permiso_permiso
-                FOREIGN KEY (permiso_id) REFERENCES permisos(id)
-                ON DELETE CASCADE
-        )
-    ");
+        $conn->exec("
+            CREATE TABLE IF NOT EXISTS rol_permiso (
+                rol_id INT NOT NULL,
+                permiso_id INT NOT NULL,
+                PRIMARY KEY (rol_id, permiso_id),
+                CONSTRAINT fk_rol_permiso_rol
+                    FOREIGN KEY (rol_id) REFERENCES roles(id)
+                    ON DELETE CASCADE,
+                CONSTRAINT fk_rol_permiso_permiso
+                    FOREIGN KEY (permiso_id) REFERENCES permisos(id)
+                    ON DELETE CASCADE
+            )
+        ");
+    }
 
     sembrar_permisos_base($conn);
 }
