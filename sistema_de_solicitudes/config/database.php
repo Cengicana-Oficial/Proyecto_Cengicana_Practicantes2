@@ -105,7 +105,11 @@ function app_normalize(string $value): string
     return preg_replace('/[^a-z0-9]+/', ' ', $value) ?: '';
 }
 
-function app_bootstrap_database(PDO $pdo): void
+/**
+ * Tablas y columnas del modulo. Solo corre al desplegar (deploy/mysql/migrar-esquema.php, con el
+ * usuario de migraciones): las peticiones no hacen DDL (AUD-2026-001/I-2).
+ */
+function app_esquema_database(PDO $pdo): void
 {
     // El modulo ahora usa usuarios de la base principal `usuarios_menu`.
     // Estas FK antiguas apuntaban a la tabla local `usuarios` y rompen al guardar
@@ -237,6 +241,13 @@ function app_bootstrap_database(PDO $pdo): void
             INDEX idx_correo_registro_creado (creado_en)
         ) ENGINE=InnoDB"
     );
+}
+
+function app_bootstrap_database(PDO $pdo): void
+{
+    if (defined('ESQUEMA_MIGRANDO')) {
+        app_esquema_database($pdo);
+    }
 
     if ((int) $pdo->query('SELECT COUNT(*) FROM programas')->fetchColumn() === 0) {
         $pdo->exec(
@@ -337,6 +348,11 @@ $dbUser = app_env_value('DB_MENU_USER', app_env_value('DB_USER', 'root'));
 $dbPass = app_env_value('DB_MENU_PASS', app_env_value('DB_PASS', ''));
 $menuDbName = app_env_value('DB_MENU_NAME', app_env_value('DB_NAME', 'usuarios_menu'));
 $solicitudesDbName = app_env_value('DB_SOLICITUDES_NAME', app_env_value('SISTEMA_SOLICITUDES_DB_NAME', 'sistema_solicitudes'));
+if (defined('ESQUEMA_MIGRANDO')) {
+    // deploy/mysql/migrar-esquema.php: el esquema se crea con el usuario de migraciones.
+    $dbUser = (string) getenv('MIGRADOR_USER');
+    $dbPass = (string) getenv('MIGRADOR_PASS');
+}
 
 try {
     $pdoOptions = [
@@ -346,16 +362,18 @@ try {
         PDO::ATTR_TIMEOUT => 10,
     ];
 
-    $serverPdo = new PDO(
-        "mysql:host={$dbHost};port={$dbPort};charset=utf8mb4",
-        $dbUser,
-        $dbPass,
-        $pdoOptions
-    );
+    if (defined('ESQUEMA_MIGRANDO')) {
+        $serverPdo = new PDO(
+            "mysql:host={$dbHost};port={$dbPort};charset=utf8mb4",
+            $dbUser,
+            $dbPass,
+            $pdoOptions
+        );
 
-    $serverPdo->exec(
-        'CREATE DATABASE IF NOT EXISTS `' . str_replace('`', '``', $solicitudesDbName) . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
-    );
+        $serverPdo->exec(
+            'CREATE DATABASE IF NOT EXISTS `' . str_replace('`', '``', $solicitudesDbName) . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+        );
+    }
 
     $pdo = new PDO(
         "mysql:host={$dbHost};port={$dbPort};dbname={$solicitudesDbName};charset=utf8mb4",
@@ -374,6 +392,9 @@ try {
     app_bootstrap_database($pdo);
     app_bootstrap_menu_data($menuPdo);
 } catch (PDOException $e) {
+    if (defined('ESQUEMA_MIGRANDO')) {
+        throw $e;
+    }
     http_response_code(500);
     exit(
         'No se pudo conectar a la base de datos. Verifica la configuracion de MySQL. Detalle: '

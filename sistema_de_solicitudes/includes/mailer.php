@@ -252,8 +252,8 @@ function mail_request_progress(array $request, string $actorName, string $status
     ];
 }
 
-/** Solicitud con sus programas y su solicitante; sin id, la mas reciente (para pruebas). */
-function mail_fetch_request(PDO $pdo, string $menuDbName, ?int $requestId = null): ?array
+/** Solicitud con sus programas y su solicitante. */
+function mail_fetch_request(PDO $pdo, string $menuDbName, int $requestId): ?array
 {
     $stmt = $pdo->prepare(
         "SELECT s.*, po.nombre AS programa_origen, pd.nombre AS programa_destino,
@@ -262,17 +262,17 @@ function mail_fetch_request(PDO $pdo, string $menuDbName, ?int $requestId = null
          INNER JOIN programas po ON po.id = s.programa_origen_id
          LEFT JOIN programas pd ON pd.id = s.programa_destino_id
          LEFT JOIN {$menuDbName}.usuarios u ON u.id = s.solicitante_id
-         " . ($requestId !== null ? 'WHERE s.id = ?' : 'ORDER BY s.id DESC LIMIT 1')
+         WHERE s.id = ?"
     );
-    $stmt->execute($requestId !== null ? [$requestId] : []);
+    $stmt->execute([$requestId]);
 
     return $stmt->fetch() ?: null;
 }
 
-/** Solicitud de ejemplo para la vista previa y las pruebas: la ultima registrada o una ficticia. */
-function mail_sample_request(PDO $pdo, string $menuDbName): array
+/** Solicitud ficticia para la vista previa y las pruebas: nunca datos reales, el correo de prueba va a cualquier direccion. */
+function mail_sample_request(): array
 {
-    return mail_fetch_request($pdo, $menuDbName) ?? [
+    return [
         'id' => 0,
         'codigo' => 'SOL-0000-000',
         'titulo' => 'Solicitud de ejemplo',

@@ -35,6 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     try {
+        if (!csrf_valido()) {
+            throw new RuntimeException('El formulario expiró o no es válido. Recarga la página e intenta de nuevo.');
+        }
+
         if ($action === 'crear_programa') {
             if (!can_manage_programs($user)) {
                 throw new RuntimeException('No tienes permiso para crear programas.');
@@ -131,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Escribe un correo valido para la prueba.');
             }
 
-            $sample = mail_sample_request($pdo, $menuDbName);
+            $sample = mail_sample_request();
             [$subject, $html] = ($_POST['plantilla'] ?? '') === 'avance'
                 ? mail_request_progress($sample, (string) $user['nombre'], 'proceso', 'Comentario de ejemplo del seguimiento.')
                 : mail_new_request($sample, (string) $user['nombre']);
@@ -406,7 +410,7 @@ $mailPreviews = [];
 if ($view === 'correos' && can_manage_mail_settings($user)) {
     $mailSettings = mail_settings($pdo);
     $mailLog = $pdo->query('SELECT * FROM correo_registro ORDER BY id DESC LIMIT 25')->fetchAll();
-    $sample = mail_sample_request($pdo, $menuDbName);
+    $sample = mail_sample_request();
     $mailPreviews = [
         'nueva' => mail_new_request($sample, 'Jefe del programa destino'),
         'avance' => mail_request_progress($sample, (string) $user['nombre'], 'proceso', 'Comentario de ejemplo del seguimiento.'),
@@ -704,7 +708,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                             <span><?= $notifications['unread'] ? (int) $notifications['unread'] . ' sin leer' : 'Estas al dia' ?></span>
                         </div>
                         <?php if ($notifications['unread'] > 0): ?>
-                            <form method="post">
+                            <form method="post"><?= csrf_field() ?>
                                 <input type="hidden" name="action" value="marcar_notificaciones">
                                 <input type="hidden" name="return" value="<?= e($notificationsReturn) ?>">
                                 <button type="submit" class="notif-mark"><i class="ti ti-checks"></i>Marcar todas como leidas</button>
@@ -1021,7 +1025,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                         <a class="btn-primary" href="../login/usuarios/crear_usuario.php?scope=solicitudes"><i class="ti ti-user-plus"></i>Crear usuario nuevo</a>
                     </div>
                 <?php elseif (can_manage_users($user)): ?>
-                    <form class="form-card" method="post">
+                    <form class="form-card" method="post"><?= csrf_field() ?>
                         <input type="hidden" name="action" value="agregar_usuario_modulo">
                         <div class="form-grid">
                             <div class="form-group user-search">
@@ -1096,7 +1100,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                                 ?>
                                 <tr>
                                     <td>
-                                        <?php if (can_manage_users($user)): ?><form id="<?= e($formId) ?>" method="post"></form><?php endif; ?>
+                                        <?php if (can_manage_users($user)): ?><form id="<?= e($formId) ?>" method="post"><?= csrf_field() ?></form><?php endif; ?>
                                         <?= e($userItem['nombre']) ?>
                                     </td>
                                     <td><?= e($userItem['correo']) ?></td>
@@ -1196,7 +1200,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                         <input type="search" id="buscar-programas" placeholder="Buscar programa..." oninput="filterPrograms('buscar-programas', 'lista-programas')">
                     </label>
                     <?php if ($canManagePrograms): ?>
-                        <form class="programs-create" method="post">
+                        <form class="programs-create" method="post"><?= csrf_field() ?>
                             <input type="hidden" name="action" value="crear_programa">
                             <input class="form-control" name="nombre" placeholder="Nombre del nuevo programa" aria-label="Nombre del nuevo programa" required>
                             <button class="btn-primary" type="submit"><i class="ti ti-plus"></i>Crear</button>
@@ -1223,7 +1227,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                             <div class="program-row-name">
                                 <span class="program-admin-icon"><i class="ti ti-building"></i></span>
                                 <?php if ($canManagePrograms): ?>
-                                    <form id="<?= e($programFormId) ?>" class="program-admin-form" method="post">
+                                    <form id="<?= e($programFormId) ?>" class="program-admin-form" method="post"><?= csrf_field() ?>
                                         <input type="hidden" name="action" value="actualizar_programa">
                                         <input type="hidden" name="programa_id" value="<?= $programId ?>">
                                         <input class="program-admin-name" name="nombre" value="<?= e($program['nombre']) ?>" data-original="<?= e($program['nombre']) ?>" aria-label="Nombre del programa" title="Haz clic para editar el nombre" required>
@@ -1238,7 +1242,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                             <?php if ($canManagePrograms): ?>
                                 <div class="program-admin-actions">
                                     <button form="<?= e($programFormId) ?>" class="icon-btn icon-btn-save" type="submit" title="Guardar cambios" aria-label="Guardar cambios"><i class="ti ti-check"></i></button>
-                                    <form method="post" onsubmit="return confirm('Se eliminara este programa. Continuar?');">
+                                    <form method="post" onsubmit="return confirm('Se eliminara este programa. Continuar?');"><?= csrf_field() ?>
                                         <input type="hidden" name="action" value="eliminar_programa">
                                         <input type="hidden" name="programa_id" value="<?= $programId ?>">
                                         <button class="icon-btn icon-btn-danger" type="submit"
@@ -1330,7 +1334,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                                         <div class="idea-actions">
                                             <?php foreach (BUZON_ESTADOS as $estadoKey => $estadoLabel): ?>
                                                 <?php if ($estadoKey === $idea['estado']) { continue; } ?>
-                                                <form method="post">
+                                                <form method="post"><?= csrf_field() ?>
                                                     <input type="hidden" name="action" value="actualizar_idea">
                                                     <input type="hidden" name="idea_id" value="<?= $ideaId ?>">
                                                     <input type="hidden" name="estado" value="<?= e($estadoKey) ?>">
@@ -1376,7 +1380,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                     <?php endif; ?>
                 </div>
 
-                <form class="form-card mail-card" method="post" action="index.php?view=correos">
+                <form class="form-card mail-card" method="post" action="index.php?view=correos"><?= csrf_field() ?>
                     <input type="hidden" name="action" value="guardar_config_correo">
 
                     <label class="mail-switch">
@@ -1425,7 +1429,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                         <div class="section-sub">Envia un ejemplo con los datos de la ultima solicitud registrada.</div>
                     </div>
                 </div>
-                <form class="form-card mail-test" method="post" action="index.php?view=correos">
+                <form class="form-card mail-test" method="post" action="index.php?view=correos"><?= csrf_field() ?>
                     <input type="hidden" name="action" value="probar_correo">
                     <div class="form-group">
                         <label class="form-label" for="correo_prueba">Enviar a</label>
@@ -1498,7 +1502,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                         <div class="section-sub">Registra compras, soporte TI o apoyo entre programas.</div>
                     </div>
                 </div>
-                <form class="form-card" method="post" enctype="multipart/form-data">
+                <form class="form-card" method="post" enctype="multipart/form-data"><?= csrf_field() ?>
                     <input type="hidden" name="action" value="crear_solicitud">
                     <div class="form-grid">
                         <div class="form-group">
@@ -1625,7 +1629,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                     <?php endif; ?>
 
                     <?php if (can_manage_request($user, $detail) && $detail['estado'] !== 'completado'): ?>
-                        <form method="post" enctype="multipart/form-data" class="form-card" style="margin-top:18px">
+                        <form method="post" enctype="multipart/form-data" class="form-card" style="margin-top:18px"><?= csrf_field() ?>
                             <input type="hidden" name="action" value="actualizar_estado">
                             <input type="hidden" name="solicitud_id" value="<?= (int) $detail['id'] ?>">
                             <div class="form-grid">
