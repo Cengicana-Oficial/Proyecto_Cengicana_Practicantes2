@@ -32,6 +32,9 @@ const LAB_INFORME_ESTADOS = [
 if (!function_exists('lab_informes_esquema')) {
     function lab_informes_esquema(PDO $pdo): void
     {
+        if (!defined('ESQUEMA_MIGRANDO')) {
+            return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+        }
         lab_documentos_esquema($pdo);
         $pdo->exec("CREATE TABLE IF NOT EXISTS lab_informe (
             id_lote INT NOT NULL PRIMARY KEY, codigo VARCHAR(20) NOT NULL, estado VARCHAR(12) NOT NULL,

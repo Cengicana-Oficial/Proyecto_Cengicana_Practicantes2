@@ -7,15 +7,18 @@ function labFormularioPdo(): PDO
     return Conexion::conectar();
 }
 
-function labFormularioEnsureSchema(): void
+function labFormularioEnsureSchema(?PDO $pdo = null): void
 {
+    if (!defined('ESQUEMA_MIGRANDO')) {
+        return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+    }
     static $schemaEnsured = false;
 
     if ($schemaEnsured) {
         return;
     }
 
-    $pdo = labFormularioPdo();
+    $pdo = $pdo ?? labFormularioPdo();
 
     try {
         $pdo->exec("

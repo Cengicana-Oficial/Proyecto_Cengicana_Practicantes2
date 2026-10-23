@@ -4,6 +4,9 @@ require_once __DIR__.'/catalogo_muestras_helper.php';
 require_once __DIR__.'/captura_variables_registry.php';
 
 function wfSchema(PDO $pdo): void {
+    if (!defined('ESQUEMA_MIGRANDO')) {
+        return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+    }
     $pdo->exec("CREATE TABLE IF NOT EXISTS lab_plan_lote (id_lote INT PRIMARY KEY, prioridad VARCHAR(8) NOT NULL DEFAULT 'media', version INT NOT NULL DEFAULT 0, FOREIGN KEY(id_lote) REFERENCES lote(id_lote)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("CREATE TABLE IF NOT EXISTS lab_plan_asignacion (id_muestra INT NOT NULL, id_tipo_analisis INT NOT NULL, usuario_id INT NOT NULL, analista VARCHAR(255) NOT NULL, PRIMARY KEY(id_muestra,id_tipo_analisis), FOREIGN KEY(id_muestra) REFERENCES muestra(id_muestra), FOREIGN KEY(id_tipo_analisis) REFERENCES tipo_analisis(id_tipo)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("CREATE TABLE IF NOT EXISTS lab_hoja_borrador (usuario_key VARCHAR(80) NOT NULL, hoja VARCHAR(180) NOT NULL, version INT NOT NULL, datos LONGTEXT NOT NULL, actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY(usuario_key,hoja)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");

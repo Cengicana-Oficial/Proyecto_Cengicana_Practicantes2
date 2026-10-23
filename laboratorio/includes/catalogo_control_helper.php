@@ -14,6 +14,9 @@ const LAB_EQUIPO_DIAS_AVISO = 30;
 
 function labCatalogoControlEsquema(PDO $pdo): void
 {
+    if (!defined('ESQUEMA_MIGRANDO')) {
+        return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+    }
     $pdo->exec("CREATE TABLE IF NOT EXISTS lab_equipo (
         id_equipo INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
         nombre VARCHAR(160) NOT NULL,
