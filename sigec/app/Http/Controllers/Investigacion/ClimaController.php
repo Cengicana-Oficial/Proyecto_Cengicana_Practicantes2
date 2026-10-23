@@ -200,7 +200,7 @@ class ClimaController extends Controller
             'red' => ['required', Rule::in(self::REDES)],
             'lat' => 'required|numeric|between:-90,90',
             'lng' => 'required|numeric|between:-180,180',
-            'altitud' => 'nullable|integer|min:-100|max:6000',
+            'altitud' => 'nullable|integer|min:0|max:6000',
             'ubicacion' => 'nullable|string|max:150',
             'activa' => 'boolean',
         ], [

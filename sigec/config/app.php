@@ -67,7 +67,9 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Igual que MySQL (--default-time-zone=-06:00) y el resto de modulos: con UTC, Laravel escribia
+    // created_at/updated_at en UTC sobre una sesion de MySQL en -06:00 (AUD-2026-001/M-1).
+    'timezone' => 'America/Guatemala',
 
     /*
     |--------------------------------------------------------------------------
