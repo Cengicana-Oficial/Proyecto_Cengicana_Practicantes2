@@ -1,7 +1,7 @@
 <?php
 // Configuracion de lo que ve el estudiante en su aula (tipo Moodle): secciones visibles,
 // anuncio de bienvenida y visibilidad / disponibilidad de cada recurso.
-// Esquema: migrations/20261021_aula_vista_estudiante.sql (se completa aqui si falta).
+// Esquema: migrations/20261021_aula_vista_estudiante.sql y 20261022_aula_anuncios.sql.
 
 // Secciones que coordinacion puede ocultar. "Resumen" siempre se muestra.
 const AULA_SECCIONES_CONFIGURABLES = [
@@ -16,26 +16,6 @@ function aula_fecha_larga($fecha, $corta = false) {
     $dia = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][(int) date('w', $t)];
     return $corta ? mb_substr($dia, 0, 3) . ' ' . date('d/m', $t) : $dia . ' ' . date('d/m/Y', $t);
 }
-
-const AULA_ANUNCIOS_DDL = "CREATE TABLE IF NOT EXISTS aula_anuncios (
-  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  curso_id INT UNSIGNED NOT NULL,
-  sesion_id INT UNSIGNED NULL,
-  titulo VARCHAR(180) NOT NULL,
-  mensaje TEXT NULL,
-  enlace_url VARCHAR(2048) NOT NULL DEFAULT '',
-  enlace_texto VARCHAR(80) NOT NULL DEFAULT '',
-  publicar_desde DATETIME NULL,
-  visible TINYINT NOT NULL DEFAULT 1,
-  fijado TINYINT NOT NULL DEFAULT 0,
-  creado_por INT NULL,
-  creado_por_nombre VARCHAR(255) NOT NULL DEFAULT '',
-  creado TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-  actualizado TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  KEY idx_aula_anuncios_curso (curso_id),
-  FOREIGN KEY (curso_id) REFERENCES cursos(id) ON DELETE CASCADE,
-  FOREIGN KEY (sesion_id) REFERENCES curso_sesiones(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
 /**
  * Anuncios del curso. $estudiante = true: solo visibles y ya publicados (fijados primero, luego
@@ -71,19 +51,13 @@ function aula_vista_ready(PDO $db) {
     static $ready = [];
     $key = spl_object_id($db);
     if (isset($ready[$key])) return $ready[$key];
+    // Solo comprueba: las columnas y aula_anuncios las crean las migraciones 20261021 y 20261022
+    // (deploy/mysql/actualizar-bd.sh). La aplicacion no hace DDL (AUD-2026-001/I-2).
     try {
         $cols = [];
-        foreach ($db->query("SELECT TABLE_NAME,COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('aula_curso_config','aula_recursos')")->fetchAll(PDO::FETCH_NUM) as [$t, $c]) $cols[$t][$c] = true;
-        if (empty($cols['aula_curso_config']) || empty($cols['aula_recursos'])) return $ready[$key] = false;
-        $faltan = [
-            'aula_curso_config' => ['secciones_ocultas' => "VARCHAR(255) NOT NULL DEFAULT ''", 'anuncio_titulo' => "VARCHAR(180) NOT NULL DEFAULT ''", 'anuncio' => 'TEXT NULL'],
-            'aula_recursos' => ['visible' => 'TINYINT NOT NULL DEFAULT 1', 'disponible_desde' => 'DATETIME NULL'],
-        ];
-        foreach ($faltan as $tabla => $defs) foreach ($defs as $col => $def) if (empty($cols[$tabla][$col])) $db->exec("ALTER TABLE $tabla ADD COLUMN $col $def");
-        // Anuncios del curso (migrations/20261022_aula_anuncios.sql). Solo se crea si falta: el DDL hace
-        // commit implicito y esta funcion tambien se llama dentro de transacciones.
-        if (!$db->query("SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='aula_anuncios'")->fetchColumn()) {
-            $db->exec(AULA_ANUNCIOS_DDL);
+        foreach ($db->query("SELECT TABLE_NAME,COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('aula_curso_config','aula_recursos','aula_anuncios')")->fetchAll(PDO::FETCH_NUM) as [$t, $c]) $cols[$t][$c] = true;
+        foreach (['aula_curso_config' => ['secciones_ocultas', 'anuncio_titulo', 'anuncio'], 'aula_recursos' => ['visible', 'disponible_desde'], 'aula_anuncios' => ['id']] as $tabla => $necesarias) {
+            foreach ($necesarias as $col) if (empty($cols[$tabla][$col])) return $ready[$key] = false;
         }
         return $ready[$key] = true;
     } catch (Throwable $e) {

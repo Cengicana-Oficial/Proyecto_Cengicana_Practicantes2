@@ -12,4 +12,4 @@ Próximos cursos presenta la oferta aprobada o reprogramada por iniciar. Esa ofe
 
 Crear cuentas: Usuarios → Nuevo usuario, seleccionar el rol de Cursos y el ingenio. Se requiere nombre, correo y contraseña de al menos 8 caracteres con letras y números. El formulario de Cursos verifica el permiso del operador y obliga al gestor a utilizar su propio ingenio y el rol de estudiante.
 
-Base existente: ejecutar login/config/migracion_roles_cursos.sql en usuarios_menu. Para instalaciones nuevas, deploy/mysql/init/43-cengicursos-roles-alcance.sql aplica los mismos roles. Esta migración no crea cuentas personales ni cambia sus contraseñas.
+Base existente: ejecutar login/config/migracion_roles_cursos.sql en usuarios_menu. Para instalaciones nuevas, deploy/mysql/init/54-cengicursos-roles-alcance.sql aplica los mismos roles. Esta migración no crea cuentas personales ni cambia sus contraseñas.

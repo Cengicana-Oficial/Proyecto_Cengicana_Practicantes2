@@ -17,52 +17,6 @@ if (!$puedeFirmar) {
 $db = conectar();
 $hoy = cengi_pp_hoy();
 
-/**
- * Tablas y columnas del módulo (migrations/20261016_liquidacion_versiones.sql y
- * 20261017_liquidacion_comprobante_firma.sql). Se agregan aquí si faltan, fuera de cualquier
- * transacción (el DDL de MySQL hace commit implícito).
- */
-function cengi_pago_asegurar_esquema(PDO $db)
-{
-    $db->exec("CREATE TABLE IF NOT EXISTS liquidacion_versiones (
-      id INT UNSIGNED NOT NULL AUTO_INCREMENT, liquidacion_id INT UNSIGNED NOT NULL, version SMALLINT UNSIGNED NOT NULL,
-      motivo VARCHAR(500) NOT NULL DEFAULT '', cambios TEXT NULL, datos LONGTEXT NOT NULL,
-      total_antes DECIMAL(12,2) NOT NULL DEFAULT 0, total_despues DECIMAL(12,2) NOT NULL DEFAULT 0,
-      usuario VARCHAR(255) NOT NULL DEFAULT '', creado TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (id), UNIQUE KEY uq_liquidacion_version (liquidacion_id, version),
-      CONSTRAINT fk_liquidacion_versiones_liq FOREIGN KEY (liquidacion_id) REFERENCES liquidaciones (id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $columnas = [
-        'instructores' => ['dpi' => "VARCHAR(20) NOT NULL DEFAULT ''", 'comprobante' => "VARCHAR(10) NOT NULL DEFAULT 'factura'"],
-        'soporte_tecnico' => ['dpi' => "VARCHAR(20) NOT NULL DEFAULT ''", 'comprobante' => "VARCHAR(10) NOT NULL DEFAULT 'factura'"],
-        'liquidacion_detalle' => ['comprobante' => "VARCHAR(10) NOT NULL DEFAULT 'factura'", 'impuesto_pct' => 'DECIMAL(5,2) NOT NULL DEFAULT 5.00',
-            'persona_dpi' => "VARCHAR(20) NOT NULL DEFAULT ''", 'documento_numero' => "VARCHAR(40) NOT NULL DEFAULT ''"],
-        'liquidaciones' => ['firmada_en' => 'DATETIME NULL', 'firmada_por' => "VARCHAR(255) NOT NULL DEFAULT ''", 'firma_codigo' => "VARCHAR(20) NOT NULL DEFAULT ''",
-            'firma_imagen' => 'MEDIUMTEXT NULL', 'firma_nombre' => "VARCHAR(255) NOT NULL DEFAULT ''", 'firma_cargo' => "VARCHAR(255) NOT NULL DEFAULT ''",
-            'observacion_jefe' => "VARCHAR(500) NOT NULL DEFAULT ''"],
-    ];
-    $existentes = [];
-    foreach ($db->query("SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME IN ('instructores', 'soporte_tecnico', 'liquidacion_detalle', 'liquidaciones')")->fetchAll(PDO::FETCH_NUM) as [$t, $c]) {
-        $existentes[$t][$c] = true;
-    }
-    foreach ($columnas as $tabla => $defs) {
-        foreach ($defs as $columna => $definicion) {
-            if (empty($existentes[$tabla][$columna])) {
-                $db->exec("ALTER TABLE $tabla ADD COLUMN $columna $definicion");
-            }
-        }
-    }
-    // Permiso del Jefe de Transferencia en la base de usuarios (matriz de Roles y permisos).
-    try {
-        conectar_usuarios_menu_pdo()->prepare('INSERT IGNORE INTO permisos (nombre_permiso, descripcion) VALUES (?, ?)')
-            ->execute(['firmar_liquidaciones_cengi', 'Permite validar y firmar digitalmente las liquidaciones de pago a instructores (Jefe de Transferencia de Tecnologia)']);
-    } catch (Throwable $e) {
-        error_log('Pago a instructores: no se pudo registrar el permiso de firma: ' . $e->getMessage());
-    }
-}
-cengi_pago_asegurar_esquema($db);
-cengi_pr_asegurar($db);
 $cfgPago = cengi_pp_pago_config($db);
 
 /** Guarda la configuración del pago a instructores (eventos_config, clave pi_config). */
@@ -1509,7 +1463,7 @@ $facturasVista = array_values(array_filter($facturasRepo, static function ($ff) 
 $facPendientes = $conteoFac['por_requerir'] + $conteoFac['esperando'];
 $historialFac = $tab === 'facturas' ? cengi_pr_historial($db, array_column($facturasVista, 'id')) : [];
 
-// Con DPI y comprobante (columnas de esta pantalla, ver cengi_pago_asegurar_esquema).
+// Con DPI y comprobante (migrations/20261017_liquidacion_comprobante_firma.sql).
 cengi_pp_asegurar_codigos_instructor($db);
 $instructores = $db->query("SELECT id, nombre, correo, codigo_catedratico, tarifa_sesion, estado, dpi, comprobante FROM instructores ORDER BY nombre")->fetchAll(PDO::FETCH_ASSOC);
 $soportes = cengi_pp_soportes($db, false);

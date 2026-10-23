@@ -1,3 +1,4 @@
+USE cengi_cursos;
 SET NAMES utf8mb4;
 SET @exists_origin=(SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='solicitudes_inscripcion' AND COLUMN_NAME='origen_inscripcion');
 SET @origin_ddl=IF(@exists_origin=0,"ALTER TABLE solicitudes_inscripcion ADD origen_inscripcion VARCHAR(30) NOT NULL DEFAULT 'sin_identificar'","SELECT 1");

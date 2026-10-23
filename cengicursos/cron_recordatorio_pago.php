@@ -12,7 +12,10 @@
  *
  * Modos (igual que cron_recordatorio_cupo.php):
  *   - CLI: php cron_recordatorio_pago.php [--simular]
- *   - HTTP: cron_recordatorio_pago.php?token=<CRON_RECORDATORIO_SECRET>[&simular=1]
+ *   - HTTP: cron_recordatorio_pago.php[?simular=1] con el token en una cabecera
+ *     ("Authorization: Bearer <token>" o "X-Cron-Token: <token>"), no en la URL, que queda en
+ *     los logs (ver cengi_cron_token_valido() en conexion.php). Por HTTP solo se devuelven los
+ *     conteos; el detalle con nombres y montos solo se muestra en CLI.
  * Con "simular" solo informa a quién se le escribiría, sin enviar correos.
  */
 require_once __DIR__ . '/cobranza_helpers.php';
@@ -24,9 +27,8 @@ const CENGI_COB_AUTO_MAX = 4;
 
 $esCli = PHP_SAPI === 'cli';
 if (!$esCli) {
-    $secreto = (string) (cengicursos_env()['CRON_RECORDATORIO_SECRET'] ?? '');
     header('Content-Type: application/json; charset=utf-8');
-    if ($secreto === '' || !hash_equals($secreto, (string) ($_GET['token'] ?? ''))) {
+    if (!cengi_cron_token_valido()) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'mensaje' => 'Acceso no autorizado.']);
         exit;
@@ -36,7 +38,7 @@ $simular = $esCli ? in_array('--simular', $argv ?? [], true) : !empty($_GET['sim
 
 $db = conectar();
 $hoy = cengi_pp_hoy();
-$resultado = ['ok' => true, 'simulacion' => $simular, 'enviados' => 0, 'fallidos' => 0, 'sin_usuario' => 0, 'omitidos' => 0, 'detalle' => []];
+$resultado = ['ok' => true, 'simulacion' => $simular, 'enviados' => 0, 'fallidos' => 0, 'sin_usuario' => 0, 'omitidos' => 0, 'historicos' => 0, 'detalle' => []];
 
 try {
     // Pendientes de los años con cursos en la ventana (normalmente el actual; en enero, también el anterior).
@@ -46,6 +48,12 @@ try {
             $aplica = in_array($p['situacion'], ['sin-comprobante', 'comprobante-rechazado', 'orden-pendiente', 'orden-rechazada'], true)
                 && $p['venc']['dias'] <= CENGI_COB_AUTO_ANTES && $p['venc']['dias'] >= -CENGI_COB_AUTO_DESPUES;
             if (!$aplica) {
+                continue;
+            }
+            // Órdenes con inscripciones de la conciliación histórica: el monto puede incluir
+            // participantes ya cobrados por otra vía; las revisa Administración a mano.
+            if (!empty($p['historicos'])) {
+                $resultado['historicos']++;
                 continue;
             }
             $r = $p['recordatorio'];
@@ -72,18 +80,20 @@ try {
     }
 } catch (Throwable $e) {
     error_log('Recordatorio de pago automático: ' . $e->getMessage());
-    $resultado = ['ok' => false, 'mensaje' => 'Error al procesar los recordatorios: ' . $e->getMessage()];
+    $resultado = ['ok' => false, 'mensaje' => 'Error al procesar los recordatorios.'];
 }
 
 if ($esCli) {
     echo ($resultado['ok'] ? '' : 'ERROR: ' . ($resultado['mensaje'] ?? '') . PHP_EOL);
     if ($resultado['ok']) {
         echo ($simular ? 'SIMULACIÓN — ' : '') . 'Enviados: ' . $resultado['enviados'] . ' · fallidos: ' . $resultado['fallidos'] . ' · sin usuario: ' . $resultado['sin_usuario']
-            . ' · omitidos (recordados hace poco o al máximo): ' . $resultado['omitidos'] . PHP_EOL;
+            . ' · omitidos (recordados hace poco o al máximo): ' . $resultado['omitidos']
+            . ' · órdenes con asignaciones históricas (revisión manual): ' . $resultado['historicos'] . PHP_EOL;
         foreach ($resultado['detalle'] as $d) {
             echo '  - ' . $d . PHP_EOL;
         }
     }
     exit($resultado['ok'] ? 0 : 1);
 }
+unset($resultado['detalle']);
 echo json_encode($resultado, JSON_UNESCAPED_UNICODE);

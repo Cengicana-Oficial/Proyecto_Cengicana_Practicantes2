@@ -1,7 +1,10 @@
+USE cengi_cursos;
 -- Normaliza una sola vez los códigos internos; conserva códigos institucionales personalizados.
+-- Intencional (AUD-2026-001/M-6): los INS-nnn existentes se renumeran por orden de id. La equivalencia
+-- código anterior -> nuevo queda en instructor_codigos_secuencia_auditoria para documentos ya emitidos.
 CREATE TABLE IF NOT EXISTS instructor_codigos_secuencia_auditoria (
  instructor_id INT NOT NULL PRIMARY KEY, codigo_anterior VARCHAR(20) NULL, codigo_nuevo VARCHAR(20) NOT NULL, migrado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 INSERT IGNORE INTO instructor_codigos_secuencia_auditoria(instructor_id,codigo_anterior,codigo_nuevo)
 SELECT id,codigo_catedratico,CONCAT('INS-',LPAD(numero,GREATEST(3,CHAR_LENGTH(numero)),'0')) FROM (
  SELECT id,codigo_catedratico,ROW_NUMBER() OVER(ORDER BY id) AS numero FROM instructores

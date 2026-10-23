@@ -1,8 +1,8 @@
 -- Anuncios del aula (Gestion del aula -> Anuncios). Varios por curso; cada uno con mensaje, enlace
 -- opcional (p. ej. Teams) y su texto de boton, sesion opcional, fecha de publicacion, visible y fijado.
 -- El estudiante los ve en el Resumen (y los ligados a una sesion, tambien dentro de esa sesion).
--- Requiere 20261021_aula_vista_estudiante.sql. Idempotente; espejo en deploy/mysql/init/36-*.
--- aula_vista.php tambien crea la tabla si falta.
+-- Requiere 20261021_aula_vista_estudiante.sql. Idempotente; espejo en deploy/mysql/init/44-cengicursos-aula-anuncios.sql.
+-- La aplicacion ya no crea esta tabla: solo esta migracion (AUD-2026-001/I-2).
 SET NAMES utf8mb4;
 CREATE TABLE IF NOT EXISTS aula_anuncios (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

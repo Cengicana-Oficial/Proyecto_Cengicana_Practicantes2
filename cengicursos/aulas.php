@@ -2,7 +2,7 @@
 require_once __DIR__.'/menu.php';require_once __DIR__.'/aula_helpers.php';
 require_once __DIR__.'/aula_portadas.php';
 date_default_timezone_set('America/Guatemala');aula_require_teacher();$db=conectar();
-$scope=cengi_scope_sql_por_nombre_ingenio('i',true);$cid=(int)($_GET['curso']??0);$selected=(int)($_GET['participante']??0);
+$scope=cengi_scope_sql_por_nombre_ingenio('i',true).aula_scope_formador_sql($db);$cid=(int)($_GET['curso']??0);$selected=(int)($_GET['participante']??0);
 $course=$cid?aula_teacher_course($db,$cid):null;$ready=aula_integrada($db)&&aula_control_ready($db);
 $coverMessage='';$coverError=false;
 if($_SERVER['REQUEST_METHOD']==='POST' && $course) {

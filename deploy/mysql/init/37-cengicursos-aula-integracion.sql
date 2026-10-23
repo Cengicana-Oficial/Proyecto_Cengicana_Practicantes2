@@ -1,3 +1,4 @@
+USE cengi_cursos;
 -- Integracion del aula con sesiones y seguimiento. Idempotente.
 SET NAMES utf8mb4;
 SET @existe := (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='aula_evaluaciones' AND COLUMN_NAME='sesion_id');

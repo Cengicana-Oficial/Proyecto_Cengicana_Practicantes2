@@ -1,3 +1,4 @@
+USE cengi_cursos;
 CREATE TABLE IF NOT EXISTS proforma_versiones (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  proforma_id INT UNSIGNED NOT NULL,

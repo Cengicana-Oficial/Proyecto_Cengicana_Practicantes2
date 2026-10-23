@@ -9,7 +9,7 @@
 --
 -- version = número de la versión guardada (1 = la liquidación tal como se generó).
 --
--- Idempotente. Espejo en deploy/mysql/init/30-cengicursos-liquidacion-versiones.sql.
+-- Idempotente. Espejo en deploy/mysql/init/32-cengicursos-liquidacion-versiones.sql.
 -- pago_instructores.php también la crea si falta (CREATE TABLE IF NOT EXISTS).
 
 SET NAMES utf8mb4;

@@ -576,7 +576,8 @@ foreach ($instructores as &$instructorFila) {
     };
     $cvDigital = isset($cvDigitalEntregado[$idInstructor]);
     $cvDisponible = $cvDigital || (!empty($instructorFila['cv_path']) && is_file(__DIR__ . '/' . $instructorFila['cv_path']));
-    $instructorFila['cv_url'] = $cvDigital ? 'instructor_cv.php?id=' . $idInstructor : $instructorFila['cv_path'];
+    // El PDF se sirve por documento_instructor.php: uploads/instructores no se publica (AUD-2026-001/I-1).
+    $instructorFila['cv_url'] = $cvDigital ? 'instructor_cv.php?id=' . $idInstructor : 'documento_instructor.php?cv=' . $idInstructor;
     $instructorCvUrl[$idInstructor] = $instructorFila['cv_url'];
     $instructorFila['cv_disponible'] = $cvDisponible;
     $instructorTieneCvDisponible[$idInstructor] = $cvDisponible;
@@ -1723,7 +1724,7 @@ body.inst-modal-open { overflow: hidden; }
         if (!puedeVerCvInstructor || !instructor.cv_disponible) return '';
         var path = escapeHtml(instructor.cv_url);
         return '<div class="inst-cv-preview" id="' + previewId + '"' + (isList ? ' style="margin:0;padding-left:60px;"' : '') + '><div class="inst-cv-row"><div class="inst-cv-doc"></div>' +
-            '<div style="flex:1;min-width:0;"><div style="margin-bottom:6px;font-size:11.5px;font-weight:600;overflow-wrap:anywhere;">' + escapeHtml(instructor.cv_url && instructor.cv_url.indexOf('instructor_cv.php?') === 0 ? 'CV digital entregado' : cvName(instructor.cv_url)) + '</div>' +
+            '<div style="flex:1;min-width:0;"><div style="margin-bottom:6px;font-size:11.5px;font-weight:600;overflow-wrap:anywhere;">' + escapeHtml(instructor.cv_url && instructor.cv_url.indexOf('instructor_cv.php?') === 0 ? 'CV digital entregado' : cvName(instructor.cv_path)) + '</div>' +
             '<div style="display:flex;gap:6px;flex-wrap:wrap;"><a class="inst-btn inst-btn-primary inst-btn-sm" href="' + path + '" target="_blank" rel="noopener">Abrir documento</a>' +
             '<a class="inst-btn inst-btn-outline inst-btn-sm" href="' + path + '" download>Descargar</a></div></div></div></div>';
     }
@@ -1858,7 +1859,7 @@ body.inst-modal-open { overflow: hidden; }
         document.getElementById('instEspecialidad').value = instructor.especialidad || '';
         document.getElementById('instCorreo').value = instructor.correo || '';
         document.getElementById('instTelefono').value = instructor.telefono || '';
-        document.getElementById('instCvText').textContent = instructor.cv_path ? 'CV actual: ' + cvName(instructor.cv_url) : 'Arrastra el CV o haz clic para seleccionar';
+        document.getElementById('instCvText').textContent = instructor.cv_path ? 'CV actual: ' + cvName(instructor.cv_path) : 'Arrastra el CV o haz clic para seleccionar';
         openModal('modalInstructor');
     }
     function formatDate(dateValue) {
@@ -1877,7 +1878,7 @@ body.inst-modal-open { overflow: hidden; }
         document.getElementById('instDetEval').textContent = (instructor.eval_instructor == null ? '—' : Number(instructor.eval_instructor).toFixed(2) + '/4');
         document.getElementById('instDetEstado').textContent = Number(instructor.estado) === 1 ? 'Activo' : 'Inactivo';
         document.getElementById('instDetCv').innerHTML = !puedeVerCvInstructor ? '' : (instructor.cv_disponible ?
-            '<a class="inst-chip is-cv" href="' + escapeHtml(instructor.cv_url) + '" target="_blank" rel="noopener">📄 ' + escapeHtml(instructor.cv_url && instructor.cv_url.indexOf('instructor_cv.php?') === 0 ? 'CV digital entregado' : cvName(instructor.cv_url)) + '</a>' :
+            '<a class="inst-chip is-cv" href="' + escapeHtml(instructor.cv_url) + '" target="_blank" rel="noopener">📄 ' + escapeHtml(instructor.cv_url && instructor.cv_url.indexOf('instructor_cv.php?') === 0 ? 'CV digital entregado' : cvName(instructor.cv_path)) + '</a>' :
             '<span class="inst-chip is-missing">⚠ Sin CV cargado</span>');
         var history = document.getElementById('instDetHistorial');
         if (!courses.length) {

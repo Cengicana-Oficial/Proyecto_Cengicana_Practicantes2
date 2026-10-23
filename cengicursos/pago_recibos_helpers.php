@@ -3,7 +3,7 @@
  * Recibos de pago a instructores y soporte técnico que cobran sin factura: documento del recibo
  * (página imprimible y PDF), envío por correo con un enlace personal para devolverlo firmado
  * y registro del recibo firmado (liquidacion_recibos). Lo usan pago_instructores.php y la
- * página pública recibo_firmado.php. Esquema: migrations/20261023_liquidacion_recibos.sql.
+ * página pública recibo_firmado.php. Esquema: migrations/20261023_liquidacion_recibos.sql y 20261025_liquidacion_recibos_expediente.sql.
  */
 
 require_once __DIR__ . '/planificacion_helpers.php';
@@ -12,46 +12,6 @@ require_once __DIR__ . '/correo.php'; // cengi_enviar_correo() y Dompdf (vendor/
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
-const CENGI_PR_DDL = "CREATE TABLE IF NOT EXISTS liquidacion_recibos (
-  detalle_id INT UNSIGNED NOT NULL,
-  token CHAR(40) NOT NULL,
-  monto DECIMAL(12,2) NOT NULL DEFAULT 0,
-  enviado_en DATETIME NULL,
-  enviado_a VARCHAR(255) NOT NULL DEFAULT '',
-  envios SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  firmado_path VARCHAR(255) NOT NULL DEFAULT '',
-  firmado_nombre VARCHAR(255) NOT NULL DEFAULT '',
-  firmado_en DATETIME NULL,
-  firmado_por VARCHAR(20) NOT NULL DEFAULT '',
-  PRIMARY KEY (detalle_id),
-  UNIQUE KEY uq_liquidacion_recibos_token (token)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-
-// Expediente del recibo: cada envío (con el PDF emitido), cada firmado subido (también los
-// reemplazados), la validación del Jefe y el pago. Los archivos no se borran nunca.
-const CENGI_PR_DDL_HISTORIAL = "CREATE TABLE IF NOT EXISTS liquidacion_recibo_historial (
-  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  detalle_id INT UNSIGNED NOT NULL,
-  accion VARCHAR(30) NOT NULL,
-  detalle VARCHAR(500) NOT NULL DEFAULT '',
-  archivo_path VARCHAR(255) NOT NULL DEFAULT '',
-  archivo_nombre VARCHAR(255) NOT NULL DEFAULT '',
-  monto DECIMAL(12,2) NULL,
-  usuario VARCHAR(160) NOT NULL DEFAULT '',
-  creado DATETIME NOT NULL,
-  PRIMARY KEY (id),
-  KEY idx_recibo_historial_detalle (detalle_id, creado)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-// Validación del Jefe de Transferencia en cada recibo (solo los recibos la llevan; las facturas no).
-const CENGI_PR_COLUMNAS = [
-    'validado_en' => 'DATETIME NULL',
-    'validado_por' => "VARCHAR(120) NOT NULL DEFAULT ''",
-    'validado_nombre' => "VARCHAR(160) NOT NULL DEFAULT ''",
-    'validado_cargo' => "VARCHAR(160) NOT NULL DEFAULT ''",
-    'validado_imagen' => 'MEDIUMTEXT NULL',
-    'validado_codigo' => "VARCHAR(40) NOT NULL DEFAULT ''",
-    'validado_monto' => 'DECIMAL(12,2) NULL',
-];
 const CENGI_PR_ACCIONES = [
     'enviado' => ['Recibo emitido y enviado', 'envelope'],
     'firmado' => ['Recibo firmado recibido', 'pencil'],
@@ -64,30 +24,6 @@ const CENGI_PR_ACCIONES = [
 ];
 const CENGI_PR_TIPOS = ['application/pdf' => 'pdf', 'image/jpeg' => 'jpg', 'image/png' => 'png'];
 const CENGI_PR_MAX = 10 * 1024 * 1024;
-
-/** Crea tablas y columnas que falten (fuera de transacciones: el DDL hace commit implícito). */
-function cengi_pr_asegurar(PDO $db)
-{
-    static $listo = false;
-    if ($listo) {
-        return;
-    }
-    $listo = true;
-    $tablas = $db->query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME IN ('liquidacion_recibos', 'liquidacion_recibo_historial')")->fetchAll(PDO::FETCH_COLUMN);
-    if (!in_array('liquidacion_recibos', $tablas, true)) {
-        $db->exec(CENGI_PR_DDL);
-    }
-    if (!in_array('liquidacion_recibo_historial', $tablas, true)) {
-        $db->exec(CENGI_PR_DDL_HISTORIAL);
-    }
-    $columnas = $db->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'liquidacion_recibos'")->fetchAll(PDO::FETCH_COLUMN);
-    foreach (CENGI_PR_COLUMNAS as $columna => $tipo) {
-        if (!in_array($columna, $columnas, true)) {
-            $db->exec("ALTER TABLE liquidacion_recibos ADD COLUMN $columna $tipo");
-        }
-    }
-}
 
 /** Anota un paso en el expediente del recibo. */
 function cengi_pr_log(PDO $db, $detalleId, $accion, $detalle = '', $archivo = '', $nombre = '', $monto = null, $usuario = '')
@@ -536,19 +472,39 @@ function cengi_pr_guardar_firmado(PDO $db, array $d, array $archivo, $origen)
     if (!$ruta) {
         throw new RuntimeException('No se pudo guardar el archivo. Intenta de nuevo.');
     }
-    cengi_pr_token($db, $d);
-    $previo = $db->prepare('SELECT firmado_en, validado_en FROM liquidacion_recibos WHERE detalle_id = ?');
-    $previo->execute([(int) $d['id']]);
-    $previo = $previo->fetch(PDO::FETCH_ASSOC) ?: [];
-    $nombre = mb_substr(basename((string) $archivo['name']), 0, 255, 'UTF-8');
-    // El firmado anterior se conserva en el expediente (no se borra); el vigente es el nuevo.
-    $db->prepare('UPDATE liquidacion_recibos SET firmado_path = ?, firmado_nombre = ?, firmado_en = ?, firmado_por = ?, monto = ? WHERE detalle_id = ?')
-        ->execute([$ruta, $nombre, date('Y-m-d H:i:s'), $origen, (float) $d['total'], (int) $d['id']]);
-    $quien = $origen === 'persona' ? 'Lo devolvió la persona por su enlace' : 'Registrado por Administración';
-    cengi_pr_log($db, $d['id'], !empty($previo['firmado_en']) ? 'reemplazado' : 'firmado', $quien, $ruta, $nombre, $d['total'], $origen === 'persona' ? $d['persona_nombre'] : '');
-    if (!empty($previo['validado_en'])) {
-        $db->prepare("UPDATE liquidacion_recibos SET validado_en = NULL, validado_codigo = '', validado_monto = NULL WHERE detalle_id = ?")->execute([(int) $d['id']]);
-        cengi_pr_log($db, $d['id'], 'validacion_retirada', 'Se subió un nuevo firmado: el Jefe debe validarlo de nuevo', '', '', $d['total']);
+    // Recibo, historial y retiro de la validación van juntos: si algo falla no queda un firmado
+    // vigente sin expediente ni con la validación anterior (AUD-2026-001/B-7).
+    $propia = !$db->inTransaction();
+    try {
+        if ($propia) {
+            $db->beginTransaction();
+        }
+        cengi_pr_token($db, $d);
+        $previo = $db->prepare('SELECT firmado_en, validado_en FROM liquidacion_recibos WHERE detalle_id = ? FOR UPDATE');
+        $previo->execute([(int) $d['id']]);
+        $previo = $previo->fetch(PDO::FETCH_ASSOC) ?: [];
+        $nombre = mb_substr(basename((string) $archivo['name']), 0, 255, 'UTF-8');
+        // El firmado anterior se conserva en el expediente (no se borra); el vigente es el nuevo.
+        $db->prepare('UPDATE liquidacion_recibos SET firmado_path = ?, firmado_nombre = ?, firmado_en = ?, firmado_por = ?, monto = ? WHERE detalle_id = ?')
+            ->execute([$ruta, $nombre, date('Y-m-d H:i:s'), $origen, (float) $d['total'], (int) $d['id']]);
+        $quien = $origen === 'persona' ? 'Lo devolvió la persona por su enlace' : 'Registrado por Administración';
+        cengi_pr_log($db, $d['id'], !empty($previo['firmado_en']) ? 'reemplazado' : 'firmado', $quien, $ruta, $nombre, $d['total'], $origen === 'persona' ? $d['persona_nombre'] : '');
+        if (!empty($previo['validado_en'])) {
+            $db->prepare("UPDATE liquidacion_recibos SET validado_en = NULL, validado_codigo = '', validado_monto = NULL WHERE detalle_id = ?")->execute([(int) $d['id']]);
+            cengi_pr_log($db, $d['id'], 'validacion_retirada', 'Se subió un nuevo firmado: el Jefe debe validarlo de nuevo', '', '', $d['total']);
+        }
+        if ($propia) {
+            $db->commit();
+        }
+    } catch (Throwable $e) {
+        if ($propia && $db->inTransaction()) {
+            $db->rollBack();
+        }
+        // El archivo recién guardado no quedó registrado en ningún lado.
+        if ($propia && ($enDisco = cengi_pr_archivo_firmado($ruta))) {
+            @unlink($enDisco);
+        }
+        throw $e;
     }
     return $ruta;
 }

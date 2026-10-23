@@ -5,7 +5,7 @@
  * «Organizaciones»: cada registro tiene tipo (ingenio, universidad…) y contacto.
  * Crear, editar y eliminar se hacen aquí mismo (POST + redirección); eliminar solo se
  * permite si nada lo usa. guardar_/actualizar_/eliminar_ingenios.php quedan por compatibilidad.
- * Esquema: migrations/20261104_ingenios_unifica_organizaciones.sql (se completa aquí si falta).
+ * Esquema: migrations/20261104_ingenios_unifica_organizaciones.sql.
  */
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/menu.php';
@@ -14,34 +14,21 @@ cengi_require_ver_ingenios();
 
 $db = conectar();
 $puedeGestionar = cengi_puede_gestionar_ingenios();
-$conDatosContacto = cengi_ing_asegurar_columnas($db);
+$conDatosContacto = cengi_ing_con_contacto($db);
 $h = static function ($v) {
     return htmlspecialchars((string) ($v ?? ''), ENT_QUOTES, 'UTF-8');
 };
 
 const CENGI_ING_TIPOS = ['Ingenio azucarero', 'Universidad', 'Empresa proveedora', 'Institución técnica', 'Otra'];
 
-/**
- * Asegura tipo y contacto en ingenios y, la primera vez, copia los datos de la antigua tabla
- * organizaciones (que se conserva como respaldo). Idempotente.
- */
-function cengi_ing_asegurar_columnas(PDO $db)
+/** Si ingenios ya tiene tipo y contacto (migrations/20261104_ingenios_unifica_organizaciones.sql). */
+function cengi_ing_con_contacto(PDO $db)
 {
     try {
         $db->query('SELECT tipo, contacto_nombre, contacto_correo, contacto_telefono FROM ingenios LIMIT 0');
         return true;
     } catch (PDOException $e) {
-        // Falta: se aplica la migración de unificación.
-    }
-    try {
-        $sql = (string) @file_get_contents(__DIR__ . '/migrations/20261104_ingenios_unifica_organizaciones.sql');
-        $sql = preg_replace('/^\s*--.*$/m', '', $sql);
-        foreach (array_filter(array_map('trim', explode(';', $sql))) as $sentencia) {
-            $db->exec($sentencia);
-        }
-        return true;
-    } catch (PDOException $e) {
-        error_log('Ingenios (unificar organizaciones): ' . $e->getMessage());
+        error_log('Ingenios: faltan tipo y contacto; aplicar deploy/mysql/actualizar-bd.sh.');
         return false;
     }
 }

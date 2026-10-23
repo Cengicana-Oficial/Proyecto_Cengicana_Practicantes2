@@ -13,7 +13,8 @@
 -- usuario en login/usuarios/usuarios.php. Los permisos se afinan en login/roles/roles.php.
 
 INSERT IGNORE INTO permisos (nombre_permiso, descripcion) VALUES
-    ('administrar_cursos_cengi', 'Coordinacion de capacitacion: administra todo el modulo de Cursos y ve todos los ingenios');
+    ('administrar_cursos_cengi', 'Coordinacion de capacitacion: administra todo el modulo de Cursos y ve todos los ingenios'),
+    ('firmar_liquidaciones_cengi', 'Permite validar y firmar digitalmente las liquidaciones de pago a instructores (Jefe de Transferencia de Tecnologia)');
 
 -- "Administrador de ingenio" pasa a llamarse "Gestor de capacitación de ingenio" (conserva usuarios y permisos).
 UPDATE roles SET nombre_rol = 'Gestor de capacitación de ingenio'

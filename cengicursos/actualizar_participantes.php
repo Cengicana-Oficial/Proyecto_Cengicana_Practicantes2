@@ -32,8 +32,6 @@ if (!cengi_ve_todo_por_rol_o_ingenio()) {
     $ingenioId = cengi_ingenio_id_actual();
 }
 
-cengi_cui_asegurar_historial($db);
-
 try {
     $db->beginTransaction();
 

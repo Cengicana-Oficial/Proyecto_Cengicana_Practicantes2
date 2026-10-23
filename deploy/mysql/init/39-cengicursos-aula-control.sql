@@ -1,3 +1,4 @@
+USE cengi_cursos;
 -- Control del aula: Teams, encuesta unica y correcciones auditadas. Idempotente.
 SET NAMES utf8mb4;
 CREATE TABLE IF NOT EXISTS aula_curso_config (

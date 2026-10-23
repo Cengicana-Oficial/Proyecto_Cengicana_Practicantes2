@@ -1,3 +1,4 @@
+USE cengi_cursos;
 -- Aula propia. Aplicar en cengi_cursos antes de utilizar Evaluaciones/Asistencia.
 SET NAMES utf8mb4;
 CREATE TABLE IF NOT EXISTS aula_preguntas (

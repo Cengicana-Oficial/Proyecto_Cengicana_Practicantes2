@@ -1,3 +1,4 @@
+USE cengi_cursos;
 CREATE TABLE IF NOT EXISTS aula_portadas (
  curso_id INT UNSIGNED NOT NULL,
  mime VARCHAR(30) NOT NULL,

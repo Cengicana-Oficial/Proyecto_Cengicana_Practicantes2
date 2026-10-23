@@ -586,28 +586,6 @@ function cengi_cui_nd_generar(PDO $db)
 }
 
 /**
- * Columna participantes.cui_anterior: documentos o códigos que tuvo la persona antes del actual
- * (p. ej. el código NNNND que se reemplazó por su DPI o pasaporte). Se crea si falta; llamar
- * fuera de una transacción (ALTER TABLE confirma la transacción abierta).
- */
-function cengi_cui_asegurar_historial(PDO $db)
-{
-    static $listo = false;
-    if ($listo) {
-        return;
-    }
-    $listo = true;
-    try {
-        $existe = (int) $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'participantes' AND COLUMN_NAME = 'cui_anterior'")->fetchColumn();
-        if (!$existe) {
-            $db->exec("ALTER TABLE participantes ADD COLUMN cui_anterior VARCHAR(500) NOT NULL DEFAULT ''");
-        }
-    } catch (Throwable $e) {
-        error_log('participantes.cui_anterior: ' . $e->getMessage());
-    }
-}
-
-/**
  * Documento a guardar al editar un participante. Vacío = se conserva el actual (o, si no tenía,
  * se le asigna un código NNNND). No se valida el formato: puede ser DPI, pasaporte u otro
  * documento de cualquier país. Devuelve [documento, historial]: historial es el nuevo valor de

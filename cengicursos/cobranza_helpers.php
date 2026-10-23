@@ -33,6 +33,10 @@ function cengi_cob_url_base()
     if (!empty($env['APP_URL'])) {
         return rtrim((string) $env['APP_URL'], '/');
     }
+    if (PHP_SAPI === 'cli') {
+        // El cron no tiene petición: sin APP_URL los enlaces saldrían a http://localhost.
+        throw new RuntimeException('Configura APP_URL en cengicursos.env para enviar enlaces desde el cron.');
+    }
     $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
     return ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
 }
@@ -163,11 +167,15 @@ function cengi_cob_pendientes(PDO $db, $anio, $planId = 0, $limitado = null)
         ];
     }
 
-    // Órdenes grupales del ingenio (sin proforma) con participantes y sin pagar
+    // Órdenes grupales del ingenio (sin proforma) con participantes y sin pagar. "historicos" cuenta las
+    // inscripciones creadas por la conciliación de asignaciones históricas (migración 20261021): su cobro
+    // lo revisa Administración, no el recordatorio automático (cron_recordatorio_pago.php).
     $stmt = $db->prepare("SELECT g.*, i.nombre_ingenios, p.nombre AS plan_nombre, p.fecha_inicio,
             (SELECT COUNT(*) FROM solicitudes_inscripcion s WHERE s.grupo_pago_id = g.id AND s.estado <> 'Rechazado') AS miembros,
             (SELECT GROUP_CONCAT(s.nombre_participante ORDER BY s.nombre_participante SEPARATOR ', ') FROM solicitudes_inscripcion s WHERE s.grupo_pago_id = g.id AND s.estado <> 'Rechazado') AS nombres,
-            (SELECT MIN(s.creado) FROM solicitudes_inscripcion s WHERE s.grupo_pago_id = g.id AND s.estado <> 'Rechazado') AS desde
+            (SELECT MIN(s.creado) FROM solicitudes_inscripcion s WHERE s.grupo_pago_id = g.id AND s.estado <> 'Rechazado') AS desde,
+            (SELECT COUNT(*) FROM solicitudes_inscripcion s WHERE s.grupo_pago_id = g.id AND s.estado <> 'Rechazado'
+                AND s.asignado_por LIKE 'Asignación histórica%') AS historicos
         FROM pagos_grupales g INNER JOIN ingenios i ON i.id = g.ingenio_id INNER JOIN planificacion_cursos p ON p.id = g.planificacion_id
         WHERE p.anio = ? AND p.estado <> 'cancelado' AND g.proforma_id IS NULL AND g.estado <> 'pagado'$filtroPlan");
     $stmt->execute([(int) $anio]);
@@ -185,6 +193,7 @@ function cengi_cob_pendientes(PDO $db, $anio, $planId = 0, $limitado = null)
             'venc' => cengi_cob_vencimiento($g['fecha_inicio']),
             'antiguedad' => $g['desde'] ? cengi_pp_dias_entre(substr($g['desde'], 0, 10), cengi_pp_hoy()) : null,
             'referencia' => 'cobro:g:' . (int) $g['id'], 'correo' => '', 'fila' => $g, 'asignado' => false, 'pagador' => 'Ingenio',
+            'historicos' => (int) $g['historicos'],
         ];
     }
 

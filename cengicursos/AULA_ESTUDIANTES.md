@@ -51,7 +51,7 @@ Crear cuentas centrales con correo accesible, acceso a Cursos y rol Estudiante/A
 
 Recuperación de contraseña y recordatorios utilizan `login/forgot_password.php`, Comunicaciones y `cron_comunicaciones.php`. Verificar SMTP, reglas y cron. El desarrollo no envía correos ni cambia contraseñas.
 
-Aplicar en orden `20261018_aula_estudiantes.sql` y `20261019_aula_integracion.sql`. Aplicar también `20261020_aula_control.sql` para Teams, encuesta única, correcciones y horario especial. Son idempotentes; copias para instalaciones nuevas en `deploy/mysql/init/32-*`, `33-*` y `34-*`. Actualizar código; el despliegue definitivo debe reconstruir la imagen Docker. La actualización se realiza en el entorno Docker local, sin publicar en servidor remoto.
+Aplicar en orden `20261018_aula_estudiantes.sql` y `20261019_aula_integracion.sql`. Aplicar también `20261020_aula_control.sql` para Teams, encuesta única, correcciones y horario especial. Son idempotentes; copias para instalaciones nuevas en `deploy/mysql/init/35-cengicursos-aula-estudiantes.sql`, `37-cengicursos-aula-integracion.sql` y `39-cengicursos-aula-control.sql`. Actualizar código; el despliegue definitivo debe reconstruir la imagen Docker. La actualización se realiza en el entorno Docker local, sin publicar en servidor remoto.
 
 ## Validación
 
