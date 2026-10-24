@@ -3,7 +3,7 @@ Sistema de Gestión de Ensayos Experimentales de Cengicaña.
 
 ## Stack
 
-- PHP 7.4 / Laravel 8
+- PHP 8.3 (mínimo 8.3.36) / Laravel 8
 - Vue 2 + Laravel Mix 6
 - AdminLTE 3 (jeroennoten/laravel-adminlte)
 - spatie/laravel-permission (roles y permisos)
@@ -17,7 +17,7 @@ de scaffolding del proyecto).
 
 ## Instalación local (sin Docker)
 
-Requiere PHP 7.4 con extensiones `pdo_mysql`, `gd`, `fileinfo`, `intl`,
+Requiere PHP 8.3.36 o superior con extensiones `pdo_mysql`, `gd`, `fileinfo`, `intl`,
 `exif`, `mbstring`, `zip`, `curl` habilitadas, MySQL y Node.js.
 
 ```bash

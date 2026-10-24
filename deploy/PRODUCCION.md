@@ -47,6 +47,10 @@ git pull
 docker compose -f docker-compose.prod.yml build app sigec recibos-worker comites-correos-worker
 ```
 
+Las imágenes pasan a PHP 8.3.36 (antes 8.2 en los módulos y 8.1 en SIGEC); el build descarga
+`php:8.3.36-apache`. Con los servicios ya levantados (paso 5), `docker compose -f docker-compose.prod.yml exec app php -v`
+y `... exec sigec php -v` deben decir `PHP 8.3.36`.
+
 SIGEC no compila su JavaScript al construir la imagen: usa el `sigec/public/dist/` que está en git.
 Quien cambie `sigec/resources/js` debe correr `npm run build` dentro de `sigec/` y versionar el `dist/`
 resultante en el mismo commit.

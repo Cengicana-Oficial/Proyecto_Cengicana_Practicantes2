@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 service nginx start
-service php7.4-fpm start
+service php8.3-fpm start
 
 if [ ! -d /.composer ]; then
     mkdir /.composer

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "d93c142fd8250c7e0f0e77c0f033b782",
+    "content-hash": "3293f0719a33f7fed92ec67b90309365",
     "packages": [
         {
             "name": "almasaeed2010/adminlte",
@@ -6348,12 +6348,12 @@
             "version": "v5.6.4",
             "source": {
                 "type": "git",
-                "url": "https://github.com/vlucas/phpdotenv.git",
+                "url": "https://github.com/phpdotenv/phpdotenv.git",
                 "reference": "416df702837983f8d5ff48c9c3fee4f5f57b980b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/vlucas/phpdotenv/zipball/416df702837983f8d5ff48c9c3fee4f5f57b980b",
+                "url": "https://api.github.com/repos/phpdotenv/phpdotenv/zipball/416df702837983f8d5ff48c9c3fee4f5f57b980b",
                 "reference": "416df702837983f8d5ff48c9c3fee4f5f57b980b",
                 "shasum": ""
             },
@@ -8844,12 +8844,12 @@
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
-        "php": "^7.3|^8.0"
+        "php": "^8.3.36"
     },
     "platform-dev": {},
     "platform-overrides": {
-        "ext-pcntl": "7.4.33",
-        "ext-posix": "7.4.33"
+        "ext-pcntl": "8.3.36",
+        "ext-posix": "8.3.36"
     },
     "plugin-api-version": "2.9.0"
 }
