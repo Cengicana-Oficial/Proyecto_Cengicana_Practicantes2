@@ -23,6 +23,9 @@ function labRecepcionAnalisisDefinicion(string $tipo, string $nombre): ?array
 /** Migración aditiva, una sola vez. Conserva IDs, nombres, inactivos y metadatos existentes. */
 function labRecepcionPrepararCatalogo(PDO $conexion): void
 {
+    if (!defined('ESQUEMA_MIGRANDO')) {
+        return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+    }
     $conexion->exec("CREATE TABLE IF NOT EXISTS lab_recepcion_migracion (
         clave VARCHAR(80) PRIMARY KEY, aplicada_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB");

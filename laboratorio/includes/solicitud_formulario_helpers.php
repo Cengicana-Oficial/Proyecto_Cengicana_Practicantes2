@@ -17,6 +17,9 @@ function solicitudColumnExists(PDO $conexion, string $column): bool
 
 function asegurarColumnasFirmasSolicitud(PDO $conexion): void
 {
+  if (!defined('ESQUEMA_MIGRANDO')) {
+      return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+  }
   $columnas = [
     'correo_ingresado' => 'VARCHAR(255) NULL',
     'correo_recibido' => 'VARCHAR(255) NULL',
@@ -119,6 +122,9 @@ function labSolicitudObtenerTipoActual(PDO $conexion, int $idSolicitud): ?array
 
 function labSolicitudHistorialAsegurarEsquema(PDO $conexion): void
 {
+  if (!defined('ESQUEMA_MIGRANDO')) {
+      return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+  }
   $rutaMigracion = __DIR__ . '/../database/004_solicitud_historial_cambios.sql';
   $sql = is_file($rutaMigracion) ? file_get_contents($rutaMigracion) : false;
 
@@ -516,6 +522,9 @@ function labSolicitudSiguienteLotePorTipo(PDO $conexion, array $tipoMuestra, boo
  */
 function labCorrelativoRecepcionEsquema(PDO $conexion): void
 {
+  if (!defined('ESQUEMA_MIGRANDO')) {
+      return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+  }
   $conexion->exec("CREATE TABLE IF NOT EXISTS lab_correlativo_recepcion (
     id_tipo INT NOT NULL PRIMARY KEY,
     ultimo_lote INT NOT NULL DEFAULT 0,

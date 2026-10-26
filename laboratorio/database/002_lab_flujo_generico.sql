@@ -40,7 +40,7 @@
 -- una vez: solo crea lo que falte (CREATE TABLE IF NOT EXISTS). Antes hacia
 -- DROP TABLE + CREATE, y volver a ejecutarla borraba los documentos, sus
 -- versiones, las firmas y la trazabilidad. Espejo en
--- deploy/mysql/init/33-laboratorio-flujo-generico.sql.
+-- deploy/mysql/init/38-laboratorio-flujo-generico.sql.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------

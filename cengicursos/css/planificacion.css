@@ -209,3 +209,354 @@ button.pp-chip, a.pp-chip { border: 0; cursor: pointer; text-decoration: none; }
     .pp-cal-ev { display: none; }
     .pp-cal-day.has-events::after { content: "•"; color: var(--cengi-primary-deep); font-weight: 800; }
 }
+
+/* Menú "Acciones" de la tabla de planificación: las acciones POST van en un
+   <form> dentro del <li>; el botón se ve igual que los enlaces del menú. */
+.pp-page .cengi-psum-actions .dropdown-menu > li > form { margin: 0; }
+.pp-page .cengi-psum-actions .dropdown-menu > li > form > button {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 16px; border: 0; background: none;
+    color: #2f3b2b; font-size: 12.5px; text-align: left; white-space: nowrap;
+}
+.pp-page .cengi-psum-actions .dropdown-menu > li > form > button .glyphicon { top: 0; width: 14px; color: #6b7766; font-size: 12px; }
+.pp-page .cengi-psum-actions .dropdown-menu > li > form > button:hover,
+.pp-page .cengi-psum-actions .dropdown-menu > li > form > button:focus { background: #F4FBEC; color: var(--cengi-primary-deep); outline: 0; }
+.pp-page .cengi-psum-actions .dropdown-menu > li > form > button.is-danger,
+.pp-page .cengi-psum-actions .dropdown-menu > li > form > button.is-danger .glyphicon { color: var(--cengi-danger-strong); }
+.pp-page .cengi-psum-actions .dropdown-menu > li > form > button.is-danger:hover { background: #fdecea; }
+
+/* Plan con curso creado: se distingue de "Aprobado" (convocatoria abierta). */
+.cengi-status-badge.is-running { border-color: #b9d3ea; background: #E8F1FA; color: #1F5A8A; }
+
+/* ---------- planificacion_cursos.php: búsqueda instantánea, chips, encabezado fijo y meses ---------- */
+.pp-page [hidden] { display: none !important; }
+
+.pp-alertas .pp-card-head h3 { display: flex; align-items: center; gap: 8px; }
+.pp-alertas-resumen { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-alertas-resumen .pp-chip { padding: 4px 10px; font-size: 11px; box-shadow: inset 0 0 0 1px transparent; }
+.pp-alertas-resumen .pp-chip.is-active { box-shadow: inset 0 0 0 1.5px currentColor; }
+.pp-alertas .pp-card-body { padding-top: 6px; padding-bottom: 10px; }
+.pp-alertas-mas { margin-top: 6px; }
+
+.pp-planes .pp-toolbar { border-bottom: 1px solid #EEF1EA; }
+.pp-search { position: relative; margin: 0; font-weight: 400; }
+.pp-search .glyphicon { position: absolute; top: 50%; left: 11px; transform: translateY(-50%); color: #8A9585; font-size: 12px; }
+.pp-toolbar .pp-search input[type="search"] { min-width: 300px; max-width: none; padding-left: 32px; }
+
+.pp-estados { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 18px; border-bottom: 1px solid #E4E7E1; }
+.pp-estado-chip {
+    display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px;
+    border: 1px solid var(--cengi-border); border-radius: 999px; background: #fff;
+    color: #4B5A45; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.pp-estado-chip b { min-width: 18px; padding: 0 5px; border-radius: 99px; background: #EEF1EA; font-size: 10.5px; text-align: center; }
+.pp-estado-chip:hover { border-color: var(--cengi-primary); color: var(--cengi-primary-deep); }
+.pp-estado-chip.is-active { border-color: var(--cengi-primary-deep); background: var(--cengi-primary-deep); color: #fff; }
+.pp-estado-chip.is-active b { background: rgba(255, 255, 255, .22); }
+.pp-resultados { margin-left: auto; color: var(--cengi-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* La tabla desplaza dentro de su recuadro: encabezado y meses quedan fijos arriba. */
+.pp-planes .pp-table-wrap { max-height: calc(100vh - 150px); min-height: 320px; overflow: auto; border-radius: 0 0 10px 10px; }
+.pp-planes .pp-table-wrap .cengi-org-table { min-width: 900px; margin: 0; }
+.pp-planes .cengi-org-table thead th { position: sticky; top: 0; z-index: 3; box-shadow: inset 0 -1px 0 #E4E7E1; }
+.pp-planes .pp-mes th {
+    position: sticky; top: 38px; z-index: 2; padding: 0 !important;
+    background: #F3F6EF !important; border-bottom: 1px solid #E4E7E1;
+}
+.pp-mes-toggle {
+    display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 12px; border: 0; background: none;
+    color: var(--cengi-ink); font-size: 12px; font-weight: 700; text-align: left; text-transform: none; letter-spacing: 0;
+}
+.pp-mes-toggle .glyphicon { font-size: 10px; color: #6b7766; transition: transform .15s; }
+.pp-mes.is-colapsado .pp-mes-toggle .glyphicon { transform: rotate(-90deg); }
+.pp-mes-n { color: var(--cengi-muted); font-weight: 600; }
+
+.cengi-canvas .pp-planes .cengi-org-table .pp-plan-name { min-width: 250px; }
+.pp-plan-table .pp-prog { width: 92px; min-width: 0; }
+.pp-plan-table td:nth-child(2) { white-space: nowrap; }
+.pp-plan-table td.pp-num .pp-sub { max-width: 170px; white-space: normal; }
+.pp-plan-table td:nth-child(4) .pp-sub { white-space: nowrap; }
+.pp-plan-name .pp-nota { margin-left: 4px; color: #8A9585; font-size: 11px; cursor: help; }
+.pp-plan-table td { padding-top: 9px !important; padding-bottom: 9px !important; }
+
+@media (max-width: 767px) {
+    .pp-toolbar .pp-search, .pp-toolbar .pp-search input[type="search"] { width: 100%; min-width: 0; }
+    .pp-resultados { width: 100%; margin-left: 0; }
+    .pp-planes .pp-table-wrap { max-height: none; }
+}
+
+/* ---------- programa_sesiones.php: sesiones habilitadas según el plan ---------- */
+.pp-ses-aviso {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; padding: 11px 16px;
+    border: 1px solid #f4e5ac; border-radius: 10px; background: #FFFBEA; color: #5f4a00; font-size: 12.5px;
+}
+.pp-ses-aviso > div { flex: 1; min-width: 220px; }
+.pp-ses-aviso > .glyphicon { top: 0; font-size: 16px; color: #8A6600; }
+.pp-ses-aviso.is-ok { border-color: #cbe2b3; background: #F4FBEC; color: #2f5a14; }
+.pp-ses-aviso.is-ok > .glyphicon { color: #3E7A12; }
+.pp-ses-num { width: 54px; text-align: center; white-space: nowrap; }
+.pp-ses-num b { display: block; color: var(--cengi-ink); font-size: 14px; }
+.pp-ses-espacio > td { background: repeating-linear-gradient(135deg, #FBFCFA, #FBFCFA 8px, #F5F7F2 8px, #F5F7F2 16px) !important; }
+.pp-ses-espacio .cengi-org-name strong { color: var(--cengi-muted); font-weight: 600; }
+.pp-ses-pendiente { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pp-ses-pendiente > span { color: var(--cengi-muted); font-size: 12px; font-style: italic; }
+.pp-ses-programar { display: inline-flex; align-items: center; gap: 6px; border-color: var(--cengi-primary); color: var(--cengi-primary-deep); font-weight: 700; white-space: nowrap; }
+.pp-ses-programar .glyphicon { top: 0; font-size: 10px; }
+.pp-ses-programar:hover { background: #F4FBEC; color: var(--cengi-primary-deep); }
+
+/* Módulos del plan (planificacion_cursos.php): nombre + número de sesiones. */
+.pp-mod-editor { display: grid; gap: 6px; }
+.pp-mod-fila { display: grid; grid-template-columns: minmax(0, 1fr) 96px 30px; gap: 6px; align-items: center; }
+.pp-mod-quitar { height: 30px; border: 1px solid var(--cengi-border); border-radius: 7px; background: #fff; color: #8A9585; }
+.pp-mod-quitar:hover { border-color: #efc7c2; color: var(--cengi-danger-strong); }
+.pp-mod-pie { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.pp-sub.is-warn { color: #B34E00; font-weight: 700; }
+
+/* Programa de sesiones: rango de sesiones de cada módulo y opción "Correr esta y las siguientes". */
+.pp-ses-modulos { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.pp-ses-modulos-titulo { margin-right: 4px; color: var(--cengi-ink); font-size: 12px; font-weight: 700; }
+.pp-ses-correr { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid #f4e5ac; border-radius: 9px; background: #FFFBEA; }
+.pp-ses-correr label { display: flex; align-items: baseline; gap: 8px; margin: 0; font-weight: 400; cursor: pointer; }
+.pp-ses-correr small { color: var(--cengi-muted); }
+
+/* Programa de sesiones: casilla "Enviar invitación de Outlook" en los modales. */
+.pp-ics-check label {
+    display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 12px;
+    border: 1px solid #cbe2b3; border-radius: 9px; background: #F4FBEC; font-weight: 400; cursor: pointer;
+}
+.pp-ics-check input { flex: 0 0 auto; margin-top: 3px; }
+.pp-ics-check small { display: block; margin-top: 2px; color: var(--cengi-muted); font-size: 11.5px; }
+.pp-ics-check + .pp-ics-check { margin-top: -8px; }
+
+/* ---------- programa_sesiones.php: filtros, tarjeta del curso, acciones y modales ---------- */
+.ses-filtros { overflow: hidden; }
+.ses-filtros-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 0; padding: 14px 18px; }
+.ses-campo { display: flex; flex-direction: column; gap: 4px; margin: 0; font-weight: 400; }
+.ses-campo > span:first-child { color: #5B6459; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.ses-campo select, .ses-buscar input {
+    height: 36px; padding: 4px 10px; border: 1px solid #CED2D5; border-radius: 9px; background: #fff;
+    color: #1E2A1A; font-size: 12.5px; max-width: 220px;
+}
+.ses-campo.is-curso select { max-width: 320px; min-width: 240px; }
+.ses-campo select:focus, .ses-buscar input:focus { border-color: #73BC25; outline: 0; box-shadow: 0 0 0 3px rgba(115, 188, 37, .22); }
+.ses-campo.is-buscar { flex: 1 1 220px; }
+.ses-buscar { position: relative; display: block; }
+.ses-buscar .glyphicon { position: absolute; top: 50%; left: 11px; margin-top: -6px; color: #8A958C; font-size: 12px; pointer-events: none; }
+.ses-buscar input { width: 100%; max-width: none; padding-left: 31px; }
+.ses-filtros-fin { display: flex; align-items: center; gap: 10px; height: 36px; margin-left: auto; }
+.ses-total { padding: 6px 12px; border-radius: 999px; background: #EEF7E3; color: #3E7A12; font-size: 12px; white-space: nowrap; }
+.ses-limpiar { display: inline-flex; align-items: center; gap: 5px; color: #B34E00; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.ses-limpiar .glyphicon { font-size: 10px; }
+.ses-filtro-aviso {
+    display: flex; align-items: center; gap: 8px; padding: 9px 18px; border-top: 1px solid #F5E39A;
+    background: #FFF7D6; color: #5f4700; font-size: 12.5px;
+}
+.ses-filtro-aviso .glyphicon { color: #7A5C00; }
+
+.ses-curso {
+    display: flex; flex-wrap: wrap; align-items: stretch; justify-content: space-between; gap: 18px;
+    margin-bottom: 16px; padding: 18px 20px; border: 1px solid #E4E7E1; border-left: 5px solid #73BC25;
+    border-radius: 12px; background: #fff; box-shadow: var(--cengi-shadow);
+}
+.ses-curso.is-anio { border-left-color: #CED2D5; }
+.ses-curso-info { flex: 1 1 380px; min-width: 0; }
+.ses-curso-eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #55705F; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.ses-curso-eyebrow .cengi-status-badge { text-transform: none; letter-spacing: 0; }
+.ses-curso h2 { margin: 6px 0 8px; color: #1E2A1A; font-family: "Space Grotesk", "Inter", sans-serif; font-size: 21px; font-weight: 700; line-height: 1.2; }
+.ses-curso-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; color: #55705F; font-size: 12.5px; }
+.ses-curso-meta .glyphicon { margin-right: 5px; color: #73BC25; font-size: 11px; }
+.ses-curso-ayuda { margin: 0; color: #55705F; font-size: 12.5px; line-height: 1.5; }
+.ses-curso-prog { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 12px; color: #55705F; font-size: 12px; }
+.ses-curso-prog b { color: #1E2A1A; }
+.ses-curso-bar { flex: 0 1 260px; height: 8px; overflow: hidden; border-radius: 99px; background: #F1F3F4; box-shadow: inset 0 0 0 1px #E1E4E6; }
+.ses-curso-bar span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #73BC25, #A3D300); }
+.ses-curso-bar.is-incompleto span { background: #FFCC00; }
+.ses-curso-bar.is-over span { background: #FF6B00; }
+.ses-curso-acciones { display: flex; flex: 0 1 auto; flex-direction: column; justify-content: center; gap: 8px; }
+.ses-acciones-fila { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.ses-accion {
+    display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px;
+    border: 1px solid #CED2D5; border-radius: 9px; background: #fff; color: #1f5632; font-size: 12.5px; font-weight: 700;
+}
+.ses-accion:hover, .ses-accion:focus { border-color: #73BC25; background: #EEF7E3; color: #1f5632; outline: 0; }
+.ses-accion[disabled] { cursor: not-allowed; opacity: .5; }
+.ses-accion.is-programacion { border-color: #FFCC00; background: #FFF7D6; color: #5f4700; }
+.ses-accion.is-programacion:hover { background: #FFCC00; color: #3b2f00; }
+.ses-accion.is-programacion b { min-width: 18px; padding: 0 6px; border-radius: 99px; background: #FFCC00; color: #3b2f00; font-size: 10.5px; text-align: center; }
+.ses-accion .glyphicon { font-size: 11px; }
+.ses-dropdown .dropdown-menu { min-width: 250px; padding: 6px 0; border-color: #E4E7E1; border-radius: 10px; box-shadow: 0 12px 28px -10px rgba(22, 61, 36, .35); }
+.ses-dropdown .dropdown-menu > li > a,
+.ses-dropdown .dropdown-menu > li > form > button {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 16px; border: 0; background: none;
+    color: #2f3b2b; font-size: 12.5px; text-align: left; white-space: nowrap;
+}
+.ses-dropdown .dropdown-menu > li > form { margin: 0; }
+.ses-dropdown .dropdown-menu .glyphicon { top: 0; width: 14px; color: #73BC25; font-size: 12px; }
+.ses-dropdown .dropdown-menu > li > a:hover,
+.ses-dropdown .dropdown-menu > li > form > button:hover { background: #EEF7E3; color: #1f5632; }
+.ses-dropdown .dropdown-menu > li > a.is-danger, .ses-dropdown .dropdown-menu > li > a.is-danger .glyphicon { color: #B23223; }
+.ses-dropdown .dropdown-menu > li > a.is-danger:hover { background: #FBE3E0; }
+.ses-dropdown .dropdown-header { color: #8A958C; font-size: 11px; }
+
+/* Modales "Enviar programación" y "Eliminar programación" */
+.ses-paso { display: block; margin: 16px 0 8px; color: #1E2A1A; font-size: 13px; font-weight: 700; }
+.ses-paso:first-of-type { margin-top: 0; }
+.ses-destinatarios { display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
+.ses-destinatario {
+    display: flex; align-items: center; gap: 12px; margin: 0; padding: 10px 12px; border: 1px solid #E4E7E1;
+    border-radius: 10px; background: #fff; font-weight: 400; cursor: pointer;
+}
+.ses-destinatario:has(input:checked) { border-color: #73BC25; background: #F4FBEC; }
+.ses-destinatario.is-sin-correo { background: #FAFAFA; cursor: not-allowed; }
+.ses-destinatario.is-sin-correo .pp-sub { color: #B34E00; }
+.ses-destinatario input { flex: 0 0 auto; margin: 0; }
+.ses-destinatario-info { flex: 1; min-width: 0; }
+.ses-rol { margin-left: 4px; padding: 1px 7px; border-radius: 99px; background: #F1F3F4; color: #5B6459; font-size: 10.5px; font-weight: 700; }
+.ses-destinatario-n { flex: 0 0 auto; color: #1E2A1A; font-size: 12px; text-align: right; }
+.ses-modos { display: grid; gap: 6px; }
+.ses-modos label {
+    display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 12px; border: 1px solid #E4E7E1;
+    border-radius: 10px; font-weight: 400; cursor: pointer;
+}
+.ses-modos label:has(input:checked) { border-color: #73BC25; background: #F4FBEC; }
+.ses-modos input { margin-top: 3px; }
+.ses-modos small { display: block; margin-top: 2px; color: #55705F; font-size: 11.5px; }
+.ses-vacio { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 24px 12px; color: #55705F; text-align: center; }
+.ses-vacio .glyphicon { margin-bottom: 4px; color: #CED2D5; font-size: 24px; }
+.ses-vacio b { color: #1E2A1A; }
+.cg-tema .modal-header.ses-peligro { border-bottom-color: #E4544A; }
+.ses-peligro-texto { margin: 0 0 12px; color: #55705F; font-size: 12.5px; }
+.ses-consecuencias { margin: 12px 0 0; padding-left: 18px; color: #55705F; font-size: 12px; line-height: 1.6; }
+
+/* Reprogramar sesión: botón de la tabla, aviso en "Editar sesión" y vista previa antes → después. */
+.cengi-canvas .cengi-action-btn.is-reprogramar { color: #B34E00; }
+.cengi-canvas .cengi-action-btn.is-reprogramar:hover { border-color: #FF6B00; background: #FFEEE0; color: #B34E00; }
+.rp-hint {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px;
+    border: 1px solid #FFD2B0; border-left: 4px solid #FF6B00; border-radius: 9px; background: #FFF6EF; color: #6b3000; font-size: 12.5px;
+}
+.rp-hint > span:nth-child(2) { flex: 1 1 260px; }
+.rp-hint .glyphicon-info-sign { color: #FF6B00; }
+.rp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; }
+.rp-horas { display: flex; align-items: center; gap: 8px; }
+.rp-horas span { color: #8A958C; font-size: 12px; }
+.rp-modos { grid-template-columns: 1fr 1fr; }
+.rp-preview-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.rp-resumen { color: #B34E00; font-size: 12px; font-weight: 700; }
+.rp-preview { max-height: 260px; overflow-y: auto; border: 1px solid #E4E7E1; border-radius: 10px; }
+.rp-preview > .pp-sub { padding: 14px; text-align: center; }
+.rp-tabla { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rp-tabla th { position: sticky; top: 0; padding: 7px 10px; border-bottom: 2px solid #CED2D5; background: #F7F9F4; color: #3c5245; font-size: 10.5px; letter-spacing: .04em; text-align: left; text-transform: uppercase; }
+.rp-tabla td { padding: 7px 10px; border-bottom: 1px solid #EEF1EA; vertical-align: top; }
+.rp-tabla tr.is-principal td { background: #FFF7D6; }
+.rp-tabla tr.is-choque td { background: #FDF0EE; }
+.rp-antes { color: #8A958C; text-decoration: line-through; white-space: nowrap; }
+.rp-flecha { color: #FF6B00; font-weight: 700; }
+.rp-despues { color: #1f5632; white-space: nowrap; }
+.rp-despues .pp-chip { margin-left: 6px; white-space: normal; }
+.rp-motivo { margin: 14px 0 12px; }
+.rp-motivo small { color: #8A958C; font-weight: 400; }
+
+@media (max-width: 767px) {
+    .rp-grid, .rp-modos { grid-template-columns: minmax(0, 1fr); }
+    .ses-campo, .ses-campo select, .ses-campo.is-curso select { width: 100%; max-width: none; min-width: 0; }
+    .ses-filtros-fin { width: 100%; margin-left: 0; justify-content: space-between; }
+    .ses-acciones-fila { justify-content: stretch; }
+    .ses-acciones-fila > * { flex: 1 1 auto; }
+    .ses-acciones-fila .ses-accion, .ses-acciones-fila .btn { width: 100%; justify-content: center; }
+}
+
+/* Programa de sesiones: abrir la sesion en el aula (aula_gestion.php#ses-<id>). */
+.cengi-action-btn.is-aula { color: #3E7A12; }
+.cengi-action-btn.is-aula:hover { border-color: #73BC25; background: #EEF7E3; color: #1f5632; }
+
+/* ---------- planificacion_cursos.php: alertas plegadas en una barra y tabla compacta ---------- */
+.pp-kpi-enlace { display: block; color: inherit; text-decoration: none; }
+.pp-kpi-enlace:hover, .pp-kpi-enlace:focus { color: inherit; text-decoration: none; }
+.pp-kpi-enlace .cengi-kpi { height: 100%; transition: transform .15s ease, box-shadow .15s ease; }
+.pp-kpi-enlace:hover .cengi-kpi { transform: translateY(-1px); box-shadow: 0 8px 18px -10px rgba(31, 86, 50, .35); }
+
+.pp-alertas-barra { margin-bottom: 16px; border: 1px solid #FFD3B0; border-left: 5px solid #FF6B00; border-radius: 12px; background: #fff; }
+.pp-alertas-barra.is-ok { border-color: #D6EBBE; border-left-color: #73BC25; }
+.pp-alertas-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 14px; }
+.pp-alertas-abrir { display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px; border: 0; border-radius: 8px; background: none; color: #1f5632; font-size: 13.5px; }
+.pp-alertas-abrir:hover:not(:disabled) { background: #FFF4EB; }
+.pp-alertas-abrir:disabled { cursor: default; }
+.pp-alertas-abrir > .glyphicon { color: #FF6B00; }
+.is-ok .pp-alertas-abrir > .glyphicon { color: #73BC25; }
+.pp-alertas-ver { display: inline-flex; align-items: center; gap: 4px; color: #B34E00; font-size: 12px; font-weight: 700; }
+.pp-alertas-ver .glyphicon { font-size: 9px; transition: transform .15s; }
+.pp-alertas-barra.is-abierta .pp-alertas-ver .glyphicon { transform: rotate(180deg); }
+.pp-alertas-barra .pp-alertas-resumen { flex: 1 1 auto; }
+.pp-alertas-barra .pp-alertas-resumen .pp-chip b { margin-left: 3px; }
+.pp-alertas-lista { padding: 2px 16px 12px; border-top: 1px dashed #F3D9C4; }
+.pp-alertas-nota { display: flex; gap: 6px; margin: 8px 0 2px; padding: 7px 10px; border-radius: 8px; background: #F1F3F4; color: #5B6459; font-size: 12px; }
+
+.pp-fila-alerta { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 1px 7px; border-radius: 10px; background: #FFEEE0; color: #B34E00; font-size: 11px; font-weight: 700; text-decoration: none; vertical-align: 1px; }
+.pp-fila-alerta:hover { background: #FF6B00; color: #fff; text-decoration: none; }
+.pp-fila-alerta .glyphicon { font-size: 9px; }
+.pp-plan-table .pp-plan-name .pp-sub { color: #6b7766; }
+.pp-alerta-detalle { margin-top: 4px; }
+.pp-alerta-detalle summary { display: list-item; color: #3E7A12; font-size: 12px; font-weight: 700; cursor: pointer; }
+.pp-alerta-detalle ul { max-height: 240px; margin: 6px 0 0; padding: 0 0 0 18px; overflow-y: auto; }
+.pp-alerta-detalle li { padding: 2px 0; font-size: 12px; }
+.pp-alerta-detalle li span { color: #5B6459; }
+
+/* ===== Programa de sesiones: vista por curso (programa_sesiones.php) =====
+   Año: un renglón por curso; "Ver sesiones" despliega su tabla. Curso: tabla compacta
+   (sin la columna Tema; fecha+horario, instructor+código y modalidad+lugar juntos). */
+.ses-cursos { display: flex; flex-direction: column; gap: 8px; }
+.ses-vacio { padding: 22px; color: #5B6459; text-align: center; }
+.ses-curso-item { border: 1px solid #E4E7E1; border-left: 4px solid #73BC25; border-radius: 12px; background: #fff; }
+.ses-curso-item.is-cancelado { border-left-color: #CED2D5; opacity: .8; }
+.ses-curso-item > summary {
+    display: grid; grid-template-columns: minmax(220px, 2fr) minmax(170px, 1.3fr) 90px minmax(0, 1fr) auto;
+    align-items: center; gap: 16px; padding: 12px 16px; list-style: none; cursor: pointer;
+}
+.ses-curso-item > summary::-webkit-details-marker { display: none; }
+.ses-curso-item > summary:hover { background: #FAFCF7; border-radius: 12px; }
+.ses-curso-item[open] > summary { border-bottom: 1px solid #EEF1EA; border-radius: 12px 12px 0 0; background: #F7FBF1; }
+.ses-ci-nombre { display: flex; flex-direction: column; min-width: 0; }
+.ses-ci-nombre b { overflow: hidden; color: #1f5632; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.ses-ci-avance { display: flex; flex-direction: column; gap: 5px; }
+.ses-ci-avance .ses-curso-bar { flex: none; width: 100%; max-width: 220px; height: 6px; }
+.ses-ci-proxima { display: flex; flex-direction: column; line-height: 1.2; }
+.ses-ci-proxima b { color: #1E2A1A; font-size: 13px; }
+.ses-ci-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ses-ci-botones { display: flex; align-items: center; gap: 6px; }
+.ses-ci-ver, .ses-ci-gestionar {
+    display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px;
+    font-size: 12px; font-weight: 700; white-space: nowrap; text-decoration: none;
+}
+.ses-ci-ver { background: #73BC25; color: #fff; }
+.ses-ci-ver b { padding: 1px 7px; border-radius: 10px; background: rgba(255, 255, 255, .25); font-size: 11px; }
+.ses-ci-ver .glyphicon { top: 0; font-size: 10px; transition: transform .15s; }
+.ses-curso-item[open] .ses-ci-ver { background: #1f5632; }
+.ses-curso-item[open] .ses-ci-ver .glyphicon { transform: rotate(180deg); }
+.ses-ci-gestionar { border: 1px solid #CED2D5; background: #fff; color: #1f5632; }
+.ses-ci-gestionar:hover, .ses-ci-gestionar:focus { border-color: #73BC25; background: #EEF7E3; color: #1f5632; text-decoration: none; }
+.ses-ci-gestionar .glyphicon { top: 0; font-size: 11px; }
+.ses-ci-detalle { padding: 0 6px 6px; }
+.ses-ci-detalle .cengi-org-table, .ses-tabla .cengi-org-table { min-width: 760px; }
+/* Celdas compactas de la tabla de sesiones */
+.ses-tabla .cengi-org-table td, .ses-ci-detalle .cengi-org-table td { padding-top: 7px; padding-bottom: 7px; vertical-align: top; }
+.ses-fecha { white-space: nowrap; }
+.ses-fecha .ses-dia { color: #6b8072; font-size: 11px; text-transform: lowercase; }
+.ses-fecha .pp-chip, .ses-tabla td > .pp-chip, .ses-ci-detalle td > .pp-chip { display: inline-block; margin-top: 3px; white-space: normal; }
+@media (max-width: 1100px) {
+    .ses-curso-item > summary { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+    .ses-ci-avance, .ses-ci-proxima, .ses-ci-chips { grid-column: 1; }
+    .ses-ci-botones { grid-column: 2; grid-row: 1; }
+}
+@media (max-width: 600px) {
+    .ses-curso-item > summary { grid-template-columns: 1fr; }
+    .ses-ci-botones { grid-column: 1; grid-row: auto; flex-wrap: wrap; }
+}
+.ses-curso-item[open] .ses-ci-ver-txt { font-size: 0; }
+.ses-curso-item[open] .ses-ci-ver-txt::after { content: "Ocultar sesiones"; font-size: 12px; }
+/* Vista de un curso: regreso a la lista de cursos del año. */
+.ses-volver {
+    display: flex; width: fit-content; align-items: center; gap: 6px; margin-bottom: 8px; padding: 4px 11px;
+    border: 1px solid #D6EBBE; border-radius: 14px; background: #EEF7E3; color: #1f5632; font-size: 12px; font-weight: 700; text-decoration: none;
+}
+.ses-volver:hover, .ses-volver:focus { border-color: #73BC25; background: #73BC25; color: #fff; text-decoration: none; }
+.ses-volver .glyphicon { top: 0; font-size: 10px; }

@@ -25,4 +25,20 @@ do
     find "$dir" -type f -exec chmod 664 {} + 2>/dev/null || true
 done
 
+# Varias paginas arman enlaces absolutos (correos, restablecer contrasena, diplomas) con la cabecera
+# Host, que la controla el cliente: con un Host falso los enlaces apuntarian a otro dominio. Si
+# HOSTS_PERMITIDOS tiene valor (lista separada por comas), Apache responde 403 a cualquier otro Host.
+# Vacio (desarrollo local) no se restringe. AUD-2026-001/M-3.
+conf_hosts=/etc/apache2/conf-enabled/zz-hosts-permitidos.conf
+patron=$(printf '%s' "${HOSTS_PERMITIDOS:-}" | tr ',' '\n' | sed 's/^ *//; s/ *$//; /^$/d; s/[^A-Za-z0-9.-]//g; s/\./\\./g' | paste -sd'|' -)
+if [ -n "$patron" ]; then
+    cat > "$conf_hosts" <<EOF
+<If "%{HTTP_HOST} !~ m#^($patron)(:[0-9]+)?\$#i">
+    Require all denied
+</If>
+EOF
+else
+    : > "$conf_hosts"
+fi
+
 exec docker-php-entrypoint "$@"

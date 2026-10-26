@@ -63,6 +63,8 @@ function cengi_curso_form_datos()
             'id' => (int) ($modulo['id'] ?? 0),
             'nombre' => $nombre,
             'horas' => $horas,
+            // Sesiones del módulo (opcional): con todas indicadas, las sesiones del curso se asignan solas a su módulo.
+            'sesiones' => ctype_digit(trim((string) ($modulo['sesiones'] ?? ''))) && (int) $modulo['sesiones'] > 0 ? min(999, (int) $modulo['sesiones']) : null,
             'pre' => !empty($modulo['pre']) ? 1 : 0,
             'post' => !empty($modulo['post']) ? 1 : 0,
             'instructores' => array_values(array_map('intval', array_keys($instructoresModulo))),
@@ -142,16 +144,16 @@ function cengi_curso_guardar_modulos(PDO $db, $cursoId, array $modulos, $actuali
 
     $conservados = [];
     $orden = 1;
-    $stmtInsertar = $db->prepare('INSERT INTO curso_modulos (curso_id, nombre, horas, orden, acepta_pre, acepta_post) VALUES (?, ?, ?, ?, ?, ?)');
-    $stmtActualizar = $db->prepare('UPDATE curso_modulos SET nombre = ?, horas = ?, orden = ?, acepta_pre = ?, acepta_post = ? WHERE id = ? AND curso_id = ?');
+    $stmtInsertar = $db->prepare('INSERT INTO curso_modulos (curso_id, nombre, horas, sesiones, orden, acepta_pre, acepta_post) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $stmtActualizar = $db->prepare('UPDATE curso_modulos SET nombre = ?, horas = ?, sesiones = ?, orden = ?, acepta_pre = ?, acepta_post = ? WHERE id = ? AND curso_id = ?');
     $stmtBorrarInstructoresModulo = $db->prepare('DELETE FROM curso_modulo_instructores WHERE curso_modulo_id = ?');
     $stmtInsertarInstructorModulo = $db->prepare('INSERT INTO curso_modulo_instructores (curso_modulo_id, instructor_id) VALUES (?, ?)');
     foreach ($modulos as $modulo) {
         $moduloId = (int) $modulo['id'];
         if ($actualizar && $moduloId > 0 && isset($existentes[$moduloId])) {
-            $stmtActualizar->execute([$modulo['nombre'], $modulo['horas'], $orden, $modulo['pre'], $modulo['post'], $moduloId, $cursoId]);
+            $stmtActualizar->execute([$modulo['nombre'], $modulo['horas'], $modulo['sesiones'] ?? null, $orden, $modulo['pre'], $modulo['post'], $moduloId, $cursoId]);
         } else {
-            $stmtInsertar->execute([$cursoId, $modulo['nombre'], $modulo['horas'], $orden, $modulo['pre'], $modulo['post']]);
+            $stmtInsertar->execute([$cursoId, $modulo['nombre'], $modulo['horas'], $modulo['sesiones'] ?? null, $orden, $modulo['pre'], $modulo['post']]);
             $moduloId = (int) $db->lastInsertId();
         }
         $conservados[] = $moduloId;
@@ -184,6 +186,35 @@ function cengi_curso_guardar_modulos(PDO $db, $cursoId, array $modulos, $actuali
     return $conservados;
 }
 
+/** Cursos con menos horas que esto solo registran asistencia (sin pre ni post-evaluación). */
+const CENGI_HORAS_MIN_EVALUACION = 10;
+
+/**
+ * Horas del curso: la suma de las horas de sus módulos; si no están cargadas, la duración
+ * de las sesiones programadas o impartidas (no canceladas) de su planificación. 0 = sin dato.
+ */
+function cengi_curso_horas(PDO $db, $cursoId)
+{
+    $stmt = $db->prepare('SELECT COALESCE(SUM(horas), 0) FROM curso_modulos WHERE curso_id = ?');
+    $stmt->execute([(int) $cursoId]);
+    $horas = (float) $stmt->fetchColumn();
+    if ($horas > 0) {
+        return $horas;
+    }
+    $stmt = $db->prepare("SELECT COALESCE(SUM(TIME_TO_SEC(TIMEDIFF(s.hora_fin, s.hora_inicio))), 0) / 3600
+        FROM curso_sesiones s INNER JOIN planificacion_cursos pc ON pc.id = s.planificacion_id
+        WHERE pc.curso_id = ? AND s.estado <> 'cancelada' AND s.hora_fin > s.hora_inicio");
+    $stmt->execute([(int) $cursoId]);
+    return round((float) $stmt->fetchColumn(), 2);
+}
+
+/** El curso solo registra asistencia si dura menos de CENGI_HORAS_MIN_EVALUACION horas (y se conocen sus horas). */
+function cengi_curso_solo_asistencia(PDO $db, $cursoId)
+{
+    $horas = cengi_curso_horas($db, $cursoId);
+    return $horas > 0 && $horas < CENGI_HORAS_MIN_EVALUACION;
+}
+
 /**
  * Determina, para una vista de calificacion dada (un modulo puntual o "todo el
  * curso"), si las columnas Pre-Evaluacion y Pos-Evaluacion deben mostrarse (y
@@ -202,9 +233,13 @@ function cengi_curso_guardar_modulos(PDO $db, $cursoId, array $modulos, $actuali
  *                        para no duplicar esta regla con criterios distintos.
  * @return array{pre: bool, post: bool}
  */
-function cengi_curso_pre_post_visibles(array $modulos, $moduloId)
+function cengi_curso_pre_post_visibles(array $modulos, $moduloId, $soloAsistencia = false)
 {
     $moduloId = (int) $moduloId;
+    if ($soloAsistencia) {
+        // Curso corto (menos de CENGI_HORAS_MIN_EVALUACION horas): solo se registra la asistencia.
+        return ['pre' => false, 'post' => false];
+    }
 
     if ($moduloId > 0) {
         foreach ($modulos as $modulo) {

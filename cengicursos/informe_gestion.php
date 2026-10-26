@@ -89,6 +89,15 @@ function cengi_ig_balance($valor)
     return '<b class="' . ($valor < 0 ? 'ig-neg' : 'ig-pos') . '">' . ($valor < 0 ? '−' : '') . cengi_pp_q(abs($valor)) . '</b>';
 }
 
+/** Valor con color de semaforo de la paleta: 'bien' (verde), 'medio' (amarillo), 'bajo' (naranja). */
+function cengi_ig_chip($texto, $valor, $bien, $medio)
+{
+    if ($valor === null) {
+        return '<span class="ig-muted">' . $texto . '</span>';
+    }
+    return '<span class="ig-chip is-' . ($valor >= $bien ? 'bien' : ($valor >= $medio ? 'medio' : 'bajo')) . '">' . $texto . '</span>';
+}
+
 function cengi_ig_barra($valor, $maximo)
 {
     $pct = $maximo > 0 ? max(0, min(100, $valor / $maximo * 100)) : 0;
@@ -166,7 +175,8 @@ function cengi_ig_cursos(PDO $db, $desde, $hasta, array $gastos, array &$persona
     $stSol = $db->prepare("SELECT s.tipo_pago, s.pago_estado, s.monto, s.moneda, g.estado AS grupo_estado
         FROM solicitudes_inscripcion s LEFT JOIN pagos_grupales g ON g.id = s.grupo_pago_id
         WHERE s.estado <> 'Rechazado' AND (s.planificacion_id = ? OR (s.planificacion_id IS NULL AND s.curso_id = ?))");
-    $stSes = $db->prepare("SELECT s.estado, s.hora_inicio, s.hora_fin, COALESCE(t.tarifa, i.tarifa_sesion, 0) AS tarifa_instr, COALESCE(st.tarifa, 0) AS tarifa_sop
+    $stSes = $db->prepare("SELECT s.estado, s.fecha, s.hora_inicio, s.hora_fin, COALESCE(t.tarifa, i.tarifa_sesion, 0) AS tarifa_instr, COALESCE(st.tarifa, 0) AS tarifa_sop,
+            COALESCE(i.comprobante, 'factura') AS comp_instr, COALESCE(st.comprobante, 'factura') AS comp_sop
         FROM curso_sesiones s LEFT JOIN instructores i ON i.id = s.instructor_id
         LEFT JOIN tarifas_instructor_plan t ON t.instructor_id = s.instructor_id AND t.planificacion_id = s.planificacion_id
         LEFT JOIN soporte_tecnico st ON st.id = s.soporte_id
@@ -194,14 +204,20 @@ function cengi_ig_cursos(PDO $db, $desde, $hasta, array $gastos, array &$persona
 
         $sesiones = 0;
         $impartidas = 0;
+        $realizadas = 0;
         $horasSesiones = 0.0;
         $instr = 0.0;
         $instrProg = 0.0;
         if ($a['plan_id']) {
             $stSes->execute([$a['plan_id']]);
             foreach ($stSes->fetchAll(PDO::FETCH_ASSOC) as $s) {
-                $costo = round((float) $s['tarifa_instr'] * (1 + CENGI_PP_IMPUESTO), 2) + round((float) $s['tarifa_sop'] * (1 + CENGI_PP_IMPUESTO), 2);
+                // Impuesto segun el comprobante de cada persona (factura o recibo), igual que en Pago a instructores.
+                $costo = round((float) $s['tarifa_instr'] * (1 + cengi_pp_impuesto($db, $s['comp_instr'])), 2) + round((float) $s['tarifa_sop'] * (1 + cengi_pp_impuesto($db, $s['comp_sop'])), 2);
                 $sesiones++;
+                // Avance: sesiones ya realizadas (marcadas como impartidas o con su horario terminado).
+                if ($s['estado'] === 'impartida' || $s['fecha'] . ' ' . $s['hora_fin'] <= date('Y-m-d H:i:s')) {
+                    $realizadas++;
+                }
                 $horasSesiones += cengi_ig_horas_rango($s['hora_inicio'], $s['hora_fin']);
                 if ($s['estado'] === 'impartida') {
                     $impartidas++;
@@ -251,7 +267,7 @@ function cengi_ig_cursos(PDO $db, $desde, $hasta, array $gastos, array &$persona
         $otros = cengi_ig_suma_gastos($gastos, $a['tipo'] . ':' . $a['id']);
         $cursos[] = $a + [
             'insc' => max(count($solicitudes), count($asignados)), 'asig' => count($asignados),
-            'ses' => $sesiones, 'imp' => $impartidas, 'avance' => $sesiones ? $impartidas / $sesiones * 100 : null,
+            'ses' => $sesiones, 'imp' => $impartidas, 'real' => $realizadas, 'avance' => $sesiones ? $realizadas / $sesiones * 100 : null,
             'asist' => cengi_ig_prom(array_map(static function ($p) { return cengi_ig_num($p['asistencia']); }, $asignados)),
             'pre' => cengi_ig_prom(array_map(static function ($p) { return cengi_ig_num($p['evaluacion']); }, $asignados)),
             'post' => cengi_ig_prom(array_map(static function ($p) { return cengi_ig_num($p['posevaluacion']); }, $asignados)),
@@ -571,8 +587,8 @@ $th = static function ($texto, $izq = false) {
 $item = static function ($k, $v) {
     return '<div class="ig-item"><span>' . $k . '</span><b>' . $v . '</b></div>';
 };
-$kpi = static function ($v, $l) {
-    return '<div class="ig-kpi"><div class="v">' . $v . '</div><div class="l">' . $l . '</div></div>';
+$kpi = static function ($v, $l, $color = 'verde', $icono = 'stats') {
+    return '<div class="ig-kpi is-' . $color . '"><span class="ig-kpi-ico glyphicon glyphicon-' . $icono . '" aria-hidden="true"></span><div class="v">' . $v . '</div><div class="l">' . $l . '</div></div>';
 };
 $q = 'cengi_pp_q';
 $maxHoras = max(1, ...array_map(static function ($o) {
@@ -585,7 +601,7 @@ $maxHoras = max(1, ...array_map(static function ($o) {
     <?php cengi_pp_head('Informe de gestión'); ?>
     <link rel="stylesheet" href="css/informe_gestion.css?v=<?php echo (int) (@filemtime(__DIR__ . '/css/informe_gestion.css') ?: 1); ?>">
 </head>
-<body class="cengi-canvas">
+<body class="cengi-canvas cg-tema">
 <?php menu_render(); ?>
 
 <main class="container cengi-organizations-page pp-page ig-page">
@@ -623,15 +639,20 @@ $maxHoras = max(1, ...array_map(static function ($o) {
 
         <div class="ig-kpis">
             <?php
-            echo $kpi(count($cursos) . ' / ' . count($eventos), 'Cursos / eventos');
-            echo $kpi($g['unicos'], 'Participantes únicos');
-            echo $kpi(number_format(round($g['horas'])), 'Horas-persona acreditadas');
-            echo $kpi($q($cI + $eI), 'Ingresos');
-            echo $kpi(cengi_ig_balance($total), 'Balance general');
+            $finK = $S($cursos, 'conRes');
+            echo $kpi(count($cursos) . ' / ' . count($eventos), 'Cursos / eventos', 'verde', 'education');
+            echo $kpi($g['unicos'], 'Participantes únicos', 'verde2', 'user');
+            echo $kpi(number_format(round($g['horas'])), 'Horas-persona acreditadas', 'amarillo', 'time');
+            echo $kpi($finK ? round($S($cursos, 'aprob') / $finK * 100) . '%' : '—', 'Aprobación (cursos con resultado)', 'verde', 'ok-circle');
+            echo $kpi($q($cI + $eI), 'Ingresos', 'verde2', 'usd');
+            echo $kpi(cengi_ig_balance($total), 'Balance general', $total < 0 ? 'naranja' : 'gris', 'scale');
             ?>
         </div>
+        <nav class="ig-indice ig-no-print" aria-label="Secciones del informe">
+            <a href="#ig-s1">Resumen</a><a href="#ig-s2">Cursos · resultados</a><a href="#ig-s3">Cursos · finanzas</a><a href="#ig-s4">Eventos · participación</a><a href="#ig-s5">Eventos · finanzas</a><a href="#ig-s6">Instituciones</a><a href="#ig-s7">Balance general</a>
+        </nav>
 
-        <h3 class="ig-sec">1. Resumen de actividad y resultados</h3>
+        <h3 class="ig-sec" id="ig-s1"><span class="ig-sec-n">1</span> Resumen de actividad y resultados</h3>
         <div class="ig-2">
             <div>
                 <?php
@@ -656,7 +677,7 @@ $maxHoras = max(1, ...array_map(static function ($o) {
             </div>
         </div>
 
-        <h3 class="ig-sec">2. Detalle por curso — participación y resultados académicos</h3>
+        <h3 class="ig-sec" id="ig-s2"><span class="ig-sec-n">2</span> Detalle por curso — participación y resultados académicos</h3>
         <?php if ($cursos): ?>
             <div class="ig-scroll"><table class="ig-tb">
                 <thead><tr><?php echo $th('Curso / diplomado', true) . $th('Inscritos') . $th('Asignados') . $th('Avance (sesiones)', true) . $th('Asistencia prom.') . $th('Pre') . $th('Post') . $th('Mejora') . $th('Aprobados') . $th('Eval. instructor'); ?></tr></thead>
@@ -667,31 +688,31 @@ $maxHoras = max(1, ...array_map(static function ($o) {
                             <div class="ig-muted"><?php echo cengi_pp_h(implode(' · ', array_filter([$c['categoria'], cengi_pp_fecha_corta($c['inicio']) . ($c['fin'] && $c['fin'] !== '0000-00-00' ? '–' . cengi_pp_fecha_corta($c['fin']) : ''), $c['modalidad'], $c['tipo'] === 'curso' ? 'sin planificación' : null]))); ?></div></td>
                         <td><?php echo $c['insc']; ?></td>
                         <td><?php echo $c['asig']; ?></td>
-                        <td class="ig-l"><?php echo $c['ses'] ? '<span class="pp-prog">' . cengi_ig_barra($c['imp'], $c['ses']) . '<span class="ig-nowrap">' . $c['imp'] . '/' . $c['ses'] . ' · ' . round($c['avance']) . '%</span></span>' : '<span class="ig-muted">sin sesiones</span>'; ?></td>
-                        <td><?php echo $c['asist'] !== null ? round($c['asist']) . '%' : '—'; ?></td>
+                        <td class="ig-l"><?php echo $c['ses'] ? '<span class="pp-prog">' . cengi_ig_barra($c['real'], $c['ses']) . '<span class="ig-nowrap">' . $c['real'] . '/' . $c['ses'] . ' · ' . round($c['avance']) . '%</span></span>' : '<span class="ig-muted">sin sesiones</span>'; ?></td>
+                        <td><?php echo cengi_ig_chip($c['asist'] !== null ? round($c['asist']) . '%' : '—', $c['asist'], 80, 60); ?></td>
                         <td><?php echo cengi_ig_f1($c['pre']); ?></td>
                         <td><?php echo cengi_ig_f1($c['post']); ?></td>
                         <td><?php echo $c['mejora'] !== null ? '<b class="' . ($c['mejora'] < 0 ? 'ig-neg' : 'ig-pos') . '">' . ($c['mejora'] >= 0 ? '+' : '') . number_format($c['mejora'], 1) . '</b>' : '—'; ?></td>
-                        <td><?php echo $c['conRes'] ? $c['aprob'] . '/' . $c['conRes'] : '<span class="ig-muted">' . ($c['asig'] ? 'en curso' : '—') . '</span>'; ?></td>
-                        <td><?php echo cengi_ig_f1($c['evalInst']); ?></td>
+                        <td><?php echo $c['conRes'] ? cengi_ig_chip($c['aprob'] . '/' . $c['conRes'], $c['aprob'] / $c['conRes'] * 100, 80, 60) : '<span class="ig-muted">' . ($c['asig'] ? 'en curso' : '—') . '</span>'; ?></td>
+                        <td><?php echo cengi_ig_chip(cengi_ig_f1($c['evalInst']), $c['evalInst'], 3.2, 2.4); ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
                 <tfoot><tr>
                     <td class="ig-l">Total</td><td><?php echo (int) $S($cursos, 'insc'); ?></td><td><?php echo (int) $S($cursos, 'asig'); ?></td>
-                    <td class="ig-l"><?php echo (int) $S($cursos, 'imp') . '/' . (int) $S($cursos, 'ses'); ?></td>
+                    <td class="ig-l"><?php echo (int) $S($cursos, 'real') . '/' . (int) $S($cursos, 'ses'); ?></td>
                     <td><?php $v = cengi_ig_prom(array_column($cursos, 'asist')); echo $v !== null ? round($v) . '%' : '—'; ?></td>
                     <td><?php echo cengi_ig_f1(cengi_ig_prom(array_column($cursos, 'pre'))); ?></td>
                     <td><?php echo cengi_ig_f1(cengi_ig_prom(array_column($cursos, 'post'))); ?></td>
                     <td></td><td><?php echo (int) $aprob . '/' . (int) $fin; ?></td><td></td>
                 </tr></tfoot>
             </table></div>
-            <p class="ig-muted ig-nota">Aprobado: nota final (post-evaluación) de <?php echo CENGI_IG_APRUEBA; ?> o más. Evaluación del instructor: promedio de los criterios, escala de 1 a 4.</p>
+            <p class="ig-muted ig-nota">Avance: sesiones ya realizadas de las programadas. Aprobado: nota final (post-evaluación) de <?php echo CENGI_IG_APRUEBA; ?> o más. Evaluación del instructor: promedio de los criterios, escala de 1 a 4. <span class="ig-leyenda"><i class="is-bien"></i>alto <i class="is-medio"></i>medio <i class="is-bajo"></i>a mejorar</span></p>
         <?php else: ?>
             <p class="ig-muted">Sin cursos en el período.</p>
         <?php endif; ?>
 
-        <h3 class="ig-sec">3. Detalle por curso — balance financiero</h3>
+        <h3 class="ig-sec" id="ig-s3"><span class="ig-sec-n">3</span> Detalle por curso — balance financiero</h3>
         <?php if ($cursos): ?>
             <div class="ig-scroll"><table class="ig-tb">
                 <thead><tr><?php echo $th('Curso / diplomado', true) . $th('Ingresos cobrados') . $th('Por cobrar') . $th('Instructores y soporte') . $th('Otros gastos') . $th('Balance') . $th('Instructores por ejecutar'); ?></tr></thead>
@@ -713,10 +734,10 @@ $maxHoras = max(1, ...array_map(static function ($o) {
                     <td><?php echo $q($cO); ?></td><td><?php echo cengi_ig_balance($cI - $cC - $cO); ?></td><td><span class="ig-muted"><?php echo $q($S($cursos, 'instrProg')); ?></span></td>
                 </tr></tfoot>
             </table></div>
-            <p class="ig-muted ig-nota">Instructores y soporte: sesiones impartidas a la tarifa vigente con <?php echo CENGI_PP_IMPUESTO * 100; ?>% de impuesto. “Por ejecutar”: sesiones programadas aún no impartidas. Ingresos: pagos de inscripción marcados como pagados (US$ a Q<?php echo CENGI_INS_TIPO_CAMBIO; ?>).</p>
+            <p class="ig-muted ig-nota">Instructores y soporte: sesiones impartidas a la tarifa vigente más el impuesto según el comprobante de cada persona (factura <?php echo round(cengi_pp_impuesto($db) * 100, 2); ?>%, recibo <?php echo round(cengi_pp_impuesto($db, 'recibo') * 100, 2); ?>%). “Por ejecutar”: sesiones programadas aún no impartidas. Ingresos: pagos de inscripción marcados como pagados (US$ a Q<?php echo CENGI_INS_TIPO_CAMBIO; ?>).</p>
         <?php endif; ?>
 
-        <h3 class="ig-sec">4. Detalle por evento — participación y percepción</h3>
+        <h3 class="ig-sec" id="ig-s4"><span class="ig-sec-n">4</span> Detalle por evento — participación y percepción</h3>
         <?php if ($eventos): ?>
             <div class="ig-scroll"><table class="ig-tb">
                 <thead><tr><?php echo $th('Evento', true) . $th('Registrados') . $th('Confirmados') . $th('Asistentes') . $th('Asistencia') . $th('Percepción') . $th('Colaboración', true) . $th('Índice colab.'); ?></tr></thead>
@@ -728,8 +749,8 @@ $maxHoras = max(1, ...array_map(static function ($o) {
                         <td><?php echo $e['reg']; ?></td>
                         <td><?php echo $e['conf']; ?></td>
                         <td><?php echo $e['asist']; ?></td>
-                        <td><?php echo $e['pctAsist'] !== null ? round($e['pctAsist']) . '%' : '—'; ?></td>
-                        <td><?php echo $e['percep'] !== null ? number_format($e['percep'], 1) . ' <span class="ig-muted">(' . $e['nPercep'] . ')</span>' : '—'; ?></td>
+                        <td><?php echo cengi_ig_chip($e['pctAsist'] !== null ? round($e['pctAsist']) . '%' : '—', $e['pctAsist'], 80, 60); ?></td>
+                        <td><?php echo $e['percep'] !== null ? cengi_ig_chip(number_format($e['percep'], 1), $e['percep'], 4, 3) . ' <span class="ig-muted">(' . $e['nPercep'] . ')</span>' : '—'; ?></td>
                         <td class="ig-l"><?php echo $e['colab'] ? cengi_pp_h(implode(', ', $e['aliados']) ?: 'Sí') . ($e['modalidad'] ? '<div class="ig-muted">' . cengi_pp_h($e['modalidad']) . '</div>' : '') : '<span class="ig-muted">No</span>'; ?></td>
                         <td><?php echo $e['indice'] !== null ? number_format($e['indice'], 1) : ($e['colab'] ? '<span class="ig-muted">sin respuesta</span>' : '—'); ?></td>
                     </tr>
@@ -740,7 +761,7 @@ $maxHoras = max(1, ...array_map(static function ($o) {
             <p class="ig-muted">Sin eventos en el período.</p>
         <?php endif; ?>
 
-        <h3 class="ig-sec">5. Detalle por evento — estado financiero</h3>
+        <h3 class="ig-sec" id="ig-s5"><span class="ig-sec-n">5</span> Detalle por evento — estado financiero</h3>
         <?php if ($eventos): ?>
             <div class="ig-scroll"><table class="ig-tb">
                 <thead><tr><?php echo $th('Evento', true) . $th('Cobros a participantes') . $th('Aportes de aliados') . $th('Ingresos') . $th('Por cobrar') . $th('Otros gastos') . $th('Balance'); ?></tr></thead>
@@ -766,7 +787,7 @@ $maxHoras = max(1, ...array_map(static function ($o) {
             <p class="ig-muted ig-nota">Cobros: pagos validados. Aportes: pagos registrados en el acuerdo de colaboración. Por cobrar incluye el saldo de aportes de acuerdos aceptados.</p>
         <?php endif; ?>
 
-        <h3 class="ig-sec">6. Cobertura por institución</h3>
+        <h3 class="ig-sec" id="ig-s6"><span class="ig-sec-n">6</span> Cobertura por institución</h3>
         <?php if ($g['ings']): ?>
             <div class="ig-scroll"><table class="ig-tb">
                 <thead><tr><?php echo $th('Institución', true) . $th('Participantes') . $th('Cursos') . $th('Eventos') . $th('Horas acreditadas') . $th('', true); ?></tr></thead>
@@ -788,7 +809,7 @@ $maxHoras = max(1, ...array_map(static function ($o) {
             <p class="ig-muted">Sin participación en el período.</p>
         <?php endif; ?>
 
-        <h3 class="ig-sec">7. Balance general</h3>
+        <h3 class="ig-sec" id="ig-s7"><span class="ig-sec-n">7</span> Balance general</h3>
         <div class="ig-scroll"><table class="ig-tb ig-bal">
             <thead><tr><?php echo $th('Concepto', true) . $th('Cursos') . $th('Eventos') . $th('Total'); ?></tr></thead>
             <tbody>

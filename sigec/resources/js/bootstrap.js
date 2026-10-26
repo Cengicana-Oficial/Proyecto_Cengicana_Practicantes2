@@ -13,6 +13,14 @@ window.axios = require('axios');
 
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
+// SIGEC se publica bajo un prefijo (/sigec, ver dockerfiles/modulos-app/sigec-proxy.conf):
+// las vistas llaman axios con rutas absolutas ('/investigacion/...'), asi que se
+// resuelven contra la URL base que expone el layout (url('/') = APP_URL).
+const appBase = document.querySelector('meta[name="app-base"]');
+if (appBase && appBase.content) {
+    window.axios.defaults.baseURL = appBase.content.replace(/\/+$/, '');
+}
+
 /**
  * Echo exposes an expressive API for subscribing to channels and listening
  * for events that are broadcast by Laravel. Echo and event broadcasting

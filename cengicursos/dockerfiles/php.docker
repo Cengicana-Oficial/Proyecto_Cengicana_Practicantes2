@@ -1,14 +1,17 @@
-FROM php:7.1-fpm
+FROM php:8.3.36-fpm
 
 ENV TZ="/usr/share/zoneinfo/America/Guatemala"
 
-RUN apt-get update && apt-get install -y libmcrypt-dev mysql-client zlib1g-dev \
-    && docker-php-ext-install mcrypt pdo_mysql zip mysqli \
-    && docker-php-ext-enable mysqli
-
-#Install git
-RUN apt-get update \
-    && apt-get install -y git
-RUN docker-php-ext-install pdo
+RUN sed -i 's|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|http://deb.debian.org/debian-security|https://deb.debian.org/debian-security|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        default-mysql-client \
+        git \
+        libzip-dev \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libpng-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo pdo_mysql mysqli zip gd exif \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www

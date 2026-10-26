@@ -195,11 +195,11 @@ Esto representa riesgo de seguridad, fuga de informacion, peso innecesario del r
 
 El entorno Docker de `cengicursos` usa:
 
-- `php:7.1-fpm`
+- `php:8.3.36-fpm` (actualizado desde `php:7.1-fpm`)
 - `mysql:5.7`
 - `nginx:1.13`
 
-Estas versiones son antiguas para un entorno de produccion moderno. PHP 7.1 esta fuera de soporte desde hace anos. Esto implica riesgos de seguridad, compatibilidad y mantenimiento.
+PHP ya se actualizo a 8.3.36, minimo exigido en todo el proyecto. MySQL 5.7 y nginx 1.13 siguen siendo versiones antiguas para un entorno de produccion moderno, lo que implica riesgos de seguridad, compatibilidad y mantenimiento.
 
 ### 5.4 Uso de `md5()` para contrasenas
 

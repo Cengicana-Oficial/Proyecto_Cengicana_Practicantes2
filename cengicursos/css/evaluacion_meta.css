@@ -1,0 +1,45 @@
+/* Meta de participación en la evaluación del instructor (Seguimiento por curso). */
+.cengi-evm-aviso { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 14px; padding: 12px 16px; border: 1px solid #ffc59d; border-left: 5px solid #FF6B00; border-radius: 12px; background: #fff4ec; color: #5c2a00; font-size: 13px; text-decoration: none; }
+.cengi-evm-aviso:hover, .cengi-evm-aviso:focus { background: #ffe9d9; color: #5c2a00; text-decoration: none; }
+.cengi-evm-aviso > .glyphicon { font-size: 18px; color: #FF6B00; }
+.cengi-evm-aviso > span:nth-child(2) { flex: 1 1 380px; }
+.cengi-evm-aviso-ir { font-weight: 700; white-space: nowrap; }
+.cengi-seg-tab b.cengi-evm-tab-bajo { background: #FF6B00 !important; color: #fff !important; }
+.cengi-seg-tab b.cengi-evm-tab-ok { background: #73BC25 !important; color: #fff !important; }
+
+.cengi-evm-intro { margin: 0 0 16px; color: #3c4a40; }
+.cengi-evm-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+.cengi-evm-item { padding: 16px 18px; border: 1px solid #e0e5dc; border-top: 4px solid #FF6B00; border-radius: 12px; background: #fff; }
+.cengi-evm-item.is-medio { border-top-color: #FFCC00; }
+.cengi-evm-item.is-ok { border-top-color: #73BC25; }
+.cengi-evm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.cengi-evm-head strong { display: block; color: #1f5632; font-size: 14.5px; }
+.cengi-evm-head small { color: #6b7a72; }
+.cengi-evm-estado { flex: none; padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; background: #ffe9d9; color: #b34a00; }
+.is-medio .cengi-evm-estado { background: #fff5cc; color: #7a6000; }
+.is-ok .cengi-evm-estado { background: #e3f3cf; color: #2f6a12; }
+
+.cengi-evm-progreso { margin: 26px 0 10px; }
+.cengi-evm-barra { position: relative; display: block; height: 10px; border-radius: 6px; background: #edf1ea; }
+.cengi-evm-barra i { display: block; height: 100%; border-radius: 6px; background: #FF6B00; }
+.is-medio .cengi-evm-barra i { background: #FFCC00; }
+.is-ok .cengi-evm-barra i { background: #73BC25; }
+/* Marca de la meta sobre la barra */
+.cengi-evm-barra em { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: #1f5632; }
+.cengi-evm-barra em::after { content: 'Meta'; position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 9.5px; font-style: normal; font-weight: 700; color: #1f5632; }
+.cengi-evm-num { display: block; margin-top: 6px; font-size: 12.5px; color: #55605a; }
+.cengi-evm-num b { color: #1f5632; font-size: 14px; }
+
+.cengi-evm-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 12.5px; }
+.cengi-evm-ultimo { color: #6b7a72; }
+.cengi-evm-form { margin: 0 0 0 auto; }
+.cengi-evm-faltan { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #dfe6d8; font-size: 12.5px; }
+.cengi-evm-faltan summary { cursor: pointer; font-weight: 700; color: #b34a00; }
+.cengi-evm-faltan ul { margin: 8px 0 0; padding-left: 18px; max-height: 220px; overflow-y: auto; columns: 2; column-gap: 20px; }
+.cengi-evm-faltan li { break-inside: avoid; margin-bottom: 3px; }
+.cengi-evm-faltan small { color: #8a968f; }
+.cengi-evm-sin { color: #b34a00 !important; font-weight: 600; }
+.cengi-evm-nota { margin: 12px 0 0; padding: 8px 10px; border-radius: 8px; background: #f5f6f7; color: #55605a; font-size: 12px; }
+@media (max-width: 600px) { .cengi-evm-lista { grid-template-columns: 1fr; } .cengi-evm-faltan ul { columns: 1; } .cengi-evm-form { margin-left: 0; } }
+.cengi-evm > .panel-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.cengi-evm-config { font-size: 12.5px; font-weight: 700; color: #3e7119; }

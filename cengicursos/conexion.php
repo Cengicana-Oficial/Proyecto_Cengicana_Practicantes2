@@ -31,8 +31,8 @@ function cengicursos_env()
         return $env;
     }
 
-    $env = leer_env_simple(__DIR__ . '/.env');
-    $loginEnv = leer_env_simple(__DIR__ . '/../login/.env');
+    $env = leer_env_simple(getenv('CENGICURSOS_ENV_FILE') ?: __DIR__ . '/.env');
+    $loginEnv = leer_env_simple(getenv('LOGIN_ENV_FILE') ?: __DIR__ . '/../login/.env');
 
     foreach ($loginEnv as $clave => $valor) {
         $env['LOGIN_' . $clave] = $valor;
@@ -583,4 +583,27 @@ function cengi_cui_nd_formatear($numero)
 function cengi_cui_nd_generar(PDO $db)
 {
     return cengi_cui_nd_formatear(cengi_cui_nd_ultimo_correlativo($db) + 1);
+}
+
+/**
+ * Documento a guardar al editar un participante. Vacío = se conserva el actual (o, si no tenía,
+ * se le asigna un código NNNND). No se valida el formato: puede ser DPI, pasaporte u otro
+ * documento de cualquier país. Devuelve [documento, historial]: historial es el nuevo valor de
+ * cui_anterior si el documento cambió (el anterior queda guardado), o null si no cambió.
+ */
+function cengi_cui_para_guardar(PDO $db, $participanteId, $cuiNuevo)
+{
+    $stmt = $db->prepare("SELECT cui_participantes, COALESCE(cui_anterior, '') AS cui_anterior FROM participantes WHERE id = ?");
+    $stmt->execute([(int) $participanteId]);
+    $fila = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['cui_participantes' => '', 'cui_anterior' => ''];
+    $actual = trim((string) $fila['cui_participantes']);
+    $nuevo = trim((string) $cuiNuevo);
+    if ($nuevo === '') {
+        $nuevo = $actual !== '' ? $actual : cengi_cui_nd_generar($db);
+    }
+    if ($actual === '' || strcasecmp($actual, $nuevo) === 0) {
+        return [$nuevo, null];
+    }
+    $historial = trim($fila['cui_anterior'] . '; ' . $actual . ' (hasta ' . date('d/m/Y') . ')', '; ');
+    return [$nuevo, mb_substr($historial, -500, null, 'UTF-8')];
 }

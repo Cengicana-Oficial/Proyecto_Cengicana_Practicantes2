@@ -202,7 +202,13 @@ function cengi_es_superadmin()
 function cengi_es_admin()
 {
     $rol = cengi_rol_actual();
-    return cengi_es_superadmin() || in_array($rol, ['admin', 'administrador', 'superadmin'], true);
+    if (cengi_es_superadmin()) return true;
+    // El gestor conserva siempre su alcance institucional, incluso con permisos heredados.
+    if (strpos($rol, 'gestor') !== false && strpos($rol, 'ingenio') !== false) return false;
+    if (in_array($rol, ['coordinadordecapacitacion', 'jefedetransferenciadetecnologia'], true)) return true;
+    // El Coordinador de capacitación administra todo Cursos por su permiso (no por el nombre del rol).
+    return cengi_es_superadmin() || in_array($rol, ['admin', 'administrador', 'superadmin'], true)
+        || cengi_tiene_permiso('administrar_cursos_cengi');
 }
 
 function cengi_es_instructor()
@@ -224,6 +230,11 @@ function cengi_es_formador()
 function cengi_es_gestor()
 {
     return strpos(cengi_rol_actual(), 'gestor') !== false;
+}
+
+function cengi_es_gestor_ingenio()
+{
+    return cengi_es_gestor() && cengi_es_ingenio() && !cengi_es_superadmin();
 }
 
 function cengi_es_estudiante()
@@ -255,6 +266,7 @@ function cengi_es_administrador_ingenio()
 
 function cengi_puede_gestionar()
 {
+    if (cengi_es_gestor_ingenio()) return false;
     return cengi_es_admin() || cengi_tiene_permiso('gestionar_cursos_cengi');
 }
 
@@ -498,6 +510,7 @@ function cengi_puede_ver_roles()
 
 function cengi_puede_gestionar_roles()
 {
+    if (cengi_es_gestor_ingenio()) return false;
     return cengi_es_admin() || cengi_tiene_permiso('roles_gestionar_cengi');
 }
 

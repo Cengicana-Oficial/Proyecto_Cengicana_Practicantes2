@@ -58,8 +58,8 @@ const CENGI_CARGA_TIPOS = [
             'costo_asociados' => ['Costo asociados', ['costo asociados', 'asociados'], false, 'Quetzales. Vacío = 0.'],
             'costo_externos' => ['Costo externos', ['costo externos', 'externos'], false, 'Quetzales. Vacío = 0.'],
             'costo_extranjero' => ['Costo extranjero (US$)', ['costo extranjero', 'extranjero'], false, 'Dólares. Vacío = 0.'],
-            'instructor' => ['Instructor responsable', ['instructor responsable', 'instructor'], false, 'Nombre o código de catedrático de un instructor registrado.'],
-            'modulos' => ['Módulos', ['modulos'], false, 'Separados por punto y coma (;).'],
+            'instructor' => ['Instructor responsable', ['instructor responsable', 'instructor'], false, 'Nombre o código de instructor (ej. INS-023) de un instructor registrado.'],
+            'modulos' => ['Módulos', ['modulos'], false, 'Separados por punto y coma (;). Con sesiones por módulo: Variedades|6; Nutrición|4.'],
             'dirigido_a' => ['Dirigido a', ['dirigido a', 'dirigido'], false, 'Si falta: Todos los ingenios.'],
             'observaciones' => ['Observaciones', ['observaciones', 'obs'], false, 'Texto libre.'],
         ],
@@ -68,21 +68,21 @@ const CENGI_CARGA_TIPOS = [
         'titulo' => 'Carga masiva — Programa de sesiones',
         'destino' => 'Cursos destino',
         'volver' => 'programa_sesiones.php',
-        'nota' => 'Sube el cronograma de un curso o de todos los cursos del año (en ese caso cada fila indica su curso con “ID curso” o “Curso/Diplomado”). El módulo debe coincidir con los del curso, el instructor debe existir y la fecha debe estar dentro del rango del curso. Los choques de horario se aceptan con aviso. Las sesiones con fecha pasada se importan como impartidas.',
+        'nota' => 'Sube el cronograma de un curso o de todos los cursos del año (en ese caso cada fila indica su curso con “ID curso” o “Curso/Diplomado”). El módulo debe coincidir con los del curso, el instructor es opcional y la fecha debe estar dentro del rango del curso. Los choques de horario se aceptan con aviso. Las sesiones con fecha pasada se importan como impartidas.',
         'cols' => [
             'plan_id' => ['ID curso', ['id curso', 'id plan', 'id'], false, 'Solo al cargar todos los cursos: el ID de la hoja “Cursos”. Tiene prioridad sobre el nombre.'],
             'curso' => ['Curso/Diplomado', ['curso diplomado', 'curso', 'diplomado'], false, 'Solo al cargar todos los cursos: nombre del curso planificado (si no se indica el ID).'],
             'modulo' => ['Módulo', ['modulo'], false, 'Uno de los módulos del curso. Si falta: el primero.'],
-            'tema' => ['Tema', ['tema'], true, 'Tema de la sesión.'],
+            'tema' => ['Tema', ['tema'], false, 'Compatibilidad con archivos anteriores. Si falta se genera automáticamente.'],
             'fecha' => ['Fecha', ['fecha'], true, 'AAAA-MM-DD o DD/MM/AAAA, dentro del rango del curso.'],
-            'horario' => ['Horario', ['horario'], false, 'Ej. 15:00–17:00 (o usa Hora inicio / Hora fin).'],
+            'horario' => ['Horario', ['horario'], false, 'Compatibilidad con archivos anteriores: 15:00–17:00. La plantilla usa Hora inicio y Hora fin.'],
             'hora_inicio' => ['Hora inicio', ['hora inicio', 'hora de inicio'], false, 'Alternativa a Horario.'],
             'hora_fin' => ['Hora fin', ['hora fin', 'hora final', 'hora de fin'], false, 'Alternativa a Horario.'],
-            'instructor' => ['Instructor', ['instructor'], true, 'Nombre de un instructor registrado.'],
-            'codigo' => ['Código catedrático', ['codigo catedratico', 'codigo', 'catedratico'], false, 'Se usa para identificar al instructor si el nombre no coincide.'],
-            'modalidad' => ['Modalidad', ['modalidad'], false, 'Presencial, Virtual o Híbrida. Si falta: la del curso.'],
-            'lugar' => ['Lugar de desarrollo', ['lugar de desarrollo', 'lugar', 'enlace'], false, 'Sede (presencial) o enlace de Teams (virtual). Si falta: el lugar por defecto de la modalidad.'],
+            'instructor' => ['Instructor', ['instructor'], false, 'Opcional. Deja vacío para asignarlo después en Programa de sesiones.'],
+            'codigo' => ['Código de instructor', ['codigo de instructor', 'codigo instructor', 'codigo catedratico', 'codigo', 'catedratico'], false, 'Se usa para identificar al instructor si el nombre no coincide.'],
             'soporte' => ['Soporte técnico', ['soporte tecnico', 'soporte'], false, 'Nombre o código (SOP-001) del soporte registrado.'],
+            'modalidad' => ['Modalidad', ['modalidad'], false, 'Presencial, Virtual o Híbrida. Si falta: la del curso.'],
+            'lugar' => ['Lugar o enlace', ['lugar o enlace', 'lugar de desarrollo', 'lugar', 'enlace'], false, 'Sede presencial o enlace de la sesión virtual. Si falta: el lugar por defecto de la modalidad.'],
         ],
     ],
     'curso' => [
@@ -105,7 +105,7 @@ const CENGI_CARGA_TIPOS = [
             'fecha_inicio' => ['Fecha inicial', ['fecha inicial', 'fecha de inicio', 'fecha inicio', 'inicio'], true, 'AAAA-MM-DD o DD/MM/AAAA.'],
             'fecha_fin' => ['Fecha final', ['fecha final', 'fecha de fin', 'fecha fin', 'fin'], true, 'AAAA-MM-DD o DD/MM/AAAA.'],
             'cupo' => ['Cupo', ['cupo maximo', 'cupo'], false, 'Número entero mayor que 0. Vacío = sin límite.'],
-            'instructor' => ['Instructor responsable', ['instructor responsable', 'instructor'], false, 'Nombre o código de catedrático de un instructor registrado.'],
+            'instructor' => ['Instructor responsable', ['instructor responsable', 'instructor'], false, 'Nombre o código de instructor (ej. INS-023) de un instructor registrado.'],
             'modulos' => ['Módulos (horas)', ['modulos horas', 'modulos'], false, 'Separados por punto y coma, con sus horas entre paréntesis. Ej. Suelos (10); Riego y drenaje (30). Llevan pre y pos-evaluación.'],
         ],
     ],
@@ -115,7 +115,7 @@ const CENGI_CARGA_TIPOS = [
         'volver' => 'pago_instructores.php',
         'nota' => 'Indica el costo neto por sesión de cada instructor en cada curso: el número de sesiones se cuenta solo al liquidar. Si dejas vacío el curso, se actualiza la tarifa base del instructor. Las liquidaciones ya generadas conservan su tarifa.',
         'cols' => [
-            'instructor' => ['Instructor', ['instructor'], true, 'Nombre o código de catedrático de un instructor registrado.'],
+            'instructor' => ['Instructor', ['instructor'], true, 'Nombre o código de instructor (ej. INS-023) de un instructor registrado.'],
             'curso' => ['Curso/Diplomado', ['curso diplomado', 'curso', 'diplomado'], false, 'Curso planificado en el año elegido. Vacío = tarifa base.'],
             'costo' => ['Costo neto por sesión (Q)', ['costo neto por sesion', 'costo', 'tarifa'], true, 'Quetzales, 0 o más. Ej. 1150 o 1,150.00.'],
             'observaciones' => ['Observaciones', ['observaciones', 'obs'], false, 'Se precarga en la liquidación.'],
@@ -507,10 +507,12 @@ function cengi_carga_validar(PDO $db, $tipo, $destino, array $filas)
             $modulo = $textoModulo === '' ? $modulos[0] : (cengi_carga_buscar(array_map(static function ($m) {
                 return ['nombre' => $m];
             }, $modulos), $textoModulo, 'nombre')['nombre'] ?? null);
+            if($tema==='')$tema=mb_substr(($modulo?:'Sesión').' · Sesión '.(($plan?($totalPorPlan[(int)$plan['id']]??0):0)+1),0,255,'UTF-8');
             $fecha = cengi_carga_fecha($f['fecha'] ?? null);
             $horario = cengi_carga_horario($f);
             $instructor = cengi_carga_buscar($instructores, $f['instructor'] ?? '', 'nombre', 'codigo_catedratico')
                 ?: cengi_carga_buscar($instructores, $f['codigo'] ?? '', 'codigo_catedratico');
+            $estadoSesion=$fecha < $hoy ? 'impartida' : 'programada';
             $textoSoporte = cengi_carga_texto($f['soporte'] ?? '');
             $soporte = $textoSoporte !== '' ? cengi_carga_buscar($soportes, $textoSoporte, 'nombre', 'codigo') : null;
             $textoModalidad = cengi_carga_texto($f['modalidad'] ?? '');
@@ -524,7 +526,7 @@ function cengi_carga_validar(PDO $db, $tipo, $destino, array $filas)
                 $error = 'Falta el tema';
             } elseif (!$modulo) {
                 $error = 'Módulo no configurado en el curso (' . implode(', ', $modulos) . ')';
-            } elseif (!$instructor) {
+            } elseif (!$instructor && (cengi_carga_texto($f['instructor']??'')!=='' || cengi_carga_texto($f['codigo']??'')!=='')) {
                 $error = 'Instructor no registrado';
             } elseif (!$fecha) {
                 $error = 'Fecha no válida';
@@ -532,6 +534,7 @@ function cengi_carga_validar(PDO $db, $tipo, $destino, array $filas)
                 $error = 'Fuera del rango del curso (' . cengi_pp_fecha_corta($plan['fecha_inicio']) . ' – ' . cengi_pp_fecha_corta($plan['fecha_fin']) . ')';
             } elseif (!$horario) {
                 $error = 'Horario no válido (usa 15:00–17:00)';
+
             } elseif (!$modalidad) {
                 $error = 'Modalidad no válida';
             } elseif ($textoSoporte !== '' && !$soporte) {
@@ -540,39 +543,39 @@ function cengi_carga_validar(PDO $db, $tipo, $destino, array $filas)
 
             $obj = null;
             if (!$error) {
-                foreach ($ocupadas as $o) {
-                    if ((int) $o['instructor_id'] === (int) $instructor['id'] && $o['fecha'] === $fecha && $o['hi'] < $horario[1] && $horario[0] < $o['hf']) {
+                foreach ($estadoSesion==='cancelada'?[]:$ocupadas as $o) {
+                    if ($instructor && (int) $o['instructor_id'] === (int) $instructor['id'] && $o['fecha'] === $fecha && $o['hi'] < $horario[1] && $horario[0] < $o['hf']) {
                         $avisos[] = 'choca con “' . $o['tema'] . '”';
                         break;
                     }
                 }
                 $codigo = cengi_carga_texto($f['codigo'] ?? '');
-                if ($codigo !== '' && $instructor['codigo_catedratico'] && cengi_carga_norm($codigo) !== cengi_carga_norm($instructor['codigo_catedratico'])) {
+                if ($codigo !== '' && $instructor && $instructor['codigo_catedratico'] && cengi_carga_norm($codigo) !== cengi_carga_norm($instructor['codigo_catedratico'])) {
                     $avisos[] = 'código registrado: ' . $instructor['codigo_catedratico'];
                 }
-                if ((int) $instructor['estado'] !== 1) {
+                if ($instructor && (int) $instructor['estado'] !== 1) {
                     $avisos[] = 'instructor inactivo';
                 }
                 if (!$soporte && $modalidad !== 'Presencial') {
                     $avisos[] = 'sin soporte técnico';
                 }
-                if (++$totalPorPlan[(int) $plan['id']] > $plan['sesiones_planificadas']) {
+                if ($estadoSesion!=='cancelada' && ++$totalPorPlan[(int) $plan['id']] > $plan['sesiones_planificadas']) {
                     $avisos[] = 'supera las ' . $plan['sesiones_planificadas'] . ' sesiones del plan';
                 }
                 $obj = [
                     'planificacion_id' => (int) $plan['id'], 'modulo' => $modulo, 'tema' => $tema, 'fecha' => $fecha,
-                    'hora_inicio' => $horario[0] . ':00', 'hora_fin' => $horario[1] . ':00', 'instructor_id' => (int) $instructor['id'],
+                    'hora_inicio' => $horario[0] . ':00', 'hora_fin' => $horario[1] . ':00', 'instructor_id' => $instructor ? (int) $instructor['id'] : null,
                     'soporte_id' => $soporte ? (int) $soporte['id'] : null, 'modalidad' => $modalidad,
                     'lugar' => mb_substr(cengi_carga_texto($f['lugar'] ?? ''), 0, 255, 'UTF-8') ?: cengi_pp_lugar_por_defecto($modalidad),
-                    'estado' => $fecha < $hoy ? 'impartida' : 'programada',
+                    'estado' => $estadoSesion,
                 ];
                 // Las filas siguientes del archivo tambien chocan con esta.
-                $ocupadas[] = ['fecha' => $fecha, 'hi' => $horario[0], 'hf' => $horario[1], 'instructor_id' => $instructor['id'], 'tema' => $tema];
+                if($estadoSesion!=='cancelada')$ocupadas[] = ['fecha' => $fecha, 'hi' => $horario[0], 'hf' => $horario[1], 'instructor_id' => $instructor['id']??null, 'tema' => $tema];
             }
             $celdas = [
-                $textoModulo ?: ($plan ? ($modulo ?? '—') : '—'), $tema ?: '—', $fecha ? cengi_pp_fecha($fecha) : (cengi_carga_texto($f['fecha'] ?? '') ?: '—'),
+                $textoModulo ?: ($plan ? ($modulo ?? '—') : '—'), $fecha ? cengi_pp_fecha($fecha) : (cengi_carga_texto($f['fecha'] ?? '') ?: '—'),
                 $horario ? cengi_pp_horario($horario[0], $horario[1]) : (cengi_carga_texto($f['horario'] ?? '') ?: '—'),
-                cengi_carga_texto($f['instructor'] ?? '') ?: '—',
+                $instructor['nombre']??'Pendiente de asignar',
             ];
             if ($info['todos']) {
                 array_unshift($celdas, $plan ? $plan['nombre'] : (cengi_carga_texto($f['curso'] ?? '') ?: cengi_carga_texto($f['plan_id'] ?? '') ?: '—'));
@@ -771,6 +774,22 @@ function cengi_carga_aplicar(PDO $db, $tipo, $destino, array $validas, $archivo)
         return 'planificacion_cursos.php?' . http_build_query(['anio' => $destino, 'msg' => 'importado', 'n' => count($validas)]);
     }
     if ($tipo === 'ses') {
+        // Cada curso admite tantas sesiones como indica su plan (igual que en Programa de sesiones).
+        $nuevasPorPlan = array_count_values(array_map(static function ($r) {
+            return (int) $r['obj']['planificacion_id'];
+        }, array_filter($validas, static function ($r) {
+            return ($r['obj']['estado'] ?? 'programada') !== 'cancelada';
+        })));
+        $activas = $db->prepare("SELECT COUNT(*) FROM curso_sesiones WHERE planificacion_id = ? AND estado <> 'cancelada'");
+        foreach ($nuevasPorPlan as $planId => $nuevas) {
+            $plan = cengi_pp_plan($db, $planId);
+            $activas->execute([$planId]);
+            $libres = (int) $plan['sesiones_planificadas'] - (int) $activas->fetchColumn();
+            if ($nuevas > $libres) {
+                throw new InvalidArgumentException('“' . $plan['nombre'] . '” tiene ' . (int) $plan['sesiones_planificadas'] . ' sesiones planificadas y solo quedan '
+                    . max(0, $libres) . ' por programar; el archivo trae ' . $nuevas . '. Aumenta el número de sesiones en Planificación o quita filas del archivo.');
+            }
+        }
         $fechasPorPlan = [];
         foreach ($validas as $r) {
             $columnas = array_keys($r['obj']);
@@ -784,6 +803,7 @@ function cengi_carga_aplicar(PDO $db, $tipo, $destino, array $validas, $archivo)
             cengi_pp_log($db, $plan, 'Sesiones agregadas', count($fechas) . ' sesión(es) importadas por carga masiva (' . $archivo . '): ' . implode(', ', array_map('cengi_pp_fecha_corta', $fechas)), [
                 'afecta' => cengi_pp_convocado($plan) && end($fechas) >= $hoy,
             ]);
+            cengi_pp_asignar_modulos($db, $planId);
         }
         return 'programa_sesiones.php?' . http_build_query(['ver' => $destino, 'msg' => 'importado', 'n' => count($validas)]);
     }
@@ -911,13 +931,14 @@ function cengi_carga_plantilla_sesiones(PDO $db, $destino)
         $info = ['todos' => true, 'anio' => cengi_pp_anio_actual(), 'planes' => []];
     }
     $planes = $info['planes'];
-    $instructores = array_column(cengi_pp_instructores($db), 'nombre');
+    $instructoresPlantilla=cengi_pp_instructores($db);
+    $instructores = array_column($instructoresPlantilla, 'nombre');
     $soportes = array_column(cengi_pp_soportes($db), 'nombre');
     $conteo = $db->prepare("SELECT COUNT(*) FROM curso_sesiones WHERE planificacion_id = ? AND estado <> 'cancelada'");
 
     // Columnas: las de curso solo cuando el archivo es para todos los cursos.
     $claves = array_values(array_filter(array_keys($config['cols']), static function ($clave) use ($info) {
-        return !in_array($clave, ['hora_inicio', 'hora_fin'], true) && ($info['todos'] || !in_array($clave, ['plan_id', 'curso'], true));
+        return !in_array($clave, ['horario','tema','codigo'], true) && ($info['todos'] || !in_array($clave, ['plan_id', 'curso'], true));
     }));
     $letra = [];
     foreach ($claves as $i => $clave) {
@@ -934,11 +955,13 @@ function cengi_carga_plantilla_sesiones(PDO $db, $destino)
 
     // Filas de ejemplo con datos reales del curso o cursos.
     $filas = [];
-    $fila = static function (array $plan, $modulo, $tema, $fecha, $horario) use ($instructores) {
+    $fila = static function (array $plan, $modulo, $tema, $fecha, $horario) {
         return [
             'plan_id' => (int) $plan['id'], 'curso' => $plan['nombre'], 'modulo' => $modulo, 'tema' => $tema,
-            'fecha' => $fecha, 'horario' => $horario, 'instructor' => $plan['instructor_nombre'] ?: ($instructores[0] ?? ''),
-            'codigo' => '', 'modalidad' => $plan['modalidad'], 'lugar' => '', 'soporte' => '',
+            'fecha' => $fecha, 'horario' => $horario, 'instructor' => '',
+            'hora_inicio'=>substr($plan['hora_inicio'],0,5),'hora_fin'=>substr($plan['hora_fin'],0,5),
+            'estado'=>$fecha<cengi_pp_hoy()?'Impartida':'Programada',
+            'modalidad' => $plan['modalidad'], 'lugar' => cengi_pp_lugar_por_defecto($plan['modalidad']), 'soporte' => '',
         ];
     };
     $modulosPorPlan = [];
@@ -973,6 +996,9 @@ function cengi_carga_plantilla_sesiones(PDO $db, $destino)
     $hasta = 500;
     $hoja->getStyle('A1:' . $ultima . '1')->getFont()->setBold(true);
     $hoja->getStyle('A1:' . $ultima . '1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('EAF6DD');
+    $hoja->getStyle('A1:'.$ultima.'1')->getAlignment()->setWrapText(true);
+    $hoja->getRowDimension(1)->setRowHeight(32);
+    $hoja->setAutoFilter('A1:'.$ultima.'1');
     foreach ($claves as $clave) {
         $columna = $letra[$clave];
         $hoja->getColumnDimension($columna)->setWidth(['curso' => 44, 'tema' => 36, 'lugar' => 30, 'plan_id' => 10, 'fecha' => 13][$clave] ?? 20);
@@ -1046,15 +1072,16 @@ function cengi_carga_plantilla_sesiones(PDO $db, $destino)
     $destinoTexto = $info['todos'] ? 'Todos los cursos del año ' . $info['anio'] : ($planes ? reset($planes)['nombre'] : '');
     $texto = [[$config['titulo']], ['Destino: ' . $destinoTexto], [$config['nota']], [],
         [$info['todos']
-            ? 'Hay una fila de ejemplo por curso: cópiala tantas veces como sesiones tenga el curso y cambia tema, fecha y horario. Borra las filas de los cursos que no vas a cargar.'
+            ? 'Hay una fila de ejemplo por curso: cópiala tantas veces como sesiones tenga el curso y cambia fecha y horario. Borra las filas de los cursos que no vas a cargar.'
             : 'Hay dos filas de ejemplo con los datos del curso: cámbialas y agrega una fila por sesión.'],
-        ['Las celdas con lista desplegable sugieren valores; también puedes escribir el código del instructor o del soporte.'], [],
+        ['El instructor puede quedar vacío y asignarse después. Su código INS se toma del registro, no se llena en la plantilla. Las listas desplegables sugieren valores registrados.'], [],
         ['Columna', 'Obligatoria', 'Formato / valores']];
     foreach ($claves as $clave) {
         [$etiqueta, , $obligatoria, $descripcion] = $config['cols'][$clave];
         $texto[] = [$etiqueta, $obligatoria || ($info['todos'] && $clave === 'curso') ? 'Sí' : 'No', $descripcion];
     }
-    $texto[] = ['Hora inicio / Hora fin', 'No', 'Alternativa a Horario: puedes reemplazar la columna Horario por dos columnas con esos encabezados.'];
+    $texto[] = ['Hora inicio / Hora fin', 'Sí', 'Formato HH:MM (24 horas), como en Programa de sesiones. Los archivos anteriores con una columna Horario también se aceptan.'];
+    $texto[] = ['Instructor', 'No', 'Puede asignarse después; el código se obtiene automáticamente de la ficha del instructor.'];
     $ayuda->fromArray($texto, null, 'A1');
     $ayuda->getStyle('A1')->getFont()->setBold(true)->setSize(13);
     $ayuda->getStyle('A8:C8')->getFont()->setBold(true);
@@ -1148,6 +1175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($sesTodos && !isset($mapa['plan_id']) && !isset($mapa['curso'])) {
                 $faltan[] = 'ID curso o Curso/Diplomado (se cargan todos los cursos del año)';
             }
+
             if ($faltan) {
                 throw new InvalidArgumentException('Faltan columnas obligatorias: ' . implode(', ', $faltan) . '. Descarga la plantilla para ver los encabezados esperados.');
             }
@@ -1218,7 +1246,7 @@ if ($tipo === 'curso') {
     }
     $textoDestino = 'Año ' . cengi_pp_anio_texto((int) $destino);
 }
-$cabeceras = ['plan' => ['Curso', 'Modalidad', 'Fecha inicial', 'Fecha final', 'Sesiones'], 'ses' => ['Módulo', 'Tema', 'Fecha', 'Horario', 'Instructor'],
+$cabeceras = ['plan' => ['Curso', 'Modalidad', 'Fecha inicial', 'Fecha final', 'Sesiones'], 'ses' => ['Módulo', 'Fecha', 'Horario', 'Instructor'],
     'curso' => ['Curso', 'Código', 'Modalidad', 'Fecha inicial', 'Fecha final', 'Módulos'], 'tarifa' => ['Instructor', 'Curso / diplomado', 'Costo / sesión']][$tipo];
 if ($sesTodos) {
     array_unshift($cabeceras, 'Curso');
@@ -1232,6 +1260,7 @@ $volver = $config['volver'] . ($tipo === 'plan' ? '?anio=' . urlencode($destino)
 <?php menu_render(); ?>
 
 <main class="container cengi-organizations-page pp-page">
+    <?php cengi_banner(); ?>
     <?php if ($tipo !== 'curso') { cengi_pp_subnav($config['volver']); } ?>
     <?php cengi_pp_feedback(cengi_pp_h($error), 'error'); ?>
 
@@ -1268,7 +1297,8 @@ $volver = $config['volver'] . ($tipo === 'plan' ? '?anio=' . urlencode($destino)
                 <p class="pp-sub" style="margin-top:12px;"><b>Columnas:</b>
                     <?php echo implode(', ', array_map(static function ($c) {
                         return cengi_pp_h($c[0]) . ($c[2] ? ' <b>*</b>' : '');
-                    }, $config['cols'])); ?>. <b>*</b> obligatoria. Fechas AAAA-MM-DD o DD/MM/AAAA; los encabezados se reconocen aunque no lleven tildes.</p>
+                    }, array_filter($config['cols'],static function($clave)use($tipo,$sesTodos){return $tipo!=='ses'||(!in_array($clave,['horario','tema','codigo'],true)&&($sesTodos||!in_array($clave,['plan_id','curso'],true)));},ARRAY_FILTER_USE_KEY))); ?>. <b>*</b> obligatoria. Fechas AAAA-MM-DD o DD/MM/AAAA; los encabezados se reconocen aunque no lleven tildes.
+                    <?php if($tipo==='ses'):?> Hora inicio y Hora fin son obligatorias (HH:MM, 24 horas); también se aceptan archivos anteriores con Horario. El instructor es opcional y puede asignarse después; su código se toma automáticamente de su ficha. El estado se determina automáticamente por la fecha: impartida si ya pasó, programada en los demás casos. Con módulos automáticos, el sistema asigna el módulo según el número de sesión.<?php endif;?></p>
                 <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:14px;">
                     <a class="btn btn-default" href="<?php echo cengi_pp_h($volver); ?>">Volver</a>
                     <a class="btn btn-default" id="carga-plantilla" href="carga_masiva_planificacion.php?tipo=<?php echo $tipo; ?>&amp;plantilla=1&amp;destino=<?php echo cengi_pp_h(urlencode($destino)); ?>"><span class="glyphicon glyphicon-download-alt"></span> Descargar plantilla</a>

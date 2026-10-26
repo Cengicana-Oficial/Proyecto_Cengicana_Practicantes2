@@ -6,6 +6,7 @@ $db = conectar();
 $puedeGestionar = cengi_puede_gestionar();
 $puedeCalificar = cengi_puede_calificar();
 $esEstudiante = cengi_es_estudiante();
+if ($esEstudiante) { header('Location: mi_aula.php'); exit; }
 
 $anioActual = (int) date('Y');
 $busqueda = trim((string) ($_GET['q'] ?? $_POST['campo'] ?? ''));
@@ -13,6 +14,8 @@ $anio = trim((string) ($_GET['anio'] ?? $anioActual));
 $categoriaId = (int) ($_GET['categoria'] ?? 0);
 $estado = trim((string) ($_GET['estado'] ?? ''));
 $modalidad = trim((string) ($_GET['modalidad'] ?? ''));
+// Pestañas: "ejecucion" (cursos creados) y "convocatoria" (planes aprobados que aún no son curso).
+$vista = $puedeGestionar && ($_GET['vista'] ?? '') === 'convocatoria' ? 'convocatoria' : 'ejecucion';
 
 $categorias = $db->query("
     SELECT id, descripcion_categorias_cursos
@@ -89,9 +92,10 @@ if ($busqueda !== '') {
         OR COALESCE(ins.nombre, '') LIKE ?
         OR COALESCE(c.codigo_curso, '') LIKE ?
         OR CONCAT('CEN-', LPAD(c.id, 3, '0')) LIKE ?
+        OR COALESCE(c.area_tecnica, '') LIKE ?
     )";
     $termino = '%' . $busqueda . '%';
-    array_push($params, $termino, $termino, $termino, $termino, $termino, $termino);
+    array_push($params, $termino, $termino, $termino, $termino, $termino, $termino, $termino);
 }
 
 if ($anio !== '' && $anio !== 'todos' && ctype_digit($anio)) {
@@ -213,7 +217,7 @@ if ($cursos) {
     // en PHP en un array de {id, nombre} por modulo (una fila NULL significa 0
     // instructores propios para ese modulo, es decir que hereda al instructor principal).
     $stmtModulos = $db->prepare("
-        SELECT cm.id, cm.curso_id, cm.nombre, cm.horas, cm.orden, cm.acepta_pre, cm.acepta_post,
+        SELECT cm.id, cm.curso_id, cm.nombre, cm.horas, cm.sesiones, cm.orden, cm.acepta_pre, cm.acepta_post,
             cmi.instructor_id, ins2.nombre AS instructor_nombre
         FROM curso_modulos cm
         LEFT JOIN curso_modulo_instructores cmi ON cmi.curso_modulo_id = cm.id
@@ -231,6 +235,7 @@ if ($cursos) {
                 'curso_id' => $fila['curso_id'],
                 'nombre' => $fila['nombre'],
                 'horas' => $fila['horas'],
+                'sesiones' => $fila['sesiones'],
                 'orden' => $fila['orden'],
                 'acepta_pre' => $fila['acepta_pre'],
                 'acepta_post' => $fila['acepta_post'],
@@ -349,6 +354,43 @@ function cengi_curso_modal_atributos(array $curso)
     }
 
     return $atributos;
+}
+
+// "En convocatoria": planes aprobados que aún no tienen curso. Pasan solos a la tabla de
+// cursos cuando las inscripciones validadas llegan al cupo mínimo o se usa "Abrir curso ahora".
+$convocatorias = [];
+if ($puedeGestionar) {
+    require_once __DIR__ . '/planificacion_helpers.php';
+    $condicionesPlan = ["p.estado IN ('aprobado', 'reprogramado')", 'p.curso_id IS NULL'];
+    $paramsPlan = [];
+    if ($anio !== 'todos' && ctype_digit($anio)) {
+        $condicionesPlan[] = 'p.anio = ?';
+        $paramsPlan[] = (int) $anio;
+    }
+    if ($busqueda !== '') {
+        $condicionesPlan[] = '(p.nombre LIKE ? OR i.nombre LIKE ?)';
+        $paramsPlan[] = '%' . $busqueda . '%';
+        $paramsPlan[] = '%' . $busqueda . '%';
+    }
+    if ($categoriaId > 0) {
+        $condicionesPlan[] = 'p.categoria_curso_id = ?';
+        $paramsPlan[] = $categoriaId;
+    }
+    if ($modalidad !== '') {
+        $condicionesPlan[] = 'p.modalidad = ?';
+        $paramsPlan[] = $modalidad;
+    }
+    $stmtPlanes = $db->prepare('
+        SELECT p.*, i.nombre AS instructor_nombre, cc.descripcion_categorias_cursos AS categoria_nombre,
+               (SELECT COUNT(*) FROM solicitudes_inscripcion s WHERE s.planificacion_id = p.id AND s.estado = \'Pendiente\') AS solicitudes
+        FROM planificacion_cursos p
+        LEFT JOIN instructores i ON i.id = p.instructor_id
+        LEFT JOIN categorias_cursos cc ON cc.id = p.categoria_curso_id
+        WHERE ' . implode(' AND ', $condicionesPlan) . '
+        ORDER BY p.fecha_inicio, p.nombre');
+    $stmtPlanes->execute($paramsPlan);
+    $convocatorias = $stmtPlanes->fetchAll(PDO::FETCH_ASSOC);
+    $validadasPlan = $convocatorias ? cengi_pp_conteo_inscritos($db) : [];
 }
 ?>
 
@@ -483,7 +525,6 @@ function cengi_curso_modal_atributos(array $curso)
             }
         }
     </style>
-<link rel="stylesheet" href="css/course_actions.css?v=<?php echo filemtime(__DIR__ . '/css/course_actions.css'); ?>">
 </head>
 
 <body class="cengi-canvas">
@@ -569,7 +610,7 @@ function cengi_curso_modal_atributos(array $curso)
                                     <td class="col-estado"><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo $estadoLabel; ?></span></td>
                                     <?php if ($puedeGestionar || $puedeCalificar): ?>
                                         <td class="col-actions">
-                                            <div class="cengi-row-actions">
+                                            <div class="cengi-row-actions" data-actions-title="Gestionar curso">
                                                 <?php if ($puedeGestionar): ?>
                                                     <a class="cengi-action-btn is-edit" href="modificar_cursos.php?id=<?php echo (int) $row['idcurso']; ?>" data-tooltip="Editar" aria-label="Editar"><span class="glyphicon glyphicon-pencil"></span><span class="sr-only">Editar</span></a>
                                                     <a class="cengi-action-btn is-delete" href="#" data-href="eliminar_cursos.php?id=<?php echo (int) $row['idcurso']; ?>" data-toggle="modal" data-target="#confirm-delete" data-tooltip="Eliminar" aria-label="Eliminar"><span class="glyphicon glyphicon-trash"></span><span class="sr-only">Eliminar</span></a>
@@ -611,7 +652,6 @@ function cengi_curso_modal_atributos(array $curso)
         });
     </script>
     <?php endif; ?>
-<script src="js/course_actions.js?v=<?php echo filemtime(__DIR__ . '/js/course_actions.js'); ?>"></script>
 </body>
 </html>
 <?php endif; ?>
@@ -628,12 +668,13 @@ function cengi_curso_modal_atributos(array $curso)
     <link rel="stylesheet" type="text/css" href="css/proyecto.css?v=<?php echo (int) filemtime(__DIR__ . '/css/proyecto.css'); ?>">
     <script src="js/jquery-3.2.1.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
-<link rel="stylesheet" href="css/course_actions.css?v=<?php echo filemtime(__DIR__ . '/css/course_actions.css'); ?>">
+<link rel="stylesheet" href="css/cengi-tema.css?v=<?php echo (int) (@filemtime(__DIR__ . '/css/cengi-tema.css') ?: 1); ?>">
 </head>
-<body class="cengi-canvas">
+<body class="cengi-canvas cg-tema">
 <?php menu_render(); ?>
 
 <main class="container cengi-courses-page">
+    <?php cengi_banner(); ?>
     <?php if (in_array($mensajeCurso, ['creado', 'actualizado', 'importado'], true)): ?>
         <div class="cengi-course-feedback is-success" role="status">
             <span class="glyphicon glyphicon-ok-circle" aria-hidden="true"></span>
@@ -651,6 +692,7 @@ function cengi_curso_modal_atributos(array $curso)
 
     <section class="cengi-courses-filter-card" aria-label="Filtros de cursos">
         <form class="cengi-courses-filters" action="ver_cursos.php" method="get">
+            <?php if ($vista === 'convocatoria'): ?><input type="hidden" name="vista" value="convocatoria"><?php endif; ?>
             <div class="cengi-course-search">
                 <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
                 <input type="search" name="q" value="<?php echo cengi_curso_html($busqueda); ?>" placeholder="Buscar curso, código o instructor..." aria-label="Buscar curso, código o instructor">
@@ -667,26 +709,30 @@ function cengi_curso_modal_atributos(array $curso)
                     <option value="<?php echo (int) $categoria['id']; ?>" <?php echo (int) $categoria['id'] === $categoriaId ? 'selected' : ''; ?>><?php echo cengi_curso_html($categoria['descripcion_categorias_cursos']); ?></option>
                 <?php endforeach; ?>
             </select>
+            <?php if ($vista === 'ejecucion'): ?>
             <select name="estado" aria-label="Filtrar por estado">
                 <option value="">Todos los estados</option>
                 <option value="planificacion" <?php echo $estado === 'planificacion' ? 'selected' : ''; ?>>Planificación</option>
                 <option value="activo" <?php echo $estado === 'activo' ? 'selected' : ''; ?>>Activo</option>
                 <option value="finalizado" <?php echo $estado === 'finalizado' ? 'selected' : ''; ?>>Finalizado</option>
             </select>
+            <?php endif; ?>
             <select name="modalidad" aria-label="Filtrar por modalidad o tipo">
                 <option value="">Todas las modalidades</option>
                 <?php foreach ($modalidades as $opcionModalidad): ?>
                     <option value="<?php echo cengi_curso_html($opcionModalidad); ?>" <?php echo $modalidad === $opcionModalidad ? 'selected' : ''; ?>><?php echo cengi_curso_html($opcionModalidad); ?></option>
                 <?php endforeach; ?>
             </select>
+            <?php if ($vista === 'ejecucion'): ?>
             <select name="por_pagina" aria-label="Cursos por página">
                 <?php foreach ($porPaginaOpciones as $opcionPorPagina): ?>
                     <option value="<?php echo $opcionPorPagina; ?>" <?php echo $opcionPorPagina === $porPagina ? 'selected' : ''; ?>><?php echo $opcionPorPagina; ?> por página</option>
                 <?php endforeach; ?>
             </select>
+            <?php endif; ?>
             <button type="submit" class="cengi-filter-submit" aria-label="Aplicar filtros"><span class="glyphicon glyphicon-filter" aria-hidden="true"></span><span>Filtrar</span></button>
             <?php if ($busqueda !== '' || $categoriaId > 0 || $estado !== '' || $modalidad !== '' || $anio !== (string) $anioActual): ?>
-                <a href="ver_cursos.php" class="cengi-filter-clear" aria-label="Limpiar filtros">Limpiar</a>
+                <a href="ver_cursos.php<?php echo $vista === 'convocatoria' ? '?vista=convocatoria' : ''; ?>" class="cengi-filter-clear" aria-label="Limpiar filtros">Limpiar</a>
             <?php endif; ?>
             <?php if ($puedeGestionar): ?>
                 <a class="btn btn-default cengi-course-bulk" href="carga_masiva_planificacion.php?tipo=curso" title="Cargar cursos en ejecución desde Excel o CSV, sin pasar por la planificación"><span class="glyphicon glyphicon-upload" aria-hidden="true"></span>Carga masiva</a>
@@ -694,6 +740,98 @@ function cengi_curso_modal_atributos(array $curso)
             <?php endif; ?>
         </form>
     </section>
+
+    <?php if ($puedeGestionar):
+        // Las pestañas conservan año, búsqueda, categoría y modalidad (aplican a las dos).
+        $filtrosComunes = array_intersect_key($_GET, array_flip(['q', 'anio', 'categoria', 'modalidad']));
+    ?>
+    <nav class="cengi-courses-tabs" aria-label="Etapa de los cursos">
+        <a href="ver_cursos.php?<?php echo cengi_curso_html(http_build_query($filtrosComunes)); ?>" class="cengi-courses-tab<?php echo $vista === 'ejecucion' ? ' is-active' : ''; ?>"<?php echo $vista === 'ejecucion' ? ' aria-current="page"' : ''; ?>>
+            <span class="glyphicon glyphicon-education" aria-hidden="true"></span> Cursos en ejecución <b><?php echo (int) $totalCursos; ?></b>
+        </a>
+        <a href="ver_cursos.php?<?php echo cengi_curso_html(http_build_query($filtrosComunes + ['vista' => 'convocatoria'])); ?>" class="cengi-courses-tab<?php echo $vista === 'convocatoria' ? ' is-active' : ''; ?>"<?php echo $vista === 'convocatoria' ? ' aria-current="page"' : ''; ?>>
+            <span class="glyphicon glyphicon-bullhorn" aria-hidden="true"></span> En convocatoria <b class="is-convocatoria"><?php echo count($convocatorias); ?></b>
+        </a>
+    </nav>
+    <?php endif; ?>
+
+    <?php if ($vista === 'convocatoria'): ?>
+    <section class="cengi-courses-section cengi-convocatorias" aria-label="Cursos en convocatoria">
+        <div class="cengi-convocatorias-head">
+            <small>Planes aprobados que aún no son curso. Pasan a <b>Cursos en ejecución</b> al completar el cupo mínimo de inscripciones validadas, o con “Abrir curso ahora”.</small>
+            <a class="btn btn-default btn-sm" href="planificacion_cursos.php?<?php echo cengi_curso_html(http_build_query(['anio' => ctype_digit($anio) ? $anio : $anioActual, 'estado' => 'aprobado'])); ?>"><span class="glyphicon glyphicon-calendar" aria-hidden="true"></span> Ir a planificación</a>
+        </div>
+        <?php if (!$convocatorias): ?>
+            <div class="cengi-courses-empty cengi-convocatorias-empty"><span class="glyphicon glyphicon-bullhorn" aria-hidden="true"></span><strong>No hay convocatorias abiertas</strong><small>Aprueba un plan en Planificación de cursos para abrir su convocatoria.</small></div>
+        <?php else: ?>
+        <div class="cengi-courses-table-wrap">
+            <table class="cengi-courses-table">
+                <thead><tr>
+                    <th>Curso / modalidad</th><th>Período</th><th>Instructor</th><th>Inscripciones validadas</th><th>Situación</th><th class="is-actions"><span class="sr-only">Acciones</span></th>
+                </tr></thead>
+                <tbody>
+                <?php foreach ($convocatorias as $plan):
+                    $validadas = (int) ($validadasPlan[$plan['id']] ?? 0);
+                    $minimo = max(1, (int) $plan['cupo_minimo']);
+                    $porValidar = max(0, (int) $plan['solicitudes'] - $validadas);
+                    if ($validadas >= $minimo) {
+                        [$situacion, $situacionClase] = ['Listo para abrir', 'is-active'];
+                    } elseif ($validadas >= $minimo * 0.6) {
+                        [$situacion, $situacionClase] = ['En riesgo', 'is-upcoming'];
+                    } else {
+                        [$situacion, $situacionClase] = ['No alcanza el mínimo', 'is-rejected'];
+                    }
+                    $diasParaInicio = (int) floor((strtotime($plan['fecha_inicio']) - strtotime(date('Y-m-d'))) / 86400);
+                ?>
+                    <tr class="cengi-course-row">
+                        <td class="cengi-course-name" data-label="Curso">
+                            <strong><?php echo cengi_curso_html($plan['nombre']); ?></strong>
+                            <small><?php echo cengi_curso_html($plan['categoria_nombre'] ?: 'Sin categoría'); ?> · <?php echo cengi_curso_html($plan['modalidad']); ?> · <?php echo cengi_curso_html($plan['dirigido_a']); ?></small>
+                        </td>
+                        <td class="course-period" data-label="Período">
+                            <div><small>Inicio</small><span><?php echo cengi_curso_fecha($plan['fecha_inicio']); ?></span></div>
+                            <div><small>Fin</small><span><?php echo cengi_curso_fecha($plan['fecha_fin']); ?></span></div>
+                        </td>
+                        <td data-label="Instructor"><?php echo cengi_curso_html($plan['instructor_nombre'] ?: 'Sin asignar'); ?></td>
+                        <td data-label="Inscripciones" class="course-state-progress">
+                            <strong><?php echo $validadas; ?> / <?php echo $minimo; ?></strong> <small>mínimo<?php echo $plan['cupo_maximo'] ? ' · máx. ' . (int) $plan['cupo_maximo'] : ''; ?></small>
+                            <div class="cengi-course-progress" aria-label="<?php echo $validadas . ' de ' . $minimo; ?> inscripciones validadas"><span style="width:<?php echo min(100, (int) round($validadas * 100 / $minimo)); ?>%"></span></div>
+                            <small><?php echo $porValidar ? $porValidar . ' por validar' : 'Ninguna por validar'; ?></small>
+                        </td>
+                        <td data-label="Situación" class="course-state-progress">
+                            <span class="cengi-status-badge <?php echo $situacionClase; ?>"><i></i><?php echo $situacion; ?></span>
+                            <small><?php echo $diasParaInicio > 0 ? 'Inicia en ' . $diasParaInicio . ' día(s)' : ($diasParaInicio === 0 ? 'Inicia hoy' : 'Debió iniciar hace ' . abs($diasParaInicio) . ' día(s)'); ?><?php echo $plan['estado'] === 'reprogramado' ? ' · reprogramado' : ''; ?></small>
+                        </td>
+                        <td class="is-actions">
+                            <?php $confirmarAbrir = '¿Abrir “' . $plan['nombre'] . '” como curso ahora' . ($validadas < $minimo ? ', sin completar el cupo mínimo (' . $validadas . ' de ' . $minimo . ')' : '') . '? Pasará a Cursos en ejecución y se asignarán las inscripciones validadas.'; ?>
+                            <div class="cengi-conv-actions">
+                                <?php if ($validadas >= $minimo): ?>
+                                    <form method="post" action="inscripciones.php" class="cengi-inline-form" onsubmit="return confirm(<?php echo cengi_curso_html(json_encode($confirmarAbrir, JSON_UNESCAPED_UNICODE)); ?>);">
+                                        <input type="hidden" name="accion" value="abrir_curso"><input type="hidden" name="plan" value="<?php echo (int) $plan['id']; ?>">
+                                        <button type="submit" class="btn btn-primary btn-sm cengi-conv-open"><span class="glyphicon glyphicon-play" aria-hidden="true"></span> Abrir curso</button>
+                                    </form>
+                                <?php endif; ?>
+                                <!-- js/course_actions.js convierte este bloque en el menú "Acciones" (igual que en Cursos en ejecución). -->
+                                <div class="cengi-row-actions" data-actions-title="Gestionar convocatoria">
+                                    <a class="cengi-action-btn is-view" href="inscripciones.php?plan=<?php echo (int) $plan['id']; ?>" aria-label="Ver y validar inscripciones<?php echo $porValidar ? ' (' . $porValidar . ' por validar)' : ''; ?>"><span class="glyphicon glyphicon-list-alt"></span></a>
+                                    <a class="cengi-action-btn is-edit" href="programa_sesiones.php?plan=<?php echo (int) $plan['id']; ?>" aria-label="Programa de sesiones"><span class="glyphicon glyphicon-calendar"></span></a>
+                                    <a class="cengi-action-btn is-edit" href="planificacion_cursos.php?<?php echo cengi_curso_html(http_build_query(['anio' => (int) $plan['anio'], 'q' => $plan['nombre']])); ?>" aria-label="Ver o editar el plan"><span class="glyphicon glyphicon-pencil"></span></a>
+                                    <a class="cengi-action-btn is-edit" href="bitacora_cambios.php?plan=<?php echo (int) $plan['id']; ?>" aria-label="Historial de cambios"><span class="glyphicon glyphicon-dashboard"></span></a>
+                                    <form method="post" action="inscripciones.php" class="cengi-conv-open-form" onsubmit="return confirm(<?php echo cengi_curso_html(json_encode($confirmarAbrir, JSON_UNESCAPED_UNICODE)); ?>);">
+                                        <input type="hidden" name="accion" value="abrir_curso"><input type="hidden" name="plan" value="<?php echo (int) $plan['id']; ?>">
+                                        <button type="submit" class="cengi-action-btn is-open-course" aria-label="Abrir curso ahora"><span class="glyphicon glyphicon-play"></span></button>
+                                    </form>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php endif; ?>
+    </section>
+    <?php else: ?>
 
     <section class="cengi-courses-section">
         <div class="cengi-courses-table-wrap">
@@ -729,8 +867,9 @@ function cengi_curso_modal_atributos(array $curso)
                         <td data-label="Instructor"><?php echo cengi_curso_html($row['instructor_nombre'] ?: 'Sin asignar'); ?></td>
                         <td data-label="Cupo"><?php echo (int) $row['inscritos']; ?><?php echo (int) $row['cupo'] > 0 ? ' / ' . (int) $row['cupo'] : ''; ?></td>
                         <td data-label="Estado y avance" class="course-state-progress"><span class="cengi-status-badge <?php echo $estadoClase; ?>"><i></i><?php echo cengi_curso_html($estadoLabel); ?></span><div class="cengi-course-progress" aria-label="Avance por fechas: <?php echo cengi_curso_html($avanceLabel); ?>"><span style="width:<?php echo $avance; ?>%"></span></div><small>Calendario: <?php echo cengi_curso_html($avanceLabel); ?></small></td>
-                        <td class="is-actions"><div class="cengi-row-actions">
+                        <td class="is-actions"><div class="cengi-row-actions" data-actions-title="Gestionar curso">
                             <?php if ($puedeGestionar || $puedeCalificar): ?><a class="cengi-action-btn is-view" href="ver_participante_curso.php?id=<?php echo $cursoId; ?>" data-tooltip="Ver participantes" aria-label="Ver participantes"><span class="glyphicon glyphicon-eye-open"></span></a><?php endif; ?>
+                            <?php if ($puedeGestionar || $puedeCalificar): ?><a class="cengi-action-btn is-view" href="aula_gestion.php?curso=<?php echo $cursoId; ?>" data-tooltip="Gestionar aula" aria-label="Gestionar aula"><span class="glyphicon glyphicon-blackboard"></span></a><?php endif; ?>
                             <?php if ($puedeGestionar): ?>
                                 <button type="button" class="cengi-action-btn is-edit" data-course-modal="edit" data-toggle="modal" data-target="#course-form-modal"<?php echo cengi_curso_modal_atributos($row); ?> data-tooltip="Editar" aria-label="Editar"><span class="glyphicon glyphicon-pencil"></span></button>
                                 <a class="cengi-action-btn is-delete" href="#" data-href="eliminar_cursos.php?id=<?php echo $cursoId; ?>" data-toggle="modal" data-target="#confirm-delete" data-tooltip="Eliminar" aria-label="Eliminar"><span class="glyphicon glyphicon-trash"></span></a>
@@ -811,6 +950,7 @@ function cengi_curso_modal_atributos(array $curso)
             </div>
         <?php endif; ?>
     </section>
+    <?php endif; ?>
 </main>
 
 <?php if ($puedeGestionar): ?>
@@ -920,7 +1060,7 @@ function cengi_curso_modal_atributos(array $curso)
                             <div><strong>Módulos de evaluación</strong><small>Define los módulos antes de abrir inscripciones; esta configuración habilita la carga de calificaciones.</small></div>
                             <button type="button" class="btn btn-default btn-sm" id="course-module-add"><span class="glyphicon glyphicon-plus"></span> Agregar módulo</button>
                         </div>
-                        <div class="cengi-course-module-row is-head"><div class="cengi-course-module-main"><span>Módulo</span><span>Horas</span><span>Pre-eval.</span><span>Post-eval.</span><span></span></div></div>
+                        <div class="cengi-course-module-row is-head"><div class="cengi-course-module-main"><span>Módulo</span><span>Horas</span><span title="Número de sesiones del módulo">Sesiones</span><span>Pre-eval.</span><span>Post-eval.</span><span></span></div></div>
                         <div id="course-module-rows"></div>
                         <div class="cengi-course-modules-notice"><span class="glyphicon glyphicon-info-sign"></span><span>Si el curso no requiere calificación por módulo, déjalo vacío: el sistema solo solicitará asistencia y constancia.</span></div>
                     </section>
@@ -1026,6 +1166,7 @@ function cengi_curso_modal_atributos(array $curso)
                 '<input type="hidden" name="modulos[' + key + '][id]">' +
                 '<input type="text" class="form-control" name="modulos[' + key + '][nombre]" placeholder="Ej. Agronomía cañera" maxlength="255">' +
                 '<input type="number" class="form-control" name="modulos[' + key + '][horas]" placeholder="Horas" min="0" max="9999" step="0.25">' +
+                '<input type="number" class="form-control" name="modulos[' + key + '][sesiones]" placeholder="N.°" min="1" max="999" step="1" title="Sesiones del módulo: con todas indicadas, las sesiones del curso se asignan solas a su módulo">' +
                 '<label class="cengi-course-module-check"><input type="checkbox" name="modulos[' + key + '][pre]" value="1"><span>Sí</span></label>' +
                 '<label class="cengi-course-module-check"><input type="checkbox" name="modulos[' + key + '][post]" value="1"><span>Sí</span></label>' +
                 '<button type="button" class="cengi-course-module-remove" aria-label="Eliminar módulo"><span class="glyphicon glyphicon-remove"></span></button>' +
@@ -1050,6 +1191,7 @@ function cengi_curso_modal_atributos(array $curso)
         row.querySelector('[name$="[id]"]').value = module.id || '';
         row.querySelector('[name$="[nombre]"]').value = module.nombre || '';
         row.querySelector('[name$="[horas]"]').value = module.horas == null ? '' : module.horas;
+        row.querySelector('[name$="[sesiones]"]').value = module.sesiones == null ? '' : module.sesiones;
         row.querySelector('[name$="[pre]"]').checked = String(module.acepta_pre == null ? 1 : module.acepta_pre) === '1';
         row.querySelector('[name$="[post]"]').checked = String(module.acepta_post == null ? 1 : module.acepta_post) === '1';
         row.querySelector('.cengi-course-module-remove').addEventListener('click', function () { row.remove(); });
@@ -1185,8 +1327,12 @@ function cengi_curso_modal_atributos(array $curso)
     $('#confirm-delete').on('show.bs.modal', function (event) {
         $(this).find('.btn-ok').attr('href', $(event.relatedTarget).data('href'));
     });
+
+    // ver_cursos.php?editar=ID abre directamente "Editar curso" (enlaces desde Planificación y Programa de sesiones).
+    var editar = new URLSearchParams(location.search).get('editar');
+    var botonEditar = editar && document.querySelector('[data-course-modal="edit"][data-course-id="' + editar.replace(/\D/g, '') + '"]');
+    if (botonEditar) botonEditar.click();
 })();
 </script>
-<script src="js/course_actions.js?v=<?php echo filemtime(__DIR__ . '/js/course_actions.js'); ?>"></script>
 </body>
 </html>

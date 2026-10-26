@@ -1,0 +1,136 @@
+/* Pagos de inscripción: flujo, pendientes de cobro (vencimientos, selección en lote)
+   y validación con vista previa del comprobante. Usa las variables --cg-* de cengi-tema.css. */
+
+/* ---------- flujo (dónde se valida y cuándo pasa a Inscripciones) */
+.cob-flujo { margin-bottom: 16px; padding: 0 18px; border: 1px solid var(--cg-line); border-radius: 12px; background: #fff; box-shadow: var(--cengi-shadow); }
+.cob-flujo summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 0; color: var(--cg-deep); font-size: 13px; font-weight: 700; cursor: pointer; list-style: none; }
+.cob-flujo summary::-webkit-details-marker { display: none; }
+.cob-flujo summary > .glyphicon { color: var(--cg-verde); }
+.cob-flujo summary small { color: var(--cengi-muted); font-weight: 400; }
+.cob-flujo summary::after { content: "\e114"; margin-left: auto; color: #8a958c; font-family: 'Glyphicons Halflings'; font-size: 10px; transition: transform .2s ease; }
+.cob-flujo[open] summary::after { transform: rotate(180deg); }
+.cob-flujo ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0 0 16px; list-style: none; counter-reset: paso; }
+.cob-flujo li { position: relative; padding: 10px 12px 10px 46px; border-radius: 10px; background: var(--cg-gris-soft); counter-increment: paso; }
+.cob-flujo li::before {
+    content: counter(paso); position: absolute; top: 12px; left: 12px; width: 24px; height: 24px; border-radius: 50%;
+    color: #fff; font-size: 12px; font-weight: 800; line-height: 24px; text-align: center;
+}
+.cob-flujo b { display: block; color: #1E2A1A; font-size: 12.5px; }
+.cob-flujo li span { display: block; color: var(--cengi-muted); font-size: 11.5px; line-height: 1.4; }
+.cob-flujo .is-amarillo { background: var(--cg-amarillo-soft); }
+.cob-flujo .is-amarillo::before { background: var(--cg-amarillo); color: #3b2f00; }
+.cob-flujo .is-verde2 { background: var(--cg-verde2-soft); }
+.cob-flujo .is-verde2::before { background: var(--cg-verde-2); color: #2d3a00; }
+.cob-flujo .is-verde { background: var(--cg-verde-soft); }
+.cob-flujo .is-verde::before { background: var(--cg-verde); }
+.cob-flujo .is-naranja { background: var(--cg-naranja-soft); }
+.cob-flujo .is-naranja::before { background: var(--cg-naranja); }
+
+.cob-tab-n { margin-left: 4px; padding: 1px 7px; border-radius: 99px; background: var(--cg-amarillo); color: #3b2f00; font-size: 10.5px; }
+.cob-tab-n.is-vencido { background: #E4544A; color: #fff; }
+
+/* ---------- vencimientos */
+.cob-buckets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.cob-bucket {
+    --tono: var(--cg-verde); --tono-soft: var(--cg-verde-soft);
+    display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid var(--cg-line); border-left: 5px solid var(--tono);
+    border-radius: 12px; background: #fff; color: inherit; box-shadow: var(--cengi-shadow); transition: transform .15s ease, box-shadow .15s ease;
+}
+.cob-bucket:hover, .cob-bucket:focus { color: inherit; text-decoration: none; transform: translateY(-2px); box-shadow: 0 10px 22px rgba(30, 42, 26, .09); }
+.cob-bucket.is-current { background: var(--tono-soft); box-shadow: inset 0 0 0 2px var(--tono); }
+.cob-bucket.is-rojo { --tono: #E4544A; --tono-soft: #FDF0EE; }
+.cob-bucket.is-naranja { --tono: var(--cg-naranja); --tono-soft: var(--cg-naranja-soft); }
+.cob-bucket-icon { display: inline-flex; flex: 0 0 38px; align-items: center; justify-content: center; height: 38px; border-radius: 10px; background: var(--tono-soft); color: var(--tono); }
+.cob-bucket b { display: block; color: #1E2A1A; font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 21px; line-height: 1.1; }
+.cob-bucket-titulo { display: block; margin-top: 2px; color: #1E2A1A; font-size: 12.5px; font-weight: 700; }
+
+/* ---------- barra de selección en lote */
+.cob-lote {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px 14px;
+    border: 1px dashed var(--cg-gris); border-radius: 10px; background: #fff;
+}
+.cob-lote.is-activo { border-style: solid; border-color: var(--cg-verde); background: var(--cg-verde-soft); }
+.cob-todos { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.cob-lote-n { color: var(--cg-deep); font-size: 12.5px; }
+.cob-lote-ayuda { flex: 1 1 260px; }
+
+/* ---------- tabla de pendientes */
+.cob-tabla .cob-check { width: 34px; text-align: center; }
+.cob-tabla .cob-check input { width: 16px; height: 16px; margin: 0; cursor: pointer; }
+.cg-tema .cob-tabla .cob-fila.is-vencido > td:first-child { box-shadow: inset 4px 0 0 #E4544A; }
+.cg-tema .cob-tabla .cob-fila.is-por-vencer > td:first-child { box-shadow: inset 4px 0 0 var(--cg-naranja); }
+.cg-tema .cob-tabla .cob-fila.is-al-dia > td:first-child { box-shadow: inset 4px 0 0 var(--cg-verde); }
+.cob-venc { display: inline-block; padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+.cob-venc.is-vencido { background: #FDF0EE; color: #B23223; }
+.cob-venc.is-por-vencer { background: var(--cg-naranja-soft); color: var(--cg-naranja-text); }
+.cob-venc.is-al-dia { background: var(--cg-verde-soft); color: var(--cg-verde-text); }
+.cob-alerta { color: #B23223 !important; font-weight: 700; }
+.cob-asignado { color: var(--cg-naranja-text); }
+.cob-acciones { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; min-width: 190px; }
+
+/* ---------- modales */
+.cob-recordar-lista { margin: 0 0 14px; padding-left: 18px; color: var(--cengi-muted); font-size: 12.5px; line-height: 1.6; }
+.cob-validar { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.cob-vista { min-height: 420px; overflow: hidden; border: 1px solid var(--cg-line); border-radius: 10px; background: #F7F8F8; }
+.cob-vista iframe { display: block; width: 100%; height: 520px; border: 0; }
+.cob-vista img { display: block; max-width: 100%; max-height: 520px; margin: 0 auto; object-fit: contain; }
+.cob-vista-vacia { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 420px; color: #8A958C; font-size: 12.5px; }
+.cob-vista-vacia .glyphicon { color: var(--cg-gris); font-size: 28px; }
+
+@media (max-width: 991px) {
+    .cob-flujo ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cob-validar { grid-template-columns: minmax(0, 1fr); }
+    .cob-vista, .cob-vista-vacia { min-height: 260px; }
+    .cob-vista iframe { height: 360px; }
+}
+@media (max-width: 767px) {
+    .cob-flujo ol, .cob-buckets { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ===== Validaciones y pagos: una sola barra (Boletas · Ingenios · Historial) ===== */
+.pagos-seg { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 4px 0 14px; }
+.pagos-seg-item {
+    display: flex; flex: 1 1 220px; align-items: center; gap: 10px; padding: 10px 14px;
+    border: 1px solid #E4E7E1; border-radius: 12px; background: #fff; color: #1E2A1A; text-decoration: none;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.pagos-seg-item:hover, .pagos-seg-item:focus { border-color: #73BC25; background: #F7FBF1; color: #1E2A1A; text-decoration: none; }
+.pagos-seg-item.is-active { border-color: #1f5632; background: #1f5632; color: #fff; box-shadow: 0 6px 16px rgba(31, 86, 50, .18); }
+.pagos-seg-icono { display: inline-flex; flex: 0 0 34px; align-items: center; justify-content: center; height: 34px; border-radius: 10px; background: #EEF7E3; color: #3E7A12; }
+.pagos-seg-item.is-active .pagos-seg-icono { background: rgba(255, 255, 255, .15); color: #D9F2A6; }
+.pagos-seg-icono .glyphicon { top: 0; font-size: 14px; }
+.pagos-seg-txt { display: flex; flex: 1; flex-direction: column; min-width: 0; line-height: 1.25; }
+.pagos-seg-txt b { font-size: 13.5px; }
+.pagos-seg-txt small { color: #5B6459; font-size: 11.5px; }
+.pagos-seg-item.is-active .pagos-seg-txt small { color: rgba(255, 255, 255, .8); }
+.pagos-seg-n { min-width: 26px; padding: 2px 8px; border-radius: 12px; background: #F1F3F4; color: #5B6459; font-size: 12px; font-weight: 700; text-align: center; }
+.pagos-seg-n.is-pendiente { background: #FF6B00; color: #fff; }
+.pagos-seg-item.is-active .pagos-seg-n:not(.is-pendiente) { background: rgba(255, 255, 255, .2); color: #fff; }
+.pagos-seg-resumen { display: inline-flex; align-items: center; gap: 6px; align-self: center; margin-left: auto; padding: 6px 10px; border-radius: 8px; color: #1f5632; font-size: 12px; font-weight: 700; text-decoration: none; }
+.pagos-seg-resumen:hover, .pagos-seg-resumen:focus, .pagos-seg-resumen.is-active { background: #EEF7E3; color: #1f5632; text-decoration: none; }
+.pagos-seg-resumen .glyphicon { top: 0; font-size: 11px; }
+@media (max-width: 760px) { .pagos-seg-resumen { margin-left: 0; } }
+
+/* Franja compacta del cobro (Ingenios y proformas / Resumen). */
+.pagos-resumen { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
+.pagos-resumen > div { display: flex; flex-direction: column; gap: 1px; padding: 9px 14px; border: 1px solid #E4E7E1; border-left: 4px solid #CED2D5; border-radius: 10px; background: #fff; }
+.pagos-resumen span { color: #5B6459; font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.pagos-resumen b { color: #1E2A1A; font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 18px; line-height: 1.2; }
+.pagos-resumen small { color: #6b7a6f; font-size: 11.5px; }
+.pagos-resumen .is-alerta { border-left-color: #FF6B00; }
+.pagos-resumen .is-alerta b { color: #B34E00; }
+.pagos-resumen .is-rojo { border-left-color: #B23223; }
+.pagos-resumen .is-rojo b { color: #B23223; }
+.pagos-resumen .is-verde { border-left-color: #73BC25; }
+.pagos-resumen .is-verde b { color: #1f5632; }
+@media (max-width: 900px) { .pagos-resumen { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pagos-grupos { margin-bottom: 14px; }
+.pagos-grupos .pp-card-head h3 { display: flex; align-items: center; gap: 8px; }
+.pagos-vacio { display: flex; align-items: center; gap: 8px; padding: 16px 18px; color: #3E7A12; font-weight: 600; }
+.pagos-vacio .glyphicon { font-size: 16px; }
+
+/* Ingenios y proformas: tres pestañas (sin proforma · con proforma · proformas). */
+.pagos-ingenio-tabs a .glyphicon { margin-right: 3px; font-size: 11px; }
+.pagos-ingenio-tabs .pp-chip.is-warn { background: #FFE9D9; color: #B34E00; }
+.pagos-tab-ayuda { margin: 0; padding: 12px 18px 4px; color: #5B6459; font-size: 12.5px; }
+.pagos-vacio.is-gris { color: #5B6459; }

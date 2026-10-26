@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+// Los plazos y la bitácora usan la fecha local de Guatemala, también fuera de Docker.
+date_default_timezone_set('America/Guatemala');
+
 // Modulo: Comites, Transferencia y Comunicacion.
 // Mismo patron que sistema_de_solicitudes/config/database.php: se conecta a la
 // base central `usuarios_menu` (menuPdo) para autenticacion/menu, y crea/usa
@@ -115,7 +118,11 @@ function app_normalize(string $value): string
     return preg_replace('/[^a-z0-9]+/', ' ', $value) ?: '';
 }
 
-function app_bootstrap_database(PDO $pdo): void
+/**
+ * Tablas, columnas y llaves del modulo. Solo corre al desplegar (deploy/mysql/migrar-esquema.php,
+ * con el usuario de migraciones): las peticiones no hacen DDL (AUD-2026-001/I-2).
+ */
+function app_esquema_database(PDO $pdo): void
 {
     // Catalogo de los 14 comites tecnicos (ids tipo slug, referenciados por
     // el resto de las tablas transaccionales del modulo).
@@ -422,6 +429,47 @@ function app_bootstrap_database(PDO $pdo): void
             PRIMARY KEY (usuario_id, clave)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    // Notificaciones por correo (includes/correo-eventos.php): configuracion por evento,
+    // ajustes generales y cola de envio.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS correo_eventos (
+            evento VARCHAR(60) NOT NULL PRIMARY KEY,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            asunto VARCHAR(250) NOT NULL DEFAULT '',
+            cuerpo TEXT NULL,
+            destinatarios TEXT NULL,
+            dias INT NULL,
+            actualizado_por VARCHAR(180) NULL,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS correo_ajustes (
+            clave VARCHAR(60) NOT NULL PRIMARY KEY,
+            valor TEXT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS correo_cola (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            evento VARCHAR(60) NOT NULL,
+            destinatario VARCHAR(190) NOT NULL,
+            destinatario_original VARCHAR(190) NOT NULL,
+            nombre VARCHAR(180) NOT NULL DEFAULT '',
+            asunto VARCHAR(250) NOT NULL,
+            cuerpo_html MEDIUMTEXT NOT NULL,
+            enlace VARCHAR(500) NOT NULL DEFAULT '',
+            referencia VARCHAR(190) NOT NULL DEFAULT '',
+            estado ENUM('pendiente','enviando','enviado','error') NOT NULL DEFAULT 'pendiente',
+            intentos TINYINT NOT NULL DEFAULT 0,
+            error VARCHAR(250) NULL,
+            creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            enviado_en DATETIME NULL,
+            KEY idx_correo_estado (estado, id),
+            KEY idx_correo_referencia (evento, destinatario_original, referencia)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
     // Conexiones directas por API: configuracion visible y credenciales cifradas (AES-256-GCM).
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS redes_conexiones (
@@ -460,6 +508,13 @@ function app_bootstrap_database(PDO $pdo): void
         'fk_documentos_carpeta',
         'FOREIGN KEY (carpeta_id) REFERENCES documento_carpetas(id) ON DELETE SET NULL'
     );
+}
+
+function app_bootstrap_database(PDO $pdo): void
+{
+    if (defined('ESQUEMA_MIGRANDO')) {
+        app_esquema_database($pdo);
+    }
 
     // Migracion de datos: instalaciones que ya tenian documentos antes de
     // agregar `carpeta_id` (o filas insertadas sin carpeta) quedarian
@@ -637,6 +692,11 @@ $dbUser = app_env_value('DB_MENU_USER', app_env_value('DB_USER', 'root'));
 $dbPass = app_env_value('DB_MENU_PASS', app_env_value('DB_PASS', ''));
 $menuDbName = app_env_value('DB_MENU_NAME', app_env_value('DB_NAME', 'usuarios_menu'));
 $comitesDbName = app_env_value('DB_COMITES_NAME', app_env_value('COMITES_DB_NAME', 'sistema_comites'));
+if (defined('ESQUEMA_MIGRANDO')) {
+    // deploy/mysql/migrar-esquema.php: el esquema se crea con el usuario de migraciones.
+    $dbUser = (string) getenv('MIGRADOR_USER');
+    $dbPass = (string) getenv('MIGRADOR_PASS');
+}
 
 try {
     $pdoOptions = [
@@ -644,18 +704,21 @@ try {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
         PDO::ATTR_TIMEOUT => 10,
+        PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '-06:00'",
     ];
 
-    $serverPdo = new PDO(
-        "mysql:host={$dbHost};port={$dbPort};charset=utf8mb4",
-        $dbUser,
-        $dbPass,
-        $pdoOptions
-    );
+    if (defined('ESQUEMA_MIGRANDO')) {
+        $serverPdo = new PDO(
+            "mysql:host={$dbHost};port={$dbPort};charset=utf8mb4",
+            $dbUser,
+            $dbPass,
+            $pdoOptions
+        );
 
-    $serverPdo->exec(
-        'CREATE DATABASE IF NOT EXISTS `' . str_replace('`', '``', $comitesDbName) . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
-    );
+        $serverPdo->exec(
+            'CREATE DATABASE IF NOT EXISTS `' . str_replace('`', '``', $comitesDbName) . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+        );
+    }
 
     $pdo = new PDO(
         "mysql:host={$dbHost};port={$dbPort};dbname={$comitesDbName};charset=utf8mb4",
@@ -674,6 +737,9 @@ try {
     app_bootstrap_database($pdo);
     app_bootstrap_menu_data($menuPdo);
 } catch (PDOException $e) {
+    if (defined('ESQUEMA_MIGRANDO')) {
+        throw $e;
+    }
     http_response_code(500);
     exit(
         'No se pudo conectar a la base de datos. Verifica la configuracion de MySQL. Detalle: '

@@ -44,6 +44,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 }
 
 $cargaId = (int) ($_POST['carga_id'] ?? 0);
+if (cengi_es_administrador_ingenio() || empty($_SESSION['evaluaciones_eliminar_csrf']) || !hash_equals($_SESSION['evaluaciones_eliminar_csrf'], (string) ($_POST['csrf'] ?? ''))) {
+    cengi_responder_eliminar_carga_evaluacion(false, 'La sesión no permite eliminar evaluaciones. Recarga la página e inténtalo nuevamente.');
+}
 $evaluacionId = (int) ($_POST['evaluacion_id'] ?? 0);
 
 try {

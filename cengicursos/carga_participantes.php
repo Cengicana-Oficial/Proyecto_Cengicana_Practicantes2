@@ -4,6 +4,7 @@ session_start();
 
 require_once "revisar_permisos.php";
 require_once "conexion.php";
+require_once __DIR__ . '/inscripcion_registro.php';
 require_once "menu.php";
 require_once __DIR__ . "/classes/PHPExcel.php";
 require_once __DIR__ . "/classes/PHPExcel/IOFactory.php";
@@ -93,7 +94,7 @@ function cengi_obtener_filas_archivo($archivoTemporal, $extension)
         <div class="cengi-hero">
             <span class="cengi-chip">Participantes</span>
             <h2>Resultado de la carga</h2>
-            <p>Detalle de participantes creados, actualizados y asignados desde el archivo.</p>
+            <p>Registros por curso: los participantes esperan validación antes de su asignación.</p>
         </div>
 
         <div class="panel panel-success">
@@ -332,25 +333,8 @@ try {
             $creados++;
         }
 
-        $stmtBuscarAsignacion->execute([
-            $participanteID,
-            $cursoID,
-        ]);
-        $asignacionID = $stmtBuscarAsignacion->fetchColumn();
-
-        if ($asignacionID) {
-            $stmtActualizarAsignacion->execute([
-                $userID,
-                $asignacionID,
-            ]);
-        } else {
-            $stmtInsertAsignacion->execute([
-                $participanteID,
-                $userID,
-                $cursoID,
-            ]);
-            $asignados++;
-        }
+        $sid=cengi_ins_alta_curso($db, $participanteID, $cursoID);
+        $db->prepare("UPDATE solicitudes_inscripcion SET origen_inscripcion='carga_interna' WHERE id_solicitud=? AND origen_inscripcion IN ('sin_identificar','registro_interno')")->execute([$sid]);
 
         $procesados++;
     }
@@ -361,7 +345,7 @@ try {
 
     $db->commit();
     ob_end_clean();
-    header('Location: participantes.php?curso_id=' . $cursoID . '&mensaje=carga');
+    header('Location: inscripciones.php?curso=' . $cursoID);
     exit;
     ?>
                 <div class="cengi-result-card is-success">

@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\UsuariosController;
 use App\Http\Controllers\Analisis\AnalisisController;
 use App\Http\Controllers\Auth\SsoController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Investigacion\ClimaController;
 use App\Http\Controllers\Investigacion\EnsayosController;
 use App\Http\Controllers\Investigacion\EvaluacionesController;
 use App\Http\Controllers\Investigacion\ProgramasController;
@@ -60,6 +61,21 @@ Route::middleware(['auth'])->group(function () {
         Route::post('ensayos', [EnsayosController::class, 'store'])->name('ensayos.store');
         Route::put('ensayos/{ensayo}', [EnsayosController::class, 'update'])->name('ensayos.update');
         Route::delete('ensayos/{ensayo}', [EnsayosController::class, 'destroy'])->name('ensayos.destroy');
+        Route::get('ensayos/{ensayo}', [EnsayosController::class, 'show'])->name('ensayos.show');
+        Route::post('ensayos/{ensayo}/tratamientos', [EnsayosController::class, 'storeTratamiento'])->name('ensayos.tratamientos.store');
+        Route::put('tratamientos/{tratamiento}', [EnsayosController::class, 'updateTratamiento'])->name('tratamientos.update');
+        Route::delete('tratamientos/{tratamiento}', [EnsayosController::class, 'destroyTratamiento'])->name('tratamientos.destroy');
+        Route::post('ensayos/{ensayo}/parcelas/generar', [EnsayosController::class, 'generarParcelas'])->name('ensayos.parcelas.generar');
+        Route::put('parcelas/{parcela}', [EnsayosController::class, 'updateParcela'])->name('parcelas.update');
+        Route::post('ensayos/{ensayo}/ndvi', [EnsayosController::class, 'storeNdvi'])->name('ensayos.ndvi.store');
+        Route::delete('ndvi/{registro}', [EnsayosController::class, 'destroyNdvi'])->name('ndvi.destroy');
+
+        Route::get('clima/estaciones', [ClimaController::class, 'estaciones'])->name('clima.estaciones');
+        Route::post('clima/estaciones', [ClimaController::class, 'store'])->name('clima.estaciones.store');
+        Route::put('clima/estaciones/{estacion}', [ClimaController::class, 'update'])->name('clima.estaciones.update');
+        Route::delete('clima/estaciones/{estacion}', [ClimaController::class, 'destroy'])->name('clima.estaciones.destroy');
+        Route::get('clima/estaciones/{estacion}/datos', [ClimaController::class, 'datos'])->name('clima.estaciones.datos');
+        Route::post('clima/estaciones/{estacion}/importar', [ClimaController::class, 'importar'])->name('clima.estaciones.importar');
 
         Route::get('variables', [VariablesController::class, 'index'])->name('variables.index');
         Route::post('variables', [VariablesController::class, 'store'])->name('variables.store');

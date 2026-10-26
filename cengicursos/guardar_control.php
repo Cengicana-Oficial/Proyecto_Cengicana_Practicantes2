@@ -53,7 +53,11 @@ if (trim((string) ($_POST['accion'] ?? '')) === 'guardar_general') {
     $stmtModulosCurso = $db->prepare("SELECT * FROM curso_modulos WHERE curso_id = ? ORDER BY orden");
     $stmtModulosCurso->execute([$cursoId]);
     $modulosCurso = $stmtModulosCurso->fetchAll(PDO::FETCH_ASSOC);
-    $prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, $moduloId);
+    $soloAsistencia = cengi_curso_solo_asistencia($db, $cursoId);
+    if ($soloAsistencia) {
+        $moduloId = 0; // curso corto: no hay notas por módulo, solo asistencia del curso
+    }
+    $prePostVisibles = cengi_curso_pre_post_visibles($modulosCurso, $moduloId, $soloAsistencia);
     $puedeGuardarAsistencia = $puedeGestionar || (!$prePostVisibles['pre'] && !$prePostVisibles['post']);
 
     $normalizarNota = static function ($valor) {

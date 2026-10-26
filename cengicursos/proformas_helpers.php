@@ -122,7 +122,7 @@ function cengi_pf_cargar(PDO $db, $id, $bloquear = false)
 /** Cursos a los que se les puede emitir proforma: convocados, sin terminar y con costo. */
 function cengi_pf_cursos(PDO $db)
 {
-    return $db->query("SELECT * FROM planificacion_cursos WHERE estado IN ('aprobado', 'reprogramado') AND fecha_fin >= CURDATE()
+    return $db->query("SELECT * FROM planificacion_cursos p WHERE estado IN ('aprobado', 'reprogramado') AND (fecha_fin >= CURDATE() OR EXISTS(SELECT 1 FROM solicitudes_inscripcion s LEFT JOIN pagos_grupales g ON g.id=s.grupo_pago_id WHERE s.planificacion_id=p.id AND s.tipo_pago='Ingenio' AND s.estado<>'Rechazado' AND COALESCE(g.estado,'pendiente')<>'pagado'))
         AND (costo_asociados > 0 OR costo_externos > 0 OR costo_extranjero > 0) ORDER BY fecha_inicio, nombre")->fetchAll(PDO::FETCH_ASSOC);
 }
 
@@ -139,7 +139,7 @@ function cengi_pf_candidatos(PDO $db, $ingenioId, $planId = 0)
         LEFT JOIN pagos_grupales g ON g.id = s.grupo_pago_id
         LEFT JOIN proformas pf ON pf.id = g.proforma_id AND pf.estado <> 'anulada'
         WHERE s.ingenio_id = ? AND s.tipo_pago = 'Ingenio' AND s.estado <> 'Rechazado' AND s.planificacion_id IS NOT NULL
-          AND COALESCE(g.estado, 'pendiente') <> 'pagado'" . ($planId ? ' AND s.planificacion_id = ' . (int) $planId : '') . '
+          AND COALESCE(g.estado, 'pendiente') <> 'pagado' AND COALESCE(s.pago_estado,'pendiente') <> 'pagado'" . ($planId ? ' AND s.planificacion_id = ' . (int) $planId : '') . '
         ORDER BY s.nombre_participante');
     $stmt->execute([(int) $ingenioId]);
     $porPlan = [];
@@ -182,11 +182,6 @@ function cengi_pf_amarrar(PDO $db, array $pf, array $linea, $solicitudId)
     $db->prepare('UPDATE solicitudes_inscripcion SET grupo_pago_id = ?, cuota = ?, monto = ?, moneda = ?, descuento = ? WHERE id_solicitud = ?')
         ->execute([(int) $linea['grupo_pago_id'], $pf['tipo_cliente'], round((float) $linea['precio'] - (float) $linea['desc_unit'], 2), $pf['moneda'],
             (float) $linea['desc_unit'] > 0 ? (float) $linea['desc_unit'] : null, (int) $solicitudId]);
-    if ($pf['estado'] === 'pagada') {
-        $db->prepare("UPDATE solicitudes_inscripcion SET validacion_ingenio = 'validada', validacion_ingenio_por = ?, validacion_ingenio_en = NOW()
-            WHERE id_solicitud = ? AND COALESCE(validacion_ingenio, '') <> 'validada'")
-            ->execute(['Pago de la proforma N.° ' . $pf['numero'] . (isset($pf['empresa']) ? ' (' . $pf['empresa'] . ')' : ''), (int) $solicitudId]);
-    }
     if ($grupoAnterior && $grupoAnterior !== (int) $linea['grupo_pago_id']) {
         cengi_ins_recalcular_grupo($db, $grupoAnterior);
         // La orden normal que quedo vacia y sin movimiento se elimina.
@@ -257,6 +252,8 @@ function cengi_pf_emitir(PDO $db, array $datos)
     $clientes = (array) cengi_pf_config($db, 'pf_clientes', []);
     $clientes[(string) (int) $datos['ingenio_id']] = $c + ['tipo' => $tipo];
     cengi_pf_guardar_config($db, 'pf_clientes', $clientes);
+    $db->prepare('INSERT INTO proforma_versiones(proforma_id,revision,motivo,por,documento) VALUES(?,1,?,?,?)')
+        ->execute([$pfId,'Emisión original',cengi_pp_usuario_nombre(),json_encode(['proforma'=>cengi_pf_cargar($db,$pfId),'cuentas'=>cengi_pf_cuentas($db)],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)]);
     return $pfId;
 }
 
@@ -279,10 +276,6 @@ function cengi_pf_registrar_pago(PDO $db, array $pf, $forma, $ref, $fecha)
         }
         $db->prepare("UPDATE pagos_grupales SET estado = 'pagado', pago_forma = ?, pago_referencia = ?, pago_fecha = ?, verificado_por = ?, verificado_en = NOW() WHERE id = ?")
             ->execute([$forma, $ref, $fecha, cengi_pp_usuario_nombre(), (int) $l['grupo_pago_id']]);
-        $stmt = $db->prepare("UPDATE solicitudes_inscripcion SET validacion_ingenio = 'validada', validacion_ingenio_por = ?, validacion_ingenio_en = NOW()
-            WHERE grupo_pago_id = ? AND estado <> 'Rechazado' AND COALESCE(validacion_ingenio, '') <> 'validada'");
-        $stmt->execute(['Pago de la proforma N.° ' . $pf['numero'] . ' (' . $pf['empresa'] . ')', (int) $l['grupo_pago_id']]);
-        $validados += $stmt->rowCount();
         $planes[(int) $l['planificacion_id']] = true;
     }
     cengi_pf_log($db, $pf['id'], 'Pagada', trim($forma . ' ' . $ref) . ($validados ? ' · ' . $validados . ' participante(s) validados automáticamente' : ''));

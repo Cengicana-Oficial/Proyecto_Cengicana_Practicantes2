@@ -1,0 +1,29 @@
+USE cengi_cursos;
+CREATE TABLE IF NOT EXISTS instructor_cv_digital (
+ instructor_id INT NOT NULL PRIMARY KEY,
+ datos LONGTEXT NOT NULL,
+ estado VARCHAR(20) NOT NULL DEFAULT 'borrador',
+ temas TEXT NULL,
+ validado_por VARCHAR(180) NULL,
+ validado_en DATETIME NULL,
+ actualizado DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ enviado_en DATETIME NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS instructor_cv_enlaces (
+ instructor_id INT NOT NULL PRIMARY KEY,
+ token_hash CHAR(64) NOT NULL UNIQUE,
+ expira_en DATETIME NOT NULL,
+ cerrado TINYINT NOT NULL DEFAULT 0,
+ borrador_datos LONGTEXT NULL,
+ creado_por VARCHAR(180) NOT NULL,
+ creado DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS instructor_cv_historial (
+ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ instructor_id INT NOT NULL,
+ accion VARCHAR(30) NOT NULL,
+ datos LONGTEXT NOT NULL,
+ usuario VARCHAR(180) NOT NULL,
+ creado DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ KEY cv_historial(instructor_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

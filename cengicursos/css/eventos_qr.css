@@ -1,0 +1,130 @@
+/* Control QR de eventos (eventos_qr.php): paleta de marca sobre los estilos propios de la
+   página. Se carga después del <style> de la página; las variables --cg-* vienen de
+   cengi-tema.css (body.cg-tema). Prefijo .evq-* para los elementos nuevos. */
+
+.cengi-eventos-qr-page.cg-tema { --evq-sombra: 0 1px 2px rgba(16, 40, 24, .05), 0 8px 24px -18px rgba(16, 40, 24, .35); }
+
+/* ---------- flujo del proceso ---------- */
+.evq-flujo { position: relative; margin-bottom: 16px; padding: 14px 18px 18px; overflow: hidden; border-radius: 14px; background: var(--cg-banda); color: #fff; box-shadow: 0 10px 26px -14px rgba(31, 86, 50, .55); }
+.evq-flujo::after { content: ""; position: absolute; right: 0; bottom: 0; left: 0; height: 5px; background: var(--cg-franja); }
+.evq-flujo ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: none; }
+.evq-flujo li { position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 9px 10px; border-radius: 10px; background: rgba(255, 255, 255, .08); }
+.evq-flujo li + li::before { content: "›"; position: absolute; top: 50%; left: -9px; color: rgba(255, 255, 255, .55); font-size: 18px; line-height: 0; }
+.evq-flujo li b { display: block; color: #fff; font-size: 12.5px; }
+.evq-flujo li small { display: block; color: rgba(255, 255, 255, .75); font-size: 11px; line-height: 1.35; }
+.evq-paso { display: inline-flex; flex: 0 0 26px; align-items: center; justify-content: center; height: 26px; border-radius: 50%; font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 13px; font-weight: 700; }
+.evq-paso.is-verde { background: var(--cg-verde); color: #fff; }
+.evq-paso.is-verde2 { background: var(--cg-verde-2); color: #1f3300; }
+.evq-paso.is-amarillo { background: var(--cg-amarillo); color: #3b2f00; }
+.evq-paso.is-naranja { background: var(--cg-naranja); color: #fff; }
+.evq-flujo p { margin: 10px 0 0; color: rgba(255, 255, 255, .8); font-size: 11.5px; }
+.evq-flujo p b { color: var(--cg-verde-2); }
+
+.evq-alerta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; padding: 11px 16px; border: 1px solid #F5E39A; border-left: 5px solid var(--cg-amarillo); border-radius: 12px; background: var(--cg-amarillo-soft); color: #5f4700; font-size: 12.5px; }
+.evq-alerta > .glyphicon { color: var(--cg-amarillo-text); font-size: 16px; }
+.evq-alerta > div { flex: 1 1 320px; }
+.evq-alerta b { color: #3b2f00; }
+.evq-alerta form { margin: 0; }
+
+/* ---------- vista por rol ---------- */
+.cengi-eventos-qr-page.cg-tema .cengi-ev-rol button { border-color: var(--cg-line); color: var(--cg-gris-text); transition: border-color .15s ease, background-color .15s ease; }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-rol button:hover { border-color: var(--cg-verde); color: var(--cg-deep); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-rol button.sel { border-color: var(--cg-deep); background: var(--cg-deep); color: #fff; box-shadow: inset 0 -3px 0 var(--cg-verde); }
+
+/* ---------- indicadores ---------- */
+.cengi-eventos-qr-page.cg-tema .cengi-kpi.is-link { cursor: pointer; transition: border-color .15s ease, transform .15s ease; }
+.cengi-eventos-qr-page.cg-tema .cengi-kpi.is-link:hover,
+.cengi-eventos-qr-page.cg-tema .cengi-kpi.is-link:focus { border-color: var(--cg-verde); transform: translateY(-1px); outline: none; }
+.cengi-eventos-qr-page.cg-tema .cengi-kpi-delta { color: var(--cg-gris-text); }
+
+/* ---------- secciones, tareas y pestañas ---------- */
+.cengi-eventos-qr-page.cg-tema .cengi-ev-section { border-color: var(--cg-line); border-radius: 12px; box-shadow: var(--evq-sombra); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-section-head h3 { display: flex; align-items: center; gap: 8px; color: var(--cg-deep); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-section-head h3::before { content: ""; width: 4px; height: 16px; border-radius: 2px; background: var(--cg-verde); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-hint { color: var(--cg-gris-text); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-tn { display: inline-flex; flex: 0 0 40px; align-items: center; justify-content: center; min-width: 40px; height: 40px; border-radius: 12px; background: var(--cg-gris-soft); font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 18px; }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-tarea { border-bottom-color: #EEF1EA; }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-aviso { border-left: 4px solid var(--cg-amarillo); background: var(--cg-amarillo-soft); color: #5f4700; }
+
+.cengi-eventos-qr-page.cg-tema .cengi-ev-tabs { background: #FAFBF8; }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-tab { color: var(--cg-gris-text); transition: color .15s ease; }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-tab:hover { color: var(--cg-deep); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-tab.active { border-bottom: 3px solid var(--cg-verde); color: var(--cg-deep); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-chip { background: var(--cg-naranja-soft); color: var(--cg-naranja-text); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-search:focus,
+.cengi-eventos-qr-page.cg-tema .cengi-ev-filter:focus { border-color: var(--cg-verde); box-shadow: var(--cg-foco); }
+
+/* ---------- tabla de eventos ---------- */
+.cengi-eventos-qr-page.cg-tema .cengi-events-table > thead > tr > th { background: #FAFBF8; color: var(--cg-gris-text); }
+.cengi-eventos-qr-page.cg-tema .cengi-events-table > tbody > tr.cengi-ev-row:hover { background: #FAFCF6; }
+.cengi-eventos-qr-page.cg-tema .cengi-events-table > tbody > tr.is-hoy { background: #FFFCEB; box-shadow: inset 4px 0 0 var(--cg-amarillo); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-link:hover { color: var(--cg-verde-text); text-decoration-color: var(--cg-verde); }
+.evq-color { display: inline-block; width: 9px; height: 9px; margin-right: 7px; border-radius: 50%; box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--cg-line); vertical-align: 1px; }
+.evq-chip { display: inline-block; margin-top: 3px; padding: 1px 8px; border-radius: 99px; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+.evq-chip.is-hoy { background: var(--cg-amarillo); color: #3b2f00; }
+.evq-chip.is-pronto { background: var(--cg-verde2-soft); color: var(--cg-verde2-text); }
+.evq-chip.is-pasado { background: var(--cg-naranja-soft); color: var(--cg-naranja-text); }
+.evq-cupo { width: 70px; height: 4px; margin-top: 5px; overflow: hidden; border-radius: 99px; background: var(--cg-gris-soft); }
+.evq-cupo span { display: block; height: 100%; background: var(--cg-verde-2); }
+.evq-cupo.is-lleno span { background: var(--cg-naranja); }
+.cengi-eventos-qr-page.cg-tema .cengi-progress-track { background: var(--cg-gris-soft); }
+.cengi-eventos-qr-page.cg-tema .cengi-progress-fill { background: linear-gradient(90deg, var(--cg-verde), var(--cg-verde-2)); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-pill.is-naranja { background: var(--cg-naranja-soft); color: var(--cg-naranja-text); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-pill.is-amarillo { background: var(--cg-amarillo-soft); color: var(--cg-amarillo-text); }
+.cengi-eventos-qr-page.cg-tema .cengi-status-badge.is-waiting { border-color: #FFD3B0; background: var(--cg-naranja-soft); color: var(--cg-naranja-text); }
+.cengi-eventos-qr-page.cg-tema .cengi-status-badge.is-waiting i { background: var(--cg-naranja); }
+.cengi-eventos-qr-page.cg-tema #tablaEventos .ev-td-acc { white-space: nowrap; }
+.evq-ingreso-rapido { margin-right: 4px; font-weight: 700; }
+.evq-ingreso-rapido svg { width: 14px; height: 14px; margin-right: 2px; vertical-align: -2px; }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-acciones .dropdown-menu > li > a:hover,
+.cengi-eventos-qr-page.cg-tema .cengi-ev-acciones .dropdown-menu > li > a:focus { background: var(--cg-verde-soft); color: var(--cg-deep); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-acciones .dropdown-menu > li > a:hover svg { color: var(--cg-verde-text); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-linkbtn { color: var(--cg-verde-text); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-linkbtn:hover { color: var(--cg-deep); }
+
+/* ---------- ventana de participantes ---------- */
+.cengi-eventos-qr-page.cg-tema #modalEventoParticipantes .modal-content { overflow: hidden; border: 0; border-radius: 16px; }
+.cengi-eventos-qr-page.cg-tema .cengi-participants-modal-head { position: relative; padding: 18px 22px 22px; border: 0; background: var(--cg-banda); }
+.cengi-eventos-qr-page.cg-tema .cengi-participants-modal-head::after { content: ""; position: absolute; right: 0; bottom: 0; left: 0; height: 5px; background: var(--cg-franja); }
+.cengi-eventos-qr-page.cg-tema .cengi-participants-modal-head .modal-title { color: #fff; font-weight: 700; }
+.cengi-eventos-qr-page.cg-tema .cengi-participants-modal-head .cengi-modal-hint { color: rgba(255, 255, 255, .78); }
+.cengi-eventos-qr-page.cg-tema .cengi-participants-modal-head .close { color: #fff; opacity: .8; text-shadow: none; }
+.cengi-eventos-qr-page.cg-tema .cengi-participants-modal-head .close:hover { opacity: 1; }
+.cengi-eventos-qr-page.cg-tema .cengi-participants-modal-body { background: #F7F8F6; }
+.cengi-eventos-qr-page.cg-tema .cengi-participants-toolbar { padding: 10px; border: 1px solid var(--cg-line); border-radius: 12px; background: #fff; }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-strip { padding-top: 12px; }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-mini-stat { border-color: var(--cg-line); border-top: 3px solid var(--cg-gris); border-radius: 11px; }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-mini-stat:nth-child(4n+1) { border-top-color: var(--cg-verde); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-mini-stat:nth-child(4n+2) { border-top-color: var(--cg-naranja); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-mini-stat:nth-child(4n+3) { border-top-color: var(--cg-amarillo); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-mini-stat:nth-child(4n+4) { border-top-color: var(--cg-verde-2); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-mini-stat .ms-label { color: var(--cg-gris-text); }
+.cengi-eventos-qr-page.cg-tema #evpTablaWrap { border: 1px solid var(--cg-line); border-radius: 12px; background: #fff; }
+.cengi-eventos-qr-page.cg-tema .cengi-event-participants-table .cengi-avatar-sm { background: var(--cg-verde-soft); color: var(--cg-verde-text); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-icon-btn:hover,
+.cengi-eventos-qr-page.cg-tema .cengi-ev-icon-btn:focus { border-color: var(--cg-verde); background: var(--cg-verde-soft); color: var(--cg-verde-text); }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-icon-btn.is-solid { border-color: var(--cg-verde); background: var(--cg-verde); color: #fff; }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-icon-btn.is-solid:hover { background: var(--cg-verde-strong); color: #fff; }
+.cengi-eventos-qr-page.cg-tema .cengi-ev-icon-btn.is-danger:hover { border-color: #E4544A; background: #FDF0EE; color: #B23223; }
+.cengi-eventos-qr-page.cg-tema .cengi-event-register-form { border: 1px solid var(--cg-line); border-left: 4px solid var(--cg-verde); border-radius: 12px; background: #fff; }
+
+/* ---------- QR de enlaces (inscripción y escaneo) ---------- */
+.evq-link-qr { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 4px 0 14px; padding: 14px; border: 1px solid var(--cg-line); border-radius: 12px; background: #FAFBF8; }
+.evq-link-qr-img { display: flex; flex: 0 0 150px; align-items: center; justify-content: center; width: 150px; height: 150px; border: 1px solid var(--cg-line); border-radius: 10px; background: #fff; }
+.evq-link-qr-img:empty::before { content: "Generando…"; color: #9AA39C; font-size: 11px; }
+.evq-link-qr-img svg { width: 100%; height: 100%; }
+.evq-link-qr-txt { display: flex; flex: 1 1 220px; flex-direction: column; gap: 4px; }
+.evq-link-qr-txt b { color: var(--cg-deep); font-size: 13px; }
+.evq-link-qr-txt > span { color: var(--cg-gris-text); font-size: 12px; }
+.evq-link-acciones { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.cg-tema .evq-whatsapp { border-color: #25D366; color: #128C3E; font-weight: 700; }
+.cg-tema .evq-whatsapp:hover { background: #E8FBEF; color: #0b6b2e; }
+
+@media (max-width: 991px) {
+    .evq-flujo ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .evq-flujo li + li::before { display: none; }
+}
+@media (max-width: 520px) {
+    .evq-flujo ol { grid-template-columns: minmax(0, 1fr); }
+    .evq-link-qr-img { flex-basis: 100%; height: 200px; }
+}

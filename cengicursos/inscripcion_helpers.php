@@ -50,25 +50,32 @@ const CENGI_INS_ETAPAS = [
 
 function cengi_ins_puede_validar_pagos()
 {
-    return cengi_es_admin() || cengi_tiene_permiso('validar_pagos_cengi');
+    return !cengi_es_gestor_ingenio() && (cengi_es_admin() || cengi_tiene_permiso('validar_pagos_cengi'));
+}
+
+function cengi_ins_delega_cengicana() {
+    return !cengi_es_gestor_ingenio() && cengi_es_ingenio_cengicana() && (cengi_puede_gestionar() || cengi_es_gestor() || cengi_puede_aprobar_solicitudes());
 }
 
 function cengi_ins_puede_ver_pagos()
 {
-    return cengi_ins_puede_validar_pagos() || cengi_tiene_permiso('ver_pagos_cengi') || cengi_es_administrador_ingenio();
+    return cengi_ins_puede_validar_pagos() || cengi_tiene_permiso('ver_pagos_cengi') || cengi_es_administrador_ingenio() || cengi_puede_gestionar() || cengi_ins_delega_cengicana();
 }
 
 /** El usuario de un ingenio valida solo a los inscritos de su ingenio; el administrador, a todos. */
 function cengi_ins_puede_validar_ingenio($nombreIngenio)
 {
     return cengi_es_admin()
+        || cengi_ins_delega_cengicana()
+        || (cengi_puede_gestionar() && (cengi_ve_todo_por_rol_o_ingenio() || cengi_texto_normalizado($nombreIngenio) === cengi_texto_normalizado(cengi_ingenio_nombre_actual())))
         || (cengi_es_ingenio() && cengi_texto_normalizado($nombreIngenio) === cengi_texto_normalizado(cengi_ingenio_nombre_actual()));
 }
 
 /** Nombre del ingenio al que se limita la vista (usuarios de ingenio sin permisos centrales), o null. */
 function cengi_ins_ingenio_limitado()
 {
-    if (cengi_ins_puede_validar_pagos() || cengi_es_admin() || cengi_ve_todo_por_rol_o_ingenio()) {
+    if (cengi_es_gestor_ingenio()) return cengi_ingenio_nombre_actual();
+    if (cengi_ins_puede_validar_pagos() || cengi_es_admin() || cengi_ve_todo_por_rol_o_ingenio() || cengi_ins_delega_cengicana()) {
         return null;
     }
     return cengi_ingenio_nombre_actual();
@@ -98,8 +105,8 @@ function cengi_ins_en_quetzales($monto, $moneda)
 /** Condicion SQL (alias s) de "inscripcion validada" (cuenta para el cupo y se puede asignar). */
 function cengi_ins_sql_validada($alias = 's')
 {
-    return "({$alias}.tipo_pago = 'Exonerado' OR ({$alias}.tipo_pago = 'Ingenio' AND {$alias}.validacion_ingenio = 'validada')"
-        . " OR ({$alias}.tipo_pago = 'Propio' AND {$alias}.pago_estado IN ('validado', 'pagado')))";
+    return "($alias.tipo_pago = 'Exonerado' OR ($alias.tipo_pago='Propio' AND $alias.pago_estado='pagado') OR ($alias.tipo_pago='Ingenio' AND $alias.validacion_ingenio='validada'))";
+
 }
 
 /** ['ok' => bool, 'texto' => ..., 'accion' => 'ingenio'|'pago'|null] */
@@ -159,18 +166,23 @@ function cengi_ins_estado_cobro(array $s)
         return 'exonerado';
     }
     if ($s['tipo_pago'] === 'Ingenio') {
-        return $s['grupo_estado'] ?? 'pendiente';
+        return $s['grupo_estado'] ?? ($s['pago_estado'] ?: 'pendiente');
     }
     return $s['pago_estado'] ?: 'pendiente';
+}
+
+function cengi_ins_exigir_pago_propio_validado(array $s) {
+    if($s['tipo_pago']!=='Propio'||$s['pago_estado']!=='validado') throw new InvalidArgumentException('Administración debe revisar y validar el comprobante antes de registrar el ingreso.');
 }
 
 /** Solicitud con datos de plan, ingenio y grupo (para paginas y correos). */
 function cengi_ins_solicitud(PDO $db, $id, $bloquear = false)
 {
-    $stmt = $db->prepare("SELECT s.*, i.nombre_ingenios, p.nombre AS plan_nombre, p.anio, g.estado AS grupo_estado, g.orden AS grupo_orden
+    $stmt = $db->prepare("SELECT s.*, i.nombre_ingenios, COALESCE(p.nombre, c.nombre_cursos) AS plan_nombre, p.anio, g.estado AS grupo_estado, g.orden AS grupo_orden
         FROM solicitudes_inscripcion s
         LEFT JOIN ingenios i ON i.id = s.ingenio_id
         LEFT JOIN planificacion_cursos p ON p.id = s.planificacion_id
+        LEFT JOIN cursos c ON c.id = s.curso_id
         LEFT JOIN pagos_grupales g ON g.id = s.grupo_pago_id
         WHERE s.id_solicitud = ?" . ($bloquear ? ' FOR UPDATE' : ''));
     $stmt->execute([(int) $id]);
@@ -478,6 +490,9 @@ function cengi_ins_deshacer_cuentas_creadas(PDO $db)
  */
 function cengi_ins_asignar(PDO $db, array $solicitud, $por)
 {
+    if(!cengi_ins_admitida($solicitud))throw new InvalidArgumentException('Primero debe aceptar el ingenio o Administración debe aceptar el pago propio.');
+    if (!cengi_ins_requisito($solicitud)['ok']) throw new InvalidArgumentException('Primero valida el patrocinio del ingenio o el pago propio.');
+    if ($solicitud['tipo_pago'] === 'Propio' && $solicitud['monto'] === null) throw new InvalidArgumentException('Primero define la cuota de esta inscripción.');
     $cursoId = (int) $solicitud['curso_id'];
     if ($cursoId <= 0) {
         throw new RuntimeException('La solicitud no tiene un curso asignado.');
@@ -524,6 +539,18 @@ function cengi_ins_asignar(PDO $db, array $solicitud, $por)
     $db->prepare("UPDATE solicitudes_inscripcion SET estado = 'Aprobado', asignado_por = ?, asignado_en = NOW() WHERE id_solicitud = ?")
         ->execute([mb_substr((string) $por, 0, 255, 'UTF-8'), (int) $solicitud['id_solicitud']]);
     return $participanteId;
+}
+
+function cengi_ins_admitida(array $s) {
+    if($s['estado']==='Rechazado')return false;
+    if($s['tipo_pago']==='Exonerado')return true;
+    if($s['tipo_pago']==='Ingenio')return ($s['validacion_ingenio']??'')==='validada';
+    return $s['tipo_pago']==='Propio' && cengi_ins_estado_cobro($s)==='pagado';
+}
+
+/** Reconoce también inscritos históricos cuyo pago propio todavía debe conciliarse. */
+function cengi_ins_inscrito(array $s) {
+    return cengi_ins_admitida($s);
 }
 
 /** Quita la asignacion (desactiva) y devuelve la solicitud a "validada, por asignar". */

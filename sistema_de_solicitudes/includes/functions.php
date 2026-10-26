@@ -6,6 +6,23 @@ function e(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+/** Token CSRF de la sesión; cada formulario POST lo envía con csrf_field(). */
+function csrf_token(): string
+{
+    $_SESSION['solicitudes_csrf'] ??= bin2hex(random_bytes(32));
+    return $_SESSION['solicitudes_csrf'];
+}
+
+function csrf_field(): string
+{
+    return '<input type="hidden" name="csrf" value="' . e(csrf_token()) . '">';
+}
+
+function csrf_valido(): bool
+{
+    return hash_equals(csrf_token(), (string) ($_POST['csrf'] ?? ''));
+}
+
 function normalize_text(string $value): string
 {
     $value = trim(mb_strtolower($value, 'UTF-8'));

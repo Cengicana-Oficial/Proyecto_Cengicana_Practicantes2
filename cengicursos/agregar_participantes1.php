@@ -105,7 +105,7 @@ $stmtCursos = $db->query("
                     </div>
 
                     <div class="cengi-form-actions">
-                        <button type="submit" class="btn btn-success">Guardar y asignar</button>
+                        <button type="submit" class="btn btn-success">Guardar inscripción</button>
                         <a href="<?php echo $cursoID > 0 ? 'ver_participante_curso.php?id=' . $cursoID : 'participantes.php'; ?>" class="btn btn-danger">Cancelar</a>
                     </div>
                 </form>

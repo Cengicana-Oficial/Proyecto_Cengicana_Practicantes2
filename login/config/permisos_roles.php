@@ -2,27 +2,31 @@
 
 function asegurar_tablas_permisos(PDO $conn)
 {
-    $conn->exec("
-        CREATE TABLE IF NOT EXISTS permisos (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            nombre_permiso VARCHAR(100) NOT NULL UNIQUE,
-            descripcion VARCHAR(255)
-        )
-    ");
+    // Las tablas las crea deploy/mysql/init/01-usuarios-menu.sql; aqui solo al desplegar
+    // (deploy/mysql/migrar-esquema.php), nunca en una peticion (AUD-2026-001/I-2).
+    if (defined('ESQUEMA_MIGRANDO')) {
+        $conn->exec("
+            CREATE TABLE IF NOT EXISTS permisos (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nombre_permiso VARCHAR(100) NOT NULL UNIQUE,
+                descripcion VARCHAR(255)
+            )
+        ");
 
-    $conn->exec("
-        CREATE TABLE IF NOT EXISTS rol_permiso (
-            rol_id INT NOT NULL,
-            permiso_id INT NOT NULL,
-            PRIMARY KEY (rol_id, permiso_id),
-            CONSTRAINT fk_rol_permiso_rol
-                FOREIGN KEY (rol_id) REFERENCES roles(id)
-                ON DELETE CASCADE,
-            CONSTRAINT fk_rol_permiso_permiso
-                FOREIGN KEY (permiso_id) REFERENCES permisos(id)
-                ON DELETE CASCADE
-        )
-    ");
+        $conn->exec("
+            CREATE TABLE IF NOT EXISTS rol_permiso (
+                rol_id INT NOT NULL,
+                permiso_id INT NOT NULL,
+                PRIMARY KEY (rol_id, permiso_id),
+                CONSTRAINT fk_rol_permiso_rol
+                    FOREIGN KEY (rol_id) REFERENCES roles(id)
+                    ON DELETE CASCADE,
+                CONSTRAINT fk_rol_permiso_permiso
+                    FOREIGN KEY (permiso_id) REFERENCES permisos(id)
+                    ON DELETE CASCADE
+            )
+        ");
+    }
 
     sembrar_permisos_base($conn);
 }
@@ -75,6 +79,8 @@ function sembrar_permisos_base(PDO $conn)
         'gestionar_diplomas_cengi' => 'Permite generar y cargar diplomas en Cengicursos',
         'ver_pagos_cengi' => 'Permite ver los pagos de inscripcion de las convocatorias y de los eventos pagados de Cengicursos',
         'validar_pagos_cengi' => 'Permite validar comprobantes y registrar los pagos de inscripcion y de eventos pagados en Cengicursos',
+        'firmar_liquidaciones_cengi' => 'Permite validar y firmar digitalmente las liquidaciones de pago a instructores (Jefe de Transferencia de Tecnologia)',
+        'administrar_cursos_cengi' => 'Coordinacion de capacitacion: administra todo el modulo de Cursos y ve todos los ingenios',
         'solicitudes_internas.crear' => 'Permite crear solicitudes desde su programa y ver las que el usuario envio',
         'solicitudes_internas.ver' => 'Permite ver las solicitudes que otros programas envian al programa del usuario',
         'solicitudes_internas.gestionar' => 'Permite cambiar estado y dar seguimiento a las solicitudes recibidas por el programa del usuario',
@@ -416,6 +422,8 @@ function etiqueta_permiso($nombrePermiso)
         'gestionar_diplomas_cengi' => 'Gestionar certificacion y diplomas',
         'ver_pagos_cengi' => 'Ver pagos de inscripcion y eventos',
         'validar_pagos_cengi' => 'Validar y registrar pagos de inscripcion y eventos (Administracion)',
+        'firmar_liquidaciones_cengi' => 'Firmar liquidaciones de pago a instructores (Jefe de Transferencia)',
+        'administrar_cursos_cengi' => 'Administrar todo Cursos y ver todos los ingenios (Coordinador de capacitacion)',
         'solicitudes_internas.crear' => 'Crear solicitudes (colaborador)',
         'solicitudes_internas.ver' => 'Ver solicitudes recibidas por su programa (jefe)',
         'solicitudes_internas.gestionar' => 'Gestionar solicitudes recibidas por su programa (jefe)',

@@ -3,11 +3,14 @@ declare(strict_types=1);
 const INF_ESTADOS=['pendiente'=>'Pendiente de entrega','entregado'=>'Entregado · por revisar','observado'=>'Revisado con pendientes','atendido'=>'Pendientes atendidos','revisado'=>'Revisado'];
 const INF_AREAS=['Transferencia de Tecnología','Investigación','Variedades','Riego','Nutrición','Manejo Integrado de Plagas','Malezas y Madurantes','Agricultura de Precisión'];
 function inf_preparar(PDO $pdo):void {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS informe_areas(id INT AUTO_INCREMENT PRIMARY KEY,nombre VARCHAR(180) NOT NULL UNIQUE,correo VARCHAR(180) NOT NULL DEFAULT '',activo TINYINT(1) NOT NULL DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    app_ensure_column($pdo,'informe_areas','programa_id','programa_id INT NULL');
-    $pdo->exec("CREATE TABLE IF NOT EXISTS informe_control(id INT PRIMARY KEY,revision INT NOT NULL DEFAULT 1) ENGINE=InnoDB");$pdo->exec('INSERT IGNORE INTO informe_control(id) VALUES(1)');
-    $pdo->exec("CREATE TABLE IF NOT EXISTS informe_poa(anio INT PRIMARY KEY,filas LONGTEXT NULL,fuente VARCHAR(255) NULL,url TEXT NULL,sincronizado DATETIME NULL,revision INT NOT NULL DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    foreach(['anio'=>'INT NULL','cuatri'=>'INT NULL','area_id'=>'INT NULL','flujo'=>"VARCHAR(25) NOT NULL DEFAULT 'pendiente'",'enlace'=>'TEXT NULL','pendientes'=>'LONGTEXT NULL','bitacora'=>'LONGTEXT NULL','revision'=>'INT NOT NULL DEFAULT 1'] as $c=>$d)app_ensure_column($pdo,'informes_cuatrimestrales',$c,"$c $d");
+    // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+    if (defined('ESQUEMA_MIGRANDO')) {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS informe_areas(id INT AUTO_INCREMENT PRIMARY KEY,nombre VARCHAR(180) NOT NULL UNIQUE,correo VARCHAR(180) NOT NULL DEFAULT '',activo TINYINT(1) NOT NULL DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        app_ensure_column($pdo,'informe_areas','programa_id','programa_id INT NULL');
+        $pdo->exec("CREATE TABLE IF NOT EXISTS informe_control(id INT PRIMARY KEY,revision INT NOT NULL DEFAULT 1) ENGINE=InnoDB");$pdo->exec('INSERT IGNORE INTO informe_control(id) VALUES(1)');
+        $pdo->exec("CREATE TABLE IF NOT EXISTS informe_poa(anio INT PRIMARY KEY,filas LONGTEXT NULL,fuente VARCHAR(255) NULL,url TEXT NULL,sincronizado DATETIME NULL,revision INT NOT NULL DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        foreach(['anio'=>'INT NULL','cuatri'=>'INT NULL','area_id'=>'INT NULL','flujo'=>"VARCHAR(25) NOT NULL DEFAULT 'pendiente'",'enlace'=>'TEXT NULL','pendientes'=>'LONGTEXT NULL','bitacora'=>'LONGTEXT NULL','revision'=>'INT NOT NULL DEFAULT 1'] as $c=>$d)app_ensure_column($pdo,'informes_cuatrimestrales',$c,"$c $d");
+    }
     if(!(int)$pdo->query('SELECT COUNT(*) FROM informe_areas')->fetchColumn())foreach(INF_AREAS as $area)$pdo->prepare('INSERT IGNORE INTO informe_areas(nombre) VALUES(?)')->execute([$area]);
     foreach($pdo->query('SELECT * FROM informes_cuatrimestrales WHERE anio IS NULL')->fetchAll() as $r){
         if(!$r['area']||!preg_match('/\b(19\d{2}|20\d{2}|21\d{2})\b/',$r['periodo'],$year)||!preg_match('/\b(III|II|I|[123])\s*(?:cuatrimestre|cuat)/i',$r['periodo'],$term))continue;
@@ -96,6 +99,12 @@ function inf_mutar(PDO $pdo,array $u,string $action,array $d,array $files=[]):st
             }else throw new RuntimeException('Acción no válida.');
             $current=inf_fila($pdo,$id);$log[]=['accion'=>$label,'actor'=>$u['nombre'],'rol'=>$u['nombre_rol'] ?? 'Administrador','fecha'=>date('Y-m-d H:i:s'),'observaciones'=>$obs,'archivos'=>inf_archivos($pdo,$current)];
             $pdo->prepare('UPDATE informes_cuatrimestrales SET flujo=?,evaluacion=?,pendientes=?,bitacora=?,observaciones=?,revision=revision+1 WHERE id=?')->execute([$state,$state==='revisado'?'Satisfactorio':($state==='observado'?'Con observaciones':'En revision'),json_encode($pending,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),json_encode($log,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),$obs,$id]);
+            if($state!==($r['flujo'] ?? 'pendiente')&&function_exists('correo_evento')){
+                $abiertos=implode("\n",array_map(static fn($p)=>'• '.$p['texto'],array_filter($pending,static fn($p)=>$p['estado']!=='resuelto')));
+                $vars=['area'=>$area['nombre'],'periodo'=>['','I','II','III'][$c].' cuatrimestre '.$y,'observaciones'=>trim($abiertos."\n".$obs)];$responsable=[['email'=>(string)$area['correo'],'nombre'=>'']];
+                $evento=match($state){'entregado','atendido'=>'inf_entregado','observado'=>'inf_observado','revisado'=>'inf_revisado',default=>null};
+                if($evento)correo_evento($pdo,$evento,$evento==='inf_entregado'?[]:$responsable,$vars,'index.php?view=informes');
+            }
         }
         $pdo->commit();return $msg;
     }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();foreach($new as $a){$p=inf_ruta($a['ruta']);if($p)unlink($p);}throw $e;}

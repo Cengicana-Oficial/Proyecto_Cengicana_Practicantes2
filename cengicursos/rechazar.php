@@ -6,7 +6,12 @@ require_once "correo.php";
 cengi_require_rechazar_solicitudes('solicitudes.php');
 
 $mysqli = conectar();
-$id = (int) ($_GET['id'] ?? 0);
+// Solo por POST desde la ventana de confirmación de solicitudes.php.
+$id = $_SERVER['REQUEST_METHOD'] === 'POST' ? (int) ($_POST['id'] ?? 0) : 0;
+if ($id <= 0) {
+    header('Location: solicitudes.php');
+    exit();
+}
 $resultado = 'error';
 $mensaje = 'No se pudo localizar la solicitud.';
 

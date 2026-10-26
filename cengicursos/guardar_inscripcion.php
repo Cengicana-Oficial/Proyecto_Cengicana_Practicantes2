@@ -6,7 +6,7 @@
  *                       por validar en pagos_inscripcion.php (ver inscripcion_helpers.php).
  *   destino "c:<id>" -> curso creado directamente: flujo anterior (solicitudes.php).
  */
-require_once __DIR__ . "/inscripcion_helpers.php";
+require_once __DIR__ . "/inscripcion_ingreso.php";
 require_once __DIR__ . "/proformas_helpers.php";
 require_once __DIR__ . "/correo.php";
 
@@ -121,6 +121,7 @@ if (strpos($destino, 'p:') === 0) {
             $comprobante[0], $comprobante[1], $tipoPago === 'Ingenio' ? 'pendiente' : null, $grupoId,
         ]);
         $solicitudId = (int) $db->lastInsertId();
+        $db->prepare("UPDATE solicitudes_inscripcion SET origen_inscripcion='formulario' WHERE id_solicitud=?")->execute([$solicitudId]);
         cengi_ins_recalcular_grupo($db, $grupoId);
         // Si el ingenio tiene una proforma con cupos libres para este curso, la
         // inscripcion se amarra a ella (precio de la proforma; validada si ya se pago).
@@ -186,11 +187,19 @@ if ($cursoId <= 0) {
     inscripcion_error('Selecciona un curso.');
 }
 
-$stmtCurso = $db->prepare("SELECT id, nombre_cursos FROM cursos WHERE id = ?");
+$stmtCurso = $db->prepare("SELECT c.id, c.nombre_cursos, c.fin, EXISTS (SELECT 1 FROM planificacion_cursos p WHERE p.curso_id = c.id) AS de_plan FROM cursos c WHERE c.id = ?");
 $stmtCurso->execute([$cursoId]);
 $cursoSeleccionado = $stmtCurso->fetch();
 if (!$cursoSeleccionado) {
     inscripcion_error('El curso seleccionado no es válido.');
+}
+if ($cursoSeleccionado['de_plan'] || ($cursoSeleccionado['fin'] && $cursoSeleccionado['fin'] < date('Y-m-d'))) {
+    inscripcion_error('Este curso ya no recibe solicitudes. Revisa las convocatorias abiertas.');
+}
+$duplicada = $db->prepare("SELECT COUNT(*) FROM solicitudes_inscripcion WHERE curso_id = ? AND planificacion_id IS NULL AND estado <> 'Rechazado' AND (LOWER(correo) = LOWER(?) OR (cui_participante <> '' AND cui_participante = ?))");
+$duplicada->execute([$cursoId, $correo, trim((string) ($_POST['cui_participante'] ?? ''))]);
+if ($duplicada->fetchColumn()) {
+    inscripcion_error('Ya tenemos una solicitud tuya para este curso. Te avisaremos por correo cuando sea revisada.');
 }
 $nombreCurso = $cursoSeleccionado['nombre_cursos'] ?? '';
 
@@ -210,6 +219,7 @@ $sql = "
 ";
 
 try {
+    $db->beginTransaction();
     $stmt = $db->prepare($sql);
     $stmt->execute([
         $nombreParticipante,
@@ -223,7 +233,10 @@ try {
         $cursoId,
         $tipoPago,
     ]);
-} catch (PDOException $e) {
+    cengi_ins_normalizar_ingreso($db,(int)$db->lastInsertId(),'formulario');
+    $db->commit();
+} catch (Throwable $e) {
+    if($db->inTransaction()) $db->rollBack();
     error_log("Error al guardar solicitud de inscripcion: " . $e->getMessage());
     inscripcion_error('No fue posible enviar tu solicitud. Intenta más tarde.');
 }

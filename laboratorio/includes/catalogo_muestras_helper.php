@@ -182,6 +182,9 @@ if (!function_exists('labCatalogoMuestrasColumnExists')) {
 if (!function_exists('labCatalogoMuestrasAsegurarEsquema')) {
     function labCatalogoMuestrasAsegurarEsquema(PDO $conexion): void
     {
+        if (!defined('ESQUEMA_MIGRANDO')) {
+            return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+        }
         try {
             if (!labCatalogoMuestrasColumnExists($conexion, 'tipo_muestra', 'activo')) {
                 try {

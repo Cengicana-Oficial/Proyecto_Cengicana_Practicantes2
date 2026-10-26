@@ -2,11 +2,18 @@
 require_once "conexion.php";
 require_once "menu.php";
 require_once "curso_form_helpers.php";
+require_once "instructor_cv_helpers.php";
+require_once "planificacion_helpers.php";
+require_once "instructor_eliminar_helpers.php";
 
 cengi_require_ver_instructores();
+date_default_timezone_set('America/Guatemala');
 
 $db = conectar();
+cengi_pp_asegurar_codigos_instructor($db);
 $puedeGestionar = cengi_puede_gestionar_instructores();
+if (empty($_SESSION['evaluaciones_eliminar_csrf'])) $_SESSION['evaluaciones_eliminar_csrf'] = bin2hex(random_bytes(32));
+if (empty($_SESSION['instructor_eliminar_csrf'])) $_SESSION['instructor_eliminar_csrf'] = bin2hex(random_bytes(32));
 $mensaje = '';
 $mensajeTipo = 'success';
 
@@ -140,13 +147,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar) {
     }
 
     try {
+        if (in_array($accion, ['crear', 'actualizar'], true)) {
+            if ($nombre === '' || mb_strlen($nombre) > 100) {
+                throw new InvalidArgumentException('Escribe el nombre del instructor (hasta 100 caracteres).');
+            }
+            if ($correo !== '' && !filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+                throw new InvalidArgumentException('El correo del instructor no es válido.');
+            }
+            $dupInst = $db->prepare('SELECT nombre FROM instructores WHERE (LOWER(nombre) = LOWER(?) OR (? <> \'\' AND LOWER(correo) = LOWER(?))) AND id <> ? LIMIT 1');
+            $dupInst->execute([$nombre, $correo, $correo, (int) ($_POST['id'] ?? 0)]);
+            if ($otroInst = $dupInst->fetchColumn()) {
+                throw new InvalidArgumentException('Ya existe el instructor “' . $otroInst . '” con ese nombre o correo.');
+            }
+        }
         if ($accion === 'crear' && $nombre !== '') {
             $stmt = $db->prepare("
                 INSERT INTO instructores (nombre, especialidad, correo, telefono, cv_path, estado)
                 VALUES (?, ?, ?, ?, ?, 1)
             ");
             $stmt->execute([$nombre, $especialidad, $correo, $telefono, $cvPath]);
-            $mensaje = 'Instructor registrado correctamente.';
+            $nuevoId = (int) $db->lastInsertId();
+            // Código de instructor (el mismo en Programa de sesiones, carga masiva y pago): el interno, editable en su ficha.
+            cengi_pp_asegurar_codigos_instructor($db);
+            $mensaje = 'Instructor registrado correctamente (código ' . cengi_pp_codigo_instructor($nuevoId) . ').';
             if ($cvError !== null) {
                 $mensaje .= ' El CV no se guardó: ' . $cvError;
                 $mensajeTipo = 'error';
@@ -171,6 +194,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar) {
                     $mensajeTipo = 'error';
                 }
             }
+        } elseif ($accion === 'eliminar') {
+            if (!hash_equals($_SESSION['instructor_eliminar_csrf'], (string) ($_POST['csrf'] ?? ''))) {
+                throw new InvalidArgumentException('La sesión del formulario venció. Recarga la página e intenta nuevamente.');
+            }
+            $db->beginTransaction();
+            try {
+                cengi_instructor_eliminar($db, (int) ($_POST['id'] ?? 0));
+                $db->commit();
+            } catch (Throwable $e) {
+                if ($db->inTransaction()) $db->rollBack();
+                throw $e;
+            }
+            $mensaje = 'Instructor eliminado correctamente.';
         } elseif ($accion === 'toggle_estado') {
             $id = (int) ($_POST['id'] ?? 0);
             if ($id > 0) {
@@ -179,8 +215,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $puedeGestionar) {
                 $mensaje = 'Estado actualizado.';
             }
         }
+    } catch (InvalidArgumentException $e) {
+        $mensaje = $e->getMessage();
+        $mensajeTipo = 'error';
     } catch (PDOException $e) {
-        $mensaje = 'No fue posible guardar: ' . $e->getMessage();
+        error_log('Instructores: ' . $e->getMessage());
+        $mensaje = 'No fue posible guardar el instructor. Intenta de nuevo.';
         $mensajeTipo = 'error';
     }
 }
@@ -525,13 +565,20 @@ foreach ($modulosPorModuloId as $modulo) {
 // (por ejemplo, tras un rebuild del contenedor sin volumen persistente para
 // uploads/) deben tratarse como "sin CV" en vez de mostrar un enlace roto.
 $instructorTieneCvDisponible = [];
+$cvDigitalEntregado = cengi_cv_ready($db) ? $db->query("SELECT instructor_id FROM instructor_cv_digital WHERE estado IN ('enviado','validado')")->fetchAll(PDO::FETCH_COLUMN) : [];
+$cvDigitalEntregado = array_fill_keys($cvDigitalEntregado, true);
+$instructorCvUrl = [];
 foreach ($instructores as &$instructorFila) {
     $idInstructor = (int) $instructorFila['id'];
     $stats = $statsEncuestaPorInstructor[$idInstructor] ?? null;
     $promedio = static function ($valor) {
         return $valor !== null ? (float) $valor : null;
     };
-    $cvDisponible = !empty($instructorFila['cv_path']) && is_file($instructorFila['cv_path']);
+    $cvDigital = isset($cvDigitalEntregado[$idInstructor]);
+    $cvDisponible = $cvDigital || (!empty($instructorFila['cv_path']) && is_file(__DIR__ . '/' . $instructorFila['cv_path']));
+    // El PDF se sirve por documento_instructor.php: uploads/instructores no se publica (AUD-2026-001/I-1).
+    $instructorFila['cv_url'] = $cvDigital ? 'instructor_cv.php?id=' . $idInstructor : 'documento_instructor.php?cv=' . $idInstructor;
+    $instructorCvUrl[$idInstructor] = $instructorFila['cv_url'];
     $instructorFila['cv_disponible'] = $cvDisponible;
     $instructorTieneCvDisponible[$idInstructor] = $cvDisponible;
     $instructorFila['encuesta_satisfaccion'] = [
@@ -562,7 +609,7 @@ unset($instructorFila);
 // no los renderice.
 if ($esAdministradorIngenio) {
     foreach ($instructores as &$instructorFila) {
-        unset($instructorFila['cv_path'], $instructorFila['cv_disponible']);
+        unset($instructorFila['cv_path'], $instructorFila['cv_disponible'], $instructorFila['cv_url']);
         if (!empty($instructorFila['modulos_asignados'])) {
             foreach ($instructorFila['modulos_asignados'] as &$moduloAsignado) {
                 $moduloAsignado['evaluacion_token'] = null;
@@ -687,8 +734,78 @@ foreach ($paresCursoInstructorModulo as $par) {
     ];
 }
 
-$ediciones = array_merge($edicionesPrincipales, $edicionesModulo);
+// Instructores asignados a sesiones del Programa de sesiones (sin ser principal ni de módulo)
+// también impartieron el curso: aparecen en su historial, filtros y conteo.
+$edicionesSesion = [];
+$paresYa = [];
+foreach (array_merge($edicionesPrincipales, $edicionesModulo) as $edicionYa) {
+    $paresYa[(int) $edicionYa['curso_id'] . '-' . (int) $edicionYa['instructor_id']] = true;
+}
+foreach ($db->query("SELECT DISTINCT pc.curso_id, s.instructor_id FROM curso_sesiones s
+    INNER JOIN planificacion_cursos pc ON pc.id = s.planificacion_id
+    WHERE s.instructor_id IS NOT NULL AND pc.curso_id IS NOT NULL AND s.estado <> 'cancelada'")->fetchAll(PDO::FETCH_ASSOC) as $par) {
+    $cursoId = (int) $par['curso_id'];
+    $instructorId = (int) $par['instructor_id'];
+    if (isset($paresYa["{$cursoId}-{$instructorId}"]) || !isset($cursoBasePorId[$cursoId], $instructoresPorId[$instructorId])) {
+        continue;
+    }
+    $baseCurso = $cursoBasePorId[$cursoId];
+    $edicionesSesion[] = array_merge($baseCurso, [
+        'instructor_id' => $instructorId,
+        'instructor_nombre' => $instructoresPorId[$instructorId]['nombre'],
+        'instructor_especialidad' => $instructoresPorId[$instructorId]['especialidad'],
+        'instructor_cv' => $instructoresPorId[$instructorId]['cv_path'] ?? null,
+        'evaluacion_token' => $enlacesPorClave["{$cursoId}-{$instructorId}-0"] ?? null,
+    ]);
+}
+$ediciones = array_merge($edicionesPrincipales, $edicionesModulo, $edicionesSesion);
 
+// Por instructor: cursos (principal, módulo o sesiones), sesiones impartidas/próximas y la
+// calificación de su encuesta (promedio de los 5 aspectos del instructor, escala 1 a 4).
+$cursosPorInstructor = [];
+foreach ($ediciones as $edicionCuenta) {
+    $cursosPorInstructor[(int) $edicionCuenta['instructor_id']][(int) $edicionCuenta['curso_id']] = true;
+}
+$sesionesPorInstructor = [];
+$ahoraInst = date('Y-m-d H:i:s');
+$stmtSesInst = $db->prepare("SELECT s.instructor_id,
+        SUM(s.estado = 'impartida' OR TIMESTAMP(s.fecha, s.hora_fin) <= ?) AS impartidas,
+        SUM(s.estado <> 'impartida' AND TIMESTAMP(s.fecha, s.hora_inicio) > ?) AS proximas,
+        MIN(CASE WHEN s.estado <> 'impartida' AND TIMESTAMP(s.fecha, s.hora_inicio) > ? THEN CONCAT(s.fecha, ' ', s.hora_inicio) END) AS proxima
+    FROM curso_sesiones s WHERE s.instructor_id IS NOT NULL AND s.estado <> 'cancelada' GROUP BY s.instructor_id");
+$stmtSesInst->execute([$ahoraInst, $ahoraInst, $ahoraInst]);
+foreach ($stmtSesInst->fetchAll(PDO::FETCH_ASSOC) as $filaSes) {
+    $sesionesPorInstructor[(int) $filaSes['instructor_id']] = $filaSes;
+}
+$stmtProx = $db->prepare("SELECT s.tema, COALESCE(c.nombre_cursos, pc.nombre) AS curso FROM curso_sesiones s
+    INNER JOIN planificacion_cursos pc ON pc.id = s.planificacion_id LEFT JOIN cursos c ON c.id = pc.curso_id
+    WHERE s.instructor_id = ? AND s.estado <> 'cancelada' AND CONCAT(s.fecha, ' ', s.hora_inicio) = ? LIMIT 1");
+foreach ($instructores as &$instructorFila) {
+    $idInstructor = (int) $instructorFila['id'];
+    $instructorFila['total_cursos'] = count($cursosPorInstructor[$idInstructor] ?? []);
+    $ses = $sesionesPorInstructor[$idInstructor] ?? null;
+    $instructorFila['sesiones_impartidas'] = $ses ? (int) $ses['impartidas'] : 0;
+    $instructorFila['sesiones_proximas'] = $ses ? (int) $ses['proximas'] : 0;
+    $instructorFila['proxima_sesion'] = null;
+    if ($ses && $ses['proxima']) {
+        $stmtProx->execute([$idInstructor, $ses['proxima']]);
+        $prox = $stmtProx->fetch(PDO::FETCH_ASSOC) ?: [];
+        $instructorFila['proxima_sesion'] = ['fecha' => $ses['proxima'], 'tema' => $prox['tema'] ?? '', 'curso' => $prox['curso'] ?? ''];
+    }
+    $aspectos = array_filter((array) ($instructorFila['encuesta_satisfaccion']['instructor'] ?? []), static function ($v) { return $v !== null; });
+    $instructorFila['eval_instructor'] = $aspectos ? round(array_sum($aspectos) / count($aspectos), 2) : null;
+    if ($esAdministradorIngenio) {
+        // Sin contacto ni encuesta para el rol de ingenio (ya se limpian CV y enlaces).
+        $instructorFila['correo'] = '';
+        $instructorFila['telefono'] = '';
+    }
+}
+unset($instructorFila);
+$notasEncuestaCurso=[];
+if($puedeVerEncuestasInstructor){
+    $notasCurso=$db->query('SELECT e.curso_id,e.instructor_id,AVG((ei.instructor_lenguaje_claro+ei.instructor_material_adecuado+ei.instructor_conocimiento_tema+ei.instructor_respeto_participantes+ei.instructor_puntualidad_objetivos)/5.0) AS nota FROM evaluaciones_instructor ei JOIN enlaces_evaluacion_instructor e ON e.id=ei.enlace_id GROUP BY e.curso_id,e.instructor_id');
+    foreach($notasCurso->fetchAll(PDO::FETCH_ASSOC) as $nota)$notasEncuestaCurso[$nota['curso_id'].'-'.$nota['instructor_id']]=$nota['nota'];
+}
 $anios = [];
 $nombresCursos = [];
 foreach ($ediciones as &$edicionFila) {
@@ -696,7 +813,9 @@ foreach ($ediciones as &$edicionFila) {
         $anios[(string) $edicionFila['anio']] = true;
     }
     $nombresCursos[(string) $edicionFila['nombre_cursos']] = true;
+    $edicionFila['evaluacion_promedio'] = $notasEncuestaCurso[$edicionFila['curso_id'].'-'.$edicionFila['instructor_id']] ?? null;
     $edicionFila['instructor_cv_disponible'] = $instructorTieneCvDisponible[(int) $edicionFila['instructor_id']] ?? false;
+    $edicionFila['instructor_cv'] = $instructorCvUrl[(int) $edicionFila['instructor_id']] ?? null;
 }
 unset($edicionFila);
 
@@ -705,7 +824,8 @@ unset($edicionFila);
 if ($esAdministradorIngenio) {
     foreach ($ediciones as &$edicionFila) {
         $edicionFila['instructor_cv'] = null;
-        $edicionFila['instructor_cv_disponible'] = false;
+        $edicionFila['evaluacion_promedio'] = $notasEncuestaCurso[$edicionFila['curso_id'].'-'.$edicionFila['instructor_id']] ?? null;
+    $edicionFila['instructor_cv_disponible'] = false;
         $edicionFila['evaluacion_token'] = null;
     }
     unset($edicionFila);
@@ -744,7 +864,6 @@ if ($puedeGestionar && $puedeVerEncuestasInstructor) {
         LEFT JOIN instructores i ON i.id = eei.instructor_id
         GROUP BY cei.id, cei.archivo_nombre, cei.usuario_nombre, cei.total_filas, cei.creado, c.nombre_cursos
         ORDER BY cei.creado DESC
-        LIMIT 300
     ");
     foreach ($stmtHistorialMasivo->fetchAll(PDO::FETCH_ASSOC) as $fila) {
         $historialCargasEvaluaciones[] = [
@@ -774,7 +893,6 @@ if ($puedeGestionar && $puedeVerEncuestasInstructor) {
         LEFT JOIN ingenios ing ON ing.id = ei.ingenio_id
         WHERE ei.carga_id IS NULL
         ORDER BY ei.creado DESC
-        LIMIT 300
     ");
     foreach ($stmtHistorialIndividual->fetchAll(PDO::FETCH_ASSOC) as $fila) {
         $ingenioReferencia = trim((string) ($fila['ingenio_nombre'] ?? '')) !== ''
@@ -1053,9 +1171,31 @@ function cengi_inst_html($valor)
     .cengi-instructors-page .inst-list-stat { min-width: 76px; text-align: left; }
 }
 </style>
-<body class="cengi-canvas">
+<link rel="stylesheet" href="css/instructores_tema.css?v=<?php echo (int) @filemtime(__DIR__ . '/css/instructores_tema.css'); ?>">
+<body class="cengi-canvas cg-tema">
 <?php menu_render(); ?>
 <main class="container cengi-instructors-page">
+    <?php cengi_nav_barra('instructores.php'); ?>
+    <?php
+    $kpiActivos = count(array_filter($instructores, static function ($i) { return (int) $i['estado'] === 1; }));
+    $kpiSesiones = array_sum(array_column($instructores, 'sesiones_impartidas'));
+    $kpiProximas = array_sum(array_column($instructores, 'sesiones_proximas'));
+    $kpiEvals = array_values(array_filter(array_column($instructores, 'eval_instructor'), static function ($v) { return $v !== null; }));
+    $kpiSinCv = count(array_filter($instructores, static function ($i) { return (int) $i['estado'] === 1 && empty($i['cv_disponible']); }));
+    $kpiSinCorreo = count(array_filter($instructores, static function ($i) { return (int) $i['estado'] === 1 && trim((string) $i['correo']) === ''; }));
+    ?>
+    <header class="inst-hero">
+        <div><small>Formadores · CENGICAÑA</small><h1>Instructores</h1>
+            <p>Directorio de instructores con sus cursos, sesiones del Programa de sesiones, evaluaciones de los participantes y documentos.</p></div>
+    </header>
+    <section class="inst-kpis" aria-label="Resumen">
+        <div class="is-verde"><span class="glyphicon glyphicon-user"></span><b><?php echo $kpiActivos; ?> <small>/ <?php echo count($instructores); ?></small></b><em>Instructores activos</em></div>
+        <div class="is-verde2"><span class="glyphicon glyphicon-ok-circle"></span><b><?php echo number_format($kpiSesiones); ?></b><em>Sesiones impartidas</em></div>
+        <div class="is-amarillo"><span class="glyphicon glyphicon-calendar"></span><b><?php echo number_format($kpiProximas); ?></b><em>Sesiones próximas</em></div>
+        <div class="is-verde"><span class="glyphicon glyphicon-star"></span><b><?php echo $kpiEvals ? number_format(array_sum($kpiEvals) / count($kpiEvals), 1) . ' <small>/ 4</small>' : '—'; ?></b><em>Evaluación de los participantes</em></div>
+        <div class="<?php echo $kpiSinCv ? 'is-naranja' : 'is-gris'; ?>"><span class="glyphicon glyphicon-file"></span><b><?php echo $kpiSinCv; ?></b><em>Activos sin CV</em></div>
+        <div class="<?php echo $kpiSinCorreo ? 'is-naranja' : 'is-gris'; ?>"><span class="glyphicon glyphicon-envelope"></span><b><?php echo $kpiSinCorreo; ?></b><em>Activos sin correo</em></div>
+    </section>
     <?php if ($mensaje !== ''): ?>
         <div class="cengi-feedback<?php echo $mensajeTipo === 'error' ? ' is-error' : ''; ?>">
             <div class="cengi-feedback-icon"><span class="glyphicon glyphicon-<?php echo $mensajeTipo === 'error' ? 'remove' : 'ok'; ?>"></span></div>
@@ -1067,7 +1207,7 @@ function cengi_inst_html($valor)
         <div class="inst-section-body">
             <div class="inst-filter-row">
                 <div class="inst-filter-group">
-                    <input class="inst-search" id="instructoresBuscar" type="search" placeholder="Buscar instructor o especialidad..." autocomplete="off">
+                    <input class="inst-search" id="instructoresBuscar" type="search" placeholder="Buscar por nombre, especialidad o correo…" autocomplete="off">
                     <select class="inst-filter" id="instructoresAnio" aria-label="Filtrar por año">
                         <option value="todos">Todos los años</option>
                         <?php foreach ($anios as $anio): ?><option value="<?php echo cengi_inst_html($anio); ?>"><?php echo cengi_inst_html($anio); ?></option><?php endforeach; ?>
@@ -1076,10 +1216,18 @@ function cengi_inst_html($valor)
                         <option value="todos">Todos los cursos / diplomados</option>
                         <?php foreach ($nombresCursos as $nombreCurso): ?><option value="<?php echo cengi_inst_html($nombreCurso); ?>"><?php echo cengi_inst_html($nombreCurso); ?></option><?php endforeach; ?>
                     </select>
+                    <select class="inst-filter" id="instructoresEstado" aria-label="Filtrar por estado">
+                        <option value="activos">Instructores activos</option>
+                        <option value="inactivos">Inactivos</option>
+                        <option value="todos">Todos</option>
+                    </select>
                     <select class="inst-filter" id="instructoresOrden" aria-label="Ordenar instructores">
+                        <option value="codigo">Ordenar por: código de instructor</option>
                         <option value="cursos_desc">Ordenar por: más cursos impartidos</option>
                         <option value="cursos_asc">Ordenar por: menos cursos impartidos</option>
                         <option value="eval_desc">Ordenar por: mejor evaluación</option>
+                        <option value="sesiones_desc">Ordenar por: más sesiones impartidas</option>
+                        <option value="proxima">Ordenar por: próxima sesión</option>
                         <option value="nombre">Ordenar por: nombre (A–Z)</option>
                     </select>
                 </div>
@@ -1093,10 +1241,6 @@ function cengi_inst_html($valor)
                             <span class="glyphicon glyphicon-time" aria-hidden="true"></span>
                             Historial de cargas
                         </button>
-                        <a class="inst-btn inst-btn-outline inst-btn-sm" href="base_instructores.php">
-                            <span class="glyphicon glyphicon-folder-open" aria-hidden="true"></span>
-                            Base de datos y documentos
-                        </a>
                         <button class="inst-btn inst-btn-primary" type="button" id="nuevoInstructorBtn">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
                             Nuevo instructor
@@ -1327,6 +1471,14 @@ body.inst-modal-open { overflow: hidden; }
             <button class="inst-icon-btn" type="button" data-inst-close aria-label="Cerrar">✕</button>
         </div>
         <div class="inst-modal-body">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+                <label style="flex:1;min-width:240px;">Buscar cargas
+                    <input type="search" class="form-control" id="historialCargasBuscar" placeholder="Curso, instructor, archivo o usuario…">
+                </label>
+                <label>Tipo de registro<select class="form-control" id="historialCargasTipo"><option value="">Todos</option><option value="masiva">Carga masiva</option><option value="individual">Individual</option></select></label>
+            </div>
+            <p id="historialCargasConteo" aria-live="polite"></p>
+            <p>Retirar una carga elimina todas las evaluaciones de ese archivo, incluso si incluye varios instructores. Los promedios se actualizan al eliminar.</p>
             <div id="historialCargasLista"></div>
         </div>
     </div>
@@ -1346,7 +1498,7 @@ body.inst-modal-open { overflow: hidden; }
         </div>
         <div class="inst-profile-stats">
             <div><div class="inst-stat-value" id="instDetCursos">0</div><div class="inst-stat-label">Cursos impartidos</div></div>
-            <div><div class="inst-stat-value is-green" id="instDetEval">—</div><div class="inst-stat-label">Evaluación promedio</div></div>
+            <div><div class="inst-stat-value is-green" id="instDetEval">—</div><div class="inst-stat-label">Evaluación del instructor (1–4)</div></div>
             <div><div class="inst-stat-value" id="instDetEstado">Activo</div><div class="inst-stat-label">Estado del instructor</div></div>
         </div>
         <div class="inst-detail-tabs">
@@ -1387,7 +1539,9 @@ body.inst-modal-open { overflow: hidden; }
     var puedeVerCvInstructor = <?php echo $puedeVerCvInstructor ? 'true' : 'false'; ?>;
     var puedeVerLinkEvaluacion = <?php echo $puedeVerLinkEvaluacion ? 'true' : 'false'; ?>;
     var instDetailCharts = {};
-    var instView = 'grid';
+    // Vista elegida (lista por defecto); se recuerda en este navegador.
+    var instView = 'lista';
+    try { instView = localStorage.getItem('instVista') === 'grid' ? 'grid' : 'lista'; } catch (ignore) {}
     var activeTab = 'directorio';
 
     function escapeHtml(value) {
@@ -1402,6 +1556,39 @@ body.inst-modal-open { overflow: hidden; }
     function initials(name) {
         var cleaned = String(name || '').replace(/\b(Ing|Inga|Dr|Dra|Lic|Licda)\.?\s*/gi, '').trim();
         return cleaned.split(/\s+/).filter(Boolean).map(function (word) { return word.charAt(0); }).slice(0, 2).join('').toUpperCase() || 'IN';
+    }
+    // Semaforo de la paleta: nota de participantes sobre 100 (80/60) y encuesta del instructor sobre 4 (3.2/2.4).
+    function nivel(valor, escala4) {
+        if (valor === null || valor === undefined || valor === '' || !isFinite(Number(valor))) return '';
+        var v = escala4 ? Number(valor) * 25 : Number(valor);
+        return v >= 80 ? 'is-bien' : (v >= 60 ? 'is-medio' : 'is-bajo');
+    }
+    function fechaCorta(fecha) {
+        if (!fecha) return '';
+        var p = String(fecha).slice(0, 10).split('-'), dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+        return dias[new Date(+p[0], p[1] - 1, +p[2]).getDay()] + ' ' + p[2] + '/' + p[1] + ' · ' + String(fecha).slice(11, 16);
+    }
+    function proximaChip(instructor) {
+        var p = instructor.proxima_sesion;
+        if (!p) return '';
+        return '<div class="inst-proxima" title="' + escapeHtml(p.curso) + '"><span class="glyphicon glyphicon-calendar"></span> Próxima sesión: <b>' + escapeHtml(fechaCorta(p.fecha)) + '</b> · ' + escapeHtml(p.tema || p.curso) + '</div>';
+    }
+    function contactoChips(instructor) {
+        var html = '';
+        if (instructor.correo) html += '<a class="inst-chip is-contacto" href="mailto:' + escapeHtml(instructor.correo) + '">✉ ' + escapeHtml(instructor.correo) + '</a>';
+        else if (puedeGestionar) html += '<span class="inst-chip is-missing">⚠ Sin correo</span>';
+        if (instructor.telefono) html += '<a class="inst-chip is-contacto" href="tel:' + escapeHtml(String(instructor.telefono).replace(/[^0-9+]/g, '')) + '">☎ ' + escapeHtml(instructor.telefono) + '</a>';
+        return html;
+    }
+    function estadoChip(instructor) {
+        return Number(instructor.estado) === 1 ? '' : '<span class="inst-chip is-inactivo">Inactivo</span>';
+    }
+    function statsHtml(instructor, count, filtersActive, lista) {
+        var ev = instructor.eval_instructor;
+        var cls = lista ? 'inst-list-stat' : '';
+        return '<div class="' + cls + '"><div class="inst-stat-value">' + count + '</div><div class="inst-stat-label">' + (filtersActive ? 'Ediciones (filtro)' : 'Cursos') + '</div></div>' +
+            '<div class="' + cls + '"><div class="inst-stat-value">' + Number(instructor.sesiones_impartidas || 0) + '</div><div class="inst-stat-label">Sesiones impartidas</div></div>' +
+            '<div class="' + cls + '"><div class="inst-stat-value ' + nivel(ev, true) + '">' + (ev !== null && ev !== undefined ? Number(ev).toFixed(2) + '<small>/4</small>' : '—') + '</div><div class="inst-stat-label">Evaluación del instructor</div></div>';
     }
     function evaluationValue(value) {
         if (value === null || value === undefined || value === '') return '—';
@@ -1430,7 +1617,8 @@ body.inst-modal-open { overflow: hidden; }
             query: normalize(document.getElementById('instructoresBuscar').value).trim(),
             year: document.getElementById('instructoresAnio').value,
             course: document.getElementById('instructoresCurso').value,
-            order: document.getElementById('instructoresOrden').value
+            order: document.getElementById('instructoresOrden').value,
+            estado: (document.getElementById('instructoresEstado') || {}).value || 'todos'
         };
     }
     function filteredEditions(courseList, filters) {
@@ -1447,15 +1635,19 @@ body.inst-modal-open { overflow: hidden; }
             return { instructor: instructor, allEditions: allEditions, matchingEditions: filteredEditions(allEditions, filters) };
         });
         if (filtersActive) result = result.filter(function (item) { return item.matchingEditions.length > 0; });
+        if (filters.estado !== 'todos') result = result.filter(function (item) { return (Number(item.instructor.estado) === 1) === (filters.estado === 'activos'); });
         if (filters.query) {
             result = result.filter(function (item) {
-                return normalize(item.instructor.nombre).indexOf(filters.query) !== -1 || normalize(item.instructor.especialidad).indexOf(filters.query) !== -1;
+                return normalize(item.instructor.nombre).indexOf(filters.query) !== -1 || normalize(item.instructor.especialidad).indexOf(filters.query) !== -1 || normalize(item.instructor.correo).indexOf(filters.query) !== -1;
             });
         }
         result.sort(function (left, right) {
             var a = left.instructor, b = right.instructor;
+            if (filters.order === 'codigo') return String(a.codigo_catedratico || '').localeCompare(String(b.codigo_catedratico || ''), 'es', { numeric: true });
             if (filters.order === 'cursos_asc') return Number(a.total_cursos || 0) - Number(b.total_cursos || 0);
-            if (filters.order === 'eval_desc') return Number(b.evaluacion_promedio || -1) - Number(a.evaluacion_promedio || -1);
+            if (filters.order === 'eval_desc') return Number(b.eval_instructor || -1) - Number(a.eval_instructor || -1);
+            if (filters.order === 'sesiones_desc') return Number(b.sesiones_impartidas || 0) - Number(a.sesiones_impartidas || 0);
+            if (filters.order === 'proxima') return String((a.proxima_sesion || {}).fecha || '9999') < String((b.proxima_sesion || {}).fecha || '9999') ? -1 : 1;
             if (filters.order === 'nombre') return String(a.nombre).localeCompare(String(b.nombre), 'es');
             return Number(b.total_cursos || 0) - Number(a.total_cursos || 0);
         });
@@ -1466,18 +1658,31 @@ body.inst-modal-open { overflow: hidden; }
         if (!puedeGestionar) return '';
         return '<a class="inst-btn inst-btn-ghost inst-btn-sm" href="ficha_instructor.php?id=' + Number(instructor.id) + '">Ficha</a>';
     }
+    function documentosLink(instructor) {
+        if (!puedeGestionar || !puedeVerCvInstructor || instructor.cv_disponible) return '';
+        var ficha = 'ficha_instructor.php?id=' + Number(instructor.id) + '&amp;tab=documentos';
+        var url = ficha + '&amp;digital=1#cv-digital';
+        return '<a class="inst-btn inst-btn-ghost inst-btn-sm" href="' + url + '">CV digital</a>' +
+            '<a class="inst-btn inst-btn-ghost inst-btn-sm" href="' + ficha + '&amp;individual=1#documentacion-individual" title="Carga de CV, carta y formación">Documentación individual</a>';
+    }
+    // Atributos para que js/course_actions.js convierta los botones en el menú "Acciones".
+    function menuAcciones(instructor) {
+        return 'data-acciones-menu data-actions-title="Gestionar instructor" data-acciones-nombre="' + escapeHtml(instructor.nombre) + '"';
+    }
     function managementTools(instructor) {
         if (!puedeGestionar) return '';
         var nextLabel = Number(instructor.estado) === 1 ? 'Desactivar' : 'Activar';
         var icon = Number(instructor.estado) === 1 ? 'glyphicon-eye-close' : 'glyphicon-eye-open';
         return '<div class="inst-card-tools"><button class="inst-icon-btn" type="button" data-edit-instructor="' + Number(instructor.id) + '" title="Editar instructor"><span class="glyphicon glyphicon-pencil"></span></button>' +
             '<form method="POST" style="margin:0;"><input type="hidden" name="accion" value="toggle_estado"><input type="hidden" name="id" value="' + Number(instructor.id) + '">' +
-            '<button class="inst-icon-btn" type="submit" title="' + nextLabel + ' instructor"><span class="glyphicon ' + icon + '"></span></button></form></div>';
+            '<button class="inst-icon-btn" type="submit" title="' + nextLabel + ' instructor"><span class="glyphicon ' + icon + '"></span></button></form>' +
+            '<form method="POST" style="margin:0;" onsubmit="return confirm(\'¿Eliminar este instructor definitivamente? Solo se permite si no tiene registros vinculados. Esta acción no se puede deshacer.\');"><input type="hidden" name="accion" value="eliminar"><input type="hidden" name="csrf" value="<?php echo htmlspecialchars($_SESSION['instructor_eliminar_csrf'], ENT_QUOTES, 'UTF-8'); ?>"><input type="hidden" name="id" value="' + Number(instructor.id) + '">' +
+            '<button class="inst-icon-btn is-delete" type="submit" title="Eliminar instructor"><span class="glyphicon glyphicon-trash"></span></button></form></div>';
     }
     function cvChip(instructor, previewId) {
         // El "Administrador de ingenio" no tiene acceso al CV del instructor.
         if (!puedeVerCvInstructor) return '';
-        return instructor.cv_disponible ? '<button class="inst-chip is-cv" type="button" data-cv-preview="' + previewId + '">📄 Ver CV</button>' : '<span class="inst-chip is-missing">⚠ Sin CV</span>';
+        return instructor.cv_disponible ? '<button class="inst-chip is-cv" type="button" data-cv-preview="' + previewId + '">📄 CV entregado</button>' : '<span class="inst-chip is-missing">⚠ Sin CV</span>';
     }
     function evaluationLinkButton(token) {
         // El "Administrador de ingenio" no puede generar/copiar el link de evaluación.
@@ -1517,9 +1722,9 @@ body.inst-modal-open { overflow: hidden; }
     }
     function cvPreview(instructor, previewId, isList) {
         if (!puedeVerCvInstructor || !instructor.cv_disponible) return '';
-        var path = escapeHtml(instructor.cv_path);
+        var path = escapeHtml(instructor.cv_url);
         return '<div class="inst-cv-preview" id="' + previewId + '"' + (isList ? ' style="margin:0;padding-left:60px;"' : '') + '><div class="inst-cv-row"><div class="inst-cv-doc"></div>' +
-            '<div style="flex:1;min-width:0;"><div style="margin-bottom:6px;font-size:11.5px;font-weight:600;overflow-wrap:anywhere;">' + escapeHtml(cvName(instructor.cv_path)) + '</div>' +
+            '<div style="flex:1;min-width:0;"><div style="margin-bottom:6px;font-size:11.5px;font-weight:600;overflow-wrap:anywhere;">' + escapeHtml(instructor.cv_url && instructor.cv_url.indexOf('instructor_cv.php?') === 0 ? 'CV digital entregado' : cvName(instructor.cv_path)) + '</div>' +
             '<div style="display:flex;gap:6px;flex-wrap:wrap;"><a class="inst-btn inst-btn-primary inst-btn-sm" href="' + path + '" target="_blank" rel="noopener">Abrir documento</a>' +
             '<a class="inst-btn inst-btn-outline inst-btn-sm" href="' + path + '" download>Descargar</a></div></div></div></div>';
     }
@@ -1527,28 +1732,26 @@ body.inst-modal-open { overflow: hidden; }
         var instructor = item.instructor;
         var count = filtersActive ? item.matchingEditions.length : Number(instructor.total_cursos || 0);
         var previewId = 'cvPreviewGrid' + Number(instructor.id);
-        return '<article class="inst-section inst-card"><div class="inst-section-body"><div class="inst-card-head"><div class="inst-name-cell">' +
-            '<div class="inst-avatar">' + escapeHtml(initials(instructor.nombre)) + '</div><div style="min-width:0;"><div class="inst-name">' + escapeHtml(instructor.nombre) + '</div>' +
-            '<div class="inst-sub">' + escapeHtml(instructor.especialidad || 'Sin especialidad registrada') + '</div></div></div>' + managementTools(instructor) + '</div>' +
-            '<div class="inst-stats"><div><div class="inst-stat-value">' + count + '</div><div class="inst-stat-label">' + (filtersActive ? 'Ediciones (filtro)' : 'Cursos impartidos') + '</div></div>' +
-            '<div><div class="inst-stat-value is-green">' + evaluationValue(instructor.evaluacion_promedio) + '</div><div class="inst-stat-label">Evaluación promedio</div></div></div>' +
-            '<div class="inst-chips"><span class="inst-chip">' + escapeHtml(institutionLabel(item.allEditions)) + '</span>' + cvChip(instructor, previewId) + '</div>' +
-            '<div class="inst-card-actions"><button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="cursos">Ver historial</button>' +
+        return '<article class="inst-section inst-card' + (Number(instructor.estado) === 1 ? '' : ' is-inactivo') + '"><div class="inst-section-body"><div class="inst-card-head"><div class="inst-name-cell">' +
+            '<div class="inst-avatar">' + escapeHtml(initials(instructor.nombre)) + '</div><div style="min-width:0;"><div class="inst-name">' + escapeHtml(instructor.nombre) + ' <small>' + escapeHtml(instructor.codigo_catedratico || '') + '</small></div>' +
+            '<div class="inst-sub">' + escapeHtml(instructor.especialidad || 'Sin especialidad registrada') + '</div></div></div></div>' +
+            '<div class="inst-stats is-4">' + statsHtml(instructor, count, filtersActive, false) + '</div>' + proximaChip(instructor) +
+            '<div class="inst-chips">' + estadoChip(instructor) + '<span class="inst-chip">' + escapeHtml(institutionLabel(item.allEditions)) + '</span>' + cvChip(instructor, previewId) + contactoChips(instructor) + '</div>' +
+            '<div class="inst-card-actions" ' + menuAcciones(instructor) + '><button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="cursos">Historial</button>' +
             '<button class="inst-btn inst-btn-ghost inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="evaluaciones">Informe</button>' +
-            fichaLink(instructor) + '</div>' +
+            fichaLink(instructor) + documentosLink(instructor) + managementTools(instructor) + '</div>' +
             cvPreview(instructor, previewId, false) + '</div></article>';
     }
     function renderListItem(item, filtersActive) {
         var instructor = item.instructor;
         var count = filtersActive ? item.matchingEditions.length : Number(instructor.total_cursos || 0);
         var previewId = 'cvPreviewList' + Number(instructor.id);
-        return '<div class="inst-list-row"><div class="inst-avatar">' + escapeHtml(initials(instructor.nombre)) + '</div>' +
-            '<div class="inst-list-main"><div class="inst-name">' + escapeHtml(instructor.nombre) + '</div><div class="inst-sub">' + escapeHtml(instructor.especialidad || 'Sin especialidad') + ' · ' + escapeHtml(institutionLabel(item.allEditions)) + '</div></div>' +
-            '<div class="inst-list-stat"><div class="inst-stat-value">' + count + '</div><div class="inst-stat-label">' + (filtersActive ? 'Ediciones' : 'Cursos') + '</div></div>' +
-            '<div class="inst-list-stat"><div class="inst-stat-value is-green">' + evaluationValue(instructor.evaluacion_promedio) + '</div><div class="inst-stat-label">Evaluación</div></div>' +
-            '<div style="min-width:118px;">' + cvChip(instructor, previewId) + '</div><div style="display:flex;gap:6px;align-items:center;">' +
+        return '<div class="inst-list-row' + (Number(instructor.estado) === 1 ? '' : ' is-inactivo') + '"><div class="inst-avatar">' + escapeHtml(initials(instructor.nombre)) + '</div>' +
+            '<div class="inst-list-main"><div class="inst-name">' + escapeHtml(instructor.nombre) + ' <small>' + escapeHtml(instructor.codigo_catedratico || '') + '</small> ' + estadoChip(instructor) + '</div><div class="inst-sub">' + escapeHtml(instructor.especialidad || 'Sin especialidad') + ' · ' + escapeHtml(institutionLabel(item.allEditions)) + '</div>' + proximaChip(instructor) + '</div>' +
+            statsHtml(instructor, count, filtersActive, true) +
+            '<div style="min-width:118px;">' + cvChip(instructor, previewId) + '</div><div style="display:flex;gap:6px;align-items:center;" ' + menuAcciones(instructor) + '>' +
             '<button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="cursos">Historial</button>' +
-            '<button class="inst-btn inst-btn-ghost inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="evaluaciones">Informe</button>' + fichaLink(instructor) + managementTools(instructor) + '</div></div>' +
+            '<button class="inst-btn inst-btn-ghost inst-btn-sm" type="button" data-detail-instructor="' + Number(instructor.id) + '" data-detail-target="evaluaciones">Informe</button>' + fichaLink(instructor) + documentosLink(instructor) + managementTools(instructor) + '</div></div>' +
             cvPreview(instructor, previewId, true);
     }
     function renderInstructors() {
@@ -1601,7 +1804,7 @@ body.inst-modal-open { overflow: hidden; }
             // "Administrador de ingenio", que no tiene acceso al CV del instructor.
             var cvHeadCell = puedeVerCvInstructor ? '<th>CV</th>' : '';
             return '<div class="inst-report-group"><div class="inst-report-group-head"><span>' + escapeHtml(name) + '</span><small>' + escapeHtml(category) + ' · ' + rows.length + ' edición(es)</small></div>' +
-                '<div class="inst-table-scroll"><table class="inst-table"><thead><tr><th>Año</th><th>Instructor</th><th>Especialidad</th><th>Estado</th><th>Evaluación prom.</th><th>Cupo</th>' + cvHeadCell + '</tr></thead><tbody>' +
+                '<div class="inst-table-scroll"><table class="inst-table"><thead><tr><th>Año</th><th>Instructor</th><th>Especialidad</th><th>Estado</th><th>Evaluación del instructor (1–4)</th><th>Cupo</th>' + cvHeadCell + '</tr></thead><tbody>' +
                 rows.map(function (course) {
                     var status = courseStatus(course);
                     var cvCell = '';
@@ -1672,10 +1875,10 @@ body.inst-modal-open { overflow: hidden; }
         document.getElementById('instDetName').textContent = instructor.nombre || 'Instructor';
         document.getElementById('instDetSub').textContent = (instructor.especialidad || 'Sin especialidad') + ' · ' + institutionLabel(courses);
         document.getElementById('instDetCursos').textContent = Number(instructor.total_cursos || 0);
-        document.getElementById('instDetEval').textContent = evaluationValue(instructor.evaluacion_promedio);
+        document.getElementById('instDetEval').textContent = (instructor.eval_instructor == null ? '—' : Number(instructor.eval_instructor).toFixed(2) + '/4');
         document.getElementById('instDetEstado').textContent = Number(instructor.estado) === 1 ? 'Activo' : 'Inactivo';
         document.getElementById('instDetCv').innerHTML = !puedeVerCvInstructor ? '' : (instructor.cv_disponible ?
-            '<a class="inst-chip is-cv" href="' + escapeHtml(instructor.cv_path) + '" target="_blank" rel="noopener">📄 ' + escapeHtml(cvName(instructor.cv_path)) + '</a>' :
+            '<a class="inst-chip is-cv" href="' + escapeHtml(instructor.cv_url) + '" target="_blank" rel="noopener">📄 ' + escapeHtml(instructor.cv_url && instructor.cv_url.indexOf('instructor_cv.php?') === 0 ? 'CV digital entregado' : cvName(instructor.cv_path)) + '</a>' :
             '<span class="inst-chip is-missing">⚠ Sin CV cargado</span>');
         var history = document.getElementById('instDetHistorial');
         if (!courses.length) {
@@ -1767,28 +1970,19 @@ body.inst-modal-open { overflow: hidden; }
         return '<div class="inst-comments-list">' + comentarios.map(function (comentario) {
             var partes = [];
             if (comentario.areas_mejora) partes.push('<div><strong>Oportunidades de mejora</strong>' + escapeHtml(comentario.areas_mejora) + '</div>');
-            if (comentario.capacitaciones_necesarias) partes.push('<div><strong>Capacitaciones necesarias</strong>' + escapeHtml(comentario.capacitaciones_necesarias) + '</div>');
             return '<div class="inst-comment-item">' + partes.join('') + '<time>' + escapeHtml(formatDate((comentario.creado || '').slice(0, 10))) + '</time></div>';
         }).join('') + '</div>';
     }
     function renderSatisfactionTab(instructor, courses) {
         var encuesta = instructor.encuesta_satisfaccion || { total: 0, instructor: {}, tema: {}, comentarios: [] };
         var panel = document.getElementById('instDetEvaluaciones');
-        var academicoAvg = Number(instructor.evaluacion_promedio);
-        var academicoPct = Number.isFinite(academicoAvg) ? Math.max(0, Math.min(100, academicoAvg <= 5 ? academicoAvg * 20 : academicoAvg)) : 0;
-        var academicoHtml = '<div class="inst-academic-block"><h4>Desempeño académico (post-evaluación de cursos)</h4>' +
-            '<div class="inst-eval-summary"><div class="inst-eval-box"><div class="inst-stat-label">Evaluación promedio registrada</div>' +
-            '<div class="inst-stat-value is-green" style="font-size:26px;margin-top:6px;">' + evaluationValue(instructor.evaluacion_promedio) + '</div><div class="inst-progress"><span style="width:' + academicoPct + '%"></span></div></div>' +
-            '<div class="inst-eval-box"><div class="inst-stat-label">Cursos con datos de evaluación</div><div class="inst-stat-value" style="font-size:26px;margin-top:6px;">' +
-            courses.filter(function (course) { return course.evaluacion_promedio !== null; }).length + '</div><div class="inst-stat-label" style="margin-top:10px;">Nota de examen posterior al curso de los participantes; no mide la satisfacción con el instructor.</div></div></div></div>';
-
         if (!puedeVerEncuestasInstructor) {
             // El rol "Administrador de ingenio" no tiene acceso a las encuestas de
             // satisfaccion del instructor: no se pinta ni siquiera el bloque
             // "sin datos todavia", solo el desempeño academico (que no es dato de
             // encuesta). El servidor ya envia encuesta_satisfaccion en cero/null
             // para este rol, pero esto evita ademas renderizar la seccion.
-            panel.innerHTML = academicoHtml;
+            panel.innerHTML = '<div class="inst-detail-empty">No tienes acceso a las evaluaciones del instructor.</div>';
             destroyDetailChart('acercaInstructor');
             destroyDetailChart('recomiendaInstructor');
             destroyDetailChart('temaLogistica');
@@ -1799,7 +1993,7 @@ body.inst-modal-open { overflow: hidden; }
         if (!encuesta.total) {
             panel.innerHTML = '<div class="inst-satisfaction-block"><div class="inst-block-title"><h4>Satisfacción de los participantes (encuesta al instructor)</h4></div>' +
                 '<div class="inst-detail-empty">Aún no hay evaluaciones de satisfacción registradas para este instructor todavía.</div></div>' +
-                '<hr class="inst-satisfaction-divider">' + academicoHtml;
+                '';
             destroyDetailChart('acercaInstructor');
             destroyDetailChart('recomiendaInstructor');
             destroyDetailChart('temaLogistica');
@@ -1822,7 +2016,7 @@ body.inst-modal-open { overflow: hidden; }
             '<div class="inst-chart-card-title">Comentarios recientes</div>' +
             renderComentariosSatisfaccion(encuesta.comentarios || []) +
             '</div>' +
-            '<hr class="inst-satisfaction-divider">' + academicoHtml;
+            '';
 
         var instAspectos = encuesta.instructor || {};
         buildLikertBarChart('instChartAcercaInstructor', 'acercaInstructor',
@@ -1854,6 +2048,14 @@ body.inst-modal-open { overflow: hidden; }
     function renderHistorialCargas() {
         var contenedor = document.getElementById('historialCargasLista');
         if (!contenedor) return;
+        var normalizar = function (value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); };
+        var busqueda = normalizar(document.getElementById('historialCargasBuscar').value).trim().split(/\s+/).filter(Boolean);
+        var tipo = document.getElementById('historialCargasTipo').value;
+        var registros = historialCargas.filter(function (item) {
+            var texto = normalizar([item.curso_nombre, item.instructores_nombres, item.instructor_nombre, item.archivo_nombre, item.usuario_nombre, item.fecha, item.cargo, item.seccion, item.ingenio_referencia].join(' '));
+            return (!tipo || item.tipo === tipo) && busqueda.every(function (palabra) { return texto.indexOf(palabra) !== -1; });
+        });
+        document.getElementById('historialCargasConteo').textContent = registros.length + ' de ' + historialCargas.length + ' registros';
         if (!historialCargas.length) {
             contenedor.innerHTML = '<div class="inst-detail-empty">Todavía no se ha registrado ninguna carga ni envío de evaluaciones.</div>';
             return;
@@ -1861,7 +2063,7 @@ body.inst-modal-open { overflow: hidden; }
         contenedor.innerHTML = '<div style="overflow-x:auto;"><table class="inst-table"><thead><tr>' +
             '<th>Tipo</th><th>Fecha</th><th>Curso / edición</th><th>Detalle</th><th>Filas</th><th></th>' +
             '</tr></thead><tbody>' +
-            historialCargas.map(function (item) {
+            registros.map(function (item) {
                 if (item.tipo === 'masiva') {
                     var detalle = 'Archivo: ' + escapeHtml(item.archivo_nombre || 'Sin nombre') +
                         '<br>Instructor(es): ' + escapeHtml(item.instructores_nombres || 'Sin datos') +
@@ -1885,10 +2087,16 @@ body.inst-modal-open { overflow: hidden; }
                     '<td><button class="inst-btn inst-btn-outline inst-btn-sm" type="button" data-retirar-evaluacion="' + Number(item.evaluacion_id) + '">Retirar evaluación</button></td>' +
                     '</tr>';
             }).join('') + '</tbody></table></div>';
+        if (!registros.length) contenedor.innerHTML = '<div class="inst-detail-empty">No hay registros que coincidan con la búsqueda.</div>';
     }
+    var historialBuscar = document.getElementById('historialCargasBuscar');
+    if (historialBuscar) historialBuscar.addEventListener('input', renderHistorialCargas);
+    var historialTipo = document.getElementById('historialCargasTipo');
+    if (historialTipo) historialTipo.addEventListener('change', renderHistorialCargas);
     function retirarCargaEvaluacion(payload, boton) {
         if (boton) boton.disabled = true;
         var datosFormulario = new FormData();
+        datosFormulario.append('csrf', <?php echo json_encode($_SESSION['evaluaciones_eliminar_csrf']); ?>);
         Object.keys(payload).forEach(function (clave) { datosFormulario.append(clave, payload[clave]); });
         fetch('eliminar_carga_evaluacion_instructor.php', { method: 'POST', body: datosFormulario })
             .then(function (respuesta) { return respuesta.json(); })
@@ -1931,13 +2139,15 @@ body.inst-modal-open { overflow: hidden; }
         }).join('');
     }
 
-    ['instructoresBuscar', 'instructoresAnio', 'instructoresCurso', 'instructoresOrden'].forEach(function (id) {
+    ['instructoresBuscar', 'instructoresAnio', 'instructoresCurso', 'instructoresEstado', 'instructoresOrden'].forEach(function (id) {
         var element = document.getElementById(id);
         if (element) element.addEventListener(id === 'instructoresBuscar' ? 'input' : 'change', renderAll);
     });
     document.querySelectorAll('[data-inst-view]').forEach(function (button) {
+        button.classList.toggle('is-active', button.getAttribute('data-inst-view') === instView);
         button.addEventListener('click', function () {
             instView = button.getAttribute('data-inst-view');
+            try { localStorage.setItem('instVista', instView); } catch (ignore) {}
             document.querySelectorAll('[data-inst-view]').forEach(function (item) { item.classList.toggle('is-active', item === button); });
             renderInstructors();
         });

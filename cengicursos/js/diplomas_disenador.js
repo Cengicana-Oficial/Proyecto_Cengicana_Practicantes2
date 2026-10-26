@@ -112,9 +112,36 @@
     }
 
     // ---------- vista previa ----------
+    // Código de ejemplo con el formato real (CEN-CU|EV-año-correlativo-verificador) mientras no se emite.
+    function codigoEjemplo() {
+        var anio = String((t && t.emision) || new Date().getFullYear()).slice(0, 4);
+        return 'CEN-' + (act && act.evento ? 'EV' : 'CU') + '-' + anio + '-0000-XXXX';
+    }
     function datosDe(p) {
         var codigo = p && p.codigo && !p.pdf ? p.codigo : '';
-        return D.datos(act, p || { nombre: 'Nombre del participante', institucion: 'Institución', cui: '0000 00000 0000' }, t, codigo, codigo ? urlBase + encodeURIComponent(codigo) : urlBase + 'CEN-XX-0000-0000-XXXX');
+        var ejemplo = codigoEjemplo();
+        var v = D.datos(act, p || { nombre: 'Nombre del participante', institucion: 'Institución', cui: '0000 00000 0000' }, t, codigo || ejemplo, urlBase + encodeURIComponent(codigo || ejemplo));
+        v.esEjemplo = !codigo;
+        return v;
+    }
+    // El documento muestra código o QR (estilos con "Incluir código y QR", o campos del diseño propio).
+    function usaCodigo() {
+        if (!t) return false;
+        if (t.estilo === 'canva') {
+            return !!(t.canva && (t.canva.campos || []).some(function (f) { return f.tipo === 'qr' || String(f.contenido || '').indexOf('{codigo}') !== -1; }));
+        }
+        return !!t.qr || String(t.cuerpo || '').indexOf('{codigo}') !== -1;
+    }
+    // Dirección a la que lleva el QR y aviso si solo funciona en esta computadora o red interna.
+    function avisoUrlQr() {
+        var caja = $('dipQrUrl');
+        if (!caja || !urlBase) return;
+        var host = (urlBase.match(/^https?:\/\/([^\/:]+)/i) || [])[1] || '';
+        var local = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host) || host.indexOf('.') === -1;
+        caja.className = 'dip-qr-url' + (local ? ' is-local' : '');
+        caja.innerHTML = 'El QR abrirá: <b>' + esc(urlBase) + '…</b>' + (local
+            ? '<br>Esta dirección solo funciona en esta computadora o red interna: al escanearlo desde un celular no abrirá. Pide que se configure <b>APP_URL</b> con el dominio público del sitio antes de emitir.'
+            : '');
     }
     function dibujarPrevia() {
         if (!act) return;
@@ -125,7 +152,10 @@
         var caja = $('dipPreview');
         var k = Math.min(1, (caja.clientWidth || 800) / 1123);
         var alto = t.estilo === 'canva' && t.canva ? t.canva.h : 794;
-        caja.innerHTML = '<div class="dip-escala" style="transform:scale(' + k + ');">' + D.html(t, datosDe(p), { edit: t.estilo === 'canva' && CFG.puedeGestionar, campoSel: campoSel }) + '</div>';
+        var datos = datosDe(p);
+        caja.innerHTML = '<div class="dip-escala" style="transform:scale(' + k + ');">' + D.html(t, datos, { edit: t.estilo === 'canva' && CFG.puedeGestionar, campoSel: campoSel }) + '</div>'
+            // Aviso solo en pantalla (no se imprime): el código y el QR mostrados son de ejemplo.
+            + (datos.esEjemplo && usaCodigo() ? '<div class="dip-previa-aviso"><span class="glyphicon glyphicon-qrcode"></span>Código y QR de ejemplo: los definitivos se asignan al pulsar <b>Imprimir / guardar PDF</b> o <b>Enviar por correo</b>.</div>' : '');
         caja.style.height = Math.ceil(alto * k) + 'px';
         caja.dataset.k = k;
     }
@@ -235,6 +265,7 @@
         $('dipPreview').innerHTML = '<p class="pp-sub" style="padding:40px;text-align:center;">Cargando...</p>';
         fetch(API + '?actividad=' + encodeURIComponent(clave), { credentials: 'same-origin' }).then(respuesta).then(function (j) {
             act = j.actividad; t = j.plantilla; defecto = j.defecto; urlBase = j.urlBase; participantes = j.participantes;
+            avisoUrlQr();
             if (!Array.isArray(t.firmas)) t.firmas = [];
             var opciones = FILTROS[act.evento ? 'evento' : 'curso'];
             $('dipFiltro').innerHTML = opciones.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('');
@@ -461,8 +492,8 @@
     var temporizador;
     window.addEventListener('resize', function () { clearTimeout(temporizador); temporizador = setTimeout(dibujarPrevia, 120); });
 
-    // ---------- emitidos y validacion ----------
-    $('dipBuscarEm').addEventListener('input', function () {
+    // ---------- emitidos y validacion (ahora en la pestaña "Emitidos y validación"; aquí solo si existe) ----------
+    if ($('dipBuscarEm')) $('dipBuscarEm').addEventListener('input', function () {
         var q = normal(this.value);
         [].forEach.call($('dipEmitidos').querySelectorAll('tr[data-buscar]'), function (tr) { tr.hidden = q && tr.dataset.buscar.indexOf(q) === -1; });
     });
@@ -477,8 +508,10 @@
                 : '<div class="dip-valido no">✗ No existe un documento emitido con el código <b>' + esc(codigo) + '</b>.</div>';
         }).catch(function (e) { res.innerHTML = '<div class="dip-valido no">' + esc(e.message) + '</div>'; });
     }
-    $('dipBtnValidar').addEventListener('click', validar);
-    $('dipValidar').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); validar(); } });
+    if ($('dipBtnValidar')) {
+        $('dipBtnValidar').addEventListener('click', validar);
+        $('dipValidar').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); validar(); } });
+    }
 
     if ($('dipAct').value) cargar($('dipAct').value);
 })();

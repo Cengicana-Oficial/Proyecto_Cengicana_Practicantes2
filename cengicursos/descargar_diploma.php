@@ -68,6 +68,11 @@ if ($asignacionId > 0) {
     $ingenioActual = cengi_ingenio_id_actual();
     $autorizado = cengi_puede_ver_diplomas()
         || (cengi_puede_ver_dashboard_ingenio() && $ingenioActual > 0 && (int) $fila['ingenio_id'] === $ingenioActual);
+    // El estudiante descarga su propio diploma desde Mi perfil (solo asignaciones suyas).
+    if (!$autorizado) {
+        require_once __DIR__ . '/estudiante_perfil_helpers.php';
+        $autorizado = cengi_est_es_su_asignacion($db, $asignacionId, cengi_usuario_actual_id());
+    }
 
     if (!$autorizado) {
         http_response_code(403);

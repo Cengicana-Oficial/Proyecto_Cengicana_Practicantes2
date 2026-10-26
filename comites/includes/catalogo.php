@@ -4,6 +4,7 @@ declare(strict_types=1);
 /** Extensión aditiva del catálogo: conserva los identificadores y relaciones existentes. */
 function catalogo_preparar(PDO $pdo): void
 {
+    if (!defined('ESQUEMA_MIGRANDO')) return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
     $columnas = $pdo->query('SHOW COLUMNS FROM comites')->fetchAll(PDO::FETCH_COLUMN);
     foreach (['descripcion' => 'TEXT NULL', 'lider_id' => 'INT NULL', 'periodicidad' => "VARCHAR(40) NOT NULL DEFAULT 'Mensual'", 'logo' => 'MEDIUMTEXT NULL'] as $campo => $tipo) {
         if (!in_array($campo, $columnas, true)) {
