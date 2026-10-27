@@ -7,7 +7,10 @@
  */
 require_once __DIR__ . '/revisar_permisos.php';
 
-cengi_require_gestionar_instructores();
+// El CV vigente también lo ve quien consulta instructores sin ser de un ingenio (como en instructores.php).
+if (!(!empty($_GET['cv']) && cengi_puede_ver_instructores() && !cengi_es_administrador_ingenio())) {
+    cengi_require_gestionar_instructores();
+}
 
 $db = conectar();
 $ruta = '';

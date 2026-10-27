@@ -18,13 +18,24 @@ function redes_api_proveedores(): array
 
 // ---------------------------------------------------------------- Secretos
 
+/**
+ * Llave AES-256 de COMITES_SECRET_KEY (login/.env, ver deploy/env/login.env.example). Es
+ * obligatoria para guardar credenciales: antes, sin ella, la llave salia de DB_PASS y DB_USER,
+ * asi que quien conociera la base podia descifrarlas.
+ */
 function redes_api_llave(): string
 {
     $base = app_env_value('COMITES_SECRET_KEY');
-    if ($base === '') {
-        $base = app_env_value('DB_PASS') . '|' . app_env_value('DB_USER') . '|comites-redes';
+    if ($base === '' || $base === 'change-me') {
+        throw new RuntimeException('Falta COMITES_SECRET_KEY en la configuración del servidor: no se pueden guardar credenciales de redes sociales.');
     }
     return hash('sha256', $base, true);
+}
+
+/** Llave anterior (derivada de la BD): solo para leer credenciales guardadas antes de COMITES_SECRET_KEY. */
+function redes_api_llave_anterior(): string
+{
+    return hash('sha256', app_env_value('DB_PASS') . '|' . app_env_value('DB_USER') . '|comites-redes', true);
 }
 
 function redes_api_cifrar(array $secreto): string
@@ -44,8 +55,16 @@ function redes_api_descifrar(?string $blob): array
     if ($raw === false || strlen($raw) < 29) {
         return [];
     }
-    $plano = openssl_decrypt(substr($raw, 28), 'aes-256-gcm', redes_api_llave(), OPENSSL_RAW_DATA, substr($raw, 0, 12), substr($raw, 12, 16));
-    return $plano === false ? [] : (json_decode($plano, true) ?: []);
+    // GCM autentica: con la llave equivocada devuelve false, asi que se prueba la vigente y
+    // despues la anterior. Al volver a guardar la conexion queda cifrada con la vigente.
+    $llaves = !in_array(app_env_value('COMITES_SECRET_KEY'), ['', 'change-me'], true) ? [redes_api_llave(), redes_api_llave_anterior()] : [redes_api_llave_anterior()];
+    foreach ($llaves as $llave) {
+        $plano = openssl_decrypt(substr($raw, 28), 'aes-256-gcm', $llave, OPENSSL_RAW_DATA, substr($raw, 0, 12), substr($raw, 12, 16));
+        if ($plano !== false) {
+            return json_decode($plano, true) ?: [];
+        }
+    }
+    return [];
 }
 
 /** "••••••ab12" para mostrar que un secreto existe sin revelarlo. */

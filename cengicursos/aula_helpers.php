@@ -43,10 +43,24 @@ function aula_require_teacher() {
         http_response_code(403); exit('No tienes permiso para administrar el aula.');
     }
 }
+/**
+ * Instructores y maestros (sin permisos de gestión) solo administran el aula de los cursos que imparten:
+ * instructor del curso o de alguno de sus módulos. La cuenta se relaciona con instructores por correo.
+ * Gestores y administradores conservan el alcance de su ingenio. AUD-2026-001/M-9.
+ */
+function aula_scope_formador_sql(PDO $db, $alias = 'c') {
+    if (!cengi_es_formador() || cengi_es_admin() || cengi_puede_gestionar() || cengi_es_gestor()) return '';
+    $correo = strtolower(trim((string) ($_SESSION['correo'] ?? '')));
+    if ($correo === '') return ' AND 0=1';
+    $ids = "(SELECT ins.id FROM instructores ins WHERE LOWER(TRIM(ins.correo)) = " . $db->quote($correo) . ")";
+    return " AND ($alias.instructor_id IN $ids OR EXISTS (SELECT 1 FROM curso_modulos am
+        JOIN curso_modulo_instructores ami ON ami.curso_modulo_id = am.id
+        WHERE am.curso_id = $alias.id AND ami.instructor_id IN $ids))";
+}
 function aula_teacher_course(PDO $db, $id) {
     aula_require_teacher();
     // Respeta el alcance institucional de la cuenta; no basta con enviar un id por URL.
-    $scope = cengi_scope_sql_por_nombre_ingenio('i', true);
+    $scope = cengi_scope_sql_por_nombre_ingenio('i', true) . aula_scope_formador_sql($db);
     $rows = aula_rows($db, "SELECT c.* FROM cursos c JOIN ingenios i ON i.id=c.ingenio_id WHERE c.id=? $scope", [$id]);
     if (!$rows) { http_response_code(403); exit('El curso está fuera del alcance de tu cuenta.'); }
     return $rows[0];

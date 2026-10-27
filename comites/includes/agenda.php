@@ -6,6 +6,7 @@ const AGENDA_ESTADOS=['planificada'=>'Planificada','reprogramada'=>'Reprogramada
 
 function agenda_preparar(PDO $pdo): void
 {
+    if (!defined('ESQUEMA_MIGRANDO')) return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
     directorio_preparar($pdo);
     $antes=$pdo->query('SHOW COLUMNS FROM reuniones')->fetchAll(PDO::FETCH_COLUMN);
     foreach (['plan_mes'=>'CHAR(7) NULL','plan_fecha'=>'DATE NULL','plan_temas'=>'TEXT NULL','cancelada'=>'TINYINT(1) NOT NULL DEFAULT 0','motivo_cancelacion'=>'TEXT NULL','reprogramaciones'=>'TEXT NULL'] as $col=>$tipo) app_ensure_column($pdo,'reuniones',$col,"{$col} {$tipo}");

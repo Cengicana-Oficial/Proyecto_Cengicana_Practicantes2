@@ -3,11 +3,14 @@ declare(strict_types=1);
 const INF_ESTADOS=['pendiente'=>'Pendiente de entrega','entregado'=>'Entregado · por revisar','observado'=>'Revisado con pendientes','atendido'=>'Pendientes atendidos','revisado'=>'Revisado'];
 const INF_AREAS=['Transferencia de Tecnología','Investigación','Variedades','Riego','Nutrición','Manejo Integrado de Plagas','Malezas y Madurantes','Agricultura de Precisión'];
 function inf_preparar(PDO $pdo):void {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS informe_areas(id INT AUTO_INCREMENT PRIMARY KEY,nombre VARCHAR(180) NOT NULL UNIQUE,correo VARCHAR(180) NOT NULL DEFAULT '',activo TINYINT(1) NOT NULL DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    app_ensure_column($pdo,'informe_areas','programa_id','programa_id INT NULL');
-    $pdo->exec("CREATE TABLE IF NOT EXISTS informe_control(id INT PRIMARY KEY,revision INT NOT NULL DEFAULT 1) ENGINE=InnoDB");$pdo->exec('INSERT IGNORE INTO informe_control(id) VALUES(1)');
-    $pdo->exec("CREATE TABLE IF NOT EXISTS informe_poa(anio INT PRIMARY KEY,filas LONGTEXT NULL,fuente VARCHAR(255) NULL,url TEXT NULL,sincronizado DATETIME NULL,revision INT NOT NULL DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    foreach(['anio'=>'INT NULL','cuatri'=>'INT NULL','area_id'=>'INT NULL','flujo'=>"VARCHAR(25) NOT NULL DEFAULT 'pendiente'",'enlace'=>'TEXT NULL','pendientes'=>'LONGTEXT NULL','bitacora'=>'LONGTEXT NULL','revision'=>'INT NOT NULL DEFAULT 1'] as $c=>$d)app_ensure_column($pdo,'informes_cuatrimestrales',$c,"$c $d");
+    // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+    if (defined('ESQUEMA_MIGRANDO')) {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS informe_areas(id INT AUTO_INCREMENT PRIMARY KEY,nombre VARCHAR(180) NOT NULL UNIQUE,correo VARCHAR(180) NOT NULL DEFAULT '',activo TINYINT(1) NOT NULL DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        app_ensure_column($pdo,'informe_areas','programa_id','programa_id INT NULL');
+        $pdo->exec("CREATE TABLE IF NOT EXISTS informe_control(id INT PRIMARY KEY,revision INT NOT NULL DEFAULT 1) ENGINE=InnoDB");$pdo->exec('INSERT IGNORE INTO informe_control(id) VALUES(1)');
+        $pdo->exec("CREATE TABLE IF NOT EXISTS informe_poa(anio INT PRIMARY KEY,filas LONGTEXT NULL,fuente VARCHAR(255) NULL,url TEXT NULL,sincronizado DATETIME NULL,revision INT NOT NULL DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        foreach(['anio'=>'INT NULL','cuatri'=>'INT NULL','area_id'=>'INT NULL','flujo'=>"VARCHAR(25) NOT NULL DEFAULT 'pendiente'",'enlace'=>'TEXT NULL','pendientes'=>'LONGTEXT NULL','bitacora'=>'LONGTEXT NULL','revision'=>'INT NOT NULL DEFAULT 1'] as $c=>$d)app_ensure_column($pdo,'informes_cuatrimestrales',$c,"$c $d");
+    }
     if(!(int)$pdo->query('SELECT COUNT(*) FROM informe_areas')->fetchColumn())foreach(INF_AREAS as $area)$pdo->prepare('INSERT IGNORE INTO informe_areas(nombre) VALUES(?)')->execute([$area]);
     foreach($pdo->query('SELECT * FROM informes_cuatrimestrales WHERE anio IS NULL')->fetchAll() as $r){
         if(!$r['area']||!preg_match('/\b(19\d{2}|20\d{2}|21\d{2})\b/',$r['periodo'],$year)||!preg_match('/\b(III|II|I|[123])\s*(?:cuatrimestre|cuat)/i',$r['periodo'],$term))continue;

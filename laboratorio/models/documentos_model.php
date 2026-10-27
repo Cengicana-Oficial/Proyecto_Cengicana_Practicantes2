@@ -13,6 +13,9 @@ if (!function_exists('lab_documentos_esquema')) {
     /** Tablas del repositorio de documentos y firmas (si faltan). */
     function lab_documentos_esquema(PDO $pdo): void
     {
+        if (!defined('ESQUEMA_MIGRANDO')) {
+            return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+        }
         // Mismas definiciones de database/002_lab_flujo_generico.sql, sin DROP: se crean si faltan.
         $pdo->exec("CREATE TABLE IF NOT EXISTS lab_documento (
             id_documento INT NOT NULL AUTO_INCREMENT, tipo_documento ENUM('boleta','informe') NOT NULL,

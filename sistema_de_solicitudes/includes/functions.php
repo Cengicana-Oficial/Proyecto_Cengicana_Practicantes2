@@ -6,6 +6,23 @@ function e(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+/** Token CSRF de la sesión; cada formulario POST lo envía con csrf_field(). */
+function csrf_token(): string
+{
+    $_SESSION['solicitudes_csrf'] ??= bin2hex(random_bytes(32));
+    return $_SESSION['solicitudes_csrf'];
+}
+
+function csrf_field(): string
+{
+    return '<input type="hidden" name="csrf" value="' . e(csrf_token()) . '">';
+}
+
+function csrf_valido(): bool
+{
+    return hash_equals(csrf_token(), (string) ($_POST['csrf'] ?? ''));
+}
+
 function normalize_text(string $value): string
 {
     $value = trim(mb_strtolower($value, 'UTF-8'));
@@ -699,4 +716,193 @@ function time_ago(string $datetime): string
     }
 
     return date('d/m/Y', strtotime($datetime));
+}
+
+/**
+ * Tipos de adjunto permitidos: extension => tipos MIME reales aceptados (finfo). Los de
+ * Office antiguos (doc/xls) se detectan como CDFV2; los OOXML (docx/xlsx) a veces como zip.
+ */
+const ADJUNTOS_TIPOS = [
+    'pdf' => ['application/pdf'],
+    'jpg' => ['image/jpeg'],
+    'jpeg' => ['image/jpeg'],
+    'png' => ['image/png'],
+    'doc' => ['application/msword', 'application/vnd.ms-office', 'application/cdfv2', 'application/x-ole-storage'],
+    'xls' => ['application/vnd.ms-excel', 'application/vnd.ms-office', 'application/cdfv2', 'application/x-ole-storage'],
+    'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip'],
+    'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip'],
+];
+const ADJUNTOS_MAX_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Valida los archivos de un input multiple ($_FILES['campo']) antes de guardar nada.
+ * Devuelve [['tmp', 'nombre', 'extension', 'mime', 'tamano'], ...] o lanza RuntimeException.
+ */
+function validar_adjuntos(?array $files): array
+{
+    if (!$files || empty($files['name'][0])) {
+        return [];
+    }
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $validos = [];
+    foreach ($files['name'] as $index => $name) {
+        $errorCode = (int) $files['error'][$index];
+        if ($errorCode === UPLOAD_ERR_NO_FILE) {
+            continue;
+        }
+        $nombre = basename((string) $name);
+        if ($errorCode !== UPLOAD_ERR_OK || !is_uploaded_file($files['tmp_name'][$index])) {
+            throw new RuntimeException("No se pudo recibir el archivo {$nombre}.");
+        }
+        if ((int) $files['size'][$index] > ADJUNTOS_MAX_BYTES) {
+            throw new RuntimeException("El archivo {$nombre} supera los 20 MB.");
+        }
+        $extension = strtolower(pathinfo($nombre, PATHINFO_EXTENSION));
+        $mime = strtolower((string) $finfo->file($files['tmp_name'][$index]));
+        if (!isset(ADJUNTOS_TIPOS[$extension]) || !in_array($mime, ADJUNTOS_TIPOS[$extension], true)) {
+            throw new RuntimeException("El archivo {$nombre} no es un tipo permitido (PDF, JPG, PNG, Word o Excel).");
+        }
+        $validos[] = [
+            'tmp' => $files['tmp_name'][$index],
+            'nombre' => mb_substr($nombre, 0, 255, 'UTF-8'),
+            'extension' => $extension,
+            'mime' => $mime,
+            'tamano' => (int) $files['size'][$index],
+        ];
+    }
+    return $validos;
+}
+
+/**
+ * Guarda los adjuntos ya validados en uploads/ con nombre aleatorio (nunca el del usuario)
+ * y los registra en la solicitud.
+ */
+function guardar_adjuntos(PDO $pdo, int $requestId, string $prefijo, array $adjuntos): void
+{
+    $uploadDir = __DIR__ . '/../uploads';
+    $insert = $pdo->prepare(
+        'INSERT INTO adjuntos (solicitud_id, nombre_original, ruta, mime_type, tamano_bytes) VALUES (?, ?, ?, ?, ?)'
+    );
+    foreach ($adjuntos as $adjunto) {
+        $targetName = $prefijo . '_' . bin2hex(random_bytes(12)) . '.' . $adjunto['extension'];
+        if (move_uploaded_file($adjunto['tmp'], $uploadDir . '/' . $targetName)) {
+            $insert->execute([$requestId, $adjunto['nombre'], 'uploads/' . $targetName, $adjunto['mime'], $adjunto['tamano']]);
+        }
+    }
+}
+
+/*
+ * Buzon de ideas
+ * --------------
+ * Formulario publico (buzon.php): cualquiera con el link puede enviar una idea,
+ * sin iniciar sesion. Las ideas se revisan dentro del modulo (view=buzon) con los
+ * permisos `solicitudes_internas.buzon.ver` / `.buzon.gestionar`.
+ */
+const BUZON_AREAS = [
+    'Procesos y trabajo de campo',
+    'Investigación y calidad',
+    'Seguridad y bienestar',
+    'Recursos y eficiencia',
+    'Comunicación y trabajo en equipo',
+    'Otra',
+];
+const BUZON_ESTADOS = ['nueva' => 'Nueva', 'revisada' => 'Revisada', 'archivada' => 'Archivada'];
+const BUZON_FOTO_TIPOS = ['image/jpeg' => 'jpg', 'image/png' => 'png'];
+const BUZON_FOTO_MAX_BYTES = 5 * 1024 * 1024;
+/** Segundos minimos entre dos envios desde la misma sesion (freno basico contra spam). */
+const BUZON_ESPERA_SEGUNDOS = 30;
+
+function can_view_ideas(array $user): bool
+{
+    return has_permission($user, 'solicitudes_internas.buzon.ver') || has_permission($user, 'solicitudes_internas.buzon.gestionar');
+}
+
+function can_manage_ideas(array $user): bool
+{
+    return has_permission($user, 'solicitudes_internas.buzon.gestionar');
+}
+
+function badge_idea_estado(string $estado): string
+{
+    $clases = ['nueva' => 'recibido', 'revisada' => 'completado', 'archivada' => 'rechazado'];
+
+    return '<span class="badge badge-' . e($clases[$estado] ?? 'recibido') . '">' . e(BUZON_ESTADOS[$estado] ?? $estado) . '</span>';
+}
+
+/** Texto de un textarea con saltos de linea normalizados (el navegador cuenta \r\n como 1). */
+function buzon_texto(string $campo): string
+{
+    return trim(str_replace("\r\n", "\n", (string) ($_POST[$campo] ?? '')));
+}
+
+/**
+ * Valida el envio del formulario publico. Devuelve los datos limpios listos para
+ * guardar o lanza RuntimeException con un mensaje para el visitante.
+ */
+function validar_idea(array $post): array
+{
+    $area = (string) ($post['area'] ?? '');
+    if (!in_array($area, BUZON_AREAS, true)) {
+        throw new RuntimeException('Elige un área de mejora.');
+    }
+    $areaOtra = $area === 'Otra' ? mb_substr(trim((string) ($post['area_otra'] ?? '')), 0, 80, 'UTF-8') : '';
+
+    $textos = [];
+    foreach (['situacion' => 800, 'propuesta' => 800, 'beneficio' => 500] as $campo => $max) {
+        $valor = buzon_texto($campo);
+        if (mb_strlen($valor, 'UTF-8') < 5) {
+            throw new RuntimeException('Completa las preguntas 2, 3 y 4 antes de enviar tu idea.');
+        }
+        $textos[$campo] = mb_substr($valor, 0, $max, 'UTF-8');
+    }
+
+    $anonimo = !empty($post['anonimo']);
+    $nombre = $anonimo ? '' : mb_substr(trim((string) ($post['nombre'] ?? '')), 0, 80, 'UTF-8');
+    $correo = $anonimo ? '' : mb_substr(trim((string) ($post['correo'] ?? '')), 0, 120, 'UTF-8');
+    if ($correo !== '' && !filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Escribe un correo válido o déjalo en blanco.');
+    }
+
+    return [
+        'area' => $area,
+        'area_otra' => $areaOtra !== '' ? $areaOtra : null,
+        'situacion' => $textos['situacion'],
+        'propuesta' => $textos['propuesta'],
+        'beneficio' => $textos['beneficio'],
+        'anonimo' => $anonimo ? 1 : 0,
+        'nombre' => $nombre !== '' ? $nombre : null,
+        'correo' => $correo !== '' ? $correo : null,
+    ];
+}
+
+/**
+ * Valida y guarda la foto opcional en uploads/ideas/ con nombre aleatorio.
+ * Devuelve ['ruta' => ..., 'mime' => ...] o null si no se envio foto.
+ */
+function guardar_foto_idea(?array $file): ?array
+{
+    if (!$file || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    if ((int) $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
+        throw new RuntimeException('No se pudo recibir la foto. Intenta de nuevo o envía tu idea sin foto.');
+    }
+    if ((int) $file['size'] > BUZON_FOTO_MAX_BYTES) {
+        throw new RuntimeException('La foto debe pesar menos de 5 MB.');
+    }
+    $mime = strtolower((string) (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']));
+    if (!isset(BUZON_FOTO_TIPOS[$mime]) || @getimagesize($file['tmp_name']) === false) {
+        throw new RuntimeException('La foto debe ser JPG o PNG.');
+    }
+
+    $dir = __DIR__ . '/../uploads/ideas';
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        throw new RuntimeException('No se pudo guardar la foto. Intenta de nuevo o envía tu idea sin foto.');
+    }
+    $nombre = 'idea_' . bin2hex(random_bytes(16)) . '.' . BUZON_FOTO_TIPOS[$mime];
+    if (!move_uploaded_file($file['tmp_name'], $dir . '/' . $nombre)) {
+        throw new RuntimeException('No se pudo guardar la foto. Intenta de nuevo o envía tu idea sin foto.');
+    }
+
+    return ['ruta' => 'uploads/ideas/' . $nombre, 'mime' => $mime];
 }

@@ -4,6 +4,9 @@ require_once __DIR__.'/catalogo_muestras_helper.php';
 require_once __DIR__.'/captura_variables_registry.php';
 
 function wfSchema(PDO $pdo): void {
+    if (!defined('ESQUEMA_MIGRANDO')) {
+        return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+    }
     $pdo->exec("CREATE TABLE IF NOT EXISTS lab_plan_lote (id_lote INT PRIMARY KEY, prioridad VARCHAR(8) NOT NULL DEFAULT 'media', version INT NOT NULL DEFAULT 0, FOREIGN KEY(id_lote) REFERENCES lote(id_lote)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("CREATE TABLE IF NOT EXISTS lab_plan_asignacion (id_muestra INT NOT NULL, id_tipo_analisis INT NOT NULL, usuario_id INT NOT NULL, analista VARCHAR(255) NOT NULL, PRIMARY KEY(id_muestra,id_tipo_analisis), FOREIGN KEY(id_muestra) REFERENCES muestra(id_muestra), FOREIGN KEY(id_tipo_analisis) REFERENCES tipo_analisis(id_tipo)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("CREATE TABLE IF NOT EXISTS lab_hoja_borrador (usuario_key VARCHAR(80) NOT NULL, hoja VARCHAR(180) NOT NULL, version INT NOT NULL, datos LONGTEXT NOT NULL, actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY(usuario_key,hoja)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -27,8 +30,8 @@ function wfHoja(string $tipo,string $analisis): ?array {
 function wfUsuarioKey(array $user): string {return !empty($user['id'])?'id:'.(int)$user['id']:'nombre:'.hash('sha256',(string)($user['nombre']??''));}
 function wfUsuarios(): array {
     static $users;if($users!==null)return $users;
-    $env=parse_ini_file(__DIR__.'/../../login/.env',false,INI_SCANNER_RAW);
-    if(!$env)throw new RuntimeException('No se pudo consultar el directorio de analistas.');
+    require_once __DIR__.'/../config/env.php';
+    $env=lab_env_central();
     $db=new PDO('mysql:host='.$env['DB_HOST'].';port='.($env['DB_PORT']??3306).';dbname='.$env['DB_NAME'].';charset=utf8mb4',$env['DB_USER'],$env['DB_PASS']??$env['DB_PASSWORD']??'',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
     return $users=$db->query("SELECT DISTINCT u.id,u.nombre FROM usuarios u JOIN usuario_modulo um ON um.usuario_id=u.id JOIN modulos m ON m.id=um.modulo_id WHERE LOWER(m.nombre)='laboratorio' ORDER BY u.nombre")->fetchAll(PDO::FETCH_ASSOC);
 }

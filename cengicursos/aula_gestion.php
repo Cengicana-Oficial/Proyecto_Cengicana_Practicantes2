@@ -4,7 +4,7 @@ require_once __DIR__.'/aula_helpers.php';
 date_default_timezone_set('America/Guatemala');
 aula_require_teacher();
 $db=conectar();
-$scope=cengi_scope_sql_por_nombre_ingenio('i',true);
+$scope=cengi_scope_sql_por_nombre_ingenio('i',true).aula_scope_formador_sql($db);
 $courses=aula_rows($db,"SELECT c.id,c.nombre_cursos FROM cursos c JOIN ingenios i ON i.id=c.ingenio_id WHERE 1=1 $scope ORDER BY c.nombre_cursos");
 $cid=(int)($_GET['curso']??($courses[0]['id']??0));
 $course=$cid?aula_teacher_course($db,$cid):null;

@@ -3,6 +3,9 @@
 if (!function_exists('labMuestraIdentificacionEnsureSchema')) {
     function labMuestraIdentificacionEnsureSchema(PDO $pdo): void
     {
+        if (!defined('ESQUEMA_MIGRANDO')) {
+            return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+        }
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS muestra_identificacion (
                 id_identificacion INT NOT NULL AUTO_INCREMENT,

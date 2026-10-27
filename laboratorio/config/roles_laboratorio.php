@@ -284,10 +284,8 @@ if (!function_exists('lab_roles_db_central')) {
     /** Conexión a la base central de usuarios (mismas credenciales que login/). */
     function lab_roles_db_central(): PDO
     {
-        $env = parse_ini_file(__DIR__ . '/../../login/.env', false, INI_SCANNER_RAW);
-        if (!$env) {
-            throw new RuntimeException('No se pudo leer la configuración de la base central de usuarios.');
-        }
+        require_once __DIR__ . '/env.php';
+        $env = lab_env_central();
         return new PDO(
             'mysql:host=' . $env['DB_HOST'] . ';port=' . ($env['DB_PORT'] ?? 3306) . ';dbname=' . $env['DB_NAME'] . ';charset=utf8mb4',
             $env['DB_USER'], $env['DB_PASS'] ?? $env['DB_PASSWORD'] ?? '',

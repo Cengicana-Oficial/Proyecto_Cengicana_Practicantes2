@@ -7,7 +7,6 @@
 require_once __DIR__ . '/pago_recibos_helpers.php';
 
 $db = conectar();
-cengi_pr_asegurar($db);
 $h = static function ($v) {
     return htmlspecialchars((string) ($v ?? ''), ENT_QUOTES, 'UTF-8');
 };

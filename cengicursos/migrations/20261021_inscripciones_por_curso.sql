@@ -14,8 +14,15 @@ CREATE TABLE IF NOT EXISTS inscripcion_historial (
 -- Reconstruye registros faltantes, sin alterar acceso, notas, diplomas ni pagos existentes.
 -- No afirma que una asignación histórica haya sido pagada o validada.
 -- Identificador administrativo correlativo para personas históricas sin CUI (formato existente NNNND).
-SET @ins_nd = (SELECT COALESCE(MAX(CAST(cui_participantes AS UNSIGNED)),0) FROM participantes WHERE cui_participantes REGEXP '^[0-9]+D$');
-UPDATE participantes SET cui_participantes=CONCAT((@ins_nd := @ins_nd + 1),'D') WHERE cui_participantes IS NULL OR TRIM(cui_participantes)='' ORDER BY id;
+-- Mismo formato y correlativo que conexion.php (cengi_cui_nd_ultimo_correlativo / cengi_cui_nd_formatear):
+-- 4 dígitos + "ND", continuando el mayor ya usado en participantes y solicitudes_inscripcion.
+SET @ins_nd = (SELECT COALESCE(MAX(n),0) FROM (
+ SELECT CAST(REPLACE(UPPER(cui_participantes),'ND','') AS UNSIGNED) AS n FROM participantes WHERE cui_participantes REGEXP '^[0-9]+ND$'
+ UNION ALL SELECT CAST(REPLACE(UPPER(cui_participante),'ND','') AS UNSIGNED) FROM solicitudes_inscripcion WHERE cui_participante REGEXP '^[0-9]+ND$') AS correlativos_nd);
+UPDATE participantes pa JOIN (
+ SELECT id, CAST(@ins_nd + ROW_NUMBER() OVER (ORDER BY id) AS UNSIGNED) AS n FROM participantes WHERE cui_participantes IS NULL OR TRIM(cui_participantes)=''
+) sin_cui ON sin_cui.id = pa.id
+SET pa.cui_participantes = CONCAT(LPAD(sin_cui.n, GREATEST(4, CHAR_LENGTH(sin_cui.n)), '0'), 'ND');
 INSERT INTO solicitudes_inscripcion
  (nombre_participante,cui_participante,puesto_participante,area_participante,grado_academico,correo,telefono,ingenio_id,curso_id,planificacion_id,tipo_pago,estado,cuota,monto,moneda,pago_estado,validacion_ingenio,asignado_por,asignado_en,como_se_entero)
 SELECT pa.nombre_participantes,pa.cui_participantes,pa.puesto_participantes,pa.area_participantes,pa.grado_academico_participantes,pa.correo_participantes,pa.telefono_participantes,pa.ingenio_id,a.cursos_id,p.id,

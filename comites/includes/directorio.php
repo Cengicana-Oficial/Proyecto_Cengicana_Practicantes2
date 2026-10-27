@@ -7,6 +7,7 @@ const DIRECTORIO_ORIGENES = ['manual'=>'Registro manual','carga'=>'Carga masiva'
 
 function directorio_preparar(PDO $pdo): void
 {
+    if (!defined('ESQUEMA_MIGRANDO')) return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
     catalogo_preparar($pdo);
     foreach (['nivel'=>"VARCHAR(80) NULL",'origen_tipo'=>"VARCHAR(30) NOT NULL DEFAULT 'existente'",'origen_detalle'=>'VARCHAR(255) NULL','origen_fecha'=>'DATE NULL','origen_por'=>'VARCHAR(180) NULL'] as $col=>$tipo) {
         app_ensure_column($pdo,'contactos',$col,"{$col} {$tipo}");

@@ -42,7 +42,7 @@ if (!$tienePermiso) {
     echo '.box{max-width:560px;margin:auto;background:#fff;border:1px solid #dfe7d8;border-radius:8px;padding:24px}';
     echo 'a{color:#2c6b2f}</style></head><body><div class="box">';
     echo '<h1>Acceso denegado</h1>';
-    echo '<p>Su usuario no tiene acceso al modulo SIGEC.</p>';
+    echo '<p>Su usuario no tiene acceso al modulo Experimentos.</p>';
     echo '<a href="Menu.php">Volver al panel principal</a>';
     echo '</div></body></html>';
     exit;

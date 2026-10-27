@@ -4,7 +4,6 @@ require_once __DIR__ . '/menu.php';
 
 cengi_require_ver_participantes();
 $db = conectar();
-cengi_cui_asegurar_historial($db); // participantes.cui_anterior (documentos anteriores)
 $puedeEliminar = cengi_puede_eliminar_participantes();
 $puedeEditar = cengi_puede_editar_participantes();
 // Mismos permisos que exigen las páginas a las que se enlaza desde la ficha.

@@ -75,6 +75,25 @@ CREATE TABLE IF NOT EXISTS adjuntos (
   FOREIGN KEY (solicitud_id) REFERENCES solicitudes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- Buzon de ideas (formulario publico buzon.php)
+CREATE TABLE IF NOT EXISTS ideas (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  area VARCHAR(80) NOT NULL,
+  area_otra VARCHAR(80) NULL,
+  situacion TEXT NOT NULL,
+  propuesta TEXT NOT NULL,
+  beneficio TEXT NOT NULL,
+  foto_ruta VARCHAR(255) NULL,
+  foto_mime VARCHAR(40) NULL,
+  anonimo TINYINT(1) NOT NULL DEFAULT 0,
+  nombre VARCHAR(80) NULL,
+  correo VARCHAR(120) NULL,
+  estado ENUM('nueva','revisada','archivada') NOT NULL DEFAULT 'nueva',
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_ideas_estado (estado)
+) ENGINE=InnoDB;
+
 INSERT IGNORE INTO programas (id, nombre) VALUES
   (1, 'Variedades'),
   (2, 'Fisiologia y produccion agricola'),

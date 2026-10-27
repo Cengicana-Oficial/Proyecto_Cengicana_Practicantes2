@@ -7,5 +7,17 @@ laboratorio/database/usuarios_menu.sql
 AUDITORIA_PROYECTO_CENGICANA.md
 .claude/
 CLAUDE.md
-# Archivos subidos por los usuarios (documentos personales, recibos): no se versionan
-uploads/
+# Archivos subidos por los usuarios (documentos personales, recibos): no se versionan.
+# Se conservan las carpetas (.gitkeep) y la proteccion uploads/.htaccess.
+/uploads/**
+/Pruebas/uploads/**
+/sistema_de_solicitudes/uploads/**
+!/uploads/**/
+!/Pruebas/uploads/**/
+!/sistema_de_solicitudes/uploads/**/
+!/uploads/.htaccess
+!**/uploads/**/.gitkeep
+!/sistema_de_solicitudes/uploads/.gitkeep
+
+# Respaldos que genera deploy/mysql/actualizar-bd.sh (contienen datos reales)
+/respaldos/

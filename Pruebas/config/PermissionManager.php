@@ -20,10 +20,15 @@ class PermissionManager {
             // Rol y permisos del usuario EN ESTE MODULO (login/config/roles_modulo.php): la
             // sesion es compartida, y su rol en Cursos, Laboratorio, etc. no aplica aqui.
             require_once __DIR__ . '/../../login/config/roles_modulo.php';
-            $modulo = (($_GET['modulo'] ?? '') === 'servicio' || stripos((string) ($_SERVER['REQUEST_URI'] ?? ''), 'servicio') !== false) ? 'servicio' : 'visitas';
-            cengi_rm_activar_modulo($conn, $modulo);
-        } catch (Exception $e) {
+            // El modulo es fijo: Pruebas/ es "Solicitud de visitas". No se toma de la URL, porque
+            // Visitas y Servicio tecnico comparten nombres de permiso y el usuario podria cargar
+            // el rol del otro modulo. Servicio tecnico aun no tiene pantallas propias (Menu.php
+            // solo lo muestra al superadmin, que no depende del rol del modulo).
+            cengi_rm_activar_modulo($conn, 'visitas');
+        } catch (Throwable $e) {
             error_log("Error cargando permisos: " . $e->getMessage());
+            $_SESSION['rol'] = $_SESSION['nombre_rol'] = '';
+            $_SESSION['rol_id'] = 0;
             $_SESSION['user_permissions'] = [];
         }
     }

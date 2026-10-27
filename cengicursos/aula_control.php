@@ -51,9 +51,11 @@ function aula_survey_context(PDO $db,array $link) {
     if(!aula_control_ready($db))return null;
     $cfg=aula_rows($db,'SELECT * FROM aula_instructor_config WHERE curso_id=? AND instructor_id=?',[$link['curso_id'],$link['instructor_id']])[0]??null;
     if(!$cfg)return null; // Encuestas historicas externas sin aula conservan su flujo.
-    require_once __DIR__.'/revisar_permisos.php';
+    // Sin sesion o sin asignacion al curso, el enlace compartido sigue siendo el formulario publico;
+    // el control de un envio y la ventana de apertura solo aplican al estudiante desde su aula.
+    if(!cengi_usuario_actual_id())return null;
     $assignment=aula_assignment($db,$link['curso_id']);
-    if(!$assignment){http_response_code(403);exit('Debes estar asignado a este curso para evaluar a su instructor.');}
+    if(!$assignment)return null;
     foreach(aula_instructor_surveys($db,$link['curso_id'],$assignment['id']) as $survey) {
         if((int)$survey['instructor_id']===(int)$link['instructor_id'])return $survey+['asignacion_id'=>$assignment['id'],'curso_id'=>$link['curso_id']];
     }
@@ -103,7 +105,7 @@ function aula_preview_context(PDO $db,$seedId,$courseId,$catalog=false) {
     $seed=aula_rows($db,'SELECT a.*,p.nombre_participantes,p.estado_participantes FROM asignaciones a JOIN participantes p ON p.id=a.participantes_id WHERE a.id=? AND a.estado_asignaciones=1 AND p.estado_participantes=1',[$seedId])[0]??null;
     if(!$seed){http_response_code(404);exit('La asignación no está disponible.');}
     aula_teacher_course($db,$seed['cursos_id']);
-    $scope=cengi_scope_sql_por_nombre_ingenio('i',true);
+    $scope=cengi_scope_sql_por_nombre_ingenio('i',true).aula_scope_formador_sql($db);
     $courses=aula_rows($db,'SELECT DISTINCT c.id,c.nombre_cursos,c.inicio,c.fin FROM cursos c JOIN ingenios i ON i.id=c.ingenio_id JOIN asignaciones a ON a.cursos_id=c.id WHERE a.participantes_id=? AND a.estado_asignaciones=1 '.$scope.' ORDER BY c.inicio DESC,c.nombre_cursos',[$seed['participantes_id']]);
     if($catalog)return ['seed'=>$seed,'courses'=>$courses,'assignment'=>null,'courseId'=>0];
     $courseId=$courseId?:$seed['cursos_id'];aula_teacher_course($db,$courseId);

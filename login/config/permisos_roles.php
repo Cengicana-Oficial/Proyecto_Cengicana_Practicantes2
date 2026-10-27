@@ -2,27 +2,31 @@
 
 function asegurar_tablas_permisos(PDO $conn)
 {
-    $conn->exec("
-        CREATE TABLE IF NOT EXISTS permisos (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            nombre_permiso VARCHAR(100) NOT NULL UNIQUE,
-            descripcion VARCHAR(255)
-        )
-    ");
+    // Las tablas las crea deploy/mysql/init/01-usuarios-menu.sql; aqui solo al desplegar
+    // (deploy/mysql/migrar-esquema.php), nunca en una peticion (AUD-2026-001/I-2).
+    if (defined('ESQUEMA_MIGRANDO')) {
+        $conn->exec("
+            CREATE TABLE IF NOT EXISTS permisos (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nombre_permiso VARCHAR(100) NOT NULL UNIQUE,
+                descripcion VARCHAR(255)
+            )
+        ");
 
-    $conn->exec("
-        CREATE TABLE IF NOT EXISTS rol_permiso (
-            rol_id INT NOT NULL,
-            permiso_id INT NOT NULL,
-            PRIMARY KEY (rol_id, permiso_id),
-            CONSTRAINT fk_rol_permiso_rol
-                FOREIGN KEY (rol_id) REFERENCES roles(id)
-                ON DELETE CASCADE,
-            CONSTRAINT fk_rol_permiso_permiso
-                FOREIGN KEY (permiso_id) REFERENCES permisos(id)
-                ON DELETE CASCADE
-        )
-    ");
+        $conn->exec("
+            CREATE TABLE IF NOT EXISTS rol_permiso (
+                rol_id INT NOT NULL,
+                permiso_id INT NOT NULL,
+                PRIMARY KEY (rol_id, permiso_id),
+                CONSTRAINT fk_rol_permiso_rol
+                    FOREIGN KEY (rol_id) REFERENCES roles(id)
+                    ON DELETE CASCADE,
+                CONSTRAINT fk_rol_permiso_permiso
+                    FOREIGN KEY (permiso_id) REFERENCES permisos(id)
+                    ON DELETE CASCADE
+            )
+        ");
+    }
 
     sembrar_permisos_base($conn);
 }
@@ -126,7 +130,7 @@ function sembrar_permisos_base(PDO $conn)
         'laboratorio.usuarios.gestionar' => 'Permite gestionar los usuarios del modulo Laboratorio',
         'laboratorio.roles.gestionar' => 'Permite gestionar roles y permisos de Laboratorio',
         'laboratorio.configuracion.gestionar' => 'Permite gestionar la configuracion general de Laboratorio',
-        'sigec.acceder' => 'Permite acceder al modulo SIGEC',
+        'sigec.acceder' => 'Permite acceder al modulo Experimentos',
     ];
 
     $stmt = $conn->prepare("
@@ -281,7 +285,7 @@ function agrupar_permisos(array $permisos)
         'Permisos de cursos' => [],
         'Permisos de solicitudes internas' => [],
         'Permisos de laboratorio' => [],
-        'Permisos de SIGEC' => [],
+        'Permisos de Experimentos' => [],
         'Permisos de Comités' => [],
         'Permisos de pagos' => [],
         'Permisos de usuarios y accesos' => [],
@@ -312,7 +316,7 @@ function clasificar_grupo_permiso($nombrePermiso)
     }
 
     if (strpos($nombre, 'sigec.') === 0) {
-        return 'Permisos de SIGEC';
+        return 'Permisos de Experimentos';
     }
 
     if (strpos($nombre, 'comites.') === 0) {
@@ -345,7 +349,7 @@ function titulo_corto_grupo_permiso($grupo)
         'Permisos de cursos' => 'Cengicursos',
         'Permisos de solicitudes internas' => 'Solicitudes internas',
         'Permisos de laboratorio' => 'Cengilabs',
-        'Permisos de SIGEC' => 'SIGEC',
+        'Permisos de Experimentos' => 'Experimentos',
         'Permisos de Comités' => 'Comités',
         'Permisos de pagos' => 'Pagos',
         'Permisos de usuarios y accesos' => 'General',
@@ -362,7 +366,7 @@ function descripcion_grupo_permiso($grupo)
         'Permisos de cursos' => 'Agrupa acciones para cursos, participantes, notas, ingenios y asignaciones.',
         'Permisos de solicitudes internas' => 'Controla acceso a solicitudes, usuarios y programas del modulo Sistema de solicitudes.',
         'Permisos de laboratorio' => 'Cengilabs: permisos ordenados por etapa del flujo, de Recepción a la entrega de Reportes. Puede partir de una plantilla de rol y ajustar.',
-        'Permisos de SIGEC' => 'Controla el acceso al modulo SIGEC (Sistema de Gestion de Ensayos Experimentales).',
+        'Permisos de Experimentos' => 'Controla el acceso al modulo Experimentos (Sistema de Gestion de Ensayos Experimentales).',
         'Permisos de Comités' => 'Comités, Transferencia y Comunicación: ver o gestionar cada sección del módulo y las aprobaciones de Transferencia y Dirección.',
         'Permisos de pagos' => 'Reune permisos relacionados con estados de pago y control de cobros.',
         'Permisos de usuarios y accesos' => 'Incluye gestion de usuarios, roles, modulos y acceso administrativo.',
@@ -465,7 +469,7 @@ function etiqueta_permiso($nombrePermiso)
         'laboratorio.usuarios.gestionar' => 'Gestionar usuarios',
         'laboratorio.roles.gestionar' => 'Gestionar roles y permisos',
         'laboratorio.configuracion.gestionar' => 'Gestionar configuracion',
-        'sigec.acceder' => 'Acceder al modulo SIGEC',
+        'sigec.acceder' => 'Acceder al modulo Experimentos',
     ];
 
     $vigentesLab = permisos_laboratorio_vigentes();

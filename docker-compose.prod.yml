@@ -11,6 +11,10 @@ services:
       - "127.0.0.1:8085:80"
     environment:
       TZ: America/Guatemala
+      # Hosts aceptados por Apache; cualquier otro Host recibe 403 (ver dockerfiles/modulos-app/entrypoint.sh).
+      HOSTS_PERMITIDOS: modulos.cengicana.org,localhost,127.0.0.1
+      # Los correos de Comités los envía comites-correos-worker, no la petición.
+      COMITES_CORREO_POR_WORKER: "1"
     volumes:
       - ./deploy/env/login.env:/var/www/html/login/.env:ro
       - ./deploy/env/cengicursos.env:/var/www/html/cengicursos/.env:ro
@@ -45,7 +49,11 @@ services:
       - mysql
 
   recibos-worker:
-    image: cengicana-ui-new-app
+    # Misma imagen que "app" (la cache de build la reutiliza). Con build: propio, Compose nunca
+    # intenta descargar "cengicana-ui-new-app" de Docker Hub si aun no se construyo "app".
+    build:
+      context: .
+      dockerfile: dockerfiles/modulos-app/Dockerfile
     container_name: cengicana-ui-new-recibos-worker
     restart: unless-stopped
     command: ["php", "/var/www/html/cengicursos/cron_recibos_contables.php", "--loop"]
@@ -61,6 +69,24 @@ services:
       - ./deploy/env/cengicursos.env:/run/cengicursos.env:ro
       - ./uploads:/var/www/html/uploads
     depends_on:
+      - app
+      - mysql
+
+  comites-correos-worker:
+    # Envía la cola de correos de Comités y los recordatorios del día (comites/cron/correos.php).
+    build:
+      context: .
+      dockerfile: dockerfiles/modulos-app/Dockerfile
+    container_name: cengicana-ui-new-comites-correos-worker
+    restart: unless-stopped
+    command: ["php", "/var/www/html/comites/cron/correos.php", "--loop"]
+    environment:
+      TZ: America/Guatemala
+    volumes:
+      - ./deploy/env/login.env:/var/www/html/login/.env:ro
+      - ./dockerfiles/modulos-app/timezone.ini:/usr/local/etc/php/conf.d/zz-timezone.ini:ro
+    depends_on:
+      - app
       - mysql
 
   mysql:

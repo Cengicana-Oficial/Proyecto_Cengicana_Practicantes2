@@ -397,6 +397,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
+        cengi_ins_deshacer_cuentas_creadas($db);
         $GLOBALS['cengi_ins_cola'] = [];
         $mensajeTipo = 'error';
         if ($e instanceof InvalidArgumentException) {

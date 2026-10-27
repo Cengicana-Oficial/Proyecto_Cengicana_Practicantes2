@@ -24,11 +24,11 @@
  *      ejecutar PHP en el servidor ya tiene el acceso equivalente.
  *
  *   2) HTTP: por si se prefiere programar un cron-job.org o un cron de hosting
- *      compartido que solo puede pegar una URL. Exige ?token=... que debe coincidir
- *      (con hash_equals(), nunca ===) contra la variable de entorno
- *      CRON_RECORDATORIO_SECRET (leida via cengicursos_env(), ver
- *      deploy/env/cengicursos.env.example). Si no coincide, o la variable de entorno
- *      no esta configurada, responde 403 y no hace nada.
+ *      compartido. Exige el token en una cabecera ("Authorization: Bearer <token>" o
+ *      "X-Cron-Token: <token>"), no en la URL, que queda en los logs; debe coincidir
+ *      (con hash_equals(), nunca ===) con CRON_RECORDATORIO_SECRET (ver
+ *      cengi_cron_token_valido() en conexion.php y deploy/env/cengicursos.env.example).
+ *      Si no coincide, o la variable no esta configurada, responde 403 y no hace nada.
  */
 
 require_once __DIR__ . '/conexion.php';
@@ -38,11 +38,7 @@ $esCli = (php_sapi_name() === 'cli');
 
 if (!$esCli) {
 
-    $env = cengicursos_env();
-    $secretoEsperado = (string) ($env['CRON_RECORDATORIO_SECRET'] ?? '');
-    $tokenRecibido = (string) ($_GET['token'] ?? '');
-
-    if ($secretoEsperado === '' || !hash_equals($secretoEsperado, $tokenRecibido)) {
+    if (!cengi_cron_token_valido()) {
         http_response_code(403);
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([

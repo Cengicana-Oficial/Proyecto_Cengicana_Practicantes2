@@ -35,6 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     try {
+        if (!csrf_valido()) {
+            throw new RuntimeException('El formulario expiró o no es válido. Recarga la página e intenta de nuevo.');
+        }
+
         if ($action === 'crear_programa') {
             if (!can_manage_programs($user)) {
                 throw new RuntimeException('No tienes permiso para crear programas.');
@@ -131,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Escribe un correo valido para la prueba.');
             }
 
-            $sample = mail_sample_request($pdo, $menuDbName);
+            $sample = mail_sample_request();
             [$subject, $html] = ($_POST['plantilla'] ?? '') === 'avance'
                 ? mail_request_progress($sample, (string) $user['nombre'], 'proceso', 'Comentario de ejemplo del seguimiento.')
                 : mail_new_request($sample, (string) $user['nombre']);
@@ -262,6 +266,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            // Se validan los adjuntos antes de registrar la solicitud.
+            $adjuntosValidos = validar_adjuntos($_FILES['adjuntos'] ?? null);
+
             $code = next_codigo($pdo);
             $stmt = $pdo->prepare(
                 'INSERT INTO solicitudes
@@ -287,31 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'INSERT INTO seguimientos (solicitud_id, usuario_id, estado, observacion) VALUES (?, ?, ?, ?)'
             )->execute([$requestId, (int) $user['id'], 'recibido', 'Solicitud registrada en el sistema.']);
 
-            if (!empty($_FILES['adjuntos']['name'][0])) {
-                $uploadDir = __DIR__ . '/uploads';
-                foreach ($_FILES['adjuntos']['name'] as $index => $name) {
-                    if ($_FILES['adjuntos']['error'][$index] !== UPLOAD_ERR_OK) {
-                        continue;
-                    }
-
-                    $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', basename($name));
-                    $targetName = $code . '_' . time() . '_' . $safeName;
-                    $targetPath = $uploadDir . '/' . $targetName;
-
-                    if (move_uploaded_file($_FILES['adjuntos']['tmp_name'][$index], $targetPath)) {
-                        $pdo->prepare(
-                            'INSERT INTO adjuntos (solicitud_id, nombre_original, ruta, mime_type, tamano_bytes)
-                             VALUES (?, ?, ?, ?, ?)'
-                        )->execute([
-                            $requestId,
-                            $name,
-                            'uploads/' . $targetName,
-                            $_FILES['adjuntos']['type'][$index],
-                            (int) $_FILES['adjuntos']['size'][$index],
-                        ]);
-                    }
-                }
-            }
+            guardar_adjuntos($pdo, $requestId, $code, $adjuntosValidos);
 
             notify_new_request($pdo, $menuPdo, $menuDbName, $user, $requestId);
 
@@ -335,41 +318,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Las solicitudes completadas ya no se pueden modificar.');
             }
 
+            $adjuntosValidos = validar_adjuntos($_FILES['seguimiento_adjuntos'] ?? null);
+
             $observation = trim($_POST['observacion'] ?? '');
             $pdo->prepare('UPDATE solicitudes SET estado = ? WHERE id = ?')->execute([$status, $requestId]);
             $pdo->prepare(
                 'INSERT INTO seguimientos (solicitud_id, usuario_id, estado, observacion) VALUES (?, ?, ?, ?)'
             )->execute([$requestId, (int) $user['id'], $status, $observation ?: null]);
 
-            if (!empty($_FILES['seguimiento_adjuntos']['name'][0])) {
-                $uploadDir = __DIR__ . '/uploads';
-                foreach ($_FILES['seguimiento_adjuntos']['name'] as $index => $name) {
-                    if ($_FILES['seguimiento_adjuntos']['error'][$index] !== UPLOAD_ERR_OK) {
-                        continue;
-                    }
-
-                    $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', basename($name));
-                    $targetName = $request['codigo'] . '_seguimiento_' . time() . '_' . $safeName;
-                    $targetPath = $uploadDir . '/' . $targetName;
-
-                    if (move_uploaded_file($_FILES['seguimiento_adjuntos']['tmp_name'][$index], $targetPath)) {
-                        $pdo->prepare(
-                            'INSERT INTO adjuntos (solicitud_id, nombre_original, ruta, mime_type, tamano_bytes)
-                             VALUES (?, ?, ?, ?, ?)'
-                        )->execute([
-                            $requestId,
-                            $name,
-                            'uploads/' . $targetName,
-                            $_FILES['seguimiento_adjuntos']['type'][$index],
-                            (int) $_FILES['seguimiento_adjuntos']['size'][$index],
-                        ]);
-                    }
-                }
-            }
+            guardar_adjuntos($pdo, $requestId, $request['codigo'] . '_seguimiento', $adjuntosValidos);
 
             notify_request_progress($pdo, $menuDbName, $user, $requestId, $status, $observation);
 
             header('Location: index.php?view=detalle&id=' . $requestId . '&message=' . urlencode('Estado actualizado correctamente.'));
+            exit;
+        }
+
+        if ($action === 'actualizar_idea') {
+            $ideaId = (int) ($_POST['idea_id'] ?? 0);
+            $ideaStatus = (string) ($_POST['estado'] ?? '');
+            if (!can_manage_ideas($user) || !isset(BUZON_ESTADOS[$ideaStatus])) {
+                throw new RuntimeException('No puedes actualizar esta idea.');
+            }
+
+            $pdo->prepare('UPDATE ideas SET estado = ? WHERE id = ?')->execute([$ideaStatus, $ideaId]);
+
+            header('Location: index.php?view=buzon&message=' . urlencode('Idea #' . $ideaId . ' marcada como ' . mb_strtolower(BUZON_ESTADOS[$ideaStatus], 'UTF-8') . '.') . '#idea-' . $ideaId);
             exit;
         }
     } catch (Throwable $exception) {
@@ -436,7 +410,7 @@ $mailPreviews = [];
 if ($view === 'correos' && can_manage_mail_settings($user)) {
     $mailSettings = mail_settings($pdo);
     $mailLog = $pdo->query('SELECT * FROM correo_registro ORDER BY id DESC LIMIT 25')->fetchAll();
-    $sample = mail_sample_request($pdo, $menuDbName);
+    $sample = mail_sample_request();
     $mailPreviews = [
         'nueva' => mail_new_request($sample, 'Jefe del programa destino'),
         'avance' => mail_request_progress($sample, (string) $user['nombre'], 'proceso', 'Comentario de ejemplo del seguimiento.'),
@@ -588,6 +562,20 @@ if ($view === 'detalle' && isset($_GET['id'])) {
     }
 }
 
+$ideas = [];
+$ideaCounts = array_fill_keys(array_keys(BUZON_ESTADOS), 0);
+$buzonPublicUrl = '';
+if ($view === 'buzon' && can_view_ideas($user)) {
+    $ideas = $pdo->query('SELECT * FROM ideas ORDER BY creado_en DESC, id DESC')->fetchAll();
+    foreach ($ideas as $idea) {
+        $ideaCounts[$idea['estado']] = ($ideaCounts[$idea['estado']] ?? 0) + 1;
+    }
+
+    $https = ($_SERVER['HTTPS'] ?? '') === 'on' || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+    $basePath = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php')), '/');
+    $buzonPublicUrl = ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $basePath . '/buzon.php';
+}
+
 $notifications = fetch_notifications($pdo, $menuDbName, $user);
 $notificationsReturn = 'index.php' . ($_GET ? '?' . http_build_query(array_diff_key($_GET, ['message' => 1])) : '');
 
@@ -602,6 +590,7 @@ $sidebarTitles = [
     'correos' => ['Correos', 'Avisos por correo de las solicitudes'],
     'nueva' => ['Nueva solicitud', 'Registra una nueva solicitud'],
     'detalle' => ['Detalle de solicitud', 'Seguimiento de la solicitud'],
+    'buzon' => ['Buzon de ideas', 'Ideas y sugerencias enviadas desde el formulario publico'],
 ];
 [$topbarTitle, $topbarSub] = $sidebarTitles[$view] ?? ['Sistema de solicitudes', 'CENGICANA'];
 
@@ -654,6 +643,11 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                 <?php if (can_create_requests($user)): ?>
                     <a href="index.php?view=nueva" class="sidebar-nav-item <?= e($active('nueva')) ?>">
                         <i class="ti ti-plus"></i><span>Nueva solicitud</span>
+                    </a>
+                <?php endif; ?>
+                <?php if (can_view_ideas($user)): ?>
+                    <a href="index.php?view=buzon" class="sidebar-nav-item <?= e($active('buzon')) ?>">
+                        <i class="ti ti-bulb"></i><span>Buzon de ideas</span>
                     </a>
                 <?php endif; ?>
             </div>
@@ -714,7 +708,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                             <span><?= $notifications['unread'] ? (int) $notifications['unread'] . ' sin leer' : 'Estas al dia' ?></span>
                         </div>
                         <?php if ($notifications['unread'] > 0): ?>
-                            <form method="post">
+                            <form method="post"><?= csrf_field() ?>
                                 <input type="hidden" name="action" value="marcar_notificaciones">
                                 <input type="hidden" name="return" value="<?= e($notificationsReturn) ?>">
                                 <button type="submit" class="notif-mark"><i class="ti ti-checks"></i>Marcar todas como leidas</button>
@@ -1031,7 +1025,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                         <a class="btn-primary" href="../login/usuarios/crear_usuario.php?scope=solicitudes"><i class="ti ti-user-plus"></i>Crear usuario nuevo</a>
                     </div>
                 <?php elseif (can_manage_users($user)): ?>
-                    <form class="form-card" method="post">
+                    <form class="form-card" method="post"><?= csrf_field() ?>
                         <input type="hidden" name="action" value="agregar_usuario_modulo">
                         <div class="form-grid">
                             <div class="form-group user-search">
@@ -1106,7 +1100,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                                 ?>
                                 <tr>
                                     <td>
-                                        <?php if (can_manage_users($user)): ?><form id="<?= e($formId) ?>" method="post"></form><?php endif; ?>
+                                        <?php if (can_manage_users($user)): ?><form id="<?= e($formId) ?>" method="post"><?= csrf_field() ?></form><?php endif; ?>
                                         <?= e($userItem['nombre']) ?>
                                     </td>
                                     <td><?= e($userItem['correo']) ?></td>
@@ -1206,7 +1200,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                         <input type="search" id="buscar-programas" placeholder="Buscar programa..." oninput="filterPrograms('buscar-programas', 'lista-programas')">
                     </label>
                     <?php if ($canManagePrograms): ?>
-                        <form class="programs-create" method="post">
+                        <form class="programs-create" method="post"><?= csrf_field() ?>
                             <input type="hidden" name="action" value="crear_programa">
                             <input class="form-control" name="nombre" placeholder="Nombre del nuevo programa" aria-label="Nombre del nuevo programa" required>
                             <button class="btn-primary" type="submit"><i class="ti ti-plus"></i>Crear</button>
@@ -1233,7 +1227,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                             <div class="program-row-name">
                                 <span class="program-admin-icon"><i class="ti ti-building"></i></span>
                                 <?php if ($canManagePrograms): ?>
-                                    <form id="<?= e($programFormId) ?>" class="program-admin-form" method="post">
+                                    <form id="<?= e($programFormId) ?>" class="program-admin-form" method="post"><?= csrf_field() ?>
                                         <input type="hidden" name="action" value="actualizar_programa">
                                         <input type="hidden" name="programa_id" value="<?= $programId ?>">
                                         <input class="program-admin-name" name="nombre" value="<?= e($program['nombre']) ?>" data-original="<?= e($program['nombre']) ?>" aria-label="Nombre del programa" title="Haz clic para editar el nombre" required>
@@ -1248,7 +1242,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                             <?php if ($canManagePrograms): ?>
                                 <div class="program-admin-actions">
                                     <button form="<?= e($programFormId) ?>" class="icon-btn icon-btn-save" type="submit" title="Guardar cambios" aria-label="Guardar cambios"><i class="ti ti-check"></i></button>
-                                    <form method="post" onsubmit="return confirm('Se eliminara este programa. Continuar?');">
+                                    <form method="post" onsubmit="return confirm('Se eliminara este programa. Continuar?');"><?= csrf_field() ?>
                                         <input type="hidden" name="action" value="eliminar_programa">
                                         <input type="hidden" name="programa_id" value="<?= $programId ?>">
                                         <button class="icon-btn icon-btn-danger" type="submit"
@@ -1263,6 +1257,100 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                 <div class="panel-empty hidden" id="lista-programas-vacio"><i class="ti ti-search-off"></i>Ningun programa coincide con la busqueda.</div>
                 <?php if (!$programs): ?>
                     <div class="panel-empty"><i class="ti ti-building-off"></i>No hay programas registrados.</div>
+                <?php endif; ?>
+            <?php endif; ?>
+        <?php endif; ?>
+
+        <?php if ($view === 'buzon'): ?>
+            <?php if (!can_view_ideas($user)): ?>
+                <div class="alert error">No tienes permiso para ver el buzon de ideas.</div>
+            <?php else: ?>
+                <?php $canManageIdeas = can_manage_ideas($user); ?>
+                <div class="section-header">
+                    <div>
+                        <div class="section-title">Buzon de ideas</div>
+                        <div class="section-sub">Cualquier persona con el link puede enviar ideas, sin iniciar sesion.</div>
+                    </div>
+                    <a class="btn-outline" href="buzon.php" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Abrir formulario</a>
+                </div>
+
+                <div class="buzon-link card">
+                    <span class="buzon-link-icon"><i class="ti ti-link"></i></span>
+                    <div class="buzon-link-copy">
+                        <strong>Link publico del formulario</strong>
+                        <input class="form-control" id="buzon-url" value="<?= e($buzonPublicUrl) ?>" readonly aria-label="Link publico del buzon de ideas" onclick="this.select()">
+                    </div>
+                    <button type="button" class="btn-primary" onclick="copyBuzonLink(this)"><i class="ti ti-copy"></i>Copiar link</button>
+                </div>
+
+                <div class="filters">
+                    <div class="search-box"><input class="form-control" id="buscar-ideas" oninput="filterIdeas()" placeholder="Buscar idea..."></div>
+                    <button class="filter-chip active" data-estado="todas" onclick="setIdeaFilter(this)">Todas (<?= count($ideas) ?>)</button>
+                    <?php foreach (BUZON_ESTADOS as $estadoKey => $estadoLabel): ?>
+                        <button class="filter-chip" data-estado="<?= e($estadoKey) ?>" onclick="setIdeaFilter(this)"><?= e($estadoLabel) ?> (<?= (int) $ideaCounts[$estadoKey] ?>)</button>
+                    <?php endforeach; ?>
+                </div>
+
+                <section class="idea-list" id="lista-ideas">
+                    <?php foreach ($ideas as $idea): ?>
+                        <?php $ideaId = (int) $idea['id']; ?>
+                        <article class="idea-card card" id="idea-<?= $ideaId ?>" data-estado="<?= e($idea['estado']) ?>">
+                            <header class="idea-card-head">
+                                <div>
+                                    <div class="idea-card-title">
+                                        <strong>#<?= $ideaId ?></strong>
+                                        <?= e($idea['area']) ?><?= $idea['area_otra'] ? ': ' . e($idea['area_otra']) : '' ?>
+                                    </div>
+                                    <div class="idea-card-meta">
+                                        <span><i class="ti ti-calendar"></i><?= e(date('d/m/Y H:i', strtotime((string) $idea['creado_en']))) ?></span>
+                                        <?php if ((int) $idea['anonimo'] === 1): ?>
+                                            <span><i class="ti ti-user-off"></i>Anonimo</span>
+                                        <?php else: ?>
+                                            <span><i class="ti ti-user"></i><?= e($idea['nombre'] ?: 'Sin nombre') ?></span>
+                                            <?php if ($idea['correo']): ?>
+                                                <span><i class="ti ti-mail"></i><a href="mailto:<?= e($idea['correo']) ?>"><?= e($idea['correo']) ?></a></span>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <?= badge_idea_estado($idea['estado']) ?>
+                            </header>
+                            <dl class="idea-card-body">
+                                <dt>Situacion o problema</dt>
+                                <dd><?= nl2br(e($idea['situacion'])) ?></dd>
+                                <dt>Propuesta de mejora</dt>
+                                <dd><?= nl2br(e($idea['propuesta'])) ?></dd>
+                                <dt>Beneficio esperado</dt>
+                                <dd><?= nl2br(e($idea['beneficio'])) ?></dd>
+                            </dl>
+                            <?php if ($idea['foto_ruta'] || $canManageIdeas): ?>
+                                <footer class="idea-card-foot">
+                                    <?php if ($idea['foto_ruta']): ?>
+                                        <a class="idea-photo" href="buzon_foto.php?id=<?= $ideaId ?>" target="_blank" rel="noopener">
+                                            <img src="buzon_foto.php?id=<?= $ideaId ?>" alt="Foto adjunta a la idea #<?= $ideaId ?>" loading="lazy">
+                                        </a>
+                                    <?php endif; ?>
+                                    <?php if ($canManageIdeas): ?>
+                                        <div class="idea-actions">
+                                            <?php foreach (BUZON_ESTADOS as $estadoKey => $estadoLabel): ?>
+                                                <?php if ($estadoKey === $idea['estado']) { continue; } ?>
+                                                <form method="post"><?= csrf_field() ?>
+                                                    <input type="hidden" name="action" value="actualizar_idea">
+                                                    <input type="hidden" name="idea_id" value="<?= $ideaId ?>">
+                                                    <input type="hidden" name="estado" value="<?= e($estadoKey) ?>">
+                                                    <button class="btn-outline btn-sm" type="submit">Marcar como <?= e(mb_strtolower($estadoLabel, 'UTF-8')) ?></button>
+                                                </form>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </footer>
+                            <?php endif; ?>
+                        </article>
+                    <?php endforeach; ?>
+                </section>
+                <div class="panel-empty hidden" id="lista-ideas-vacio"><i class="ti ti-search-off"></i>Ninguna idea coincide con el filtro.</div>
+                <?php if (!$ideas): ?>
+                    <div class="panel-empty"><i class="ti ti-bulb-off"></i>Todavia no se han recibido ideas. Comparte el link del formulario.</div>
                 <?php endif; ?>
             <?php endif; ?>
         <?php endif; ?>
@@ -1292,7 +1380,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                     <?php endif; ?>
                 </div>
 
-                <form class="form-card mail-card" method="post" action="index.php?view=correos">
+                <form class="form-card mail-card" method="post" action="index.php?view=correos"><?= csrf_field() ?>
                     <input type="hidden" name="action" value="guardar_config_correo">
 
                     <label class="mail-switch">
@@ -1341,7 +1429,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                         <div class="section-sub">Envia un ejemplo con los datos de la ultima solicitud registrada.</div>
                     </div>
                 </div>
-                <form class="form-card mail-test" method="post" action="index.php?view=correos">
+                <form class="form-card mail-test" method="post" action="index.php?view=correos"><?= csrf_field() ?>
                     <input type="hidden" name="action" value="probar_correo">
                     <div class="form-group">
                         <label class="form-label" for="correo_prueba">Enviar a</label>
@@ -1414,7 +1502,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                         <div class="section-sub">Registra compras, soporte TI o apoyo entre programas.</div>
                     </div>
                 </div>
-                <form class="form-card" method="post" enctype="multipart/form-data">
+                <form class="form-card" method="post" enctype="multipart/form-data"><?= csrf_field() ?>
                     <input type="hidden" name="action" value="crear_solicitud">
                     <div class="form-grid">
                         <div class="form-group">
@@ -1541,7 +1629,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                     <?php endif; ?>
 
                     <?php if (can_manage_request($user, $detail) && $detail['estado'] !== 'completado'): ?>
-                        <form method="post" enctype="multipart/form-data" class="form-card" style="margin-top:18px">
+                        <form method="post" enctype="multipart/form-data" class="form-card" style="margin-top:18px"><?= csrf_field() ?>
                             <input type="hidden" name="action" value="actualizar_estado">
                             <input type="hidden" name="solicitud_id" value="<?= (int) $detail['id'] ?>">
                             <div class="form-grid">

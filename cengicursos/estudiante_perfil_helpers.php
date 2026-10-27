@@ -3,12 +3,12 @@
  * Perfil del estudiante (mi_perfil.php): sus datos de participante, su foto y su historial
  * de cursos y diplomas. Todo se filtra por el usuario de la sesión: un estudiante solo ve
  * lo suyo (asignaciones.usuarios_id o participantes.usuarios_id).
- * Esquema: migrations/20261103_participantes_foto.sql (se completa aquí si falta).
+ * Esquema: migrations/20261103_participantes_foto.sql.
  */
 require_once __DIR__ . '/revisar_permisos.php';
 require_once __DIR__ . '/cengi_texto.php';
 
-/** Asegura la columna participantes.foto_path (idempotente). */
+/** Si existe participantes.foto_path (migrations/20261103_participantes_foto.sql). */
 function cengi_est_foto_lista(PDO $db)
 {
     static $lista = null;
@@ -19,13 +19,8 @@ function cengi_est_foto_lista(PDO $db)
         $db->query('SELECT foto_path FROM participantes LIMIT 0');
         return $lista = true;
     } catch (PDOException $e) {
-        try {
-            $db->exec('ALTER TABLE participantes ADD COLUMN foto_path VARCHAR(255) NULL');
-            return $lista = true;
-        } catch (PDOException $e2) {
-            error_log('Perfil del estudiante (foto_path): ' . $e2->getMessage());
-            return $lista = false;
-        }
+        error_log('Perfil del estudiante: falta participantes.foto_path; aplicar deploy/mysql/actualizar-bd.sh.');
+        return $lista = false;
     }
 }
 

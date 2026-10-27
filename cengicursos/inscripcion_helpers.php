@@ -282,15 +282,48 @@ function cengi_buscar_modulo_cursos(mysqli $conexionUsuarios)
     return (int) ($fila['id'] ?? 0);
 }
 
+/**
+ * Contrasena inicial de la cuenta de estudiante: aleatoria y nadie la conoce. El estudiante
+ * crea la suya con el enlace que se le envia al ser asignado (cengi_ins_enlace_cuenta()).
+ * Antes era su CUI: con el DPI y el correo cualquiera podia entrar a su cuenta.
+ */
 function cengi_password_temporal_estudiante(array $solicitud)
 {
-    $cui = preg_replace('/\D+/', '', (string) ($solicitud['cui_participante'] ?? ''));
+    return bin2hex(random_bytes(24));
+}
 
-    if ($cui !== '') {
-        return $cui;
+/** Vigencia del enlace para crear la contrasena de una cuenta nueva de estudiante. */
+const CENGI_INS_ENLACE_CUENTA_TTL = 7 * 24 * 3600;
+
+/**
+ * Genera el enlace de login/reset_password.php para que el estudiante nuevo cree su
+ * contrasena (misma tabla password_resets que "Olvide mi contrasena") y lo guarda para los
+ * correos de esta peticion.
+ */
+function cengi_ins_generar_enlace_cuenta(mysqli $conexionUsuarios, $usuarioId, $correo)
+{
+    $token = bin2hex(random_bytes(32));
+    $tokenHash = hash('sha256', $token);
+    $expira = date('Y-m-d H:i:s', time() + CENGI_INS_ENLACE_CUENTA_TTL);
+    $stmt = $conexionUsuarios->prepare('INSERT INTO password_resets (usuario_id, token_hash, expira_en, ip_solicitud) VALUES (?, ?, ?, NULL)');
+    $stmt->bind_param('iss', $usuarioId, $tokenHash, $expira);
+    $stmt->execute();
+
+    $env = function_exists('cengicursos_env') ? cengicursos_env() : [];
+    if (!empty($env['APP_URL'])) {
+        $base = rtrim((string) $env['APP_URL'], '/');
+    } else {
+        $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+        $base = ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
     }
+    $GLOBALS['cengi_ins_enlaces_cuenta'][mb_strtolower(trim((string) $correo), 'UTF-8')] = $base . '/login/reset_password.php?token=' . $token;
+}
 
-    return substr(hash('sha256', (string) ($solicitud['correo'] ?? '') . microtime(true)), 0, 10);
+/** Enlace para crear la contrasena si en esta peticion se creo la cuenta de ese correo; '' si no. */
+function cengi_ins_enlace_cuenta($correo)
+{
+    return $GLOBALS['cengi_ins_enlaces_cuenta'][mb_strtolower(trim((string) $correo), 'UTF-8')] ?? '';
 }
 
 function cengi_asegurar_ingenio_en_menu(mysqli $conexionUsuarios, $ingenioId, $nombreIngenio = '')
@@ -381,6 +414,8 @@ function cengi_crear_o_asociar_usuario_estudiante(array $solicitud)
         $stmtInsertUsuario->bind_param('sssiii', $nombre, $correo, $contrasenaHash, $rolId, $ingenioId, $esSuperadmin);
         $stmtInsertUsuario->execute();
         $usuarioId = (int) $conexionUsuarios->insert_id;
+        $GLOBALS['cengi_ins_cuentas_creadas'][] = ['usuario_id' => $usuarioId, 'modulo_id' => 0, 'cuenta_nueva' => true];
+        cengi_ins_generar_enlace_cuenta($conexionUsuarios, $usuarioId, $correo);
     }
 
     // Acceso a Cursos con rol Estudiante (rol por modulo). Si ya tenia rol en Cursos
@@ -395,9 +430,57 @@ function cengi_crear_o_asociar_usuario_estudiante(array $solicitud)
         ");
         $stmtVinculo->bind_param('iii', $usuarioId, $moduloCursosId, $rolEstudianteId);
         $stmtVinculo->execute();
+        if ($stmtVinculo->affected_rows === 1) {
+            // Fila nueva (con ON DUPLICATE KEY, 2 = actualizada): el acceso a Cursos se dio aqui.
+            $GLOBALS['cengi_ins_cuentas_creadas'][] = ['usuario_id' => $usuarioId, 'modulo_id' => $moduloCursosId, 'cuenta_nueva' => false];
+        }
     }
 
     return $usuarioId;
+}
+
+/**
+ * La cuenta de estudiante se crea en usuarios_menu (otra base, con mysqli), fuera de la
+ * transaccion de cengi_cursos que asigna la inscripcion. Llamar despues de cada rollBack()
+ * de una transaccion que pudo asignar inscripciones: deshace las cuentas y accesos a Cursos
+ * creados en esta peticion que ya no usa ningun participante ni asignacion confirmados (si
+ * otra transaccion de la misma peticion ya los confirmo, se conservan).
+ */
+function cengi_ins_deshacer_cuentas_creadas(PDO $db)
+{
+    $creadas = $GLOBALS['cengi_ins_cuentas_creadas'] ?? [];
+    $GLOBALS['cengi_ins_cuentas_creadas'] = [];
+    // Los enlaces de cuentas que se deshacen ya no sirven (su token se borra con el usuario).
+    $GLOBALS['cengi_ins_enlaces_cuenta'] = [];
+    if (!$creadas) {
+        return;
+    }
+    try {
+        $enUso = $db->prepare('SELECT (SELECT COUNT(*) FROM participantes WHERE usuarios_id = ?) + (SELECT COUNT(*) FROM asignaciones WHERE usuarios_id = ?)');
+        $menu = conectar_usuarios_menu();
+        foreach (array_reverse($creadas) as $c) {
+            $usuarioId = (int) $c['usuario_id'];
+            $enUso->execute([$usuarioId, $usuarioId]);
+            if ((int) $enUso->fetchColumn() > 0) {
+                continue;
+            }
+            if ($c['cuenta_nueva']) {
+                $stmt = $menu->prepare('DELETE FROM usuario_modulo WHERE usuario_id = ?');
+                $stmt->bind_param('i', $usuarioId);
+                $stmt->execute();
+                $stmt = $menu->prepare('DELETE FROM usuarios WHERE id = ? AND es_superadmin = 0');
+                $stmt->bind_param('i', $usuarioId);
+                $stmt->execute();
+            } else {
+                $moduloId = (int) $c['modulo_id'];
+                $stmt = $menu->prepare('DELETE FROM usuario_modulo WHERE usuario_id = ? AND modulo_id = ?');
+                $stmt->bind_param('ii', $usuarioId, $moduloId);
+                $stmt->execute();
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('No se pudieron deshacer las cuentas de estudiante creadas: ' . $e->getMessage());
+    }
 }
 
 /**
@@ -545,14 +628,18 @@ function cengi_ins_enviar_cola(PDO $db)
         $plan = cengi_pp_plan($db, $item['plan']['id']);
         $s = $item['solicitud'];
         $asignado = $item['tipo'] === 'asignado';
+        $enlaceCuenta = $asignado ? cengi_ins_enlace_cuenta($s['correo']) : '';
+        $textoCuenta = $enlaceCuenta !== ''
+            ? "\n\nSe creó tu cuenta en la plataforma de cursos con este correo. Crea tu contraseña en el siguiente enlace (vence en 7 días; después puedes usar «¿Olvidaste tu contraseña?» en el inicio de sesión):\n" . $enlaceCuenta
+            : '';
         try {
             cengi_pp_enviar_comunicacion($db, [
                 'categoria' => $asignado ? 'Asignación al curso' : 'Lista de espera', 'origen' => 'sistema', 'planificacion_id' => (int) $plan['id'],
                 'asunto' => ($asignado ? 'Asignado al curso: ' : 'Lista de espera: ') . $plan['nombre'],
                 'mensaje' => "Hola {nombre}:\n\n" . ($asignado
                     ? 'Tu inscripción fue validada y ya estás asignado a ' . $plan['nombre'] . ($plan['codigo_curso'] ? ' (' . $plan['codigo_curso'] . ')' : '') . ".\n\nProgramación vigente:\n" . cengi_pp_programacion_vigente($db, $plan)
-                        . "\n\nRecibirás un aviso si cambia la fecha, el horario, el lugar o el instructor."
-                    : 'Tu inscripción a ' . $plan['nombre'] . " fue validada, pero el curso ya completó su cupo. Quedaste en la lista de espera: te avisaremos si se libera un lugar.")
+                        . "\n\nRecibirás un aviso si cambia la fecha, el horario, el lugar o el instructor." . $textoCuenta
+                    :'Tu inscripción a ' . $plan['nombre'] . " fue validada, pero el curso ya completó su cupo. Quedaste en la lista de espera: te avisaremos si se libera un lugar.")
                     . "\n\nCoordinación de Capacitación — CENGICAÑA",
             ], [['nombre' => $s['nombre_participante'], 'correo' => $s['correo']]]);
         } catch (Throwable $e) {

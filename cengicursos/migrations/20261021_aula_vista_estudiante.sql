@@ -3,7 +3,7 @@
 --                                         evaluaciones, tareas, notas, instructores, diplomas).
 --   aula_curso_config.anuncio_titulo / anuncio  mensaje de bienvenida o aviso en el Resumen.
 --   aula_recursos.visible / disponible_desde    ocultar un recurso o publicarlo a partir de una fecha.
--- Requiere 20261020_aula_control.sql. Idempotente; espejo en deploy/mysql/init/35-*.
+-- Requiere 20261020_aula_control.sql. Idempotente; espejo en deploy/mysql/init/41-cengicursos-aula-vista-estudiante.sql.
 -- aula_vista.php tambien agrega las columnas que falten.
 SET NAMES utf8mb4;
 SET @existe := (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='aula_curso_config' AND COLUMN_NAME='secciones_ocultas');

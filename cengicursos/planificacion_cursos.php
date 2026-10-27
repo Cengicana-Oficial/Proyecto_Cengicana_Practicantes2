@@ -323,6 +323,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
+        if (function_exists('cengi_ins_deshacer_cuentas_creadas')) {
+            cengi_ins_deshacer_cuentas_creadas($db);
+        }
         $mensajeTipo = 'error';
         if ($e instanceof InvalidArgumentException) {
             $mensaje = $e->getMessage();

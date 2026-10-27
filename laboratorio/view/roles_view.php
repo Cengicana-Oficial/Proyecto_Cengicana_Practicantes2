@@ -62,7 +62,8 @@ try {
     $estado = lab_roles_estado($central);
 } catch (Throwable $e) {
     error_log('[laboratorio][roles] ' . $e->getMessage());
-    $error = 'No se pudo consultar la base central de usuarios: ' . $e->getMessage();
+    // El detalle (host, usuario, esquema) queda solo en el log.
+    $error = 'No se pudo consultar la base central de usuarios. Inténtelo más tarde o contacte al administrador.';
 }
 
 $faltanRoles = $estado ? count(array_filter($estado, static fn($r) => $r === null)) : 0;

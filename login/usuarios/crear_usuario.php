@@ -52,10 +52,8 @@ if (strtolower(trim((string) $scope)) === 'cursos') {
     if ($cengiAltaLimitada && cengi_ingenio_id_actual() <= 0) { http_response_code(403); exit('Asigna un ingenio a esta cuenta antes de crear usuarios.'); }
 }
 
-if (!$esSuperadmin && !$scopeConfig) {
-    header("Location: usuarios.php");
-    exit;
-}
+require_once __DIR__ . '/_autorizacion.php';
+$modulosGestionados = usr_exigir_acceso_scope($conn, $idUsuario, $esSuperadmin, $scope, $scopeConfig);
 
 $modulosActualesUsuario = [];
 if (!$esSuperadmin) {
@@ -72,15 +70,8 @@ $modulosDisponibles = [];
 $moduloIdsForzados = [];
 
 if ($scopeConfig) {
-    $placeholders = implode(',', array_fill(0, count($scopeConfig['module_names']), '?'));
-    $stmtScopeMods = $conn->prepare("
-        SELECT id, nombre
-        FROM modulos
-        WHERE LOWER(nombre) IN ($placeholders)
-        ORDER BY nombre
-    ");
-    $stmtScopeMods->execute($scopeConfig['module_names']);
-    $modulosDisponibles = $stmtScopeMods->fetchAll(PDO::FETCH_ASSOC);
+    // Solo los modulos del scope en los que quien crea puede gestionar usuarios.
+    $modulosDisponibles = $modulosGestionados;
     $moduloIdsForzados = array_map(fn($mod) => (int) $mod['id'], $modulosDisponibles);
 } elseif ($esSuperadmin) {
     $stmtMod = $conn->query("SELECT id, nombre FROM modulos ORDER BY nombre");
@@ -105,7 +96,7 @@ $destinoRegreso = $scopeConfig['return_url'] ?? 'usuarios.php';
 require_once __DIR__ . '/_modulos_roles.php';
 $modulosPermitidos = array_map(static fn($m) => (int) $m['id'], $modulosDisponibles);
 $nombresModulos = array_column($modulosDisponibles, 'nombre', 'id');
-$rolesPorModulo = usr_roles_por_modulo($conn, $modulosDisponibles, $esSuperadmin);
+$rolesPorModulo = usr_filtrar_roles_asignables($conn, $idUsuario, $esSuperadmin, usr_roles_por_modulo($conn, $modulosDisponibles, $esSuperadmin), $modulosDisponibles);
 if (strtolower(trim((string) $scope)) === 'cursos') {
     $permitidosCursos = array_column(array_filter(cengi_acc_roles_cursos($conn), 'cengi_acc_puede_asignar_rol'), 'id');
     foreach ($rolesPorModulo as &$opciones) $opciones = array_intersect_key($opciones, array_flip($permitidosCursos));
@@ -114,9 +105,10 @@ if (strtolower(trim((string) $scope)) === 'cursos') {
 $pidePlataforma = $esSuperadmin && !$scopeConfig;
 $modulosElegidos = [];
 
-if (empty($_SESSION['crear_usuario_csrf'])) $_SESSION['crear_usuario_csrf'] = bin2hex(random_bytes(32));
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!hash_equals($_SESSION['crear_usuario_csrf'], (string) ($_POST['csrf'] ?? ''))) { http_response_code(403); exit('Recarga el formulario antes de crear el usuario.'); }
+    if (!usr_csrf_valido($_POST['csrf'] ?? null)) {
+        usr_denegar("La sesión del formulario expiró. Vuelve a abrir el formulario e inténtalo de nuevo.", $destinoRegreso);
+    }
     $nombre = trim($_POST['nombre'] ?? '');
     $correo = trim($_POST['correo'] ?? '');
     $contrasenaPlano = trim($_POST['contrasena'] ?? '');
@@ -225,9 +217,9 @@ if ($cengiAltaLimitada) $ingenios = array_values(array_filter($ingenios, static 
     <?php endif; ?>
 
     <form method="POST" class="form-card form-card-wide">
-        <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['crear_usuario_csrf'], ENT_QUOTES, 'UTF-8') ?>">
         <h1>Crear usuario</h1>
         <p class="form-sub">Registra un nuevo usuario y asígnale un rol, ingenio y módulos.</p>
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars(usr_csrf_token()) ?>">
 
         <div class="form-field">
             <label for="nombre">Nombre</label>

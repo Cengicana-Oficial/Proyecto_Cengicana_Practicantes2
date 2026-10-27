@@ -6,9 +6,10 @@ declare(strict_types=1);
 // Cada sección llama a correo_evento() cuando ocurre algo (se asigna un revisor,
 // un boletín entra a revisión, etc.). El correo se guarda en `correo_cola` dentro
 // de la misma transacción que el cambio: si la operación se revierte, el correo
-// no sale. Al terminar la petición se envía la cola (correo_despachar) y una vez
-// al día se generan los recordatorios de plazos. cron/correos.php hace lo mismo
-// desde la línea de comandos para reintentos y servidores con cron.
+// no sale. En producción la cola la envía el servicio comites-correos-worker
+// (cron/correos.php --loop) y la petición no espera al SMTP. Sin worker
+// (COMITES_CORREO_POR_WORKER vacío), se envía al terminar la petición y una vez
+// al día se generan los recordatorios de plazos.
 //
 // En Configuración > Notificaciones por correo se activa cada evento, se edita su
 // asunto y mensaje, se definen destinatarios y los días de anticipación.
@@ -187,14 +188,18 @@ function correo_smtp_listo(): bool
     return true;
 }
 
-/** URL absoluta del módulo para los enlaces de los correos. */
+/**
+ * URL absoluta del módulo para los enlaces de los correos. Sin "Dirección del sistema" configurada se
+ * deduce de la petición actual, pero no se guarda: la cabecera Host la controla el cliente y un valor
+ * guardado quedaría en todos los correos siguientes (AUD-2026-001/M-3). El cron, sin petición, envía
+ * los correos sin botón hasta que se configure.
+ */
 function correo_url_base(PDO $pdo): string
 {
     $base = trim(correo_ajuste($pdo, 'url_base'));
     if ($base === '' && !empty($_SERVER['HTTP_HOST'])) {
         $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
         $base = ($https ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . rtrim(dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/comites/index.php')), '/\\');
-        correo_guardar_ajuste($pdo, 'url_base', $base); // Lo usa el cron, que no conoce el dominio.
     }
     return rtrim($base, '/');
 }
@@ -383,9 +388,14 @@ function correo_recordatorios(PDO $pdo): int
 /**
  * Al terminar cada petición: envía lo encolado y, una vez al día, genera los
  * recordatorios. Se registra en index.php con register_shutdown_function().
+ * Con COMITES_CORREO_POR_WORKER=1 no hace nada: mod_php no tiene
+ * fastcgi_finish_request() y el usuario esperaría al SMTP (AUD-2026-001/B-2).
  */
 function correo_al_terminar(PDO $pdo): void
 {
+    if (app_env_value('COMITES_CORREO_POR_WORKER') === '1') {
+        return;
+    }
     try {
         if (function_exists('fastcgi_finish_request')) {
             fastcgi_finish_request(); // La respuesta llega al usuario sin esperar al SMTP.

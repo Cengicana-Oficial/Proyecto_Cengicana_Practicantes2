@@ -45,6 +45,9 @@ if (!function_exists('labCamposMuestraTipoDatoLabel')) {
 if (!function_exists('labCamposMuestraAsegurarEsquema')) {
     function labCamposMuestraAsegurarEsquema(PDO $conexion): void
     {
+        if (!defined('ESQUEMA_MIGRANDO')) {
+            return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+        }
         static $esquemaAsegurado = false;
         if ($esquemaAsegurado) {
             return;

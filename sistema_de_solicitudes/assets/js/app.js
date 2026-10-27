@@ -459,3 +459,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// Buzon de ideas: filtro por estado + busqueda de texto.
+function filterIdeas() {
+  const list = document.getElementById('lista-ideas');
+  if (!list) return;
+  const query = (document.getElementById('buscar-ideas').value || '').trim().toLowerCase();
+  const chip = document.querySelector('.filters .filter-chip.active');
+  const estado = chip ? chip.dataset.estado : 'todas';
+  let visible = 0;
+  list.querySelectorAll('.idea-card').forEach((card) => {
+    const match = (estado === 'todas' || card.dataset.estado === estado) && card.textContent.toLowerCase().includes(query);
+    card.classList.toggle('hidden', !match);
+    if (match) visible += 1;
+  });
+  const empty = document.getElementById('lista-ideas-vacio');
+  if (empty) empty.classList.toggle('hidden', visible > 0 || list.children.length === 0);
+}
+
+function setIdeaFilter(button) {
+  button.closest('.filters').querySelectorAll('.filter-chip').forEach((chip) => chip.classList.remove('active'));
+  button.classList.add('active');
+  filterIdeas();
+}
+
+function copyBuzonLink(button) {
+  const input = document.getElementById('buzon-url');
+  const done = () => {
+    const original = button.innerHTML;
+    button.innerHTML = '<i class="ti ti-check"></i>Copiado';
+    setTimeout(() => { button.innerHTML = original; }, 2000);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(input.value).then(done, () => { input.select(); document.execCommand('copy'); done(); });
+  } else {
+    input.select();
+    document.execCommand('copy');
+    done();
+  }
+}

@@ -22,7 +22,7 @@ const CENGI_RM_MODULOS = [
     'laboratorio' => 'Laboratorio',
     'comites' => 'Comites, Transferencia y Comunicacion',
     'solicitudes' => 'Solicitudes internas',
-    'sigec' => 'SIGEC',
+    'sigec' => 'Experimentos',
     'visitas' => 'Solicitud de visitas',
     'servicio' => 'Servicio tecnico',
 ];

@@ -38,10 +38,8 @@ $esSuperadmin = (int) ($_SESSION['es_superadmin'] ?? 0) === 1;
 $scope = $_GET['scope'] ?? '';
 $scopeConfig = user_scope_config($scope);
 
-if (!$esSuperadmin && !$scopeConfig) {
-    header("Location: ../Menu.php");
-    exit;
-}
+require_once __DIR__ . '/_autorizacion.php';
+usr_exigir_acceso_scope($conn, $idUsuario, $esSuperadmin, $scope, $scopeConfig);
 
 $params = [];
 $where = [];
@@ -154,7 +152,7 @@ function usr_tono_modulo($nombre)
 {
     static $tonos = [];
     $clave = mb_strtolower((string) $nombre);
-    $fijos = ['cursos' => 0, 'laboratorio' => 1, 'solicitudes internas' => 2, 'sigec' => 3, 'servicio tecnico' => 4, 'solicitud de visitas' => 5];
+    $fijos = ['cursos' => 0, 'laboratorio' => 1, 'solicitudes internas' => 2, 'sigec' => 3, 'experimentos' => 3, 'servicio tecnico' => 4, 'solicitud de visitas' => 5];
     foreach ($fijos as $patron => $tono) {
         if (strpos($clave, $patron) !== false) {
             return $tono;

@@ -58,6 +58,9 @@ function labIdentificacionCargarCamposTipo(PDO $pdo): void
 
 function labIdentificacionLoteSchema(PDO $pdo): void
 {
+    if (!defined('ESQUEMA_MIGRANDO')) {
+        return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+    }
     $pdo->exec("CREATE TABLE IF NOT EXISTS lab_identificacion_lote (
         id_solicitud INT NOT NULL PRIMARY KEY,
         metodo VARCHAR(16) NOT NULL,

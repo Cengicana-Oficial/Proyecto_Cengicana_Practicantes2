@@ -42,6 +42,35 @@ function cengicursos_env()
 }
 
 /**
+ * Token de los cron por HTTP (cron_comunicaciones.php, cron_recordatorio_cupo.php): debe
+ * coincidir con CRON_RECORDATORIO_SECRET y llegar en una cabecera, nunca en la URL (la URL
+ * queda en los logs de acceso y de proxies):
+ *   Authorization: Bearer <token>   o   X-Cron-Token: <token>
+ */
+function cengi_cron_token_valido()
+{
+    $secreto = (string) (cengicursos_env()['CRON_RECORDATORIO_SECRET'] ?? '');
+    if ($secreto === '' || $secreto === 'change-me') {
+        return false;
+    }
+    $recibido = (string) ($_SERVER['HTTP_X_CRON_TOKEN'] ?? '');
+    if ($recibido === '') {
+        $autorizacion = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($autorizacion === '' && function_exists('getallheaders')) {
+            foreach (getallheaders() as $nombre => $valor) {
+                if (strcasecmp($nombre, 'Authorization') === 0) {
+                    $autorizacion = (string) $valor;
+                }
+            }
+        }
+        if (stripos($autorizacion, 'Bearer ') === 0) {
+            $recibido = trim(substr($autorizacion, 7));
+        }
+    }
+    return $recibido !== '' && hash_equals($secreto, $recibido);
+}
+
+/**
  * MYSQL (MENU / USUARIOS)
  */
 function cengicursos_abrir_mysqli($host, $puerto, $usuario, $pass, $bdd)
@@ -554,28 +583,6 @@ function cengi_cui_nd_formatear($numero)
 function cengi_cui_nd_generar(PDO $db)
 {
     return cengi_cui_nd_formatear(cengi_cui_nd_ultimo_correlativo($db) + 1);
-}
-
-/**
- * Columna participantes.cui_anterior: documentos o códigos que tuvo la persona antes del actual
- * (p. ej. el código NNNND que se reemplazó por su DPI o pasaporte). Se crea si falta; llamar
- * fuera de una transacción (ALTER TABLE confirma la transacción abierta).
- */
-function cengi_cui_asegurar_historial(PDO $db)
-{
-    static $listo = false;
-    if ($listo) {
-        return;
-    }
-    $listo = true;
-    try {
-        $existe = (int) $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'participantes' AND COLUMN_NAME = 'cui_anterior'")->fetchColumn();
-        if (!$existe) {
-            $db->exec("ALTER TABLE participantes ADD COLUMN cui_anterior VARCHAR(500) NOT NULL DEFAULT ''");
-        }
-    } catch (Throwable $e) {
-        error_log('participantes.cui_anterior: ' . $e->getMessage());
-    }
 }
 
 /**

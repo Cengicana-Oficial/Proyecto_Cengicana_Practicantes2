@@ -16,7 +16,7 @@
 --     HMAC del contenido: si la liquidación cambia, la firma deja de ser válida. Una corrección
 --     retira la firma.
 --
--- Idempotente. Espejo en deploy/mysql/init/31-cengicursos-liquidacion-comprobante-firma.sql.
+-- Idempotente. Espejo en deploy/mysql/init/33-cengicursos-liquidacion-comprobante-firma.sql.
 -- pago_instructores.php también agrega las columnas que falten.
 
 SET NAMES utf8mb4;
