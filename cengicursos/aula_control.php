@@ -51,9 +51,11 @@ function aula_survey_context(PDO $db,array $link) {
     if(!aula_control_ready($db))return null;
     $cfg=aula_rows($db,'SELECT * FROM aula_instructor_config WHERE curso_id=? AND instructor_id=?',[$link['curso_id'],$link['instructor_id']])[0]??null;
     if(!$cfg)return null; // Encuestas historicas externas sin aula conservan su flujo.
-    require_once __DIR__.'/revisar_permisos.php';
+    // Sin sesion o sin asignacion al curso, el enlace compartido sigue siendo el formulario publico;
+    // el control de un envio y la ventana de apertura solo aplican al estudiante desde su aula.
+    if(!cengi_usuario_actual_id())return null;
     $assignment=aula_assignment($db,$link['curso_id']);
-    if(!$assignment){http_response_code(403);exit('Debes estar asignado a este curso para evaluar a su instructor.');}
+    if(!$assignment)return null;
     foreach(aula_instructor_surveys($db,$link['curso_id'],$assignment['id']) as $survey) {
         if((int)$survey['instructor_id']===(int)$link['instructor_id'])return $survey+['asignacion_id'=>$assignment['id'],'curso_id'=>$link['curso_id']];
     }
