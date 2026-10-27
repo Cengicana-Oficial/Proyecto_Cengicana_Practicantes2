@@ -757,3 +757,36 @@ body.sigec-shell {
 .sigec-shell .modal-backdrop { z-index: 1070; }
 .sigec-shell .modal { z-index: 1080; }
 .sigec-shell .swal2-container { z-index: 1090; }
+
+/* Avisos (SweetAlert2) con la tipografia y paleta del modulo. */
+body .swal2-popup {
+    border-radius: 16px;
+    font-family: inherit;
+    padding: 1.4em 1.4em 1.2em;
+}
+body .swal2-popup .swal2-title { color: #1e2a1a; font-size: 1.25em; font-weight: 800; }
+body .swal2-popup .swal2-html-container { color: #4d5a48; font-size: .95em; line-height: 1.45; }
+body .swal2-popup .swal2-actions { gap: 8px; }
+body .swal2-popup .swal2-styled { margin: 0; padding: .55em 1.3em; border-radius: 9px; font-weight: 700; box-shadow: none !important; }
+body .swal2-popup .swal2-styled.swal2-cancel { color: #1f5632; }
+body .swal2-popup .swal2-styled:focus { box-shadow: 0 0 0 3px rgba(115, 188, 37, .3) !important; }
+body .swal2-icon.swal2-success { border-color: #73BC25; color: #73BC25; }
+body .swal2-icon.swal2-success [class^='swal2-success-line'] { background-color: #73BC25; }
+body .swal2-icon.swal2-success .swal2-success-ring { border-color: rgba(115, 188, 37, .3); }
+body .swal2-icon.swal2-warning { border-color: #FF6B00; color: #FF6B00; }
+body .swal2-icon.swal2-question { border-color: #A3D300; color: #6f8f00; }
+body .swal2-icon.swal2-info { border-color: #2a78d6; color: #2a78d6; }
+body .swal2-popup.swal2-toast { border-radius: 12px; padding: .7em 1em; box-shadow: 0 8px 24px rgba(30, 42, 26, .18); }
+body .swal2-popup.swal2-toast .swal2-title { font-size: .95em; }
+body .swal2-popup.swal2-toast .swal2-html-container { font-size: .85em; }
+body .swal2-timer-progress-bar { background: rgba(115, 188, 37, .5); }
+
+/* Graficos Highcharts en pantalla completa: el navegador pone negro detras de
+   lo transparente; se fuerza fondo blanco en el grafico y en su fondo. */
+[data-highcharts-chart]:fullscreen,
+[data-highcharts-chart]:-webkit-full-screen {
+    background: #fff;
+}
+[data-highcharts-chart]::backdrop {
+    background: #fff;
+}

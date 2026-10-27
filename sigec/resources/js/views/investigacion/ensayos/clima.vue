@@ -8,7 +8,7 @@
           <option value="punto">Punto del ensayo — Open-Meteo (modelo)</option>
           <optgroup v-for="g in estacionesPorRed" :key="g.red" :label="g.red">
             <option v-for="s in g.items" :key="s.id" :value="s.id">
-              {{ s.nombre }} ({{ s.codigo }}){{ s.distancia_km !== null ? ' · ' + s.distancia_km + ' km' : '' }}{{ s.registros_count ? ' · ' + s.registros_count + ' dias' : ' · sin datos importados' }}{{ s.activa ? '' : ' · inactiva' }}
+              {{ s.nombre }} ({{ s.codigo }}){{ s.distancia_km !== null ? ' · ' + s.distancia_km + ' km' : '' }}{{ usaApi(s) ? ' · API ICC' : s.registros_count ? ' · ' + s.registros_count + ' dias' : ' · sin datos importados' }}{{ s.activa ? '' : ' · inactiva' }}
             </option>
           </optgroup>
         </select>
@@ -45,6 +45,20 @@
         </button>
       </div>
     </div>
+    <p class="cl-cercana" v-if="!cargandoEst">
+      <template v-if="!tieneGps">
+        <i class="fas fa-map-marker-alt"></i> Agregue las coordenadas GPS del ensayo para elegir automaticamente la estacion mas cercana.
+      </template>
+      <template v-else-if="cercana">
+        <i class="fas fa-map-marker-alt"></i> Estacion mas cercana al ensayo: <b>{{ cercana.nombre }}</b> ({{ cercana.codigo }}) a <b>{{ cercana.distancia_km }} km</b>
+        <span v-if="cercana.distancia_km > 25" class="cl-lejos"> · esta lejos: los datos pueden no representar el ensayo</span>
+        <a v-if="estacionSel !== cercana.id" href="#" @click.prevent="estacionSel = cercana.id"> · usar esta</a>
+        · <a :href="base + '/investigacion/clima?vista=estaciones'">ver catalogo de estaciones</a>
+      </template>
+      <template v-else>
+        <i class="fas fa-map-marker-alt"></i> Ninguna estacion tiene ubicacion cargada: registrelas en <a :href="base + '/investigacion/clima?vista=estaciones'">Clima y estaciones → Estaciones y ubicaciones</a>.
+      </template>
+    </p>
     <label class="cl-check" v-if="estacion">
       <input type="checkbox" v-model="completar"> Completar dias sin registro de la estacion con Open-Meteo (en sus coordenadas)
     </label>
@@ -65,6 +79,12 @@
           <div class="col-md-3 form-group"><label>Ubicacion</label><input class="form-control form-control-sm" maxlength="150" v-model="formEst.ubicacion" placeholder="Municipio, finca..."></div>
         </div>
         <div class="form-row">
+          <div class="col-md-4 form-group">
+            <label>Codigo en la API ICC</label>
+            <input class="form-control form-control-sm" maxlength="60" v-model="formEst.codigo_api" placeholder="Si difiere del codigo">
+          </div>
+        </div>
+        <div class="form-row">
           <div class="col-md-3 form-group"><label>Latitud *</label><input type="number" step="0.000001" class="form-control form-control-sm" v-model="formEst.lat" :class="{ 'is-invalid': errEst.lat }"><span class="invalid-feedback" v-if="errEst.lat">{{ errEst.lat[0] }}</span></div>
           <div class="col-md-3 form-group"><label>Longitud *</label><input type="number" step="0.000001" class="form-control form-control-sm" v-model="formEst.lng" :class="{ 'is-invalid': errEst.lng }"><span class="invalid-feedback" v-if="errEst.lng">{{ errEst.lng[0] }}</span></div>
           <div class="col-md-2 form-group"><label>Altitud (msnm)</label><input type="number" class="form-control form-control-sm" v-model="formEst.altitud"></div>
@@ -76,6 +96,36 @@
         </div>
       </form>
 
+      <!-- API agromet del ICC -->
+      <div class="cl-api" :class="{ 'is-off': !icc.configurada }">
+        <div class="cl-api-head">
+          <span>
+            <i class="fas fa-plug"></i>
+            <template v-if="icc.configurada">API agromet del ICC conectada · <b>{{ icc.servidor }}</b></template>
+            <template v-else>API agromet del ICC sin configurar</template>
+          </span>
+          <span v-if="icc.configurada" class="d-flex flex-wrap" style="gap:6px">
+            <a :href="base + '/investigacion/clima'" class="btn btn-secondary btn-sm"><i class="fas fa-table"></i> Consultar y exportar</a>
+            <button v-if="puedeImportar" type="button" class="btn btn-success btn-sm" :disabled="sincronizando || !rangoValido" @click="sincronizarIcc">
+              <i :class="sincronizando ? 'fas fa-spinner fa-spin' : 'fas fa-cloud-download-alt'"></i> Descargar {{ fmt(desde) }} → {{ fmt(hasta) }}
+            </button>
+          </span>
+        </div>
+        <p v-if="!icc.configurada" class="cl-help">
+          Defina en el .env del servidor <code>ICC_API_URL</code> y las credenciales (<code>ICC_API_TOKEN</code> o usuario/clave).
+        </p>
+        <template v-else>
+          <p class="cl-help">
+            La API entrega por fechas los datos diarios de <b>todas</b> las estaciones; SIGEC los guarda y aqui se filtra por estacion y periodo.
+            Al consultar se descargan solo los dias que faltan.
+            <template v-if="icc.cobertura"> {{ icc.cobertura.dias }} dias descargados entre {{ fmt(icc.cobertura.desde) }} y {{ fmt(icc.cobertura.hasta) }} · {{ icc.estaciones }} estaciones.</template>
+          </p>
+          <p v-if="icc.sin_coordenadas" class="cl-warn">
+            <i class="fas fa-map-marker-alt"></i> {{ icc.sin_coordenadas }} estacion(es) del ICC sin coordenadas: editelas para calcular la distancia al ensayo y completar con Open-Meteo.
+          </p>
+        </template>
+      </div>
+
       <div class="cl-table-wrap" v-if="estaciones.length">
         <table class="table cl-table">
           <thead><tr><th>Codigo</th><th>Nombre</th><th>Red</th><th>Distancia</th><th>Datos importados</th><th></th></tr></thead>
@@ -84,7 +134,11 @@
               <td><strong>{{ s.codigo }}</strong></td>
               <td>{{ s.nombre }}<small v-if="s.ubicacion"> · {{ s.ubicacion }}</small></td>
               <td>{{ s.red }}</td>
-              <td>{{ s.distancia_km !== null ? s.distancia_km + ' km' : '—' }}</td>
+              <td>
+                <template v-if="s.distancia_km !== null">{{ s.distancia_km }} km</template>
+                <span v-else-if="s.lat === null" class="cl-warn-tag" title="Edite la estacion para agregar latitud y longitud">sin coordenadas</span>
+                <template v-else>—</template>
+              </td>
               <td>
                 <span v-if="s.registros_count">{{ s.registros_count }} dias · {{ fmt(s.registros_min_fecha) }} → {{ fmt(s.registros_max_fecha) }}</span>
                 <span v-else class="cl-muted">Sin datos</span>
@@ -136,7 +190,10 @@
     </div>
 
     <!-- ============ Resultados ============ -->
-    <div v-if="cargando" class="cl-loading"><i class="fas fa-spinner fa-spin"></i> Consultando datos climaticos...</div>
+    <div v-if="cargando" class="cl-loading">
+      <i class="fas fa-spinner fa-spin"></i>
+      {{ estacion && usaApi(estacion) ? `Consultando ${estacion.nombre} en la API del ICC...` : 'Consultando datos climaticos...' }}
+    </div>
     <div v-else-if="error" class="cl-empty">
       <i class="fas fa-exclamation-circle"></i> {{ error }}
       <button type="button" class="btn btn-secondary btn-sm mt-2" @click="consultar"><i class="fas fa-redo"></i> Reintentar</button>
@@ -168,8 +225,17 @@
       <div class="cl-charts">
         <div class="cl-chart"><highcharts :options="chartLluvia"></highcharts></div>
         <div class="cl-chart"><highcharts :options="chartTemp"></highcharts></div>
-        <div class="cl-chart"><highcharts :options="chartAmbiente"></highcharts></div>
+        <div class="cl-chart"><highcharts :options="chartHr"></highcharts></div>
+        <div class="cl-chart"><highcharts :options="chartViento"></highcharts></div>
+        <div class="cl-chart"><highcharts :options="chartRadiacion"></highcharts></div>
         <div class="cl-chart"><highcharts :options="chartBalance"></highcharts></div>
+        <div class="cl-chart"><highcharts :options="chartDpv"></highcharts></div>
+        <div class="cl-chart">
+          <div class="cl-tbase">
+            <label class="mb-0">T base <input type="number" min="0" max="40" step="0.5" v-model.number="tbase"> °C</label>
+          </div>
+          <highcharts :options="chartGdd"></highcharts>
+        </div>
       </div>
 
       <details class="cl-datos">
@@ -177,14 +243,15 @@
         <div class="cl-table-wrap cl-table-scroll">
           <table class="table cl-table">
             <thead>
-              <tr><th>{{ etiquetaGrupo }}</th><th>Lluvia mm</th><th>T max °C</th><th>T min °C</th><th>T media °C</th><th>HR %</th><th>Viento km/h</th><th>Rad. MJ/m²·d</th><th>ETo mm</th><th>Balance mm</th></tr>
+              <tr><th>{{ etiquetaGrupo }}</th><th>Lluvia mm</th><th>T max °C</th><th>T min °C</th><th>T media °C</th><th>ΔT °C</th><th>HR %</th><th>Viento km/h</th><th>Rad. MJ/m²·d</th><th>ETo mm</th><th>Balance mm</th><th>DPV kPa</th><th>Grados dia</th></tr>
             </thead>
             <tbody>
               <tr v-for="g in grupos" :key="g.clave">
                 <td class="cl-nowrap">{{ g.etiqueta }}<sup v-if="g.modelados" title="Incluye dias completados con Open-Meteo">*</sup></td>
-                <td>{{ n(g.lluvia, 1) }}</td><td>{{ n(g.tmax, 1) }}</td><td>{{ n(g.tmin, 1) }}</td><td>{{ n(g.tmed, 1) }}</td>
+                <td>{{ n(g.lluvia, 1) }}</td><td>{{ n(g.tmax, 1) }}</td><td>{{ n(g.tmin, 1) }}</td><td>{{ n(g.tmed, 1) }}</td><td>{{ n(g.at, 1) }}</td>
                 <td>{{ n(g.hr, 0) }}</td><td>{{ n(g.viento, 1) }}</td><td>{{ n(g.radiacion, 1) }}</td><td>{{ n(g.eto, 1) }}</td>
                 <td :class="g.balance < 0 ? 'cl-neg' : 'cl-pos'">{{ n(g.balance, 1) }}</td>
+                <td>{{ n(g.vpd, 2) }}</td><td>{{ n(g.gdd, 1) }}</td>
               </tr>
             </tbody>
           </table>
@@ -202,6 +269,8 @@
 </template>
 
 <script>
+import { derivados } from '../clima/clima-util';
+
 const NOMBRES = { lluvia: 'Lluvia', tmax: 'T max', tmin: 'T min', tmed: 'T media', hr: 'HR', viento: 'Viento', radiacion: 'Radiacion', eto: 'ETo' };
 const VARS = Object.keys(NOMBRES);
 const TZ = 'America/Guatemala';
@@ -240,6 +309,7 @@ export default {
       agrupar: 'semana',
       agrupaciones: [{ id: 'dia', label: 'Dia' }, { id: 'semana', label: 'Semana' }, { id: 'mes', label: 'Mes' }],
       completar: true,
+      tbase: 18,
       cargando: false,
       consultado: false,
       error: null,
@@ -253,6 +323,12 @@ export default {
       archivoClima: null,
       importando: false,
       resultadoImport: null,
+      // API agromet del ICC
+      icc: { configurada: false, servidor: null, cobertura: null, estaciones: 0, sin_coordenadas: 0 },
+      sync: null,
+      sincronizando: false,
+      cercana: null,
+      base: ((document.querySelector('meta[name="app-base"]') || {}).content || '').replace(/\/+$/, ''),
     };
   },
   computed: {
@@ -286,9 +362,18 @@ export default {
     },
     rangoValido() { return !this.errorRango; },
     filas() { return this.dias; },
+    /** Dias con DPV, grados dia (T base) y amplitud termica (Tmax - Tmin). */
+    diasCalc() {
+      const tb = Number(this.tbase) || 0;
+      return this.dias.map((d) => {
+        const x = derivados(d, tb);
+        x.at = d.tmax !== null && d.tmax !== undefined && d.tmin !== null && d.tmin !== undefined ? d.tmax - d.tmin : null;
+        return x;
+      });
+    },
     grupos() {
       const mapa = {};
-      this.dias.forEach((d) => {
+      this.diasCalc.forEach((d) => {
         const { clave, etiqueta } = this.claveGrupo(d.fecha);
         if (!mapa[clave]) mapa[clave] = { clave, etiqueta, dias: [] };
         mapa[clave].dias.push(d);
@@ -298,14 +383,17 @@ export default {
         const r = { clave: g.clave, etiqueta: g.etiqueta, modelados: g.dias.some((d) => d.modelado) };
         r.lluvia = vals('lluvia').length ? sumar(vals('lluvia')) : null;
         r.eto = vals('eto').length ? sumar(vals('eto')) : null;
-        ['tmax', 'tmin', 'tmed', 'hr', 'viento', 'radiacion'].forEach((k) => { r[k] = prom(vals(k)); });
+        ['tmax', 'tmin', 'tmed', 'hr', 'hr_min', 'hr_max', 'viento', 'radiacion'].forEach((k) => { r[k] = prom(vals(k)); });
         r.balance = r.lluvia !== null && r.eto !== null ? r.lluvia - r.eto : null;
+        r.gdd = vals('gdd').length ? sumar(vals('gdd')) : null;
+        r.vpd = prom(vals('vpd'));
+        r.at = prom(vals('at'));
         return r;
       });
     },
     etiquetaGrupo() { return { dia: 'Fecha', semana: 'Semana (desde)', mes: 'Mes' }[this.agrupar]; },
     resumen() {
-      const v = (k) => this.dias.map((d) => d[k]).filter((x) => x !== null && x !== undefined);
+      const v = (k) => this.diasCalc.map((d) => d[k]).filter((x) => x !== null && x !== undefined);
       const lluvia = v('lluvia');
       const eto = v('eto');
       return {
@@ -317,6 +405,9 @@ export default {
         tmed: prom(v('tmed')), hr: prom(v('hr')), viento: prom(v('viento')), radiacion: prom(v('radiacion')),
         eto: eto.length ? sumar(eto) : null,
         diasCalor: v('tmax').filter((x) => x >= 35).length,
+        vpd: prom(v('vpd')), vpdMax: v('vpd').length ? Math.max(...v('vpd')) : null,
+        gdd: v('gdd').length ? sumar(v('gdd')) : null, diasGdd: v('gdd').length,
+        at: prom(v('at')), atMax: v('at').length ? Math.max(...v('at')) : null,
         maxSeco: this.rachaSeca(),
       };
     },
@@ -328,6 +419,9 @@ export default {
         { label: 'Temp. maxima', valor: this.u(r.tmaxProm, 1, '°C'), sub: `prom. · extrema ${this.u(r.tmaxAbs, 1, '°C')}`, icon: 'fas fa-temperature-high', color: '#FF6B00' },
         { label: 'Temp. minima', valor: this.u(r.tminProm, 1, '°C'), sub: `prom. · extrema ${this.u(r.tminAbs, 1, '°C')}`, icon: 'fas fa-temperature-low', color: '#FFCC00' },
         { label: 'Temp. media', valor: this.u(r.tmed, 1, '°C'), icon: 'fas fa-thermometer-half', color: '#FF6B00' },
+        { label: 'Amplitud termica (ΔT)', valor: this.u(r.at, 1, '°C'), sub: `Tmax − Tmin · max ${this.u(r.atMax, 1, '°C')}`, icon: 'fas fa-arrows-alt-v', color: '#FF6B00' },
+        { label: 'Deficit de presion de vapor', valor: this.u(r.vpd, 2, 'kPa'), sub: `promedio · max ${this.u(r.vpdMax, 2, 'kPa')}`, icon: 'fas fa-smog', color: '#A3D300' },
+        { label: 'Grados dia acumulados', valor: this.u(r.gdd, 0, '°C·d'), sub: r.gdd !== null && r.diasGdd ? `base ${this.tbase} °C · ${this.n(r.gdd / r.diasGdd, 1)} por dia` : `base ${this.tbase} °C`, icon: 'fas fa-temperature-high', color: '#FFCC00' },
         { label: 'Humedad relativa', valor: this.u(r.hr, 0, '%'), sub: 'promedio', icon: 'fas fa-tint', color: '#73BC25' },
         { label: 'Viento', valor: this.u(r.viento, 1, 'km/h'), sub: 'promedio', icon: 'fas fa-wind', color: '#A3D300' },
         { label: 'Radiacion solar', valor: this.u(r.radiacion, 1, 'MJ/m²·d'), sub: 'promedio diario', icon: 'fas fa-sun', color: '#FFCC00' },
@@ -347,7 +441,7 @@ export default {
     },
     chartBase() {
       return {
-        chart: { height: 260, backgroundColor: 'transparent', style: { fontFamily: 'Inter, Arial, sans-serif' } },
+        chart: { height: 260, backgroundColor: '#fbfcf9', style: { fontFamily: 'Inter, Arial, sans-serif' } },
         credits: { enabled: false },
         xAxis: { categories: this.grupos.map((g) => g.etiqueta), labels: { style: { fontSize: '10px' } } },
         tooltip: { shared: true },
@@ -357,6 +451,7 @@ export default {
     chartLluvia() {
       return {
         ...this.chartBase,
+        exporting: this.exp('lluvia_eto'),
         title: { text: 'Lluvia y ETo (mm)', style: { fontSize: '13px', fontWeight: '700' } },
         yAxis: { min: 0, title: { text: 'mm' } },
         plotOptions: { column: { borderRadius: 3 } },
@@ -369,29 +464,89 @@ export default {
     chartTemp() {
       return {
         ...this.chartBase,
+        exporting: this.exp('temperatura'),
         title: { text: 'Temperatura (°C)', style: { fontSize: '13px', fontWeight: '700' } },
         yAxis: { title: { text: '°C' } },
         tooltip: { shared: true, valueSuffix: ' °C', valueDecimals: 1 },
+        plotOptions: { column: { borderRadius: 2, borderWidth: 0, pointPadding: 0.05, groupPadding: 0.05 } },
         series: [
-          { type: 'line', name: 'Maxima', color: '#FF6B00', data: this.grupos.map((g) => this.r(g.tmax, 1)), marker: { radius: 2 } },
-          { type: 'line', name: 'Media', color: '#FFCC00', data: this.grupos.map((g) => this.r(g.tmed, 1)), marker: { radius: 2 } },
-          { type: 'line', name: 'Minima', color: '#73BC25', data: this.grupos.map((g) => this.r(g.tmin, 1)), marker: { radius: 2 } },
+          // ΔT en el mismo eje (°C), como columnas tenues detras de las lineas.
+          { type: 'column', name: 'ΔT (Tmax − Tmin)', color: 'rgba(42, 120, 214, 0.28)', data: this.grupos.map((g) => this.r(g.at, 1)), zIndex: 0 },
+          { type: 'line', name: 'Maxima', color: '#FF6B00', data: this.grupos.map((g) => this.r(g.tmax, 1)), marker: { radius: 2 }, zIndex: 2 },
+          { type: 'line', name: 'Media', color: '#FFCC00', data: this.grupos.map((g) => this.r(g.tmed, 1)), marker: { radius: 2 }, zIndex: 2 },
+          { type: 'line', name: 'Minima', color: '#73BC25', data: this.grupos.map((g) => this.r(g.tmin, 1)), marker: { radius: 2 }, zIndex: 2 },
         ],
       };
     },
-    chartAmbiente() {
+    chartDpv() {
       return {
         ...this.chartBase,
-        title: { text: 'Humedad, viento y radiacion', style: { fontSize: '13px', fontWeight: '700' } },
-        yAxis: [
-          { title: { text: 'HR %' }, min: 0, max: 100 },
-          { title: { text: 'km/h · MJ/m²' }, min: 0, opposite: true },
-        ],
+        exporting: this.exp('deficit_presion_vapor'),
+        title: { text: 'Deficit de presion de vapor (kPa)', style: { fontSize: '13px', fontWeight: '700' } },
+        yAxis: { min: 0, title: { text: 'kPa' } },
+        tooltip: { shared: true, valueSuffix: ' kPa', valueDecimals: 2 },
         series: [
-          { type: 'line', name: 'HR (%)', color: '#73BC25', yAxis: 0, data: this.grupos.map((g) => this.r(g.hr, 0)), marker: { radius: 2 } },
-          { type: 'line', name: 'Viento (km/h)', color: '#5b6267', yAxis: 1, data: this.grupos.map((g) => this.r(g.viento, 1)), marker: { radius: 2 } },
-          { type: 'line', name: 'Radiacion (MJ/m²·d)', color: '#FFCC00', yAxis: 1, data: this.grupos.map((g) => this.r(g.radiacion, 1)), marker: { radius: 2 } },
+          { type: 'line', name: 'DPV', color: '#2a78d6', lineWidth: 2, data: this.grupos.map((g) => this.r(g.vpd, 2)), marker: { radius: 2 } },
         ],
+        legend: { enabled: false },
+      };
+    },
+    chartGdd() {
+      // Columnas por periodo; el acumulado se muestra en el tooltip (un solo eje).
+      let acum = 0;
+      const acumulado = this.grupos.map((g) => (acum += g.gdd || 0));
+      return {
+        ...this.chartBase,
+        exporting: this.exp('grados_dia'),
+        title: { text: `Grados dia (base ${this.tbase} °C)`, style: { fontSize: '13px', fontWeight: '700' } },
+        yAxis: { min: 0, title: { text: '°C·dia' } },
+        tooltip: {
+          shared: true,
+          formatter() {
+            const p = this.points[0];
+            return `<b>${this.x}</b><br>Grados dia: <b>${p.y === null ? '—' : p.y.toFixed(1)}</b> °C·d<br>Acumulado: <b>${acumulado[p.point.index].toFixed(0)}</b> °C·d`;
+          },
+        },
+        plotOptions: { column: { borderRadius: 3, borderWidth: 0 } },
+        series: [{ type: 'column', name: 'Grados dia', color: '#FFCC00', data: this.grupos.map((g) => this.r(g.gdd, 1)) }],
+        legend: { enabled: false },
+      };
+    },
+    // Humedad, viento y radiacion por separado: cada uno con su propia escala.
+    chartHr() {
+      return {
+        ...this.chartBase,
+        exporting: this.exp('humedad_relativa'),
+        title: { text: 'Humedad relativa (%)', style: { fontSize: '13px', fontWeight: '700' } },
+        yAxis: { title: { text: '%' }, max: 100 },
+        tooltip: { shared: true, valueSuffix: ' %', valueDecimals: 0 },
+        series: [
+          { type: 'line', name: 'HR maxima', color: '#2a78d6', data: this.grupos.map((g) => this.r(g.hr_max, 0)), marker: { radius: 2 }, dashStyle: 'ShortDash' },
+          { type: 'line', name: 'HR media', color: '#1baf7a', data: this.grupos.map((g) => this.r(g.hr, 0)), marker: { radius: 2 } },
+          { type: 'line', name: 'HR minima', color: '#eb6834', data: this.grupos.map((g) => this.r(g.hr_min, 0)), marker: { radius: 2 }, dashStyle: 'ShortDash' },
+        ].filter((s) => s.data.some((v) => v !== null)),
+      };
+    },
+    chartViento() {
+      return {
+        ...this.chartBase,
+        exporting: this.exp('velocidad_viento'),
+        title: { text: 'Velocidad del viento (km/h)', style: { fontSize: '13px', fontWeight: '700' } },
+        yAxis: { min: 0, title: { text: 'km/h' } },
+        tooltip: { shared: true, valueSuffix: ' km/h', valueDecimals: 1 },
+        legend: { enabled: false },
+        series: [{ type: 'line', name: 'Viento promedio', color: '#5b6267', data: this.grupos.map((g) => this.r(g.viento, 1)), marker: { radius: 2 } }],
+      };
+    },
+    chartRadiacion() {
+      return {
+        ...this.chartBase,
+        exporting: this.exp('radiacion_solar'),
+        title: { text: 'Radiacion solar (MJ/m²·dia)', style: { fontSize: '13px', fontWeight: '700' } },
+        yAxis: { min: 0, title: { text: 'MJ/m²·dia' } },
+        tooltip: { shared: true, valueSuffix: ' MJ/m²·d', valueDecimals: 1 },
+        legend: { enabled: false },
+        series: [{ type: 'line', name: 'Radiacion', color: '#eda100', lineWidth: 2, data: this.grupos.map((g) => this.r(g.radiacion, 1)), marker: { radius: 2 } }],
       };
     },
     chartBalance() {
@@ -403,6 +558,7 @@ export default {
       });
       return {
         ...this.chartBase,
+        exporting: this.exp('balance_hidrico'),
         title: { text: 'Balance hidrico acumulado (lluvia − ETo, mm)', style: { fontSize: '13px', fontWeight: '700' } },
         yAxis: { title: { text: 'mm' }, plotLines: [{ value: 0, color: '#CED2D5', width: 2 }] },
         tooltip: { valueSuffix: ' mm', valueDecimals: 1 },
@@ -419,9 +575,27 @@ export default {
     agrupar() { /* reagrupa en el cliente, sin nueva consulta */ },
   },
   mounted() {
-    this.cargarEstaciones(true);
+    // El estado de la API define que estaciones tienen datos; luego se elige la mas cercana.
+    this.cargarIcc().then(() => this.cargarEstaciones(true));
   },
   methods: {
+    /* ---------------- API ICC ---------------- */
+    usaApi(s) { return !!s && this.icc.configurada && !!s.codigo_api; },
+    cargarIcc() {
+      return window.axios.get('/investigacion/clima/icc').then(({ data }) => { this.icc = data; }).catch(() => {});
+    },
+    /** Descarga de la API el periodo elegido (todas las estaciones) y vuelve a consultar. */
+    sincronizarIcc() {
+      this.sincronizando = true;
+      window.axios.post('/investigacion/clima/icc/sincronizar', { desde: this.desde, hasta: this.hasta, forzar: 1 })
+        .then(({ data }) => {
+          this.toast('Datos del ICC descargados', `${data.registros || 0} registros de ${data.dias || 0} dia(s)${data.estaciones_nuevas ? ` · ${data.estaciones_nuevas} estacion(es) nueva(s)` : ''}`);
+          return Promise.all([this.cargarIcc(), this.cargarEstaciones(false)]).then(() => this.consultar());
+        })
+        .catch(this.falla)
+        .finally(() => { this.sincronizando = false; });
+    },
+
     /* ---------------- estaciones ---------------- */
     cargarEstaciones(inicial) {
       this.cargandoEst = true;
@@ -430,10 +604,14 @@ export default {
         .then(({ data }) => {
           this.estaciones = data.estaciones;
           this.redes = data.redes;
+          // Estacion mas cercana al ensayo: activa, con ubicacion y con datos
+          // (guardados o de la API del ICC). La lista ya viene ordenada por distancia.
+          const activas = this.estaciones.filter((s) => s.activa);
+          this.cercana = this.tieneGps
+            ? (activas.find((s) => s.distancia_km !== null && (this.usaApi(s) || s.registros_count)) || activas.find((s) => s.distancia_km !== null) || null)
+            : null;
           if (inicial) {
-            // Sugerencia: la estacion activa mas cercana con datos; si no, la mas cercana; si no, el punto del ensayo.
-            const activas = this.estaciones.filter((s) => s.activa);
-            const sug = activas.find((s) => s.registros_count) || (this.tieneGps ? activas[0] : null);
+            const sug = this.cercana || activas.find((s) => s.registros_count) || null;
             if (sug && sug.id !== this.estacionSel) this.estacionSel = sug.id;
             else this.consultar();
           }
@@ -444,18 +622,18 @@ export default {
     nuevaEstacion() {
       this.errEst = {};
       this.formEst = {
-        id: null, codigo: '', nombre: '', red: this.redes[0] || 'ICC REDMET', ubicacion: '',
+        id: null, codigo: '', codigo_api: '', nombre: '', red: this.redes[0] || 'ICC REDMET', ubicacion: '',
         lat: this.tieneGps ? this.ensayo.lat : '', lng: this.tieneGps ? this.ensayo.lng : '', altitud: '', activa: true,
       };
     },
     editarEstacion(s) {
       this.errEst = {};
-      this.formEst = { ...s, ubicacion: s.ubicacion || '', altitud: s.altitud === null ? '' : s.altitud };
+      this.formEst = { ...s, ubicacion: s.ubicacion || '', codigo_api: s.codigo_api || '', altitud: s.altitud === null ? '' : s.altitud };
     },
     guardarEstacion() {
       const f = this.formEst;
       const payload = {
-        codigo: String(f.codigo || '').trim(), nombre: String(f.nombre || '').trim(), red: f.red,
+        codigo: String(f.codigo || '').trim(), codigo_api: String(f.codigo_api || '').trim() || null, nombre: String(f.nombre || '').trim(), red: f.red,
         ubicacion: f.ubicacion || null, lat: f.lat, lng: f.lng, altitud: f.altitud === '' ? null : f.altitud, activa: !!f.activa,
       };
       this.guardandoEst = true;
@@ -545,17 +723,27 @@ export default {
       this.error = null;
       const token = (this.consultaId = (this.consultaId || 0) + 1);
 
+      this.sync = null;
+      // Estaciones ICC: el servidor completa desde la API los dias que falten del periodo.
       const pedirEstacion = est
-        ? window.axios.get(`/investigacion/clima/estaciones/${est.id}/datos`, { params: { desde: this.desde, hasta: this.hasta } }).then((r) => r.data.dias)
+        ? window.axios.get(`/investigacion/clima/estaciones/${est.id}/datos`, { params: { desde: this.desde, hasta: this.hasta, sincronizar: 1 } })
+          .then((r) => {
+            if (token === this.consultaId) this.sync = r.data.sync || null;
+            if (r.data.sync && r.data.sync.consultada) { this.cargarEstaciones(false); this.cargarIcc(); }
+            return r.data.dias;
+          })
         : Promise.resolve([]);
 
       pedirEstacion
         .then((propios) => {
           const total = Math.round((parse(this.hasta) - parse(this.desde)) / DIA) + 1;
           const faltan = total - propios.length;
-          const usarModelo = !est || (this.completar && faltan > 0);
-          const lat = est ? est.lat : this.ensayo.lat;
-          const lng = est ? est.lng : this.ensayo.lng;
+          // Estacion sin coordenadas (creada desde la API): Open-Meteo en el punto del ensayo.
+          const estConGps = est && est.lat !== null && est.lng !== null;
+          const lat = estConGps ? est.lat : this.ensayo.lat;
+          const lng = estConGps ? est.lng : this.ensayo.lng;
+          const hayPunto = lat !== null && lat !== '' && lng !== null && lng !== '';
+          const usarModelo = hayPunto && (!est || (this.completar && faltan > 0));
           return (usarModelo ? this.openMeteo(lat, lng, this.desde, this.hasta) : Promise.resolve([])).then((modelo) => ({ propios, modelo, total }));
         })
         .then(({ propios, modelo, total }) => {
@@ -626,19 +814,24 @@ export default {
       }
       const cobertura = Math.round((propios.length / total) * 100);
       const completados = this.dias.filter((d) => d.modelado).length;
+      const s = this.sync || {};
+      const api = s.usa_api
+        ? (s.error ? ` · API ICC: ${s.error}` : s.consultada ? ` · API ICC: ${s.dias} dia(s) descargados ahora` : ' · API ICC al dia')
+        : '';
       if (!propios.length) {
         return {
-          tipo: 'modelo', modelados: false, etoEstimada: false,
-          titulo: `${est.nombre} (${est.codigo}) · sin datos importados en el periodo`,
-          detalle: `Se muestran datos de Open-Meteo en las coordenadas de la estacion · ${rango}. Importe el archivo de REDMET para usar las mediciones reales.`,
+          tipo: 'modelo', modelados: false, etoEstimada: false, apiError: !!s.error,
+          titulo: `${est.nombre} (${est.codigo}) · sin mediciones en el periodo`,
+          detalle: `Se muestran datos de Open-Meteo en las coordenadas de la estacion · ${rango}${api}.${s.usa_api ? '' : ' Importe el archivo de REDMET para usar las mediciones reales.'}`,
         };
       }
       return {
         tipo: 'estacion',
         modelados: completados > 0,
         etoEstimada: propios.some((p) => p.eto_estimada),
-        titulo: `${est.nombre} (${est.codigo}) · Red ${est.red}`,
-        detalle: `${propios.length} de ${total} dias con mediciones (${cobertura} %)${completados ? ` · ${completados} dia(s) completados con Open-Meteo` : ''} · ${rango}${est.distancia_km !== null ? ` · a ${est.distancia_km} km del ensayo` : ''}.`,
+        apiError: !!s.error,
+        titulo: `${est.nombre} (${est.codigo}) · Red ${est.red}${s.usa_api ? ' · API' : ''}`,
+        detalle: `${propios.length} de ${total} dias con mediciones (${cobertura} %)${completados ? ` · ${completados} dia(s) completados con Open-Meteo` : ''} · ${rango}${est.distancia_km !== null ? ` · a ${est.distancia_km} km del ensayo` : ''}${api}.`,
       };
     },
     claveGrupo(fecha) {
@@ -652,6 +845,18 @@ export default {
       const k = iso(lunes);
       return { clave: k, etiqueta: this.fmt(k) };
     },
+    /** Menu de cada grafico: pantalla completa, imprimir y descargar (PNG, SVG, CSV, Excel). */
+    exp(nombre) {
+      const est = this.estacion;
+      return {
+        enabled: true,
+        filename: `clima_${this.ensayo.codigo}_${nombre}_${this.desde}_${this.hasta}`,
+        chartOptions: {
+          chart: { backgroundColor: '#ffffff' },
+          subtitle: { text: `${est ? est.nombre : 'Punto del ensayo (Open-Meteo)'} · ${this.fmt(this.desde)} a ${this.fmt(this.hasta)} · Ensayo ${this.ensayo.codigo}` },
+        },
+      };
+    },
     rachaSeca() {
       let max = 0;
       let act = 0;
@@ -664,7 +869,7 @@ export default {
     /* ---------------- exportar ---------------- */
     exportarCsv() {
       const est = this.estacion;
-      const enc = [this.etiquetaGrupo, 'Lluvia (mm)', 'T max (°C)', 'T min (°C)', 'T media (°C)', 'HR (%)', 'Viento (km/h)', 'Radiacion (MJ/m2/d)', 'ETo (mm)', 'Balance (mm)', 'Fuente'];
+      const enc = [this.etiquetaGrupo, 'Lluvia (mm)', 'T max (°C)', 'T min (°C)', 'T media (°C)', 'DeltaT Tmax-Tmin (°C)', 'HR (%)', 'Viento (km/h)', 'Radiacion (MJ/m2/d)', 'ETo (mm)', 'Balance (mm)', 'DPV (kPa)', `Grados dia base ${this.tbase} (°C·d)`, 'Fuente'];
       const num = (v, d) => (v === null || v === undefined ? '' : Number(v).toFixed(d).replace('.', ','));
       const lineas = [
         `Estacion;${est ? `${est.nombre} (${est.codigo}) - ${est.red}` : 'Punto del ensayo (Open-Meteo)'}`,
@@ -673,8 +878,8 @@ export default {
         '',
         enc.join(';'),
         ...this.grupos.map((g) => [
-          g.etiqueta, num(g.lluvia, 1), num(g.tmax, 1), num(g.tmin, 1), num(g.tmed, 1), num(g.hr, 0),
-          num(g.viento, 1), num(g.radiacion, 2), num(g.eto, 2), num(g.balance, 1),
+          g.etiqueta, num(g.lluvia, 1), num(g.tmax, 1), num(g.tmin, 1), num(g.tmed, 1), num(g.at, 1), num(g.hr, 0),
+          num(g.viento, 1), num(g.radiacion, 2), num(g.eto, 2), num(g.balance, 1), num(g.vpd, 2), num(g.gdd, 1),
           !est ? 'Open-Meteo' : g.modelados ? 'Estacion + Open-Meteo' : 'Estacion',
         ].join(';')),
       ];
@@ -731,6 +936,16 @@ export default {
 .cl-panel h6 i { margin-right: 6px; color: #73BC25; }
 .cl-form { margin-bottom: 12px; padding: 12px; border-radius: 8px; background: #fafbf8; }
 .cl-form label { font-size: 11px; }
+.cl-api { margin-bottom: 12px; padding: 10px 12px; border: 1px solid #d6e4f3; border-radius: 10px; background: #f4f8fd; }
+.cl-api.is-off { border-color: #ecdcb0; background: #fffbea; }
+.cl-api-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; color: #1d4f80; font-size: 12.5px; }
+.cl-api.is-off .cl-api-head { color: #7a5d00; }
+.cl-api-head i { margin-right: 6px; }
+.cl-cercana { margin: 8px 0 0; color: #3f7a12; font-size: 12.5px; }
+.cl-cercana i { margin-right: 4px; }
+.cl-lejos { color: #b84d00; }
+.cl-warn { margin: 4px 0 0; color: #b84d00; font-size: 12px; }
+.cl-warn-tag { padding: 1px 7px; border-radius: 999px; background: #fff1e6; color: #b84d00; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .cl-import { margin-top: 14px; padding-top: 12px; border-top: 1px solid #edf1ec; }
 .cl-import h6 { margin-bottom: 10px; }
 .cl-help { margin: 4px 0 0; color: var(--cengi-muted); font-size: 11.5px; line-height: 1.5; }
@@ -774,7 +989,9 @@ export default {
 .cl-alertas i { margin-top: 2px; color: #FF6B00; }
 
 .cl-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
-.cl-chart { min-width: 0; padding: 8px; border: 1px solid #edf1ec; border-radius: 10px; background: #fbfcf9; }
+.cl-chart { position: relative; min-width: 0; padding: 8px; border: 1px solid #edf1ec; border-radius: 10px; background: #fbfcf9; }
+.cl-tbase { position: absolute; top: 10px; left: 12px; z-index: 2; color: #6b7568; font-size: 11.5px; font-weight: 600; }
+.cl-tbase input { width: 54px; padding: 1px 4px; border: 1px solid #d8ddd5; border-radius: 6px; }
 .cl-datos summary { margin-bottom: 8px; color: var(--cengi-primary-deep); font-size: 12.5px; font-weight: 700; cursor: pointer; }
 .cl-datos summary i { margin-right: 5px; color: #73BC25; }
 .cl-note { margin-top: 10px; color: var(--cengi-muted); font-size: 11.5px; }

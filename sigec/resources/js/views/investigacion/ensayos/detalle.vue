@@ -6,7 +6,7 @@
           <div class="det-title" v-if="e">
             <div class="det-avatar"><i class="fas fa-seedling"></i></div>
             <div>
-              <h5 class="modal-title mb-0">Ensayo {{ e.codigo }}</h5>
+              <h5 class="modal-title mb-0">Ensayo {{ e.codigo }}<span v-if="e.nombre" class="det-nombre"> · {{ e.nombre }}</span></h5>
               <small>{{ e.proyecto ? e.proyecto.codigo + ' — ' + e.proyecto.nombre : 'Sin proyecto' }}</small>
             </div>
             <span class="det-estado" :class="claseEstado(e.estado)">{{ e.estado }}</span>
@@ -37,6 +37,7 @@
           <template v-if="d">
             <!-- ============ INFORMACION ============ -->
             <section v-show="tab === 'info'">
+              <p v-if="e.objetivo" class="det-objetivo"><i class="fas fa-bullseye"></i> <b>Objetivo:</b> {{ e.objetivo }}</p>
               <div class="det-info-grid">
                 <div v-for="f in camposInfo" :key="f.label" class="det-field">
                   <span>{{ f.label }}</span>
@@ -88,6 +89,12 @@
                     </button>
                   </div>
                 </div>
+                <div class="custom-control custom-checkbox mb-2">
+                  <input type="checkbox" class="custom-control-input" id="gen-aleatorizar" v-model="gen.aleatorizar">
+                  <label class="custom-control-label" for="gen-aleatorizar">
+                    Aleatorizar tratamientos dentro de cada repeticion <span class="det-muted">(bloques completos al azar)</span>
+                  </label>
+                </div>
                 <p class="det-warn mb-0" v-if="d.parcelas.length">
                   <i class="fas fa-exclamation-triangle"></i> Se reemplazaran las {{ d.parcelas.length }} parcelas actuales.
                 </p>
@@ -133,30 +140,72 @@
                 Sin parcelas — use "Generar parcelas" para crear la matriz Tratamiento × Repeticion.
               </div>
               <div v-else-if="vistaParcelas === 'croquis'" class="det-croquis-wrap">
+                <div class="det-croquis-bar">
+                  <span class="det-leyenda">
+                    <span v-for="t in d.tratamientos" :key="t.id" class="det-tag" :style="{ '--c': colorTrat(t.codigo) }" :title="t.descripcion || ''">{{ t.codigo }}</span>
+                  </span>
+                  <template v-if="permisos.editar">
+                    <small class="det-muted">
+                      <template v-if="intercambio">Toque otra parcela de la <b>Rep. {{ intercambio.repeticion }}</b> para intercambiar con {{ intercambio.codigo }} · <a href="#" @click.prevent="intercambio = null">cancelar</a></template>
+                      <template v-else>Toque dos parcelas de la misma repeticion para intercambiar sus tratamientos.</template>
+                    </small>
+                    <button type="button" class="btn btn-secondary btn-sm" @click="aleatorizarParcelas" :disabled="ocupado">
+                      <i class="fas fa-random"></i> Aleatorizar
+                    </button>
+                  </template>
+                </div>
                 <table class="det-croquis">
-                  <thead><tr><th></th><th v-for="t in d.tratamientos" :key="t.id">{{ t.codigo }}</th></tr></thead>
+                  <thead><tr><th></th><th v-for="c in posiciones" :key="c">{{ c }}</th></tr></thead>
                   <tbody>
                     <tr v-for="r in repeticiones" :key="r">
                       <th>Rep. {{ r }}</th>
-                      <td v-for="t in d.tratamientos" :key="t.id" :style="{ '--c': colorTrat(t.codigo) }">
-                        <template v-if="parcelaEn(t.id, r)">
-                          <strong>{{ parcelaEn(t.id, r).codigo }}</strong>
-                          <small v-if="parcelaEn(t.id, r).evaluaciones_count">{{ parcelaEn(t.id, r).evaluaciones_count }} eval.</small>
-                        </template>
-                        <span v-else>—</span>
-                      </td>
+                      <template v-for="c in posiciones">
+                        <td
+                          v-if="celda(r, c)" :key="c" :style="{ '--c': colorTrat(nombreTrat(celda(r, c))) }"
+                          :class="{
+                            'is-aqui': celda(r, c).id === parcelaGps,
+                            'is-geo': celda(r, c).geometria,
+                            'is-editable': permisos.editar,
+                            'is-sel': intercambio && intercambio.id === celda(r, c).id,
+                            'is-otro-bloque': intercambio && intercambio.repeticion !== r,
+                          }"
+                          :title="celda(r, c).id === parcelaGps ? 'Usted esta aqui (GPS)' : ''"
+                          @click="tocarCelda(celda(r, c))"
+                        >
+                          <strong>{{ celda(r, c).codigo }}</strong>
+                          <span class="det-celda-trat">{{ nombreTrat(celda(r, c)) }}</span>
+                          <small v-if="celda(r, c).evaluaciones_count">{{ celda(r, c).evaluaciones_count }} eval.</small>
+                        </td>
+                        <td v-else :key="c" class="is-vacia"></td>
+                      </template>
                     </tr>
                   </tbody>
                 </table>
               </div>
-              <div v-else class="det-table-wrap">
+              <croquis-mapa
+                v-if="vistaParcelas === 'croquis' || !d.parcelas.length"
+                ref="croquisMapa"
+                :ensayo-id="e.id"
+                :croquis="d.croquis"
+                :parcelas="d.parcelas"
+                :tratamientos="d.tratamientos"
+                :storage-url="storageUrl"
+                :puede-editar="!!permisos.editar"
+                :color-trat="colorTrat"
+                v-bind="gpsProps"
+                @actualizado="aplicar"
+                v-on="gpsEventos"
+                @ver-mapa="cambiarTab('mapa')"
+              ></croquis-mapa>
+              <div v-if="vistaParcelas !== 'croquis' && d.parcelas.length" class="det-table-wrap">
                 <table class="table det-table">
-                  <thead><tr><th>Codigo</th><th>Tratamiento</th><th>Repeticion</th><th style="width:130px">Area (m²)</th><th>Notas</th><th>Evaluaciones</th></tr></thead>
+                  <thead><tr><th>Codigo</th><th>Tratamiento</th><th>Repeticion</th><th>Posicion</th><th style="width:130px">Area (m²)</th><th>Notas</th><th>Evaluaciones</th></tr></thead>
                   <tbody>
                     <tr v-for="p in d.parcelas" :key="p.id">
                       <td><strong>{{ p.codigo }}</strong></td>
                       <td><span class="det-tag" :style="{ '--c': colorTrat(p.tratamiento && p.tratamiento.codigo) }">{{ p.tratamiento ? p.tratamiento.codigo : '—' }}</span></td>
                       <td>{{ p.repeticion }}</td>
+                      <td>{{ p.posicion || '—' }}</td>
                       <td>
                         <input v-if="permisos.editar" type="number" min="0" step="0.1" class="form-control form-control-sm" v-model="p.area" @change="guardarParcela(p)">
                         <span v-else>{{ p.area ? p.area + ' m²' : '—' }}</span>
@@ -173,28 +222,41 @@
             </section>
 
             <!-- ============ MAPA ============ -->
-            <section v-show="tab === 'mapa'">
-              <template v-if="tieneGps">
-                <div class="det-map-bar">
-                  <span class="det-gps"><i class="fas fa-map-marker-alt"></i> {{ Number(e.lat).toFixed(5) }}, {{ Number(e.lng).toFixed(5) }}</span>
-                  <a class="btn btn-secondary btn-sm" target="_blank" rel="noopener" :href="`https://www.google.com/maps/dir/?api=1&destination=${e.lat},${e.lng}`">
-                    <i class="fas fa-route"></i> Navegar con Maps
-                  </a>
-                  <button type="button" class="btn btn-secondary btn-sm" @click="copiarCoordenadas"><i class="fas fa-copy"></i> Copiar coordenadas</button>
-                  <span class="det-muted">{{ d.parcelas.length }} parcelas</span>
-                </div>
-                <div class="det-map" ref="mapa"></div>
-                <p class="det-note"><i class="fas fa-info-circle"></i> El marcador verde es el punto GPS del ensayo; los naranjas representan las parcelas (posicion aproximada alrededor del centroide).</p>
-              </template>
-              <div v-else class="det-empty-box">
-                <i class="fas fa-location-arrow"></i>
-                Este ensayo no tiene coordenadas GPS registradas.
-                <button v-if="permisos.editar" type="button" class="btn btn-success btn-sm mt-2" @click="editar"><i class="fas fa-pen"></i> Editar ensayo y agregar GPS</button>
-              </div>
+            <section v-if="mapaVisto" v-show="tab === 'mapa'">
+              <mapa-gps
+                ref="mapaGps"
+                :ensayo="e"
+                :parcelas="d.parcelas"
+                :tratamientos="d.tratamientos"
+                :croquis="d.croquis"
+                :storage-url="storageUrl"
+                :puede-editar="!!permisos.editar"
+                :color-trat="colorTrat"
+                v-bind="gpsProps"
+                v-on="gpsEventos"
+                :ndvi="d.ndvi"
+                :ndvi-imagenes="d.ndvi_imagenes || []"
+                @ver-croquis="irACroquis"
+                @editar="editar"
+              ></mapa-gps>
             </section>
 
             <!-- ============ NDVI ============ -->
             <section v-show="tab === 'ndvi'">
+              <ndvi-imagenes
+                :ensayo-id="e.id"
+                :imagenes="d.ndvi_imagenes || []"
+                :geo="d.imagenes_geo || []"
+                :parcelas="d.parcelas"
+                :tratamientos="d.tratamientos"
+                :fuentes="fuentesNdvi"
+                :storage-url="storageUrl"
+                :puede-editar="!!permisos.ndvi"
+                :color-trat="colorTrat"
+                @actualizado="aplicar"
+                @ver-mapa="verNdviEnMapa"
+              ></ndvi-imagenes>
+              <div class="det-sec-head"><h6><i class="fas fa-chart-line"></i> Serie NDVI por tratamiento</h6></div>
               <div class="det-panel" v-if="permisos.ndvi && d.tratamientos.length">
                 <p>Ingrese valores NDVI de imagenes satelitales o de dron (0.0 a 1.0). Registrar el mismo tratamiento y periodo actualiza el valor.</p>
                 <div class="form-row">
@@ -357,9 +419,11 @@
 </template>
 
 <script>
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import EnsayoClima from './clima.vue';
+import CroquisMapa from './croquis-mapa.vue';
+import MapaGps from './mapa-gps.vue';
+import NdviImagenes from './ndvi-imagenes.vue';
+import { navegacion, distanciaM } from './geo-util';
 
 const COLORES_TRAT = ['#73BC25', '#FF6B00', '#FFCC00', '#A3D300', '#5b6267', '#3f7a12', '#b84d00', '#8a6a00'];
 
@@ -370,7 +434,7 @@ function hoyISO() {
 
 export default {
   name: 'EnsayoDetalle',
-  components: { EnsayoClima },
+  components: { EnsayoClima, CroquisMapa, MapaGps, NdviImagenes },
   props: {
     fuentesNdvi: { type: Array, default: () => [] },
     carpetas: { type: Array, default: () => [] },
@@ -387,26 +451,53 @@ export default {
       tab: 'info',
       panelParcelas: false,
       vistaParcelas: 'tabla',
-      gen: { num_repeticiones: 3, area_parcela: 50 },
+      gen: { num_repeticiones: 3, area_parcela: 50, aleatorizar: true },
+      intercambio: null,
       ndviForm: { tratamiento_id: null, periodo: hoyISO().slice(0, 7), valor: '', fuente: this.fuentesNdvi[0] || null },
       bitForm: this.bitacoraVacia(),
       archivoSel: null,
       carpetaSel: this.carpetas[0] || null,
       subiendo: null,
       climaVisto: false,
-      mapa: null,
+      mapaVisto: false,
+      // GPS y navegacion compartidos por el croquis (Estructura) y el Mapa GPS.
+      gps: { activo: false, error: null, pos: null, seguir: true, destinoId: null, recorrido: [] },
     };
   },
   computed: {
+    nav() {
+      return navegacion(this.gps.pos, this.d ? this.d.parcelas : [], this.gps.destinoId);
+    },
+    parcelaGps() { return this.nav.parcela ? this.nav.parcela.id : null; },
+    recorridoM() {
+      const r = this.gps.recorrido;
+      let m = 0;
+      for (let i = 1; i < r.length; i++) m += distanciaM(r[i - 1][0], r[i - 1][1], r[i][0], r[i][1]);
+      return m;
+    },
+    gpsProps() {
+      return {
+        gpsActivo: this.gps.activo, gpsError: this.gps.error, pos: this.gps.pos, seguir: this.gps.seguir,
+        nav: this.nav, destinoId: this.gps.destinoId, recorrido: this.gps.recorrido, recorridoM: this.recorridoM,
+      };
+    },
+    gpsEventos() {
+      return {
+        'alternar-gps': this.alternarGps,
+        seguir: (v) => { this.gps.seguir = v; },
+        destino: this.fijarDestino,
+        'limpiar-recorrido': () => { this.gps.recorrido = []; },
+      };
+    },
     e() { return this.d ? this.d.ensayo : null; },
     tieneGps() { return !!(this.e && this.e.lat !== null && this.e.lng !== null && this.e.lat !== '' && this.e.lng !== ''); },
     tabs() {
-      const d = this.d || { tratamientos: [], parcelas: [], ndvi: [], archivos: [], bitacora: [] };
+      const d = this.d || { tratamientos: [], parcelas: [], ndvi: [], ndvi_imagenes: [], archivos: [], bitacora: [] };
       return [
         { id: 'info', label: 'Informacion', icon: 'fas fa-info-circle' },
         { id: 'estructura', label: 'Estructura', icon: 'fas fa-border-all', count: d.parcelas.length || null },
         { id: 'mapa', label: 'Mapa GPS', icon: 'fas fa-map-marked-alt' },
-        { id: 'ndvi', label: 'NDVI', icon: 'fas fa-satellite', count: d.ndvi.length || null },
+        { id: 'ndvi', label: 'NDVI', icon: 'fas fa-satellite', count: (d.ndvi.length + (d.ndvi_imagenes || []).length) || null },
         { id: 'clima', label: 'Clima', icon: 'fas fa-cloud-sun' },
         { id: 'archivos', label: 'Archivos', icon: 'fas fa-paperclip', count: d.archivos.length || null },
         { id: 'bitacora', label: 'Bitacora', icon: 'fas fa-book-open', count: d.bitacora.length || null },
@@ -423,10 +514,44 @@ export default {
         { label: 'Responsable', valor: e.responsable ? e.responsable.name : null },
         { label: 'Repeticiones', valor: e.num_repeticiones ? String(e.num_repeticiones) : null },
         { label: 'Area por parcela', valor: e.area_parcela ? `${Number(e.area_parcela)} m²` : null },
+        { label: 'Ciclo', valor: e.ciclo },
+        { label: e.ciclo && e.ciclo !== 'Plantia' ? 'Corte anterior' : 'Siembra', valor: this.fmtFecha(e.fecha_siembra) },
+        { label: 'Edad del cultivo', valor: this.edadCultivo },
+        { label: 'Cosecha', valor: e.fecha_cosecha ? `${this.fmtFecha(e.fecha_cosecha)} (real)` : (e.fecha_cosecha_prevista ? `${this.fmtFecha(e.fecha_cosecha_prevista)} (prevista)` : null) },
+        { label: 'Estrato / Zona', valor: [e.estrato, e.zona].filter(Boolean).join(' / ') },
+        { label: 'Area total', valor: e.area_total ? `${Number(e.area_total)} ha` : null },
+        { label: 'Tipo de suelo', valor: e.tipo_suelo },
       ];
+    },
+    /** Edad desde la siembra o el corte anterior (hasta la cosecha si ya ocurrio). */
+    edadCultivo() {
+      const e = this.e;
+      if (!e || !e.fecha_siembra) return null;
+      const fin = e.fecha_cosecha ? Date.parse(e.fecha_cosecha) : Date.now();
+      const dias = Math.floor((fin - Date.parse(e.fecha_siembra)) / 86400000);
+      if (Number.isNaN(dias)) return null;
+      if (dias < 0) return `por sembrar (en ${-dias} dias)`;
+      return `${(dias / 30.44).toFixed(1)} meses · ${dias} dias${e.fecha_cosecha ? ' al cosechar' : ''}`;
     },
     repeticiones() {
       return [...new Set(this.d.parcelas.map((p) => p.repeticion))].sort((a, b) => a - b);
+    },
+    // Rejilla fisica: fila = repeticion, columna = posicion en campo (los
+    // tratamientos pueden ir aleatorizados dentro de cada bloque).
+    mapaCeldas() {
+      const m = {};
+      const siguiente = {};
+      this.d.parcelas.forEach((p) => {
+        let pos = p.posicion || (siguiente[p.repeticion] || 0) + 1;
+        while (m[`${p.repeticion}#${pos}`]) pos++;
+        siguiente[p.repeticion] = Math.max(siguiente[p.repeticion] || 0, pos);
+        m[`${p.repeticion}#${pos}`] = p;
+      });
+      return m;
+    },
+    posiciones() {
+      const max = Math.max(0, ...Object.keys(this.mapaCeldas).map((k) => Number(k.split('#')[1])));
+      return Array.from({ length: max }, (_, i) => i + 1);
     },
     ndviOrdenado() {
       return this.d.ndvi.slice().sort((a, b) => b.periodo.localeCompare(a.periodo));
@@ -481,12 +606,13 @@ export default {
   },
   mounted() {
     const $m = window.$(this.$refs.modal);
-    $m.on('shown.bs.modal', () => { if (this.mapa) this.mapa.invalidateSize(); });
-    $m.on('hidden.bs.modal', () => { this.destruirMapa(); });
+    $m.on('shown.bs.modal', () => { if (this.tab === 'mapa' && this.$refs.mapaGps) this.$refs.mapaGps.mostrar(); });
+    // Al cerrar el detalle se apaga el GPS (ahorra bateria en campo).
+    $m.on('hidden.bs.modal', () => { this.detenerGps(); });
   },
   beforeDestroy() {
     window.$(this.$refs.modal).off('shown.bs.modal hidden.bs.modal');
-    this.destruirMapa();
+    this.detenerGps();
   },
   methods: {
     /* ---------------- carga ---------------- */
@@ -496,10 +622,12 @@ export default {
         this.tab = 'info';
         this.panelParcelas = false;
         this.climaVisto = false;
+        this.mapaVisto = false;
+        this.gps.destinoId = null;
+        this.gps.recorrido = [];
         this.resetBitacora();
       }
       this.ensayoId = id;
-      this.destruirMapa();
       window.$(this.$refs.modal).modal('show');
       this.cargar();
     },
@@ -518,13 +646,87 @@ export default {
       if (!data.tratamientos.find((t) => t.id === this.ndviForm.tratamiento_id)) {
         this.ndviForm.tratamiento_id = data.tratamientos.length ? data.tratamientos[0].id : null;
       }
-      if (this.tab === 'mapa') this.$nextTick(this.iniciarMapa);
+      if (this.gps.destinoId && !data.parcelas.some((p) => p.id === this.gps.destinoId && p.geometria)) this.gps.destinoId = null;
+      if (this.tab === 'mapa') this.mapaVisto = true;
       if (this.tab === 'clima') this.climaVisto = true;
     },
     cambiarTab(id) {
       this.tab = id;
-      if (id === 'mapa') this.$nextTick(this.iniciarMapa);
+      if (id === 'mapa') {
+        this.mapaVisto = true;
+        this.$nextTick(() => {
+          if (!this.$refs.mapaGps) return;
+          this.$refs.mapaGps.mostrar();
+          if (this.gps.destinoId) setTimeout(() => this.$refs.mapaGps && this.$refs.mapaGps.enfocarParcela(this.gps.destinoId), 200);
+        });
+      }
       if (id === 'clima') this.climaVisto = true;
+    },
+    verNdviEnMapa(fecha) {
+      this.cambiarTab('mapa');
+      this.$nextTick(() => setTimeout(() => { if (this.$refs.mapaGps) this.$refs.mapaGps.verNdvi(fecha); }, 150));
+    },
+    irACroquis() {
+      this.vistaParcelas = 'croquis';
+      this.cambiarTab('estructura');
+      this.$nextTick(() => setTimeout(() => {
+        const c = this.$refs.croquisMapa;
+        if (!c) return;
+        if (c.mapa) c.mapa.invalidateSize();
+        if (this.gps.destinoId) c.enfocarParcela(this.gps.destinoId);
+        if (c.$el && c.$el.scrollIntoView) c.$el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150));
+    },
+
+    /* ---------------- GPS y navegacion (compartidos) ---------------- */
+    alternarGps() {
+      if (this.gps.activo) { this.detenerGps(); return; }
+      this.gps.error = null;
+      if (!window.isSecureContext) { this.gps.error = 'El GPS del navegador requiere HTTPS (use la direccion https de SIGEC).'; return; }
+      if (!navigator.geolocation) { this.gps.error = 'Este dispositivo no permite obtener la ubicacion.'; return; }
+      this.gps.activo = true;
+      this.gps.seguir = true;
+      this.watchId = navigator.geolocation.watchPosition(
+        (p) => this.onPosicion(p.coords),
+        (e) => {
+          this.gps.error = e.code === 1 ? 'Permiso de ubicacion denegado. Habilitelo en el navegador.' : 'No se pudo obtener la posicion GPS (sin senal).';
+          if (e.code === 1) this.detenerGps(true);
+        },
+        { enableHighAccuracy: true, maximumAge: 3000, timeout: 30000 }
+      );
+    },
+    onPosicion(c) {
+      this.gps.error = null;
+      const pos = { lat: c.latitude, lng: c.longitude, precision: c.accuracy };
+      this.gps.pos = pos;
+      // Recorrido: solo puntos con buena precision y que avanzan al menos 3 m.
+      const r = this.gps.recorrido;
+      const ult = r[r.length - 1];
+      if (pos.precision <= 30 && (!ult || distanciaM(ult[0], ult[1], pos.lat, pos.lng) >= 3)) {
+        this.gps.recorrido = [...r.slice(-1999), [pos.lat, pos.lng]];
+      }
+      const n = this.nav;
+      if (n.destino && n.llegado && !this.avisoLlegada) {
+        this.avisoLlegada = n.destino.id;
+        this.$swal.fire({ toast: true, position: 'top', icon: 'success', title: `Llego a ${n.destino.codigo}`, timer: 3500, showConfirmButton: false });
+      }
+    },
+    detenerGps(conservarError) {
+      if (this.watchId !== null && this.watchId !== undefined && navigator.geolocation) navigator.geolocation.clearWatch(this.watchId);
+      this.watchId = null;
+      this.gps.activo = false;
+      this.gps.pos = null;
+      if (!conservarError) this.gps.error = null;
+    },
+    fijarDestino(id) {
+      this.gps.destinoId = id;
+      this.avisoLlegada = null;
+      if (!id) return;
+      if (!this.gps.activo) this.alternarGps();
+      this.$nextTick(() => {
+        if (this.tab === 'mapa' && this.$refs.mapaGps) this.$refs.mapaGps.enfocarParcela(id);
+        if (this.tab === 'estructura' && this.$refs.croquisMapa) this.$refs.croquisMapa.enfocarParcela(id);
+      });
     },
     editar() {
       const ensayo = this.e;
@@ -579,13 +781,15 @@ export default {
         window.axios.post(`/investigacion/ensayos/${this.ensayoId}/parcelas/generar`, {
           num_repeticiones: this.gen.num_repeticiones,
           area_parcela: this.gen.area_parcela === '' ? null : this.gen.area_parcela,
+          aleatorizar: this.gen.aleatorizar,
         })
       ).then((data) => {
         this.panelParcelas = false;
         this.toast('Parcelas generadas', `${data.parcelas.length} parcelas (${data.tratamientos.length} trat. × ${this.gen.num_repeticiones} rep.)`);
       }).catch(() => {});
       if (this.d.parcelas.length) {
-        this.confirmar('Regenerar parcelas', `Se reemplazaran las <b>${this.d.parcelas.length}</b> parcelas actuales.`).then((ok) => ok && hacer());
+        const conGeo = this.d.parcelas.filter((p) => p.geometria).length;
+        this.confirmar('Regenerar parcelas', `Se reemplazaran las <b>${this.d.parcelas.length}</b> parcelas actuales${conGeo ? ` y se perderan los poligonos de ${conGeo} parcela(s) en el croquis` : ''}.`).then((ok) => ok && hacer());
       } else {
         hacer();
       }
@@ -594,44 +798,34 @@ export default {
       this.peticion(window.axios.put(`/investigacion/parcelas/${p.id}`, { area: p.area === '' ? null : p.area, notas: p.notas }), 'Parcela actualizada')
         .catch(() => this.cargar());
     },
-    parcelaEn(tratamientoId, rep) {
-      return this.d.parcelas.find((p) => p.tratamiento_id === tratamientoId && p.repeticion === rep);
+    nombreTrat(p) {
+      return p.tratamiento ? p.tratamiento.codigo : (this.d.tratamientos.find((t) => t.id === p.tratamiento_id) || {}).codigo || '—';
+    },
+    celda(rep, pos) {
+      return this.mapaCeldas[`${rep}#${pos}`] || null;
+    },
+    tocarCelda(p) {
+      if (!this.permisos.editar || this.ocupado) return;
+      if (!this.intercambio || this.intercambio.repeticion !== p.repeticion) { this.intercambio = p; return; }
+      if (this.intercambio.id === p.id) { this.intercambio = null; return; }
+      const a = this.intercambio;
+      this.intercambio = null;
+      if (a.tratamiento_id === p.tratamiento_id) return;
+      this.peticion(
+        window.axios.post(`/investigacion/ensayos/${this.ensayoId}/parcelas/intercambiar`, { a: a.id, b: p.id }),
+        `${a.codigo} ⇄ ${p.codigo}`
+      ).catch(() => {});
+    },
+    aleatorizarParcelas() {
+      this.confirmar('Aleatorizar tratamientos', 'Se sorteara de nuevo el orden de los tratamientos dentro de cada repeticion. Los codigos y poligonos de las parcelas se conservan.')
+        .then((ok) => ok && this.peticion(
+          window.axios.post(`/investigacion/ensayos/${this.ensayoId}/parcelas/aleatorizar`),
+          'Tratamientos aleatorizados'
+        ).catch(() => {}));
     },
     colorTrat(codigo) {
       const idx = this.d ? this.d.tratamientos.findIndex((t) => t.codigo === codigo) : -1;
       return COLORES_TRAT[(idx < 0 ? 0 : idx) % COLORES_TRAT.length];
-    },
-
-    /* ---------------- mapa ---------------- */
-    iniciarMapa() {
-      if (!this.tieneGps || !this.$refs.mapa) return;
-      if (this.mapa) { this.mapa.invalidateSize(); return; }
-      const lat = Number(this.e.lat);
-      const lng = Number(this.e.lng);
-      this.mapa = L.map(this.$refs.mapa).setView([lat, lng], 16);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(this.mapa);
-      const centro = L.divIcon({ className: '', iconAnchor: [9, 9], html: '<div class="det-pin"></div>' });
-      L.marker([lat, lng], { icon: centro }).addTo(this.mapa)
-        .bindPopup(`<b>${this.esc(this.e.codigo)}</b><br>${this.esc([this.e.finca, this.e.lote].filter(Boolean).join(' / '))}`)
-        .openPopup();
-      const n = this.d.parcelas.length;
-      this.d.parcelas.forEach((p, i) => {
-        const ang = (i / (n || 1)) * 2 * Math.PI;
-        const off = 0.0006;
-        const icon = L.divIcon({ className: '', iconAnchor: [12, 12], html: `<div class="det-pin-parcela">${this.esc(p.codigo.replace('P-', ''))}</div>` });
-        L.marker([lat + Math.cos(ang) * off, lng + Math.sin(ang) * off], { icon }).addTo(this.mapa)
-          .bindPopup(`<b>${this.esc(p.codigo)}</b><br>${this.esc(p.tratamiento ? p.tratamiento.codigo : '')} · Rep. ${p.repeticion}`);
-      });
-      setTimeout(() => this.mapa && this.mapa.invalidateSize(), 150);
-    },
-    destruirMapa() {
-      if (this.mapa) { this.mapa.remove(); this.mapa = null; }
-    },
-    copiarCoordenadas() {
-      const txt = `${this.e.lat}, ${this.e.lng}`;
-      (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject())
-        .then(() => this.toast('Coordenadas copiadas', txt))
-        .catch(() => this.$swal.fire({ icon: 'info', title: 'Coordenadas', text: txt }));
     },
 
     /* ---------------- NDVI ---------------- */
@@ -814,6 +1008,9 @@ export default {
 .det-field span { display: block; margin-bottom: 3px; color: var(--cengi-muted); font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .det-field strong { color: var(--cengi-ink); font-size: 13px; }
 .det-vacio { color: #9aa3a8 !important; font-style: italic; font-weight: 500 !important; }
+.det-nombre { color: var(--cengi-muted, #6b7568); font-weight: 600; }
+.det-objetivo { margin: 0 0 12px; padding: 9px 12px; border-left: 4px solid #73BC25; border-radius: 8px; background: #f5faef; color: #3d4838; font-size: 13px; }
+.det-objetivo i { color: #73BC25; }
 .det-gps {
   display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; padding: 7px 12px;
   border-radius: 999px; background: #eef8df; color: #3f7a12; font-size: 12px; font-weight: 600;
@@ -828,36 +1025,6 @@ export default {
 .det-pill:hover { border-color: #73BC25; background: #f5faef; }
 .det-pill i { color: #73BC25; }
 
-.det-sec-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-.det-sec-head h6 { margin: 0; color: var(--cengi-primary-deep); font-size: 14px; font-weight: 700; }
-.det-sec-head h6 i { margin-right: 6px; color: #73BC25; }
-.det-sec-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.det-panel { margin-bottom: 16px; padding: 14px; border: 1px solid #dcebc8; border-radius: 10px; background: #f7fbf1; }
-.det-panel > p { margin-bottom: 10px; color: var(--cengi-muted); font-size: 12.5px; }
-.det-warn { color: #b84d00; font-size: 12px; font-weight: 600; }
-.det-table-wrap { overflow-x: auto; border: 1px solid #edf1ec; border-radius: 10px; }
-.det-table-short { max-height: 300px; overflow-y: auto; }
-.det-table { min-width: 560px; margin: 0; }
-.det-table td { vertical-align: middle; }
-.det-empty-row { padding: 18px !important; color: var(--cengi-muted); text-align: center; }
-.det-tag {
-  display: inline-block; padding: 2px 9px; border-radius: 6px;
-  background: color-mix(in srgb, var(--c, #73BC25) 18%, #fff);
-  color: color-mix(in srgb, var(--c, #73BC25) 60%, #1f2a1f); font-size: 11.5px; font-weight: 700;
-}
-.det-muted { color: var(--cengi-muted); }
-.det-icon {
-  display: inline-grid; place-items: center; width: 30px; height: 30px;
-  border: 1px solid transparent; border-radius: 8px; background: transparent;
-  color: var(--cengi-muted); font-size: 12px; cursor: pointer;
-}
-.det-icon:hover { border-color: var(--cengi-border); background: var(--cengi-accent-soft); color: var(--cengi-primary-deep); text-decoration: none; }
-.det-icon-danger:hover { border-color: #ffd2b3; background: #fff1e6; color: #FF6B00; }
-.det-empty-box {
-  display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 14px; padding: 30px 16px;
-  border: 1px dashed #CED2D5; border-radius: 10px; color: var(--cengi-muted); font-size: 12.5px; text-align: center;
-}
-.det-empty-box > i { color: #CED2D5; font-size: 24px; }
 .det-switch { display: inline-flex; padding: 3px; border: 1px solid var(--cengi-border); border-radius: 8px; background: #f3f5f1; }
 .det-switch button { padding: 4px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--cengi-muted); font-size: 12px; font-weight: 600; cursor: pointer; }
 .det-switch button.is-active { background: #fff; color: var(--cengi-primary-deep); box-shadow: 0 1px 3px rgba(30, 42, 26, .12); }
@@ -870,6 +1037,18 @@ export default {
 }
 .det-croquis td strong { display: block; color: var(--cengi-primary-deep); font-size: 12.5px; }
 .det-croquis td small { color: var(--cengi-muted); font-size: 10.5px; }
+.det-croquis td.is-geo strong::after { content: ' \25C9'; color: #5b6267; font-size: 9px; }
+.det-croquis-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 6px 4px; }
+.det-croquis-bar small { flex: 1 1 220px; }
+.det-leyenda { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.det-celda-trat { display: inline-block; margin-top: 2px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--c) 40%, #fff); color: #33402a; font-size: 10.5px; font-weight: 700; }
+.det-croquis td.is-vacia { border: 1px dashed #e2e5e7; background: transparent; }
+.det-croquis td.is-editable { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+.det-croquis td.is-editable:hover { box-shadow: 0 2px 6px rgba(30, 42, 26, .15); }
+.det-croquis td.is-sel { outline: 3px dashed #FF6B00; outline-offset: 1px; transform: scale(1.04); }
+.det-croquis td.is-otro-bloque { opacity: .45; }
+.det-croquis td.is-aqui { outline: 3px solid #1f6fbf; outline-offset: 1px; animation: det-aqui 1.4s ease-in-out infinite; }
+@keyframes det-aqui { 50% { outline-color: rgba(31, 111, 191, .25); } }
 
 .det-map-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
 .det-map-bar .det-gps { margin-top: 0; }
@@ -928,6 +1107,38 @@ export default {
 </style>
 
 <style>
+/* Bloques comunes del detalle, compartidos con los subcomponentes (ndvi-imagenes.vue). */
+.det-sec-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.det-sec-head h6 { margin: 0; color: var(--cengi-primary-deep); font-size: 14px; font-weight: 700; }
+.det-sec-head h6 i { margin-right: 6px; color: #73BC25; }
+.det-sec-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.det-panel { margin-bottom: 16px; padding: 14px; border: 1px solid #dcebc8; border-radius: 10px; background: #f7fbf1; }
+.det-panel > p { margin-bottom: 10px; color: var(--cengi-muted); font-size: 12.5px; }
+.det-warn { color: #b84d00; font-size: 12px; font-weight: 600; }
+.det-table-wrap { overflow-x: auto; border: 1px solid #edf1ec; border-radius: 10px; }
+.det-table-short { max-height: 300px; overflow-y: auto; }
+.det-table { min-width: 560px; margin: 0; }
+.det-table td { vertical-align: middle; }
+.det-empty-row { padding: 18px !important; color: var(--cengi-muted); text-align: center; }
+.det-tag {
+  display: inline-block; padding: 2px 9px; border-radius: 6px;
+  background: color-mix(in srgb, var(--c, #73BC25) 18%, #fff);
+  color: color-mix(in srgb, var(--c, #73BC25) 60%, #1f2a1f); font-size: 11.5px; font-weight: 700;
+}
+.det-muted { color: var(--cengi-muted); }
+.det-icon {
+  display: inline-grid; place-items: center; width: 30px; height: 30px;
+  border: 1px solid transparent; border-radius: 8px; background: transparent;
+  color: var(--cengi-muted); font-size: 12px; cursor: pointer;
+}
+.det-icon:hover { border-color: var(--cengi-border); background: var(--cengi-accent-soft); color: var(--cengi-primary-deep); text-decoration: none; }
+.det-icon-danger:hover { border-color: #ffd2b3; background: #fff1e6; color: #FF6B00; }
+.det-empty-box {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 14px; padding: 30px 16px;
+  border: 1px dashed #CED2D5; border-radius: 10px; color: var(--cengi-muted); font-size: 12.5px; text-align: center;
+}
+.det-empty-box > i { color: #CED2D5; font-size: 24px; }
+
 /* Marcadores Leaflet (fuera del scope: Leaflet inserta su propio DOM). */
 .det-pin { width: 18px; height: 18px; border: 3px solid #fff; border-radius: 50%; background: #73BC25; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
 .det-pin-parcela {

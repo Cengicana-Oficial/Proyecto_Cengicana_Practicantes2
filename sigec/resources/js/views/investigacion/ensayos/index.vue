@@ -30,6 +30,7 @@
         <option value="">Todos los estados</option>
         <option v-for="e in estados" :key="e" :value="e">{{ e }}</option>
       </select>
+      <button type="button" class="btn ens-btn-sec" :disabled="!filtrados.length" title="Descargar el listado filtrado" @click="exportar"><i class="fas fa-file-csv"></i> Exportar</button>
       <button v-if="permisos.crear" class="btn btn-success ens-nuevo" @click="abrirCrear">
         <i class="fas fa-plus"></i> Nuevo ensayo
       </button>
@@ -41,31 +42,38 @@
         <table class="table ens-table mb-0">
           <thead>
             <tr>
-              <th>Codigo</th>
-              <th>Proyecto</th>
-              <th>Ingenio</th>
-              <th>Finca / Lote</th>
-              <th>Variedad</th>
-              <th>Diseno</th>
-              <th>Estructura</th>
-              <th>Estado</th>
+              <th v-for="c in columnas" :key="c.id" :class="[c.clase, { 'is-sort': c.orden }]" :title="c.orden ? 'Ordenar' : ''" @click="c.orden && ordenarPor(c.id)">
+                {{ c.label }}
+                <i v-if="c.orden" class="fas" :class="orden.campo === c.id ? (orden.asc ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort ens-sort-off'"></i>
+              </th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="e in pagina" :key="e.id" class="ens-row" @dblclick="ver(e)">
-              <td>
+              <td class="ens-col-ens">
                 <a href="#" class="ens-codigo" @click.prevent="ver(e)">{{ e.codigo }}</a>
                 <i v-if="e.lat && e.lng" class="fas fa-map-marker-alt ens-gps" title="Con coordenadas GPS"></i>
+                <small v-if="e.nombre" class="ens-nombre" :title="e.nombre">{{ e.nombre }}</small>
               </td>
               <td><span class="ens-proy" :title="e.proyecto && e.proyecto.nombre">{{ e.proyecto ? e.proyecto.codigo : '—' }}</span></td>
-              <td>{{ e.ingenio ? e.ingenio.nombre : '—' }}</td>
-              <td>{{ [e.finca, e.lote].filter(Boolean).join(' / ') || '—' }}</td>
-              <td>{{ e.variedad || '—' }}</td>
-              <td class="ens-muted">{{ e.diseno || '—' }}</td>
-              <td class="ens-muted ens-nowrap">
-                <span title="Tratamientos"><i class="fas fa-flask"></i> {{ e.tratamientos_count || 0 }}</span>
-                <span title="Parcelas"><i class="fas fa-border-all"></i> {{ e.parcelas_count || 0 }}</span>
+              <td>
+                {{ [e.finca, e.lote].filter(Boolean).join(' / ') || '—' }}
+                <small v-if="e.ingenio || e.estrato" class="ens-sub">{{ [e.ingenio && e.ingenio.nombre, e.estrato && 'Estrato ' + e.estrato.toLowerCase()].filter(Boolean).join(' · ') }}</small>
+              </td>
+              <td>
+                {{ e.variedad || '—' }}
+                <small class="ens-sub" :title="`${e.tratamientos_count || 0} tratamientos · ${e.parcelas_count || 0} parcelas`">{{ [e.ciclo, e.diseno, `${e.tratamientos_count || 0} trat. · ${e.parcelas_count || 0} parc.`].filter(Boolean).join(' · ') }}</small>
+              </td>
+              <td class="ens-nowrap">
+                <template v-if="edad(e)"><b>{{ edad(e).texto }}</b><small class="ens-sub">{{ edad(e).detalle }}</small></template>
+                <span v-else class="ens-muted" title="Registre la fecha de siembra o corte">sin fecha</span>
+              </td>
+              <td class="ens-muted">{{ e.responsable ? e.responsable.name : '—' }}</td>
+              <td class="ens-nowrap">
+                <span class="ens-av" :title="e.ultima_evaluacion ? 'Ultima evaluacion ' + fmt(e.ultima_evaluacion) : 'Sin evaluaciones'"><i class="fas fa-clipboard-check"></i> {{ e.evaluaciones_count || 0 }}</span>
+                <span class="ens-av" :title="`${e.muestras_completadas_count || 0} de ${e.muestras_count || 0} muestras con resultado`"><i class="fas fa-vial"></i> {{ e.muestras_completadas_count || 0 }}/{{ e.muestras_count || 0 }}</span>
+                <small class="ens-sub" :class="{ 'is-alerta': sinActividad(e) }" :title="sinActividad(e) ? 'Mas de 30 dias sin evaluaciones ni muestreos' : ''">{{ actividad(e) ? 'ult. ' + fmt(actividad(e)) : 'sin actividad' }}</small>
               </td>
               <td><span class="ens-estado" :class="claseEstado(e.estado)">{{ e.estado }}</span></td>
               <td class="ens-actions">
@@ -133,6 +141,11 @@
                   <span class="invalid-feedback" v-if="errors.proyecto_id">{{ errors.proyecto_id[0] }}</span>
                 </div>
               </div>
+              <div class="form-group">
+                <label>Nombre del ensayo</label>
+                <input type="text" maxlength="200" class="form-control" :class="{ 'is-invalid': errors.nombre }" v-model="form.nombre" placeholder="Ej. Evaluacion de densidades de siembra en CG02-163">
+                <span class="invalid-feedback" v-if="errors.nombre">{{ errors.nombre[0] }}</span>
+              </div>
               <div class="form-row">
                 <div class="col-md-4 form-group">
                   <label>Ingenio</label>
@@ -183,9 +196,70 @@
                 </div>
               </div>
 
+              <div class="form-group">
+                <label>Objetivo</label>
+                <textarea rows="2" maxlength="2000" class="form-control" v-model="form.objetivo" placeholder="Que se busca evaluar o demostrar con el ensayo"></textarea>
+              </div>
+
               <div class="ens-section">
-                <i class="fas fa-map-marker-alt"></i> Coordenadas GPS del lote
-                <small>opcional — habilita el mapa y los datos climaticos</small>
+                <i class="fas fa-seedling"></i> Ciclo del cultivo
+                <small>la fecha de siembra o corte calcula la edad del cultivo en evaluaciones, NDVI y clima</small>
+              </div>
+              <div class="form-row">
+                <div class="col-md-3 form-group">
+                  <label>Ciclo</label>
+                  <select class="form-control" v-model="form.ciclo">
+                    <option :value="null">Sin definir</option>
+                    <option v-for="c in ciclos" :key="c" :value="c">{{ c }}</option>
+                  </select>
+                </div>
+                <div class="col-md-3 form-group">
+                  <label>{{ form.ciclo && form.ciclo !== 'Plantia' ? 'Fecha del corte anterior' : 'Fecha de siembra' }}</label>
+                  <input type="date" class="form-control" :class="{ 'is-invalid': errors.fecha_siembra }" v-model="form.fecha_siembra">
+                  <span class="invalid-feedback" v-if="errors.fecha_siembra">{{ errors.fecha_siembra[0] }}</span>
+                </div>
+                <div class="col-md-3 form-group">
+                  <label>Cosecha prevista</label>
+                  <input type="date" class="form-control" :class="{ 'is-invalid': errors.fecha_cosecha_prevista }" v-model="form.fecha_cosecha_prevista">
+                  <span class="invalid-feedback" v-if="errors.fecha_cosecha_prevista">{{ errors.fecha_cosecha_prevista[0] }}</span>
+                </div>
+                <div class="col-md-3 form-group">
+                  <label>Cosecha real</label>
+                  <input type="date" class="form-control" :class="{ 'is-invalid': errors.fecha_cosecha }" v-model="form.fecha_cosecha">
+                  <span class="invalid-feedback" v-if="errors.fecha_cosecha">{{ errors.fecha_cosecha[0] }}</span>
+                </div>
+              </div>
+              <p class="ens-hint" v-if="edadForm">
+                <i class="fas fa-info-circle"></i> Edad del cultivo: <b>{{ edadForm.texto }}</b> ({{ edadForm.detalle }}).
+              </p>
+
+              <div class="ens-section">
+                <i class="fas fa-map-marker-alt"></i> Ubicacion y coordenadas GPS del lote
+                <small>el GPS habilita el mapa y los datos climaticos; estrato y zona son los mismos de las estaciones</small>
+              </div>
+              <div class="form-row">
+                <div class="col-md-3 form-group">
+                  <label>Estrato</label>
+                  <select class="form-control" v-model="form.estrato">
+                    <option :value="null">Sin definir</option>
+                    <option v-for="s in estratos" :key="s" :value="s">{{ s }}</option>
+                  </select>
+                </div>
+                <div class="col-md-3 form-group">
+                  <label>Zona</label>
+                  <select class="form-control" v-model="form.zona">
+                    <option :value="null">Sin definir</option>
+                    <option v-for="z in zonas" :key="z" :value="z">{{ z }}</option>
+                  </select>
+                </div>
+                <div class="col-md-3 form-group">
+                  <label>Area total (ha)</label>
+                  <input type="number" step="0.01" min="0" class="form-control" v-model="form.area_total">
+                </div>
+                <div class="col-md-3 form-group">
+                  <label>Tipo de suelo</label>
+                  <input type="text" maxlength="100" class="form-control" v-model="form.tipo_suelo" placeholder="Ej. Franco arcilloso">
+                </div>
               </div>
               <div class="form-row">
                 <div class="col-md-5 form-group">
@@ -268,6 +342,9 @@ export default {
     ingenios: { type: Array, default: () => [] },
     responsables: { type: Array, default: () => [] },
     disenos: { type: Array, default: () => [] },
+    ciclos: { type: Array, default: () => [] },
+    estratos: { type: Array, default: () => [] },
+    zonas: { type: Array, default: () => [] },
     fuentesNdvi: { type: Array, default: () => [] },
     carpetas: { type: Array, default: () => [] },
     tiposBitacora: { type: Array, default: () => [] },
@@ -284,6 +361,17 @@ export default {
       filtroProyecto: Number(new URLSearchParams(window.location.search).get('proyecto')) || null,
       paginaActual: 1,
       porPagina: 10,
+      orden: { campo: 'codigo', asc: true },
+      columnas: [
+        { id: 'codigo', label: 'Ensayo', orden: true },
+        { id: 'proyecto', label: 'Proyecto', orden: true },
+        { id: 'ubicacion', label: 'Finca / Lote', orden: true },
+        { id: 'variedad', label: 'Variedad', orden: true },
+        { id: 'edad', label: 'Edad', orden: true },
+        { id: 'responsable', label: 'Responsable', orden: true },
+        { id: 'actividad', label: 'Avance', orden: true },
+        { id: 'estado', label: 'Estado', orden: true },
+      ],
       editando: null,
       form: this.formVacio(),
       errors: {},
@@ -294,13 +382,32 @@ export default {
   computed: {
     filtrados() {
       const q = this.normalizar(this.busqueda.trim());
-      return this.items.filter((e) => {
-        const texto = this.normalizar([e.codigo, e.finca, e.lote, e.variedad].join(' '));
+      const lista = this.items.filter((e) => {
+        const texto = this.normalizar([e.codigo, e.nombre, e.finca, e.lote, e.variedad, e.ciclo, e.responsable && e.responsable.name, e.proyecto && e.proyecto.codigo].join(' '));
         return (!q || texto.includes(q))
           && (!this.filtroEstado || e.estado === this.filtroEstado)
           && (!this.filtroProyecto || e.proyecto_id === this.filtroProyecto);
       });
+      const valor = {
+        codigo: (e) => e.codigo,
+        proyecto: (e) => (e.proyecto ? e.proyecto.codigo : ''),
+        ubicacion: (e) => [e.finca, e.lote].filter(Boolean).join(' '),
+        variedad: (e) => e.variedad || '',
+        // Mayor edad primero = fecha de siembra mas antigua; sin fecha al final.
+        edad: (e) => e.fecha_siembra || '9999',
+        responsable: (e) => (e.responsable ? e.responsable.name : ''),
+        actividad: (e) => this.actividad(e) || '',
+        estado: (e) => ESTADOS.indexOf(e.estado),
+      }[this.orden.campo];
+      const dir = this.orden.asc ? 1 : -1;
+      return lista.sort((a, b) => {
+        const x = valor(a);
+        const y = valor(b);
+        const r = typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'es', { numeric: true });
+        return r * dir || a.codigo.localeCompare(b.codigo, 'es', { numeric: true });
+      });
     },
+    edadForm() { return this.edad(this.form); },
     totalPaginas() {
       return Math.max(1, Math.ceil(this.filtrados.length / this.porPagina));
     },
@@ -324,12 +431,17 @@ export default {
     },
   },
   mounted() {
-    // Enlace directo: ?ensayo=ID[&tab=estructura|mapa|ndvi|clima|archivos|bitacora]
+    // Enlace directo: ?ensayo=ID[&tab=estructura|mapa|ndvi|clima|archivos|bitacora][&vista=croquis]
     const qs = new URLSearchParams(window.location.search);
     const id = Number(qs.get('ensayo'));
     if (id && this.items.some((e) => e.id === id)) {
       this.$refs.detalle.abrir(id);
-      if (qs.get('tab')) this.$refs.detalle.cambiarTab(qs.get('tab'));
+      if (qs.get('vista') === 'croquis') {
+        this.$refs.detalle.vistaParcelas = 'croquis';
+        this.$refs.detalle.cambiarTab(qs.get('tab') || 'estructura');
+      } else if (qs.get('tab')) {
+        this.$refs.detalle.cambiarTab(qs.get('tab'));
+      }
     }
   },
   watch: {
@@ -346,7 +458,49 @@ export default {
         diseno: 'Bloques al azar', cultivo: 'Caña de azúcar', variedad: '',
         responsable_id: this.usuarioId ? Number(this.usuarioId) : null, estado: 'Planificado',
         lat: null, lng: null, num_tratamientos: 3, num_repeticiones: 3, area_parcela: 50,
+        nombre: '', objetivo: '', ciclo: null, fecha_siembra: '', fecha_cosecha_prevista: '', fecha_cosecha: '',
+        estrato: null, zona: null, area_total: null, tipo_suelo: '',
       };
+    },
+    fmt(s) { if (!s) return ''; const [y, m, d] = String(s).slice(0, 10).split('-'); return `${d}/${m}/${y}`; },
+    /** Edad del cultivo desde la siembra o el corte anterior (hasta la cosecha si ya ocurrio). */
+    edad(e) {
+      if (!e || !e.fecha_siembra) return null;
+      const ini = Date.parse(String(e.fecha_siembra).slice(0, 10));
+      const fin = e.fecha_cosecha ? Date.parse(String(e.fecha_cosecha).slice(0, 10)) : Date.now();
+      const dias = Math.floor((fin - ini) / 86400000);
+      if (Number.isNaN(dias)) return null;
+      if (dias < 0) return { texto: 'por sembrar', detalle: `en ${-dias} dias` };
+      const meses = dias / 30.44;
+      return {
+        texto: meses >= 1 ? `${meses.toFixed(1)} meses` : `${dias} dias`,
+        detalle: e.fecha_cosecha ? `${dias} dias al cosechar` : `${dias} dias${e.ciclo && e.ciclo !== 'Plantia' ? ' desde el corte' : ' desde siembra'}`,
+      };
+    },
+    actividad(e) {
+      return [e.ultima_evaluacion, e.ultimo_muestreo].filter(Boolean).map((f) => String(f).slice(0, 10)).sort().pop() || null;
+    },
+    sinActividad(e) {
+      const a = this.actividad(e);
+      return e.estado === 'En campo' && (!a || Date.now() - Date.parse(a) > 30 * 86400000);
+    },
+    ordenarPor(campo) {
+      this.orden = { campo, asc: this.orden.campo === campo ? !this.orden.asc : true };
+    },
+    exportar() {
+      const esc = (s) => { const t = String(s === null || s === undefined ? '' : s); return /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+      const cab = ['Codigo', 'Nombre', 'Proyecto', 'Ingenio', 'Finca', 'Lote', 'Estrato', 'Zona', 'Cultivo', 'Variedad', 'Ciclo', 'Fecha siembra/corte', 'Cosecha prevista', 'Cosecha real',
+        'Edad', 'Diseno', 'Tratamientos', 'Repeticiones', 'Parcelas', 'Area parcela (m2)', 'Area total (ha)', 'Responsable', 'Estado', 'Evaluaciones', 'Ultima evaluacion', 'Muestras', 'Muestras con resultado', 'Latitud', 'Longitud'];
+      const filas = this.filtrados.map((e) => [
+        e.codigo, e.nombre, e.proyecto && e.proyecto.codigo, e.ingenio && e.ingenio.nombre, e.finca, e.lote, e.estrato, e.zona, e.cultivo, e.variedad, e.ciclo,
+        e.fecha_siembra, e.fecha_cosecha_prevista, e.fecha_cosecha, this.edad(e) ? this.edad(e).texto : '', e.diseno, e.tratamientos_count, e.num_repeticiones, e.parcelas_count,
+        e.area_parcela, e.area_total, e.responsable && e.responsable.name, e.estado, e.evaluaciones_count, e.ultima_evaluacion, e.muestras_count, e.muestras_completadas_count, e.lat, e.lng,
+      ].map(esc).join(';'));
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([`﻿${[cab.join(';'), ...filas].join('\r\n')}`], { type: 'text/csv;charset=utf-8' }));
+      a.download = `ensayos_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     },
     normalizar(s) {
       return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -370,6 +524,9 @@ export default {
         diseno: e.diseno || null, cultivo: e.cultivo || '', variedad: e.variedad || '', responsable_id: e.responsable_id,
         estado: e.estado, lat: e.lat, lng: e.lng, num_tratamientos: e.num_tratamientos,
         num_repeticiones: e.num_repeticiones, area_parcela: e.area_parcela,
+        nombre: e.nombre || '', objetivo: e.objetivo || '', ciclo: e.ciclo || null,
+        fecha_siembra: e.fecha_siembra || '', fecha_cosecha_prevista: e.fecha_cosecha_prevista || '', fecha_cosecha: e.fecha_cosecha || '',
+        estrato: e.estrato || null, zona: e.zona || null, area_total: e.area_total, tipo_suelo: e.tipo_suelo || '',
       };
       this.errors = {};
       window.$(this.$refs.modal).modal('show');
@@ -402,7 +559,7 @@ export default {
       this.guardando = true;
       this.errors = {};
       const payload = { ...this.form, codigo: this.form.codigo.trim() };
-      ['lat', 'lng', 'area_parcela'].forEach((k) => { if (payload[k] === '') payload[k] = null; });
+      ['lat', 'lng', 'area_parcela', 'area_total', 'fecha_siembra', 'fecha_cosecha_prevista', 'fecha_cosecha', 'nombre', 'objetivo', 'tipo_suelo'].forEach((k) => { if (payload[k] === '') payload[k] = null; });
       const editando = this.editando;
       const peticion = editando
         ? window.axios.put(`/investigacion/ensayos/${editando.id}`, payload)
@@ -518,7 +675,22 @@ export default {
   background: var(--cengi-surface); box-shadow: var(--cengi-shadow); overflow: hidden;
 }
 .ens-table-wrap { overflow-x: auto; }
-.ens-table { min-width: 940px; }
+.ens-table { min-width: 980px; }
+.ens-table th, .ens-table td { padding: .65rem .55rem; }
+.ens-table th:first-child, .ens-table td:first-child { padding-left: 14px; }
+.ens-table th.is-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.ens-table th.is-sort:hover { color: var(--cengi-primary-deep); }
+.ens-table th i { margin-left: 3px; font-size: 10px; }
+.ens-sort-off { opacity: .3; }
+.ens-col-ens { max-width: 240px; }
+.ens-nombre { display: block; overflow: hidden; color: var(--cengi-muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.ens-sub { display: block; color: var(--cengi-muted); font-size: 11px; }
+.ens-sub.is-alerta { color: #c95500; font-weight: 700; }
+.ens-av { margin-right: 8px; color: var(--cengi-ink); font-size: 12.5px; font-weight: 600; }
+.ens-av i { margin-right: 3px; color: #73BC25; font-size: 11px; }
+.ens-btn-sec { border: 1px solid var(--cengi-border); border-radius: 9px; background: #fff; color: var(--cengi-primary-deep); font-weight: 600; white-space: nowrap; }
+.ens-btn-sec:hover { border-color: #73BC25; color: var(--cengi-primary-deep); }
+.ens-btn-sec i { color: #73BC25; }
 .ens-table td { vertical-align: middle; }
 .ens-row { cursor: default; }
 .ens-codigo { color: var(--cengi-primary-deep); font-weight: 700; }

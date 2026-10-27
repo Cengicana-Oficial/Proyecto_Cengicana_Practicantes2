@@ -72,8 +72,15 @@
             <p class="text-muted small mb-1" v-if="img.sensor">Sensor: {{ img.sensor }}</p>
             <p class="text-muted small mb-1" v-if="img.resolucion">Resolucion: {{ img.resolucion }}</p>
             <p class="text-muted small mb-2" v-if="img.width">{{ img.width }}x{{ img.height }} px</p>
-            <a :href="'/storage/' + img.path" target="_blank" class="btn btn-secondary btn-sm">
+            <a :href="base + '/storage/' + img.path" target="_blank" class="btn btn-secondary btn-sm">
               <i class="fas fa-download"></i> Descargar
+            </a>
+            <a
+              v-if="img.ensayo_id && ['NDVI', 'Multiespectral'].includes(img.tipo)"
+              :href="`${base}/investigacion/ensayos?ensayo=${img.ensayo_id}&tab=ndvi`" class="btn btn-success btn-sm"
+              title="Procesar el NDVI por parcela y verlo en el Mapa GPS del ensayo"
+            >
+              <i class="fas fa-satellite"></i> NDVI del ensayo
             </a>
           </div>
         </div>
@@ -101,6 +108,8 @@ export default {
       form: this.formVacio(),
       errors: {},
       subiendo: false,
+      // Prefijo del proxy (/sigec) para enlaces a storage y a otras vistas.
+      base: ((document.querySelector('meta[name="app-base"]') || {}).content || '').replace(/\/+$/, ''),
     };
   },
   methods: {
@@ -154,7 +163,7 @@ export default {
         showCancelButton: true,
         confirmButtonText: 'Eliminar',
         cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#c4471b',
+        confirmButtonColor: '#FF6B00',
       }).then((res) => {
         if (!res.isConfirmed) return;
         window.axios.delete(`/soporte/imagenes-geo/${img.id}`).then(() => {

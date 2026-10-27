@@ -145,7 +145,7 @@ export default {
         showCancelButton: true,
         confirmButtonText: 'Eliminar',
         cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#c4471b',
+        confirmButtonColor: '#FF6B00',
       }).then((res) => {
         if (!res.isConfirmed) return;
         window.axios.delete(`/soporte/archivos/${a.id}`).then(() => {

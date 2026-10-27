@@ -13,6 +13,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
+/**
+ * Codificacion de los ID de muestra de SIGEC. La pagina Laboratorio de SIGEC se retiro:
+ * el trabajo de laboratorio se hace en el modulo Laboratorio del portal y SIGEC lee
+ * sus resultados (App\Services\LaboratorioModulo).
+ */
 class LaboratorioController extends Controller
 {
     public static function tipoCodigo(string $tipo): string
@@ -27,113 +32,30 @@ class LaboratorioController extends Controller
         ][$tipo] ?? 'OT';
     }
 
-    public static function generarIdMuestra(Ensayo $ensayo, string $tipo): string
+    /**
+     * ID unico: SIGEC-{ensayo}-{tipo}-{secuencia}-{aa}, con el año de la fecha de
+     * muestreo. La secuencia sigue al mayor ID existente (no al conteo), asi
+     * borrar una muestra nunca provoca un ID repetido.
+     */
+    public static function generarIdMuestra(Ensayo $ensayo, string $tipo, $fecha = null): string
     {
-        $anio = now()->format('y');
-        $codigo = self::tipoCodigo($tipo);
+        $prefijo = self::prefijoId($ensayo, $tipo);
+        $anio = \Illuminate\Support\Carbon::parse($fecha ?: now())->format('y');
 
-        $secuencia = MuestraLab::where('ensayo_id', $ensayo->id)
-            ->where('tipo', $tipo)
-            ->whereYear('fecha', now()->year)
-            ->count() + 1;
-
-        return sprintf('SIGEC-%s-%s-%03d-%s', $ensayo->codigo, $codigo, $secuencia, $anio);
+        return sprintf('%s%03d-%s', $prefijo, self::ultimaSecuencia($prefijo, $anio) + 1, $anio);
     }
 
-    protected function verificarAcceso()
+    public static function prefijoId(Ensayo $ensayo, string $tipo): string
     {
-        abort_unless(Auth::user()->can('view_lab') || Auth::user()->can('create_muestra'), 403);
+        return sprintf('SIGEC-%s-%s-', $ensayo->codigo, self::tipoCodigo($tipo));
     }
 
-    public function index()
+    /** Mayor secuencia usada con ese prefijo y año (0 si no hay). */
+    public static function ultimaSecuencia(string $prefijo, string $anio): int
     {
-        $this->verificarAcceso();
-
-        $user = Auth::user();
-        $ensayoIds = Ensayo::visiblesPara($user)->pluck('id');
-
-        $muestras = MuestraLab::with(['proyecto', 'ensayo', 'tratamiento', 'parcela', 'solicitante'])
-            ->whereIn('ensayo_id', $ensayoIds)
-            ->orderByDesc('fecha')
-            ->get();
-
-        $catalogo = AnaliticoPorTipo::orderBy('tipo_muestra')->orderBy('id')->get()
-            ->groupBy('tipo_muestra')
-            ->map(fn ($items) => $items->map(fn ($a) => ['clave' => $a->clave, 'label' => $a->label, 'unidad' => $a->unidad])->values());
-
-        return view('component', [
-            'title' => 'Laboratorio',
-            'component' => 'laboratorio-index',
-            'params' => [
-                'muestras' => $muestras,
-                'analitosPorTipo' => $catalogo,
-                'tiposMuestra' => array_keys($catalogo->toArray()),
-                'proyectos' => Proyecto::visiblesPara($user)->orderBy('codigo')->get(['id', 'codigo']),
-                'ensayos' => Ensayo::visiblesPara($user)->orderBy('codigo')->get(['id', 'codigo', 'proyecto_id']),
-                'tratamientos' => Tratamiento::whereIn('ensayo_id', $ensayoIds)->get(['id', 'ensayo_id', 'codigo']),
-                'parcelas' => Parcela::whereIn('ensayo_id', $ensayoIds)->get(['id', 'ensayo_id', 'tratamiento_id', 'codigo']),
-                'kpis' => [
-                    'total' => $muestras->count(),
-                    'completadas' => $muestras->where('estado', 'Completado')->count(),
-                    'en_proceso' => $muestras->where('estado', 'En proceso')->count(),
-                    'pendientes' => $muestras->whereIn('estado', ['Pendiente', 'Recibida'])->count(),
-                ],
-                'puedeCrear' => $user->can('create_muestra'),
-                'puedeEliminar' => $user->can('admin_only'),
-            ],
-        ]);
-    }
-
-    protected function reglas(): array
-    {
-        return [
-            'proyecto_id' => 'required|exists:proyectos,id',
-            'ensayo_id' => 'required|exists:ensayos,id',
-            'tipo' => 'required|string',
-            'fecha' => 'required|date',
-            'tratamiento_id' => 'nullable|exists:tratamientos,id',
-            'parcela_id' => 'nullable|exists:parcelas,id',
-            'repeticion' => 'nullable|integer|min:1',
-            'estado' => 'nullable|in:Recibida,Pendiente,En proceso,Completado',
-            'analitos' => 'nullable|array',
-            'obs' => 'nullable|string|max:1000',
-            'analistas' => 'nullable|string|max:150',
-            'resultado_texto' => 'nullable|string|max:2000',
-            'fecha_resultado' => 'nullable|date',
-        ];
-    }
-
-    public function store(Request $request)
-    {
-        Gate::authorize('create_muestra');
-
-        $data = $request->validate($this->reglas());
-        $ensayo = Ensayo::findOrFail($data['ensayo_id']);
-
-        $data['id_muestra'] = self::generarIdMuestra($ensayo, $data['tipo']);
-        $data['estado'] = $data['estado'] ?? 'Pendiente';
-        $data['solicitante_id'] = Auth::id();
-
-        $muestra = MuestraLab::create($data);
-
-        return response()->json($muestra->load(['proyecto', 'ensayo', 'tratamiento', 'parcela', 'solicitante']), 201);
-    }
-
-    public function update(Request $request, MuestraLab $muestra)
-    {
-        Gate::authorize('create_muestra');
-
-        $muestra->update($request->validate($this->reglas()));
-
-        return response()->json($muestra->load(['proyecto', 'ensayo', 'tratamiento', 'parcela', 'solicitante']));
-    }
-
-    public function destroy(MuestraLab $muestra)
-    {
-        Gate::authorize('admin_only');
-
-        $muestra->delete();
-
-        return response()->json(['ok' => true]);
+        return (int) MuestraLab::where('id_muestra', 'like', str_replace(['%', '_'], ['\%', '\_'], $prefijo) . '%-' . $anio)
+            ->pluck('id_muestra')
+            ->map(fn ($id) => preg_match('/-(\d+)-\d{2}$/', $id, $m) ? (int) $m[1] : 0)
+            ->max();
     }
 }

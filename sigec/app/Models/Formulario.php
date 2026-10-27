@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Formulario extends Model
 {
-    protected $fillable = ['nombre', 'proyecto_id', 'ensayo_id', 'campos', 'creado_por', 'fecha', 'estado'];
+    protected $fillable = ['nombre', 'descripcion', 'proyecto_id', 'ensayo_id', 'campos', 'creado_por', 'fecha', 'estado', 'promocion'];
 
     protected $casts = [
         'fecha' => 'date',

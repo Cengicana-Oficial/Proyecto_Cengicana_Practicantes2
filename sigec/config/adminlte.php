@@ -330,6 +330,12 @@ return [
             'can' => 'menu_general',
         ],
         [
+            'text' => 'Clima',
+            'route' => 'investigacion.clima.index',
+            'icon' => 'fas fa-fw fa-cloud-sun-rain',
+            'can' => 'menu_general',
+        ],
+        [
             'text' => 'Variables',
             'route' => 'investigacion.variables.index',
             'icon' => 'fas fa-fw fa-chart-line',

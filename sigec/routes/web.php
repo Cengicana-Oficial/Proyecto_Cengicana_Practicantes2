@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\UsuariosController;
 use App\Http\Controllers\Analisis\AnalisisController;
 use App\Http\Controllers\Auth\SsoController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Investigacion\ClimaBaseController;
 use App\Http\Controllers\Investigacion\ClimaController;
 use App\Http\Controllers\Investigacion\EnsayosController;
 use App\Http\Controllers\Investigacion\EvaluacionesController;
@@ -13,7 +14,6 @@ use App\Http\Controllers\Investigacion\VariablesController;
 use App\Http\Controllers\Soporte\ArchivosController;
 use App\Http\Controllers\Soporte\BitacoraController;
 use App\Http\Controllers\Soporte\FormulariosController;
-use App\Http\Controllers\Soporte\GraficasController;
 use App\Http\Controllers\Soporte\ImagenesGeoController;
 use App\Http\Controllers\Soporte\LaboratorioController;
 use App\Http\Controllers\Soporte\MuestrasConsultaController;
@@ -66,9 +66,19 @@ Route::middleware(['auth'])->group(function () {
         Route::put('tratamientos/{tratamiento}', [EnsayosController::class, 'updateTratamiento'])->name('tratamientos.update');
         Route::delete('tratamientos/{tratamiento}', [EnsayosController::class, 'destroyTratamiento'])->name('tratamientos.destroy');
         Route::post('ensayos/{ensayo}/parcelas/generar', [EnsayosController::class, 'generarParcelas'])->name('ensayos.parcelas.generar');
+        Route::post('ensayos/{ensayo}/parcelas/aleatorizar', [EnsayosController::class, 'aleatorizarParcelas'])->name('ensayos.parcelas.aleatorizar');
+        Route::post('ensayos/{ensayo}/parcelas/intercambiar', [EnsayosController::class, 'intercambiarParcelas'])->name('ensayos.parcelas.intercambiar');
         Route::put('parcelas/{parcela}', [EnsayosController::class, 'updateParcela'])->name('parcelas.update');
+        Route::post('ensayos/{ensayo}/croquis', [EnsayosController::class, 'storeCroquis'])->name('ensayos.croquis.store');
+        Route::put('ensayos/{ensayo}/croquis', [EnsayosController::class, 'updateCroquis'])->name('ensayos.croquis.update');
+        Route::delete('ensayos/{ensayo}/croquis', [EnsayosController::class, 'destroyCroquis'])->name('ensayos.croquis.destroy');
+        Route::put('ensayos/{ensayo}/parcelas/geometria', [EnsayosController::class, 'guardarGeometrias'])->name('ensayos.parcelas.geometria');
         Route::post('ensayos/{ensayo}/ndvi', [EnsayosController::class, 'storeNdvi'])->name('ensayos.ndvi.store');
         Route::delete('ndvi/{registro}', [EnsayosController::class, 'destroyNdvi'])->name('ndvi.destroy');
+        Route::post('ensayos/{ensayo}/ndvi-imagenes', [EnsayosController::class, 'storeNdviImagen'])->name('ensayos.ndvi-imagenes.store');
+        Route::put('ndvi-imagenes/{imagen}', [EnsayosController::class, 'updateNdviImagen'])->name('ndvi-imagenes.update');
+        Route::delete('ndvi-imagenes/{imagen}', [EnsayosController::class, 'destroyNdviImagen'])->name('ndvi-imagenes.destroy');
+        Route::post('ndvi-imagenes/{imagen}/tratamientos', [EnsayosController::class, 'ndviImagenATratamientos'])->name('ndvi-imagenes.tratamientos');
 
         Route::get('clima/estaciones', [ClimaController::class, 'estaciones'])->name('clima.estaciones');
         Route::post('clima/estaciones', [ClimaController::class, 'store'])->name('clima.estaciones.store');
@@ -76,36 +86,66 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('clima/estaciones/{estacion}', [ClimaController::class, 'destroy'])->name('clima.estaciones.destroy');
         Route::get('clima/estaciones/{estacion}/datos', [ClimaController::class, 'datos'])->name('clima.estaciones.datos');
         Route::post('clima/estaciones/{estacion}/importar', [ClimaController::class, 'importar'])->name('clima.estaciones.importar');
+        Route::get('clima', [ClimaController::class, 'pagina'])->name('clima.index');
+        Route::get('clima/consulta', [ClimaController::class, 'consulta'])->name('clima.consulta');
+        Route::get('clima/analisis', [ClimaController::class, 'analisis'])->name('clima.analisis');
+        Route::get('clima/serie', [ClimaController::class, 'serie'])->name('clima.serie');
+        Route::get('clima/base/estado', [ClimaBaseController::class, 'estado'])->name('clima.base.estado');
+        Route::get('clima/base/cobertura-mes', [ClimaBaseController::class, 'coberturaMes'])->name('clima.base.cobertura');
+        Route::get('clima/base/bitacora', [ClimaBaseController::class, 'bitacora'])->name('clima.base.bitacora');
+        Route::get('clima/calidad/rangos', [ClimaBaseController::class, 'rangos'])->name('clima.calidad.rangos');
+        Route::put('clima/calidad/rangos', [ClimaBaseController::class, 'guardarRangos'])->name('clima.calidad.rangos.guardar');
+        Route::post('clima/calidad/revisar', [ClimaBaseController::class, 'revisar'])->name('clima.calidad.revisar');
+        Route::get('clima/calidad/hallazgos', [ClimaBaseController::class, 'hallazgos'])->name('clima.calidad.hallazgos');
+        Route::post('clima/calidad/accion', [ClimaBaseController::class, 'accion'])->name('clima.calidad.accion');
+        Route::post('clima/estaciones-catalogo', [ClimaController::class, 'importarCatalogo'])->name('clima.estaciones.catalogo');
+        Route::get('clima/estaciones-plantilla', [ClimaController::class, 'plantillaCatalogo'])->name('clima.estaciones.plantilla');
+        Route::get('clima/icc', [ClimaController::class, 'iccEstado'])->name('clima.icc');
+        Route::post('clima/icc/sincronizar', [ClimaController::class, 'iccSincronizar'])->name('clima.icc.sincronizar');
+        Route::get('clima/icc/config', [ClimaController::class, 'iccConfig'])->name('clima.icc.config');
+        Route::put('clima/icc/config', [ClimaController::class, 'iccConfigGuardar'])->name('clima.icc.config.guardar');
+        Route::post('clima/icc/probar', [ClimaController::class, 'iccProbar'])->name('clima.icc.probar');
 
         Route::get('variables', [VariablesController::class, 'index'])->name('variables.index');
         Route::post('variables', [VariablesController::class, 'store'])->name('variables.store');
         Route::put('variables/{variable}', [VariablesController::class, 'update'])->name('variables.update');
         Route::delete('variables/{variable}', [VariablesController::class, 'destroy'])->name('variables.destroy');
+        Route::get('variables/{variable}/resumen', [VariablesController::class, 'resumen'])->name('variables.resumen');
+        Route::post('variables/lote', [VariablesController::class, 'lote'])->name('variables.lote');
 
         Route::get('evaluaciones', [EvaluacionesController::class, 'index'])->name('evaluaciones.index');
         Route::post('evaluaciones', [EvaluacionesController::class, 'store'])->name('evaluaciones.store');
+        Route::post('evaluaciones/lote', [EvaluacionesController::class, 'lote'])->name('evaluaciones.lote');
+        Route::get('evaluaciones/laboratorio', [EvaluacionesController::class, 'laboratorio'])->name('evaluaciones.laboratorio');
         Route::put('evaluaciones/{evaluacion}', [EvaluacionesController::class, 'update'])->name('evaluaciones.update');
         Route::delete('evaluaciones/{evaluacion}', [EvaluacionesController::class, 'destroy'])->name('evaluaciones.destroy');
     });
 
     Route::group(['as' => 'soporte.', 'prefix' => 'soporte'], function () {
-        Route::get('laboratorio', [LaboratorioController::class, 'index'])->name('laboratorio.index');
-        Route::post('laboratorio', [LaboratorioController::class, 'store'])->name('laboratorio.store');
-        Route::put('laboratorio/{muestra}', [LaboratorioController::class, 'update'])->name('laboratorio.update');
-        Route::delete('laboratorio/{muestra}', [LaboratorioController::class, 'destroy'])->name('laboratorio.destroy');
+        // El trabajo de laboratorio vive en el modulo Laboratorio del portal; SIGEC solo consulta sus resultados.
+        Route::get('laboratorio', fn () => redirect()->route('soporte.muestras-consulta.index'))->name('laboratorio.index');
 
         Route::get('muestras/generar', [MuestrasGenController::class, 'index'])->name('muestras-gen.index');
         Route::post('muestras/generar', [MuestrasGenController::class, 'store'])->name('muestras-gen.store');
+        Route::get('muestras/generar/lote', [MuestrasGenController::class, 'lote'])->name('muestras-gen.lote');
+        Route::post('muestras/campos', [MuestrasGenController::class, 'guardarCampo'])->name('muestras-campos.store');
+        Route::put('muestras/campos/{campo}', [MuestrasGenController::class, 'guardarCampo'])->name('muestras-campos.update');
+        Route::delete('muestras/campos/{campo}', [MuestrasGenController::class, 'eliminarCampo'])->name('muestras-campos.destroy');
 
         Route::get('muestras/consulta', [MuestrasConsultaController::class, 'index'])->name('muestras-consulta.index');
         Route::put('muestras/consulta/{muestra}', [MuestrasConsultaController::class, 'update'])->name('muestras-consulta.update');
+        Route::post('muestras/consulta/lote', [MuestrasConsultaController::class, 'lote'])->name('muestras-consulta.lote');
+        Route::post('muestras/consulta/sincronizar-laboratorio', [MuestrasConsultaController::class, 'sincronizarLaboratorio'])->name('muestras-consulta.sincronizar');
+        Route::get('muestras/consulta/vinculos-sugeridos', [MuestrasConsultaController::class, 'sugerencias'])->name('muestras-consulta.sugerencias');
+        Route::get('muestras/consulta/envios-laboratorio', [MuestrasConsultaController::class, 'enviosLaboratorio'])->name('muestras-consulta.envios');
+        Route::post('muestras/consulta/vincular', [MuestrasConsultaController::class, 'vincular'])->name('muestras-consulta.vincular');
+        Route::post('muestras/consulta/{muestra}/desvincular', [MuestrasConsultaController::class, 'desvincular'])->name('muestras-consulta.desvincular');
         Route::get('imagenes-geo', [ImagenesGeoController::class, 'index'])->name('imagenes-geo.index');
         Route::post('imagenes-geo', [ImagenesGeoController::class, 'store'])->name('imagenes-geo.store');
         Route::delete('imagenes-geo/{imagen}', [ImagenesGeoController::class, 'destroy'])->name('imagenes-geo.destroy');
 
-        Route::get('graficas', [GraficasController::class, 'index'])->name('graficas.index');
-        Route::get('graficas/datos-variable', [GraficasController::class, 'datosVariable'])->name('graficas.datos-variable');
-        Route::get('graficas/datos-analito', [GraficasController::class, 'datosAnalito'])->name('graficas.datos-analito');
+        // Las graficas se integraron: campo y laboratorio en Evaluaciones › Graficos; clima en Ensayos › Clima.
+        Route::get('graficas', fn () => redirect()->route('investigacion.evaluaciones.index', ['tab' => 'graficos', 'vista' => 'tiempo']))->name('graficas.index');
 
         Route::get('archivos', [ArchivosController::class, 'index'])->name('archivos.index');
         Route::post('archivos', [ArchivosController::class, 'store'])->name('archivos.store');
@@ -121,6 +161,13 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('formularios/{formulario}', [FormulariosController::class, 'destroy'])->name('formularios.destroy');
         Route::post('formularios/{formulario}/asignaciones', [FormulariosController::class, 'storeAsignacion'])->name('formularios.asignaciones.store');
         Route::delete('formularios/asignaciones/{asignacion}', [FormulariosController::class, 'destroyAsignacion'])->name('formularios.asignaciones.destroy');
+        Route::put('formularios/asignaciones/{asignacion}', [FormulariosController::class, 'updateAsignacion'])->name('formularios.asignaciones.update');
+        Route::post('formularios/{formulario}/mi-asignacion', [FormulariosController::class, 'miAsignacion'])->name('formularios.mi-asignacion');
+        Route::get('formularios/asignaciones/{asignacion}/respuestas', [FormulariosController::class, 'respuestasAsignacion'])->name('formularios.asignaciones.respuestas');
+        Route::post('formularios/asignaciones/{asignacion}/respuestas', [FormulariosController::class, 'guardarRespuestas'])->name('formularios.asignaciones.guardar');
+        Route::get('formularios/{formulario}/respuestas', [FormulariosController::class, 'respuestasFormulario'])->name('formularios.respuestas');
+        Route::post('formularios/respuestas/promover', [FormulariosController::class, 'promover'])->name('formularios.respuestas.promover');
+        Route::delete('formularios/respuestas/{respuesta}', [FormulariosController::class, 'destroyRespuesta'])->name('formularios.respuestas.destroy');
 
         Route::get('reportes', [ReportesController::class, 'index'])->name('reportes.index');
         Route::get('reportes/exportar/evaluaciones', [ReportesController::class, 'exportarEvaluaciones'])->name('reportes.exportar-evaluaciones');

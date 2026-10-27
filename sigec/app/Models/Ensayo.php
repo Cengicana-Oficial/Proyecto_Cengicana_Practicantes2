@@ -7,10 +7,29 @@ use Illuminate\Database\Eloquent\Model;
 class Ensayo extends Model
 {
     protected $fillable = [
-        'codigo', 'proyecto_id', 'ingenio_id', 'finca', 'lote', 'diseno',
-        'cultivo', 'variedad', 'responsable_id', 'estado', 'lat', 'lng',
+        'codigo', 'nombre', 'objetivo', 'proyecto_id', 'ingenio_id', 'finca', 'lote', 'diseno',
+        'cultivo', 'variedad', 'ciclo', 'fecha_siembra', 'fecha_cosecha_prevista', 'fecha_cosecha',
+        'responsable_id', 'estado', 'lat', 'lng', 'estrato', 'zona', 'area_total', 'tipo_suelo',
         'num_tratamientos', 'num_repeticiones', 'area_parcela',
     ];
+
+    protected $casts = [
+        'fecha_siembra' => 'date:Y-m-d',
+        'fecha_cosecha_prevista' => 'date:Y-m-d',
+        'fecha_cosecha' => 'date:Y-m-d',
+    ];
+
+    /** Evaluaciones registradas en las parcelas del ensayo. */
+    public function evaluaciones()
+    {
+        return $this->hasManyThrough(Evaluacion::class, Parcela::class, 'ensayo_id', 'parcela_id', 'id', 'id');
+    }
+
+    /** Muestras generadas para el ensayo (laboratorio). */
+    public function muestras()
+    {
+        return $this->hasMany(MuestraLab::class, 'ensayo_id', 'id');
+    }
 
     public function proyecto()
     {
@@ -50,6 +69,16 @@ class Ensayo extends Model
     public function ndvi()
     {
         return $this->hasMany(NdviRegistro::class, 'ensayo_id', 'id');
+    }
+
+    public function ndviImagenes()
+    {
+        return $this->hasMany(NdviImagen::class, 'ensayo_id', 'id');
+    }
+
+    public function croquis()
+    {
+        return $this->hasOne(CroquisGeo::class, 'ensayo_id', 'id');
     }
 
     /**

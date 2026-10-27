@@ -8,7 +8,7 @@ class Evaluacion extends Model
 {
     protected $table = 'evaluaciones';
 
-    protected $fillable = ['fecha', 'variable_id', 'parcela_id', 'valor', 'obs', 'responsable_id'];
+    protected $fillable = ['fecha', 'variable_id', 'parcela_id', 'valor', 'obs', 'responsable_id', 'respuesta_id'];
 
     protected $casts = [
         'fecha' => 'date',
@@ -22,6 +22,12 @@ class Evaluacion extends Model
     public function parcela()
     {
         return $this->belongsTo(Parcela::class, 'parcela_id', 'id');
+    }
+
+    /** Respuesta de formulario de campo de la que se promovio (null si se registro directo). */
+    public function respuesta()
+    {
+        return $this->belongsTo(Respuesta::class, 'respuesta_id', 'id');
     }
 
     public function responsable()

@@ -63,6 +63,24 @@ return [
             ]) : [],
         ],
 
+        // Modulo Laboratorio del portal: SIGEC solo LEE resultados (usuario con SELECT unicamente).
+        'laboratorio' => [
+            'driver' => 'mysql',
+            'host' => env('LAB_DB_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('LAB_DB_PORT', '3306'),
+            'database' => env('LAB_DB_DATABASE', 'laboratorios_prueba'),
+            'username' => env('LAB_DB_USERNAME', ''),
+            'password' => env('LAB_DB_PASSWORD', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_general_ci',
+            'prefix' => '',
+            'strict' => false,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::ATTR_TIMEOUT => 5,
+            ]) : [],
+        ],
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DATABASE_URL'),

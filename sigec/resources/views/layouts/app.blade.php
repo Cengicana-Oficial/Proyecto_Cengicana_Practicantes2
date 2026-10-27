@@ -31,11 +31,11 @@
         'Ensayos experimentales' => 'Detalle de ensayos en campo, tratamientos y parcelas',
         'Variables' => 'Catalogo de variables de evaluacion',
         'Evaluaciones' => 'Registro y consulta de resultados de campo',
-        'Laboratorio' => 'Recepcion y seguimiento de muestras',
+        'Clima · Red de estaciones' => 'Catalogo de estaciones meteorologicas, ubicaciones y datos diarios',
+
         'Generacion de ID de Muestras' => 'Creacion de lotes y etiquetas de muestra',
-        'Consulta de Muestras' => 'Trazabilidad del ciclo de laboratorio',
+        'Consulta de Muestras' => 'Seguimiento y resultados del modulo Laboratorio',
         'Imagenes Geoespaciales' => 'Archivos y sensores asociados a ensayos',
-        'Graficas Temporales' => 'Comportamiento de variables y analitos',
         'Archivos' => 'Documentacion asociada a proyectos y ensayos',
         'Bitacora' => 'Historial de actividades de investigacion',
         'Formularios de campo' => 'Captura y asignacion de formularios',
@@ -75,6 +75,9 @@
                     <a href="{{ route('investigacion.ensayos.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.ensayos.*') ? ' is-active' : '' }}">
                         <i class="fas fa-seedling"></i><span>Ensayos</span>
                     </a>
+                    <a href="{{ route('investigacion.clima.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.clima.index') ? ' is-active' : '' }}">
+                        <i class="fas fa-cloud-sun-rain"></i><span>Clima y estaciones</span>
+                    </a>
                     <a href="{{ route('investigacion.variables.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.variables.*') ? ' is-active' : '' }}">
                         <i class="fas fa-chart-line"></i><span>Variables</span>
                     </a>
@@ -87,22 +90,19 @@
             @can('menu_general')
                 <div class="cengi-nav-group">
                     <div class="cengi-nav-label">Soporte</div>
-                    <a href="{{ route('soporte.laboratorio.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.laboratorio.*') ? ' is-active' : '' }}">
-                        <i class="fas fa-flask"></i><span>Laboratorio</span>
-                    </a>
+                    {{-- El trabajo de laboratorio se hace en el modulo Laboratorio del portal; aqui se generan las muestras y se consultan sus resultados. --}}
                     @can('create_muestra')
                         <a href="{{ route('soporte.muestras-gen.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.muestras-gen.*') ? ' is-active' : '' }}">
                             <i class="fas fa-barcode"></i><span>Generar muestras</span>
                         </a>
-                        <a href="{{ route('soporte.muestras-consulta.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.muestras-consulta.*') ? ' is-active' : '' }}">
-                            <i class="fas fa-search"></i><span>Consultar muestras</span>
-                        </a>
                     @endcan
+                    @canany(['create_muestra', 'view_lab'])
+                        <a href="{{ route('soporte.muestras-consulta.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.muestras-consulta.*') || request()->routeIs('soporte.laboratorio.*') ? ' is-active' : '' }}">
+                            <i class="fas fa-flask"></i><span>Muestras y resultados</span>
+                        </a>
+                    @endcanany
                     <a href="{{ route('soporte.imagenes-geo.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.imagenes-geo.*') ? ' is-active' : '' }}">
                         <i class="fas fa-satellite"></i><span>Imagenes geoespaciales</span>
-                    </a>
-                    <a href="{{ route('soporte.graficas.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.graficas.*') ? ' is-active' : '' }}">
-                        <i class="fas fa-chart-area"></i><span>Graficas temporales</span>
                     </a>
                     <a href="{{ route('soporte.archivos.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.archivos.*') ? ' is-active' : '' }}">
                         <i class="fas fa-paperclip"></i><span>Archivos</span>
