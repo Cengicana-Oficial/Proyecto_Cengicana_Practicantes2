@@ -39,7 +39,7 @@ COPY dockerfiles/sigec-app/000-default.conf /etc/apache2/sites-available/000-def
 COPY dockerfiles/sigec-app/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 
 WORKDIR /var/www/html/sigec
-COPY sigec/. /var/www/html/sigec
+COPY experimentos/. /var/www/html/sigec
 
 RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
 # public/vendor (AdminLTE, Bootstrap, jQuery, Font Awesome) no se versiona (.gitignore):

@@ -47,7 +47,7 @@ if (!$esCli) {
 }
 
 // Roles del compendio que reciben sigec.acceder por defecto. Ver
-// sigec/config/sso.php::role_map para el mapeo correspondiente de estos
+// experimentos/config/sso.php::role_map para el mapeo correspondiente de estos
 // mismos rol_id a un rol spatie dentro de SIGEC.
 $rolesConAccesoPorDefecto = [1, 2];
 

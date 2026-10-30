@@ -36,7 +36,7 @@ RUN a2enconf error-pages
 # exponer su puerto publicamente: modulos.cengicana.org/sigec/... se sirve
 # asi bajo el mismo dominio ya configurado, sin necesitar un subdominio ni
 # tocar el proxy externo. Ver dockerfiles/modulos-app/sigec-proxy.conf y
-# sigec/app/Providers/AppServiceProvider.php (URL::forceRootUrl) para la
+# experimentos/app/Providers/AppServiceProvider.php (URL::forceRootUrl) para la
 # otra mitad de este arreglo: sin eso, los enlaces/assets que genera
 # Laravel saldrian sin el prefijo /sigec.
 COPY dockerfiles/modulos-app/sigec-proxy.conf /etc/apache2/conf-available/sigec-proxy.conf

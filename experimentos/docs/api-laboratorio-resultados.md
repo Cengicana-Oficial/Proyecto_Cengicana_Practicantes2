@@ -20,16 +20,16 @@ En ambos casos el Laboratorio decide **qué** y **cuándo**. SIGEC nunca escribe
 | Red | Solo red interna de Docker (servicio `sigec`). Desde el portal público responde `403`. |
 | Formato | `Content-Type: application/json`, UTF-8 |
 | Autenticación | Firma HMAC-SHA256 con secreto compartido (`X-Lab-Timestamp` y `X-Lab-Firma`) |
-| Ejemplo de código | `sigec/docs/ejemplos/enviar_resultados_laboratorio.php` (PHP + cURL, sin dependencias): `sigec_consultar_muestras()` y `sigec_enviar_resultados()` |
+| Ejemplo de código | `experimentos/docs/ejemplos/enviar_resultados_laboratorio.php` (PHP + cURL, sin dependencias): `sigec_consultar_muestras()` y `sigec_enviar_resultados()` |
 
 ## 1. Consulta de muestras por QR
 
-La etiqueta de SIGEC lleva en el QR solo el ID (por ejemplo `SIGEC-01-SU-003-26`). Al escanearlo en la recepción o en la identificación del lote, el Laboratorio pide a SIGEC los datos y los guarda en sus propias tablas. Así no hay que digitar nada.
+La etiqueta de SIGEC lleva en el QR solo el ID (por ejemplo `SIGEC-COS-26-01-E01-SU-003-26`). Al escanearlo en la recepción o en la identificación del lote, el Laboratorio pide a SIGEC los datos y los guarda en sus propias tablas. Así no hay que digitar nada.
 
 Cuerpo (de 1 a 200 IDs; no distingue mayúsculas de minúsculas):
 
 ```json
-{ "ids": ["SIGEC-01-SU-002-26", "SIGEC-01-AG-001-26"] }
+{ "ids": ["SIGEC-COS-26-01-E01-SU-002-26", "SIGEC-COS-26-01-E01-AG-001-26"] }
 ```
 
 Respuesta `200`:
@@ -41,13 +41,13 @@ Respuesta `200`:
   "encontradas": 1,
   "muestras": [
     {
-      "id_sigec": "SIGEC-01-SU-002-26",
+      "id_sigec": "SIGEC-COS-26-01-E01-SU-002-26",
       "tipo": "Suelo",
       "tipo_lab": "suelos",
       "fecha_muestreo": "2026-10-20",
-      "nombre_ensayo": "01",
-      "ensayo": { "codigo": "01", "nombre": null, "diseno": "Bloques", "cultivo": "Caña", "variedad": "CG02-163" },
-      "proyecto": { "codigo": "001", "nombre": "Ensayo de brotacion" },
+      "nombre_ensayo": "COS-26-01-E01",
+      "ensayo": { "codigo": "COS-26-01-E01", "nombre": null, "diseno": "Bloques", "cultivo": "Caña", "variedad": "CG02-163" },
+      "proyecto": { "codigo": "COS-26-01", "nombre": "Ensayo de brotacion" },
       "institucion": null,
       "finca": "Ilusiones",
       "lote": "16-186978",
@@ -57,17 +57,17 @@ Respuesta `200`:
       "observaciones": null,
       "campos": [ { "clave": "profundidad", "etiqueta": "Profundidad", "valor": "0-20", "unidad": "cm" } ],
       "identificacion": {
-        "lectura_codigo": "SIGEC-01-SU-002-26", "parcela": "P-01", "bloque": null,
+        "lectura_codigo": "SIGEC-COS-26-01-E01-SU-002-26", "parcela": "P-01", "bloque": null,
         "tratamiento": "T1 - Estimulante 1", "repeticion": "1", "variedad": "CG02-163", "observaciones": null
       },
       "campos_lab": {
-        "fecha": "2026-10-20", "ensayo": "01", "finca": "Ilusiones", "loteCampo": "16-186978",
+        "fecha": "2026-10-20", "ensayo": "COS-26-01-E01", "finca": "Ilusiones", "loteCampo": "16-186978",
         "parcela": "P-01", "tratamiento": "T1 - Estimulante 1", "repeticion": "1", "variedad": "CG02-163", "profundidad": "0-20"
       },
       "estado_sigec": "Recibida"
     }
   ],
-  "no_encontradas": ["SIGEC-01-AG-001-26"]
+  "no_encontradas": ["SIGEC-COS-26-01-E01-AG-001-26"]
 }
 ```
 
@@ -87,7 +87,7 @@ Los IDs que no existen se listan en `no_encontradas` (no es un error). Los códi
 
 ### Qué muestras se envían
 
-Solo las muestras cuyo código de etiqueta empieza con `SIGEC-` (por ejemplo `SIGEC-01-SU-003-26`). En el módulo Laboratorio ese código queda en `muestra_identificacion.lectura_codigo` al escanear la etiqueta QR durante la identificación del lote.
+Solo las muestras cuyo código de etiqueta empieza con `SIGEC-` (por ejemplo `SIGEC-COS-26-01-E01-SU-003-26`). En el módulo Laboratorio ese código queda en `muestra_identificacion.lectura_codigo` al escanear la etiqueta QR durante la identificación del lote.
 
 Momentos recomendados para enviar:
 
@@ -135,7 +135,7 @@ $firma = 'sha256=' . hash_hmac('sha256', $ts . "\n" . $cuerpo, $secreto);
   },
   "muestras": [
     {
-      "id_sigec": "SIGEC-01-JU-001-26",
+      "id_sigec": "SIGEC-COS-26-01-E01-JU-001-26",
       "codigo_lab": "C-005-10-26",
       "id_muestra_lab": 220,
       "resultados": [
@@ -198,7 +198,7 @@ Ejemplo `200`:
   "recibidas": 3,
   "aplicadas": 2,
   "rechazadas": [
-    { "id_sigec": "SIGEC-01-JU-009-26", "motivo": "El ID no existe en SIGEC." }
+    { "id_sigec": "SIGEC-COS-26-01-E01-JU-009-26", "motivo": "El ID no existe en SIGEC." }
   ]
 }
 ```
@@ -222,7 +222,7 @@ Desde el contenedor del Laboratorio:
 
 ```bash
 # Consulta de datos por QR
-LAB_API_SECRET='<secreto>' php enviar_resultados_laboratorio.php consultar SIGEC-01-SU-002-26
+LAB_API_SECRET='<secreto>' php enviar_resultados_laboratorio.php consultar SIGEC-COS-26-01-E01-SU-002-26
 # Envío de resultados (JSON de ejemplo)
 LAB_API_SECRET='<secreto>' php enviar_resultados_laboratorio.php enviar envio.json
 ```
