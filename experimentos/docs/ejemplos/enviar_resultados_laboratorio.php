@@ -7,7 +7,7 @@
  *  - sigec_enviar_resultados(): envia a SIGEC el avance o los resultados firmados.
  *
  * Uso desde linea de comandos (prueba):
- *   LAB_API_SECRET=... php enviar_resultados_laboratorio.php consultar SIGEC-01-SU-001-26 [SIGEC-...]
+ *   LAB_API_SECRET=... php enviar_resultados_laboratorio.php consultar SIGEC-COS-26-01-E01-SU-001-26 [SIGEC-...]
  *   LAB_API_SECRET=... php enviar_resultados_laboratorio.php enviar envio.json
  * SIGEC_API_BASE cambia la direccion (por defecto http://sigec/api/laboratorio).
  */

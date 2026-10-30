@@ -41,7 +41,7 @@
             <div v-for="c in copias" :key="m.id + '-' + c" class="mg-etq" :class="{ 'is-denso': conDatos && lineasEtiqueta(m).length > 3, 'is-muy-denso': conDatos && lineasEtiqueta(m).length > 5 }">
               <img v-if="qr[m.id_muestra]" :src="qr[m.id_muestra]" alt="">
               <div class="mg-etq-txt">
-                <b>{{ m.id_muestra }}</b>
+                <b><i v-for="(p, pi) in tramosId(m.id_muestra)" :key="pi" class="mg-etq-tramo" :class="{ 'is-largo': p.length > 15 }">{{ p }}</i></b>
                 <template v-if="conDatos">
                   <span v-for="(l, li) in lineasEtiqueta(m)" :key="li" :class="{ 'is-vacio': l.vacio }">
                     <template v-if="l.etiqueta">{{ l.etiqueta }}: </template>{{ l.vacio ? '' : l.valor }}
@@ -477,6 +477,12 @@ export default {
      * activos del tipo (incluida la observacion). Los vacios salen con linea para
      * escribir a mano, salvo que se desactive.
      */
+    // SIGEC-COS-26-01-E01-SU-001-26 -> ["SIGEC-COS-26-01", "-E01-SU-001-26"]: en etiquetas
+    // pequeñas el ID se parte entre proyecto y ensayo, no en cualquier letra.
+    tramosId(id) {
+      const i = String(id).search(/-E\d+-/);
+      return i > 0 ? [id.slice(0, i), id.slice(i)] : [id];
+    },
     lineasEtiqueta(m) {
       const lineas = [{ valor: `${m.tipo} · ${this.fmt(m.fecha)}` }];
       const ubic = [];
@@ -876,7 +882,8 @@ export default {
 .mg-etq { display: flex; align-items: center; gap: 2.5mm; overflow: hidden; padding: 2mm; border: 1px dashed #b8bfb4; border-radius: 2mm; background: #fff; }
 .mg-etq img { flex: 0 0 auto; }
 .mg-etq-txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
-.mg-etq-txt b { color: #000; font-family: 'Consolas', 'Courier New', monospace; word-break: break-all; }
+.mg-etq-txt b { color: #000; font-family: 'Consolas', 'Courier New', monospace; word-break: normal; }
+.mg-etq-txt b .mg-etq-tramo { display: inline-block; font-style: normal; overflow-wrap: anywhere; }
 .mg-etq-txt span { color: #333 !important; }
 .mg-etq-txt span.is-vacio::after { content: ""; display: inline-block; width: 18mm; margin-left: 1mm; border-bottom: 0.25mm solid #555; vertical-align: -0.3mm; }
 .mg-etq.is-denso .mg-etq-txt span { font-size: 85% !important; }
@@ -885,6 +892,7 @@ export default {
 .mg-print.is-chica .mg-etq { width: 50mm; height: 25mm; }
 .mg-print.is-chica .mg-etq img { width: 20mm; height: 20mm; }
 .mg-print.is-chica .mg-etq-txt b { font-size: 7.5pt; }
+.mg-print.is-chica .mg-etq-txt b .is-largo { font-size: 6.6pt; }
 .mg-print.is-chica .mg-etq-txt span { font-size: 6pt; }
 .mg-print.is-mediana .mg-etq { width: 70mm; height: 35mm; }
 .mg-print.is-mediana .mg-etq img { width: 29mm; height: 29mm; }

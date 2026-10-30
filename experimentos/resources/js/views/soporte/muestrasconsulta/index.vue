@@ -389,8 +389,9 @@ export default {
       etapas: ETAPAS,
       agrupaciones: AGRUPACIONES,
       estados: ['Recibida', 'Pendiente', 'En proceso', 'Completado'],
-      busqueda: '',
-      filtroEtapa: '',
+      // Enlaces del dashboard: ?buscar=texto &etapa=recibida|proceso|completado
+      busqueda: new URLSearchParams(window.location.search).get('buscar') || '',
+      filtroEtapa: ETAPAS.some((e) => e.id === new URLSearchParams(window.location.search).get('etapa')) ? new URLSearchParams(window.location.search).get('etapa') : '',
       filtroTipo: '',
       desde: '',
       hasta: '',

@@ -115,7 +115,7 @@ class ClimaBaseController extends Controller
     /** Revisa un año (la pantalla recorre año por año con barra de progreso). */
     public function revisar(Request $request, ClimaCalidad $calidad)
     {
-        Gate::authorize('upload_files');
+        Gate::authorize('gestionar_clima');
         $data = $request->validate(['anio' => 'required|integer|min:1990|max:'.date('Y')]);
 
         return response()->json($calidad->revisar(Carbon::create($data['anio'], 1, 1), Carbon::create($data['anio'], 12, 31)));
@@ -156,7 +156,7 @@ class ClimaBaseController extends Controller
 
     public function accion(Request $request, ClimaCalidad $calidad)
     {
-        Gate::authorize('upload_files');
+        Gate::authorize('gestionar_clima');
         $data = $request->validate([
             'ids' => 'required|array|min:1|max:500',
             'ids.*' => 'integer',

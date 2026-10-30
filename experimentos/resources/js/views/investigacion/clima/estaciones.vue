@@ -73,6 +73,36 @@
       <div v-for="o in resultado.omitidas" :key="'o' + o.fila"><i class="fas fa-times-circle"></i> Fila {{ o.fila }} omitida: {{ o.motivo }}</div>
     </div>
 
+    <!-- ============ Carga de datos diarios de una estacion (permiso gestionar_clima) ============ -->
+    <div v-if="puedeCargarDatos && estaciones.length" class="ce-datos">
+      <h6><i class="fas fa-file-upload"></i> Cargar datos de una estacion <small>archivo exportado de REDMET u otra red</small></h6>
+      <div class="ce-datos-fila">
+        <select class="form-control form-control-sm ce-datos-est" v-model="datosSel" aria-label="Estacion">
+          <option :value="null">Estacion...</option>
+          <option v-for="s in estaciones" :key="s.id" :value="s.id">{{ s.nombre }} ({{ s.codigo }}){{ s.registros_count ? ` · ${s.registros_count} dias` : '' }}</option>
+        </select>
+        <label class="btn btn-secondary btn-sm mb-0">
+          <i class="fas fa-paperclip"></i> {{ archivoDatos ? archivoDatos.name : 'Elegir archivo (CSV / Excel, max. 20 MB)' }}
+          <input type="file" ref="archivoDatos" accept=".csv,.txt,.xlsx,.xls" hidden @change="archivoDatos = $event.target.files[0] || null">
+        </label>
+        <button type="button" class="btn btn-success btn-sm" @click="importarDatos" :disabled="!datosSel || !archivoDatos || importandoDatos">
+          <i :class="importandoDatos ? 'fas fa-spinner fa-spin' : 'fas fa-upload'"></i> {{ importandoDatos ? 'Importando...' : 'Importar' }}
+        </button>
+      </div>
+      <p class="ce-ayuda mb-0">
+        La primera fila debe tener encabezados. Se reconocen: <b>Fecha</b> (o Fecha/Hora; datos diarios o cada 15 min),
+        <b>Lluvia/Precipitacion</b> (mm), <b>Temp. max/min/media</b> o <b>Temperatura</b> (°C), <b>HR/Humedad relativa</b> (%),
+        <b>Velocidad del viento</b> (km/h o m/s), <b>Radiacion</b> (W/m² o MJ/m²) y <b>ETo</b> (mm).
+        Los datos subdiarios se agregan por dia; reimportar un periodo reemplaza sus valores para todos los ensayos que usan la estacion.
+      </p>
+      <div v-if="resultadoDatos" class="ce-res">
+        <i class="fas fa-check-circle"></i>
+        {{ resultadoDatos.dias }} dias importados ({{ fecha(resultadoDatos.desde) }} → {{ fecha(resultadoDatos.hasta) }}) de {{ resultadoDatos.filas_leidas }} filas.
+        Columnas: {{ Object.keys(resultadoDatos.columnas).filter((k) => k !== 'fecha').map((k) => NOMBRES_VAR[k] || k).join(', ') }}.
+        <span v-if="resultadoDatos.omitidas.length"> {{ resultadoDatos.omitidas.length }} fila(s) omitidas (p. ej. fila {{ resultadoDatos.omitidas[0].fila }}: {{ resultadoDatos.omitidas[0].motivo }}).</span>
+      </div>
+    </div>
+
     <div class="ce-vistas">
       <button type="button" :class="{ 'is-on': vistaCat === 'categorias' }" @click="vistaCat = 'categorias'"><i class="fas fa-tags"></i> Categorias (estrato y zona)</button>
       <button type="button" :class="{ 'is-on': vistaCat === 'mapa' }" @click="mostrarMapa"><i class="fas fa-map-marked-alt"></i> Mapa y ubicaciones</button>
@@ -278,10 +308,13 @@ export default {
   props: {
     estaciones: { type: Array, default: () => [] },
     puedeGestionar: { type: Boolean, default: false },
+    puedeCargarDatos: { type: Boolean, default: false },
   },
   data() {
     return {
       buscar: '', soloSin: false, edicion: {}, guardando: null, importando: false, resultado: null, seleccion: null, ubicando: null,
+      datosSel: null, archivoDatos: null, importandoDatos: false, resultadoDatos: null,
+      NOMBRES_VAR: { lluvia: 'Lluvia', tmax: 'Temp. max', tmin: 'Temp. min', tmed: 'Temp. media', hr: 'HR', hr_min: 'HR min', hr_max: 'HR max', viento: 'Viento', radiacion: 'Radiacion', eto: 'ETo' },
       form: null, creando: false, errorForm: null, redes: ['ICC REDMET', 'INSIVUMEH', 'Ingenio', 'Otra'],
       base: ((document.querySelector('meta[name="app-base"]') || {}).content || '').replace(/\/+$/, ''),
       estratos: ['ALTO', 'MEDIO', 'BAJO', 'LITORAL'],
@@ -549,6 +582,27 @@ export default {
         })
         .finally(() => { this.importando = false; });
     },
+    fecha(f) { if (!f) return ''; const [y, m, d] = String(f).slice(0, 10).split('-'); return `${d}/${m}/${y}`; },
+    /** Datos diarios de una estacion desde un archivo (antes estaba en la pestaña Clima del ensayo). */
+    importarDatos() {
+      const fd = new FormData();
+      fd.append('archivo', this.archivoDatos);
+      this.importandoDatos = true;
+      this.resultadoDatos = null;
+      window.axios.post(`/investigacion/clima/estaciones/${this.datosSel}/importar`, fd)
+        .then(({ data }) => {
+          this.resultadoDatos = data;
+          this.archivoDatos = null;
+          if (this.$refs.archivoDatos) this.$refs.archivoDatos.value = '';
+          this.$swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Datos importados', text: `${data.dias} dias`, timer: 2200, showConfirmButton: false });
+          this.$emit('recargar');
+        })
+        .catch((err) => {
+          const r = err.response;
+          this.$swal.fire({ icon: 'error', title: 'No se pudo importar', text: (r && r.data && (r.data.message || (r.data.errors && Object.values(r.data.errors).flat()[0]))) || 'Error al leer el archivo.' });
+        })
+        .finally(() => { this.importandoDatos = false; });
+    },
     descargar() {
       const c = (v) => (v === null || v === undefined ? '' : String(v).replace(/;/g, ','));
       const n = (v) => (v === null || v === undefined ? '' : String(v).replace('.', ','));
@@ -658,6 +712,12 @@ export default {
   .ce-grid { grid-template-columns: 1fr; }
   .ce-mapa { height: 380px; }
 }
+.ce-datos { margin: 0 0 12px; padding: 12px 14px; border: 1px solid #e3eedb; border-radius: 10px; background: #f7faf3; }
+.ce-datos h6 { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--cengi-primary-deep); }
+.ce-datos h6 i { margin-right: 5px; color: #73BC25; }
+.ce-datos h6 small { margin-left: 4px; color: var(--cengi-muted); font-weight: 500; }
+.ce-datos-fila { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.ce-datos-est { flex: 0 1 320px; width: auto; min-height: 0; }
 </style>
 
 <style>

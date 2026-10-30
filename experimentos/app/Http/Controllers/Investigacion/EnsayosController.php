@@ -15,6 +15,7 @@ use App\Models\Parcela;
 use App\Models\Proyecto;
 use App\Models\Tratamiento;
 use App\Models\User;
+use App\Services\Codificacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 
 class EnsayosController extends Controller
 {
@@ -35,7 +37,6 @@ class EnsayosController extends Controller
     const CARPETAS = ['Protocolo', 'Croquis', 'Datos', 'Informes', 'Otro'];
 
     protected array $reglasValidacion = [
-        'codigo' => 'required|string|max:30',
         'proyecto_id' => 'required|exists:proyectos,id',
         'ingenio_id' => 'nullable|exists:ingenios,id',
         'finca' => 'nullable|string|max:150',
@@ -69,10 +70,10 @@ class EnsayosController extends Controller
     {
         $user = Auth::user();
 
-        $ensayos = $this->conConteos(Ensayo::visiblesPara($user))
-            ->with(['proyecto', 'ingenio', 'responsable'])
+        $ensayos = $this->conHitos($this->conConteos(Ensayo::visiblesPara($user))
+            ->with(['proyecto.programa:id,nombre,sigla,color', 'ingenio', 'responsable'])
             ->orderBy('codigo')
-            ->get();
+            ->get());
 
         return view('component', [
             'title' => 'Ensayos experimentales',
@@ -91,6 +92,8 @@ class EnsayosController extends Controller
                 'tiposBitacora' => BitacoraController::TIPOS,
                 'usuarioId' => $user->id,
                 'storageUrl' => url('storage'),
+                'evaluacionesUrl' => $user->can('menu_general') ? route('investigacion.evaluaciones.index') : null,
+                'muestrasUrl' => ($user->can('create_muestra') || $user->can('view_lab')) ? route('soporte.muestras-consulta.index') : null,
                 'permisos' => [
                     'crear' => $user->can('create_ensayo'),
                     'editar' => $user->can('edit_ensayo'),
@@ -118,6 +121,8 @@ class EnsayosController extends Controller
         $data = $this->validar($request);
 
         $ensayo = DB::transaction(function () use ($data) {
+            // Codigo PROYECTO-ENN; el bloqueo evita que dos altas tomen el mismo numero.
+            $data['codigo'] = Codificacion::codigoEnsayo(Proyecto::lockForUpdate()->findOrFail($data['proyecto_id']));
             $ensayo = Ensayo::create($data);
 
             // Configuracion inicial del diseno: T1..Tn, editables luego en "Estructura".
@@ -137,9 +142,42 @@ class EnsayosController extends Controller
         Gate::authorize('edit_ensayo');
         $this->autorizarVisible($ensayo);
 
-        $ensayo->update($this->validar($request, $ensayo));
+        $data = $this->validar($request, $ensayo);
 
-        return response()->json($this->fila($ensayo));
+        // Al pasar a otro proyecto, el codigo y los IDs de sus muestras se ponen al dia.
+        try {
+            $cambios = DB::transaction(function () use ($ensayo, $data) {
+                Proyecto::lockForUpdate()->findOrFail($data['proyecto_id']);
+                $ensayo->update($data);
+
+                return Codificacion::recodificarEnsayo($ensayo->fresh('proyecto'));
+            });
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage() . ' Mantenga el proyecto actual.'], 422);
+        }
+
+        return response()->json(array_merge($this->fila($ensayo)->toArray(), ['recodificado' => (bool) $cambios]));
+    }
+
+    /** Vista previa del codigo que recibira el ensayo (formulario). */
+    public function codigo(Request $request)
+    {
+        $data = $request->validate([
+            'proyecto_id' => 'required|exists:proyectos,id',
+            'ensayo_id' => 'nullable|exists:ensayos,id',
+        ]);
+        $proyecto = Proyecto::visiblesPara(Auth::user())->findOrFail($data['proyecto_id']);
+        $ensayo = isset($data['ensayo_id']) ? Ensayo::find($data['ensayo_id']) : null;
+
+        if ($ensayo && $ensayo->proyecto_id == $proyecto->id) {
+            return response()->json(['codigo' => $ensayo->codigo, 'cambia' => false]);
+        }
+
+        return response()->json([
+            'codigo' => Codificacion::codigoEnsayo($proyecto, $ensayo),
+            'cambia' => (bool) $ensayo,
+            'bloqueo' => $ensayo ? Codificacion::bloqueo([$ensayo->id]) : null,
+        ]);
     }
 
     public function destroy(Ensayo $ensayo)
@@ -245,6 +283,13 @@ class EnsayosController extends Controller
         if ($evaluaciones > 0) {
             return response()->json([
                 'message' => "No se pueden regenerar las parcelas: ya tienen {$evaluaciones} evaluacion(es) registrada(s).",
+            ], 422);
+        }
+        // muestras_lab.parcela_id es nullOnDelete: regenerar dejaria las muestras sin parcela sin avisar.
+        $muestras = $ensayo->muestras()->whereNotNull('parcela_id')->count();
+        if ($muestras > 0) {
+            return response()->json([
+                'message' => "No se pueden regenerar las parcelas: {$muestras} muestra(s) de laboratorio estan asociadas a ellas.",
             ], 422);
         }
 
@@ -688,10 +733,8 @@ class EnsayosController extends Controller
     protected function validar(Request $request, ?Ensayo $ensayo = null): array
     {
         $reglas = $this->reglasValidacion;
-        $reglas['codigo'] = ['required', 'string', 'max:30', Rule::unique('ensayos', 'codigo')->ignore($ensayo)];
 
         $data = $request->validate($reglas, [
-            'codigo.unique' => 'Ya existe un ensayo con ese codigo.',
             'fecha_cosecha_prevista.after_or_equal' => 'La cosecha prevista no puede ser anterior a la siembra.',
             'fecha_cosecha.after_or_equal' => 'La cosecha no puede ser anterior a la siembra.',
         ]);
@@ -805,9 +848,30 @@ class EnsayosController extends Controller
 
     protected function fila(Ensayo $ensayo): Ensayo
     {
-        return $this->conConteos(Ensayo::whereKey($ensayo->id))
-            ->with(['proyecto', 'ingenio', 'responsable'])
-            ->first();
+        return $this->conHitos($this->conConteos(Ensayo::whereKey($ensayo->id))
+            ->with(['proyecto.programa:id,nombre,sigla,color', 'ingenio', 'responsable'])
+            ->get())->first();
+    }
+
+    /**
+     * Fechas de evaluacion y de muestreo de cada ensayo (vista "Ciclo del cultivo"):
+     * una entrada por dia, con cuantos valores / muestras se registraron.
+     */
+    protected function conHitos($ensayos)
+    {
+        $ids = $ensayos->pluck('id');
+        $evaluaciones = DB::table('evaluaciones as v')->join('parcelas as p', 'p.id', '=', 'v.parcela_id')
+            ->whereIn('p.ensayo_id', $ids)->groupBy('p.ensayo_id', 'v.fecha')
+            ->selectRaw('p.ensayo_id, v.fecha, COUNT(*) as n, COUNT(DISTINCT v.variable_id) as variables')
+            ->orderBy('v.fecha')->get()->groupBy('ensayo_id');
+        $muestreos = DB::table('muestras_lab')->whereIn('ensayo_id', $ids)->groupBy('ensayo_id', 'fecha', 'tipo')
+            ->selectRaw('ensayo_id, fecha, tipo, COUNT(*) as n')
+            ->orderBy('fecha')->get()->groupBy('ensayo_id');
+
+        return $ensayos->each(fn ($e) => $e->setAttribute('hitos', [
+            'evaluaciones' => $evaluaciones->get($e->id, collect())->map(fn ($r) => ['fecha' => substr($r->fecha, 0, 10), 'n' => (int) $r->n, 'variables' => (int) $r->variables])->values(),
+            'muestreos' => $muestreos->get($e->id, collect())->map(fn ($r) => ['fecha' => substr($r->fecha, 0, 10), 'tipo' => $r->tipo, 'n' => (int) $r->n])->values(),
+        ]));
     }
 
     protected function detalle(Ensayo $ensayo): array

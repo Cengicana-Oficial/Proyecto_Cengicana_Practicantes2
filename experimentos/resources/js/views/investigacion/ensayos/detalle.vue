@@ -1,6 +1,6 @@
 <template>
   <div class="modal fade" ref="modal" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable det-dialog" role="document">
       <div class="modal-content det">
         <div class="modal-header det-header">
           <div class="det-title" v-if="e">
@@ -36,26 +36,83 @@
 
           <template v-if="d">
             <!-- ============ INFORMACION ============ -->
-            <section v-show="tab === 'info'">
-              <p v-if="e.objetivo" class="det-objetivo"><i class="fas fa-bullseye"></i> <b>Objetivo:</b> {{ e.objetivo }}</p>
-              <div class="det-info-grid">
-                <div v-for="f in camposInfo" :key="f.label" class="det-field">
-                  <span>{{ f.label }}</span>
-                  <strong :class="{ 'det-vacio': !f.valor }">{{ f.valor || 'Sin dato' }}</strong>
+            <section v-show="tab === 'info'" class="det-info">
+              <div class="det-info-main">
+                <p v-if="e.objetivo" class="det-objetivo"><i class="fas fa-bullseye"></i> <b>Objetivo:</b> {{ e.objetivo }}</p>
+                <div class="det-ficha">
+                  <div v-for="g in gruposInfo" :key="g.titulo" class="det-ficha-grupo">
+                    <h6><i :class="g.icono"></i> {{ g.titulo }}</h6>
+                    <dl>
+                      <template v-for="f in g.campos">
+                        <dt :key="'t' + f.label">{{ f.label }}</dt>
+                        <dd :key="'d' + f.label" :class="{ 'det-vacio': !f.valor }">{{ f.valor || 'Sin dato' }}</dd>
+                      </template>
+                    </dl>
+                  </div>
+                </div>
+                <div class="det-crono">
+                  <h6><i class="fas fa-stream"></i> Cronograma del ensayo <small>siembra o corte, evaluaciones, muestreos y cosecha</small></h6>
+                  <ensayos-ciclo :ensayos="[e]" :estados="ESTADOS_ENSAYO" compacto></ensayos-ciclo>
                 </div>
               </div>
-              <div class="det-gps" :class="{ 'is-off': !tieneGps }">
-                <i :class="tieneGps ? 'fas fa-map-marker-alt' : 'fas fa-location-arrow'"></i>
-                <template v-if="tieneGps">GPS registrado: {{ Number(e.lat).toFixed(5) }}, {{ Number(e.lng).toFixed(5) }}</template>
-                <template v-else>Sin coordenadas GPS — edite el ensayo para agregarlas (habilita mapa y clima).</template>
-              </div>
-              <div class="det-pills">
-                <button type="button" class="det-pill" @click="cambiarTab('estructura')"><i class="fas fa-flask"></i> {{ d.tratamientos.length }} tratamientos</button>
-                <button type="button" class="det-pill" @click="cambiarTab('estructura')"><i class="fas fa-border-all"></i> {{ d.parcelas.length }} parcelas</button>
-                <button type="button" class="det-pill" @click="cambiarTab('ndvi')"><i class="fas fa-satellite"></i> {{ d.ndvi.length }} lecturas NDVI</button>
-                <button type="button" class="det-pill" @click="cambiarTab('archivos')"><i class="fas fa-paperclip"></i> {{ d.archivos.length }} archivos</button>
-                <button type="button" class="det-pill" @click="cambiarTab('bitacora')"><i class="fas fa-book-open"></i> {{ d.bitacora.length }} entradas de bitacora</button>
-              </div>
+
+              <aside class="det-info-side">
+                <!-- Ciclo del cultivo -->
+                <div class="det-card">
+                  <h6><i class="fas fa-seedling"></i> Ciclo del cultivo</h6>
+                  <template v-if="e.fecha_siembra">
+                    <div class="det-ciclo-edad"><b>{{ edadMeses }}</b> <span>{{ e.ciclo || '' }}</span></div>
+                    <div class="det-ciclo-linea">
+                      <div class="det-ciclo-barra"><i :style="{ width: (avanceCiclo === null ? 100 : avanceCiclo) + '%' }" :class="{ 'is-abierta': avanceCiclo === null }"></i></div>
+                      <div class="det-ciclo-fechas">
+                        <span>{{ e.ciclo && e.ciclo !== 'Plantia' ? 'Corte' : 'Siembra' }}<br><b>{{ fmtFecha(e.fecha_siembra) }}</b></span>
+                        <span class="text-right">{{ e.fecha_cosecha ? 'Cosechado' : 'Cosecha prevista' }}<br><b>{{ fmtFecha(e.fecha_cosecha || e.fecha_cosecha_prevista) || '—' }}</b></span>
+                      </div>
+                    </div>
+                    <small v-if="textoCosecha" :class="{ 'is-alerta': alertaCosecha }">{{ textoCosecha }}</small>
+                  </template>
+                  <p v-else class="det-vacio-txt">
+                    Registre la fecha de siembra o corte para calcular la edad y los dias despues de siembra de cada evaluacion.
+                    <a v-if="permisos.editar" href="#" @click.prevent="editar">Completar</a>
+                  </p>
+                </div>
+
+                <!-- Avance -->
+                <div class="det-card">
+                  <h6><i class="fas fa-tasks"></i> Avance del ensayo</h6>
+                  <component :is="evaluacionesUrl ? 'a' : 'div'" :href="evaluacionesUrl ? `${evaluacionesUrl}?ensayo=${e.id}` : null" class="det-avance">
+                    <i class="fas fa-clipboard-check"></i>
+                    <span><b>{{ e.evaluaciones_count || 0 }}</b> valores evaluados<small>{{ e.ultima_evaluacion ? 'Ultima: ' + fmtFecha(e.ultima_evaluacion) + ' · ' + fechasEvaluacion + ' fecha(s)' : 'Sin evaluaciones' }}</small></span>
+                    <i v-if="evaluacionesUrl" class="fas fa-chevron-right"></i>
+                  </component>
+                  <component :is="muestrasUrl ? 'a' : 'div'" :href="muestrasUrl ? `${muestrasUrl}?buscar=${encodeURIComponent(e.codigo)}` : null" class="det-avance">
+                    <i class="fas fa-vial"></i>
+                    <span><b>{{ e.muestras_completadas_count || 0 }}/{{ e.muestras_count || 0 }}</b> muestras con resultado<small>{{ e.ultimo_muestreo ? 'Ultimo muestreo: ' + fmtFecha(e.ultimo_muestreo) : 'Sin muestreos' }}</small></span>
+                    <i v-if="muestrasUrl" class="fas fa-chevron-right"></i>
+                  </component>
+                  <button type="button" class="det-avance" @click="cambiarTab('ndvi')">
+                    <i class="fas fa-satellite"></i>
+                    <span><b>{{ (d.ndvi_imagenes || []).length }}</b> imagenes NDVI<small>{{ d.ndvi.length }} lecturas por tratamiento</small></span>
+                    <i class="fas fa-chevron-right"></i>
+                  </button>
+                  <button type="button" class="det-avance" @click="cambiarTab('bitacora')">
+                    <i class="fas fa-book-open"></i>
+                    <span><b>{{ d.bitacora.length }}</b> entradas de bitacora<small>{{ d.bitacora.length ? 'Ultima: ' + fmtFecha(d.bitacora[0].fecha) + ' · ' + d.bitacora[0].tipo : 'Sin registros de manejo' }}</small></span>
+                    <i class="fas fa-chevron-right"></i>
+                  </button>
+                  <button type="button" class="det-avance" @click="cambiarTab('archivos')">
+                    <i class="fas fa-paperclip"></i>
+                    <span><b>{{ d.archivos.length }}</b> archivos<small>Protocolo, croquis, datos e informes</small></span>
+                    <i class="fas fa-chevron-right"></i>
+                  </button>
+                </div>
+
+                <button type="button" class="det-gps" :class="{ 'is-off': !tieneGps }" @click="tieneGps ? cambiarTab('mapa') : (permisos.editar && editar())">
+                  <i :class="tieneGps ? 'fas fa-map-marker-alt' : 'fas fa-location-arrow'"></i>
+                  <template v-if="tieneGps">{{ Number(e.lat).toFixed(5) }}, {{ Number(e.lng).toFixed(5) }} · ver mapa</template>
+                  <template v-else>Sin coordenadas GPS: agreguelas para usar mapa y clima</template>
+                </button>
+              </aside>
             </section>
 
             <!-- ============ ESTRUCTURA ============ -->
@@ -101,20 +158,20 @@
               </div>
 
               <div class="det-table-wrap">
-                <table class="table det-table">
+                <table class="table det-table is-compacta">
                   <thead><tr><th style="width:110px">Codigo</th><th>Descripcion / factor evaluado</th><th style="width:120px">Unidades (reps)</th><th style="width:90px">Parcelas</th><th v-if="permisos.editar" style="width:50px"></th></tr></thead>
                   <tbody>
                     <tr v-for="t in d.tratamientos" :key="t.id">
                       <td>
-                        <input v-if="permisos.editar" class="form-control form-control-sm" maxlength="20" v-model="t.codigo" @change="guardarTratamiento(t)">
+                        <input v-if="permisos.editar" class="form-control form-control-sm det-inline" maxlength="20" v-model="t.codigo" @change="guardarTratamiento(t)">
                         <span v-else class="det-tag">{{ t.codigo }}</span>
                       </td>
                       <td>
-                        <input v-if="permisos.editar" :ref="'desc-' + t.id" class="form-control form-control-sm" maxlength="255" v-model="t.descripcion" placeholder="Descripcion del tratamiento" @change="guardarTratamiento(t)">
+                        <input v-if="permisos.editar" :ref="'desc-' + t.id" class="form-control form-control-sm det-inline" maxlength="255" v-model="t.descripcion" placeholder="Descripcion del tratamiento" @change="guardarTratamiento(t)">
                         <span v-else>{{ t.descripcion || '—' }}</span>
                       </td>
                       <td>
-                        <input v-if="permisos.editar" type="number" min="1" max="50" class="form-control form-control-sm" v-model="t.unidades" @change="guardarTratamiento(t)">
+                        <input v-if="permisos.editar" type="number" min="1" max="50" class="form-control form-control-sm det-inline" v-model="t.unidades" @change="guardarTratamiento(t)">
                         <span v-else>{{ t.unidades || '—' }}</span>
                       </td>
                       <td class="text-center">{{ t.parcelas_count }}</td>
@@ -128,7 +185,7 @@
               </div>
 
               <div class="det-sec-head mt-4">
-                <h6><i class="fas fa-border-all"></i> Parcelas</h6>
+                <h6><i class="fas fa-border-all"></i> Parcelas <small v-if="d.parcelas.length" class="det-muted">{{ d.parcelas.length }} · {{ d.tratamientos.length }} trat. × {{ repeticiones.length }} rep.</small></h6>
                 <div class="det-switch" v-if="d.parcelas.length">
                   <button type="button" :class="{ 'is-active': vistaParcelas === 'tabla' }" @click="vistaParcelas = 'tabla'"><i class="fas fa-list"></i> Tabla</button>
                   <button type="button" :class="{ 'is-active': vistaParcelas === 'croquis' }" @click="vistaParcelas = 'croquis'"><i class="fas fa-th"></i> Croquis</button>
@@ -182,6 +239,32 @@
                   </tbody>
                 </table>
               </div>
+              <div v-if="vistaParcelas === 'croquis' && concordancia" class="det-conc" :class="concordancia.alertas.length ? 'is-warn' : 'is-ok'">
+                <div class="det-conc-h">
+                  <i :class="concordancia.alertas.length ? 'fas fa-exclamation-triangle' : 'fas fa-check-circle'"></i>
+                  <b>Diseño y croquis</b>
+                  <span>Diseño: {{ concordancia.total }} parcelas ({{ d.tratamientos.length }} trat. × {{ repeticiones.length }} rep.) · Croquis: {{ concordancia.ubicadas }} ubicadas · cargado el {{ fmtFecha(String(d.croquis.created_at).slice(0, 10)) }}</span>
+                </div>
+                <template v-if="concordancia.alertas.length">
+                  <ul>
+                    <li v-for="(a, i) in concordancia.alertas" :key="i"><i :class="a.icono"></i> {{ a.texto }}</li>
+                  </ul>
+                  <p class="det-conc-nota">
+                    El croquis es el plano fisico: cambiar tratamientos, aleatorizar o regenerar parcelas no lo modifica.
+                    Para que coincidan, suba el plano actualizado con las parcelas rotuladas como en SIGEC
+                    ({{ d.parcelas[0].codigo }} … {{ d.parcelas[d.parcelas.length - 1].codigo }}) y use <b>Detectar en el PDF</b>,
+                    o ubique las parcelas con <b>Rejilla</b> o <b>Dibujar</b>.
+                  </p>
+                  <div v-if="permisos.editar" class="det-conc-acc">
+                    <label class="btn btn-success btn-sm mb-0">
+                      <i class="fas fa-sync-alt"></i> Reemplazar croquis
+                      <input type="file" accept=".pdf,.png,.jpg,.jpeg" hidden @change="$refs.croquisMapa && $refs.croquisMapa.subir($event)">
+                    </label>
+                    <button type="button" class="btn btn-secondary btn-sm" @click="$refs.croquisMapa && $refs.croquisMapa.cambiarModo('rejilla')"><i class="fas fa-th"></i> Ubicar con rejilla</button>
+                  </div>
+                </template>
+                <p v-else class="det-conc-nota">Las {{ concordancia.total }} parcelas del diseño estan ubicadas en el croquis y cada repeticion forma un bloque.</p>
+              </div>
               <croquis-mapa
                 v-if="vistaParcelas === 'croquis' || !d.parcelas.length"
                 ref="croquisMapa"
@@ -198,7 +281,7 @@
                 @ver-mapa="cambiarTab('mapa')"
               ></croquis-mapa>
               <div v-if="vistaParcelas !== 'croquis' && d.parcelas.length" class="det-table-wrap">
-                <table class="table det-table">
+                <table class="table det-table is-compacta">
                   <thead><tr><th>Codigo</th><th>Tratamiento</th><th>Repeticion</th><th>Posicion</th><th style="width:130px">Area (m²)</th><th>Notas</th><th>Evaluaciones</th></tr></thead>
                   <tbody>
                     <tr v-for="p in d.parcelas" :key="p.id">
@@ -207,11 +290,11 @@
                       <td>{{ p.repeticion }}</td>
                       <td>{{ p.posicion || '—' }}</td>
                       <td>
-                        <input v-if="permisos.editar" type="number" min="0" step="0.1" class="form-control form-control-sm" v-model="p.area" @change="guardarParcela(p)">
+                        <input v-if="permisos.editar" type="number" min="0" step="0.1" class="form-control form-control-sm det-inline" v-model="p.area" @change="guardarParcela(p)">
                         <span v-else>{{ p.area ? p.area + ' m²' : '—' }}</span>
                       </td>
                       <td>
-                        <input v-if="permisos.editar" class="form-control form-control-sm" maxlength="500" v-model="p.notas" placeholder="—" @change="guardarParcela(p)">
+                        <input v-if="permisos.editar" class="form-control form-control-sm det-inline" maxlength="500" v-model="p.notas" placeholder="Agregar nota" @change="guardarParcela(p)">
                         <span v-else class="det-muted">{{ p.notas || '—' }}</span>
                       </td>
                       <td class="text-center">{{ p.evaluaciones_count }}</td>
@@ -325,31 +408,25 @@
             </section>
 
             <section v-if="climaVisto" v-show="tab === 'clima'">
-              <ensayo-clima :ensayo="e" :puede-gestionar="!!permisos.eliminar" :puede-importar="!!permisos.archivos"></ensayo-clima>
+              <ensayo-clima :ensayo="e"></ensayo-clima>
             </section>
 
             <!-- ============ ARCHIVOS ============ -->
             <section v-show="tab === 'archivos'">
-              <div class="det-panel" v-if="permisos.archivos">
-                <div class="form-row align-items-end">
-                  <div class="col-md-6 form-group">
-                    <label>Archivo (max. 20 MB)</label>
-                    <input type="file" ref="archivo" class="form-control-file" @change="archivoSel = $event.target.files[0] || null">
-                  </div>
-                  <div class="col-md-3 form-group">
-                    <label>Carpeta</label>
-                    <select class="form-control" v-model="carpetaSel">
-                      <option v-for="c in carpetas" :key="c" :value="c">{{ c }}</option>
-                    </select>
-                  </div>
-                  <div class="col-md-3 form-group">
-                    <button type="button" class="btn btn-success btn-block" @click="subirArchivo" :disabled="!archivoSel || subiendo !== null">
-                      <i :class="subiendo !== null ? 'fas fa-spinner fa-spin' : 'fas fa-upload'"></i>
-                      {{ subiendo !== null ? subiendo + ' %' : 'Adjuntar' }}
-                    </button>
-                  </div>
-                </div>
-                <p class="det-note mb-0"><i class="fas fa-lock"></i> Acceso restringido a los usuarios del proyecto {{ e.proyecto ? e.proyecto.codigo : '' }}.</p>
+              <div class="det-barra-form" v-if="permisos.archivos">
+                <label class="btn btn-secondary btn-sm mb-0 det-elegir">
+                  <i class="fas fa-paperclip"></i> Elegir archivo
+                  <input type="file" ref="archivo" hidden @change="archivoSel = $event.target.files[0] || null">
+                </label>
+                <span class="det-archivo-sel" :class="{ 'det-muted': !archivoSel }" :title="archivoSel ? archivoSel.name : ''">{{ archivoSel ? archivoSel.name + ' · ' + tamano(archivoSel.size) : 'Ningun archivo elegido (max. 20 MB)' }}</span>
+                <select class="form-control form-control-sm det-carpeta" v-model="carpetaSel" aria-label="Carpeta">
+                  <option v-for="c in carpetas" :key="c" :value="c">{{ c }}</option>
+                </select>
+                <button type="button" class="btn btn-success btn-sm" @click="subirArchivo" :disabled="!archivoSel || subiendo !== null">
+                  <i :class="subiendo !== null ? 'fas fa-spinner fa-spin' : 'fas fa-upload'"></i>
+                  {{ subiendo !== null ? subiendo + ' %' : 'Adjuntar' }}
+                </button>
+                <small class="det-candado" :title="`Acceso restringido a los usuarios del proyecto ${e.proyecto ? e.proyecto.codigo : ''}`"><i class="fas fa-lock"></i> Solo el proyecto</small>
               </div>
               <div v-if="!d.archivos.length" class="det-empty-box"><i class="fas fa-paperclip"></i> Sin archivos adjuntos en este ensayo.</div>
               <div v-for="g in archivosPorCarpeta" :key="g.carpeta" class="det-folder">
@@ -368,29 +445,16 @@
 
             <!-- ============ BITACORA ============ -->
             <section v-show="tab === 'bitacora'">
-              <div class="det-panel" v-if="permisos.bitacora">
-                <div class="form-row">
-                  <div class="col-md-3 form-group">
-                    <label>Fecha</label>
-                    <input type="date" class="form-control" v-model="bitForm.fecha">
-                  </div>
-                  <div class="col-md-4 form-group">
-                    <label>Tipo de actividad</label>
-                    <select class="form-control" v-model="bitForm.tipo">
-                      <option v-for="t in tiposBitacora" :key="t" :value="t">{{ t }}</option>
-                    </select>
-                  </div>
-                  <div class="col-md-12 form-group">
-                    <label>Descripcion</label>
-                    <textarea class="form-control" rows="2" maxlength="2000" v-model="bitForm.descripcion" placeholder="Actividad realizada, observaciones..."></textarea>
-                  </div>
-                </div>
-                <div class="d-flex justify-content-end" style="gap:8px">
-                  <button v-if="bitForm.id" type="button" class="btn btn-secondary btn-sm" @click="resetBitacora">Cancelar edicion</button>
-                  <button type="button" class="btn btn-success btn-sm" @click="guardarBitacora" :disabled="ocupado">
-                    <i class="fas fa-save"></i> {{ bitForm.id ? 'Guardar cambios' : 'Agregar entrada' }}
-                  </button>
-                </div>
+              <div class="det-barra-form is-bitacora" v-if="permisos.bitacora">
+                <input type="date" class="form-control form-control-sm det-bit-fecha" v-model="bitForm.fecha" aria-label="Fecha">
+                <select class="form-control form-control-sm det-bit-tipo" v-model="bitForm.tipo" aria-label="Tipo de actividad">
+                  <option v-for="t in tiposBitacora" :key="t" :value="t">{{ t }}</option>
+                </select>
+                <textarea class="form-control form-control-sm det-bit-desc" rows="1" maxlength="2000" v-model="bitForm.descripcion" placeholder="Actividad realizada, insumos, dosis, observaciones..." aria-label="Descripcion"></textarea>
+                <button v-if="bitForm.id" type="button" class="btn btn-secondary btn-sm" @click="resetBitacora">Cancelar</button>
+                <button type="button" class="btn btn-success btn-sm" @click="guardarBitacora" :disabled="ocupado">
+                  <i class="fas fa-save"></i> {{ bitForm.id ? 'Guardar' : 'Agregar' }}
+                </button>
               </div>
               <div v-if="!d.bitacora.length" class="det-empty-box"><i class="fas fa-book-open"></i> Sin entradas en la bitacora para este ensayo.</div>
               <div class="det-timeline" v-else>
@@ -423,6 +487,7 @@ import EnsayoClima from './clima.vue';
 import CroquisMapa from './croquis-mapa.vue';
 import MapaGps from './mapa-gps.vue';
 import NdviImagenes from './ndvi-imagenes.vue';
+import EnsayosCiclo from './ciclo.vue';
 import { navegacion, distanciaM } from './geo-util';
 
 const COLORES_TRAT = ['#73BC25', '#FF6B00', '#FFCC00', '#A3D300', '#5b6267', '#3f7a12', '#b84d00', '#8a6a00'];
@@ -434,17 +499,25 @@ function hoyISO() {
 
 export default {
   name: 'EnsayoDetalle',
-  components: { EnsayoClima, CroquisMapa, MapaGps, NdviImagenes },
+  components: { EnsayoClima, CroquisMapa, MapaGps, NdviImagenes, EnsayosCiclo },
   props: {
     fuentesNdvi: { type: Array, default: () => [] },
     carpetas: { type: Array, default: () => [] },
     tiposBitacora: { type: Array, default: () => [] },
     storageUrl: { type: String, default: '' },
     permisos: { type: Object, default: () => ({}) },
+    evaluacionesUrl: { type: String, default: null },
+    muestrasUrl: { type: String, default: null },
   },
   data() {
     return {
       ensayoId: null,
+      // Paleta validada de estados de ensayo (la misma de la lista y el cronograma).
+      ESTADOS_ENSAYO: [
+        { id: 'Planificado', color: '#eda100', texto: '#1f2a12' },
+        { id: 'En campo', color: '#5a9e1a', texto: '#ffffff' },
+        { id: 'Finalizado', color: '#2a78d6', texto: '#ffffff' },
+      ],
       d: null,
       cargando: false,
       ocupado: false,
@@ -523,6 +596,89 @@ export default {
         { label: 'Tipo de suelo', valor: e.tipo_suelo },
       ];
     },
+    /**
+     * Coincidencia entre el diseño (parcelas de SIGEC) y el croquis (plano fisico).
+     * El croquis es una imagen fija: cambiar tratamientos o regenerar parcelas no lo
+     * modifica, y la deteccion empareja por el rotulo impreso (P-04 del PDF = P-04 de SIGEC).
+     */
+    concordancia() {
+      const d = this.d;
+      if (!d || !d.croquis || !d.parcelas.length) return null;
+      const ps = d.parcelas;
+      const ubicadas = ps.filter((p) => p.geometria && p.geometria.coordinates);
+      // Las parcelas sin ubicar ya las avisa la barra del croquis (con sus acciones); aqui solo se cuentan.
+      const alertas = [];
+      const tCroquis = Date.parse(d.croquis.created_at);
+      const tDiseno = Math.max(...ps.map((p) => Date.parse(p.created_at) || 0));
+      if (tCroquis && tDiseno > tCroquis + 60000) {
+        alertas.push({ icono: 'fas fa-history', texto: `Las parcelas se generaron el ${this.fmtFecha(String(ps[0].created_at).slice(0, 10))}, despues de cargar el croquis: el plano puede corresponder a un diseño anterior.` });
+      }
+      const mezcla = this.mezclaBloques(ubicadas);
+      if (mezcla) alertas.push({ icono: 'fas fa-random', texto: mezcla });
+      return { total: ps.length, ubicadas: ubicadas.length, alertas };
+    },
+    /** Ficha del ensayo en tres grupos, como la consulta un investigador en campo. */
+    gruposInfo() {
+      const e = this.e;
+      const d = this.d || { tratamientos: [], parcelas: [] };
+      return [
+        { titulo: 'Ubicacion', icono: 'fas fa-map-marker-alt', campos: [
+          { label: 'Proyecto', valor: e.proyecto ? e.proyecto.nombre : null },
+          { label: 'Ingenio', valor: e.ingenio ? e.ingenio.nombre : null },
+          { label: 'Finca / Lote', valor: [e.finca, e.lote].filter(Boolean).join(' / ') },
+          { label: 'Estrato / Zona', valor: [e.estrato, e.zona].filter(Boolean).map((x) => x.charAt(0) + x.slice(1).toLowerCase()).join(' / ') },
+          { label: 'Area total', valor: e.area_total ? `${Number(e.area_total)} ha` : null },
+          { label: 'Tipo de suelo', valor: e.tipo_suelo },
+        ] },
+        { titulo: 'Cultivo', icono: 'fas fa-leaf', campos: [
+          { label: 'Cultivo', valor: e.cultivo },
+          { label: 'Variedad', valor: e.variedad },
+          { label: 'Ciclo', valor: e.ciclo },
+          { label: e.ciclo && e.ciclo !== 'Plantia' ? 'Corte anterior' : 'Siembra', valor: this.fmtFecha(e.fecha_siembra) },
+          { label: 'Cosecha', valor: e.fecha_cosecha ? `${this.fmtFecha(e.fecha_cosecha)} (real)` : (e.fecha_cosecha_prevista ? `${this.fmtFecha(e.fecha_cosecha_prevista)} (prevista)` : null) },
+          { label: 'Responsable', valor: e.responsable ? e.responsable.name : null },
+        ] },
+        { titulo: 'Diseño experimental', icono: 'fas fa-th', campos: [
+          { label: 'Diseño', valor: e.diseno },
+          { label: 'Tratamientos', valor: d.tratamientos.length ? String(d.tratamientos.length) : null },
+          { label: 'Repeticiones', valor: this.repeticiones.length ? String(this.repeticiones.length) : (e.num_repeticiones ? String(e.num_repeticiones) : null) },
+          { label: 'Parcelas', valor: d.parcelas.length ? String(d.parcelas.length) : null },
+          { label: 'Area por parcela', valor: e.area_parcela ? `${Number(e.area_parcela)} m²` : null },
+        ] },
+      ];
+    },
+    edadMeses() {
+      const e = this.e;
+      if (!e || !e.fecha_siembra) return null;
+      const fin = e.fecha_cosecha ? Date.parse(e.fecha_cosecha) : Date.now();
+      const dias = Math.floor((fin - Date.parse(e.fecha_siembra)) / 86400000);
+      if (dias < 0) return `Por sembrar (en ${-dias} dias)`;
+      return `${(dias / 30.44).toFixed(1)} meses · ${dias} dias`;
+    },
+    /** % del ciclo hasta la cosecha prevista; null si no hay cosecha prevista. */
+    avanceCiclo() {
+      const e = this.e;
+      if (!e || !e.fecha_siembra || !(e.fecha_cosecha || e.fecha_cosecha_prevista)) return null;
+      const a = Date.parse(e.fecha_siembra);
+      const b = Date.parse(e.fecha_cosecha || e.fecha_cosecha_prevista);
+      if (!(b > a)) return null;
+      const t = e.fecha_cosecha ? b : Date.now();
+      return Math.max(0, Math.min(100, Math.round(((t - a) / (b - a)) * 100)));
+    },
+    diasCosecha() {
+      const e = this.e;
+      if (!e || e.fecha_cosecha || !e.fecha_cosecha_prevista) return null;
+      return Math.ceil((Date.parse(e.fecha_cosecha_prevista) - Date.now()) / 86400000);
+    },
+    textoCosecha() {
+      if (this.e && this.e.fecha_cosecha) return 'Ensayo cosechado.';
+      const d = this.diasCosecha;
+      if (d === null) return 'Sin cosecha prevista registrada.';
+      if (d < 0) return `La cosecha prevista paso hace ${-d} dias.`;
+      return `${this.avanceCiclo} % del ciclo · faltan ${d} dias para la cosecha.`;
+    },
+    alertaCosecha() { return this.diasCosecha !== null && this.diasCosecha <= 30; },
+    fechasEvaluacion() { return ((this.e && this.e.hitos && this.e.hitos.evaluaciones) || []).length; },
     /** Edad desde la siembra o el corte anterior (hasta la cosecha si ya ocurrio). */
     edadCultivo() {
       const e = this.e;
@@ -772,6 +928,43 @@ export default {
       this.confirmar('Eliminar tratamiento', `Se eliminara <b>${this.esc(t.codigo)}</b>${t.parcelas_count ? ` y sus ${t.parcelas_count} parcela(s)` : ''}.`)
         .then((ok) => ok && this.peticion(window.axios.delete(`/investigacion/tratamientos/${t.id}`), 'Tratamiento eliminado').catch(() => {}));
     },
+    /**
+     * Cada repeticion es un bloque: en el plano sus parcelas forman una fila (o una columna).
+     * Agrupa los centros de las parcelas ubicadas en filas y en columnas; si en ambos sentidos
+     * hay grupos que mezclan repeticiones, el croquis no corresponde al diseño.
+     */
+    mezclaBloques(ubicadas) {
+      if (new Set(ubicadas.map((p) => p.repeticion)).size < 2) return null;
+      const lat0 = ubicadas[0].geometria.coordinates[0][0][1];
+      const kx = 111320 * Math.cos((lat0 * Math.PI) / 180);
+      const pts = ubicadas.map((p) => {
+        const anillo = p.geometria.coordinates[0].slice(0, -1);
+        const x = anillo.reduce((s, c) => s + c[0], 0) / anillo.length;
+        const y = anillo.reduce((s, c) => s + c[1], 0) / anillo.length;
+        return { p, x: x * kx, y: y * 110540 };
+      });
+      // Distancia tipica entre parcelas vecinas: separa filas/columnas por saltos mayores a su mitad.
+      const vecinas = pts.map((a) => Math.min(...pts.filter((b) => b !== a).map((b) => Math.hypot(a.x - b.x, a.y - b.y))));
+      const umbral = vecinas.sort((a, b) => a - b)[Math.floor(vecinas.length / 2)] / 2;
+      const agrupar = (eje) => {
+        const orden = pts.slice().sort((a, b) => a[eje] - b[eje]);
+        const grupos = [[orden[0]]];
+        for (let i = 1; i < orden.length; i += 1) {
+          if (orden[i][eje] - orden[i - 1][eje] > umbral) grupos.push([]);
+          grupos[grupos.length - 1].push(orden[i]);
+        }
+        return grupos.filter((g) => new Set(g.map((x) => x.p.repeticion)).size > 1);
+      };
+      const filas = agrupar('y');
+      const columnas = agrupar('x');
+      if (!filas.length || !columnas.length) return null;
+      const [mixtos, sentido] = filas.length <= columnas.length ? [filas, 'fila'] : [columnas, 'columna'];
+      const g = mixtos[0].map((x) => x.p).sort((a, b) => a.repeticion - b.repeticion || a.posicion - b.posicion);
+      const porRep = {};
+      g.forEach((p) => { (porRep[p.repeticion] = porRep[p.repeticion] || []).push(p.codigo); });
+      const detalle = Object.entries(porRep).map(([r, cs]) => `${cs.join(', ')} (Rep. ${r})`).join(' y ');
+      return `En el croquis, ${detalle} quedaron en la misma ${sentido}${mixtos.length > 1 ? ` (y ${mixtos.length - 1} ${sentido}(s) mas)` : ''}, pero en el diseño cada repeticion es un bloque: el plano no corresponde al diseño actual.`;
+    },
     generarParcelas() {
       if (!(this.gen.num_repeticiones >= 1)) {
         this.$swal.fire({ icon: 'warning', title: 'Repeticiones invalidas', text: 'Indique al menos 1 repeticion.' });
@@ -1000,7 +1193,13 @@ export default {
 .det-tabs button:hover { color: var(--cengi-primary-deep); }
 .det-tabs button.is-active { border-bottom-color: #73BC25; color: var(--cengi-primary-deep); }
 .det-tabs em { padding: 1px 7px; border-radius: 999px; background: #eef8df; color: #3f7a12; font-size: 10.5px; font-style: normal; font-weight: 700; }
-.det-body { min-height: 420px; }
+.det-body { min-height: 0; }
+/* Ventana de alto fijo: no salta al cambiar de pestaña y la cabecera y las pestañas no se encogen. */
+.det-dialog { max-width: min(1360px, 96vw); }
+.det { height: calc(100vh - 3.5rem); }
+.det-header, .det-tabs { flex-shrink: 0; }
+.det-header { padding: 12px 18px; }
+.det-body { padding: 14px 18px 18px; }
 .det-loading { padding: 40px; color: var(--cengi-muted); text-align: center; }
 
 .det-info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
@@ -1145,5 +1344,81 @@ export default {
   display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
   border: 2px solid #fff; border-radius: 5px; background: #FF6B00; color: #fff;
   font-size: 9.5px; font-weight: 700; box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+}
+
+/* ---------- Informacion: ficha agrupada + columna de ciclo y avance ---------- */
+.det-info:not([style*="none"]) { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.det-info-main, .det-crono { min-width: 0; }
+.det-ficha { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.det-ficha-grupo { padding: 12px 14px; border: 1px solid #edf1ec; border-radius: 10px; background: #fafbf8; }
+.det-ficha-grupo h6, .det-card h6 { margin: 0 0 8px; color: var(--cengi-primary-deep); font-size: 12.5px; font-weight: 700; }
+.det-ficha-grupo h6 i, .det-card h6 i { margin-right: 4px; color: #73BC25; }
+.det-ficha-grupo dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 12px; margin: 0; font-size: 12.5px; }
+.det-ficha-grupo dt { color: var(--cengi-muted); font-weight: 500; white-space: nowrap; }
+.det-ficha-grupo dd { margin: 0; color: var(--cengi-ink); font-weight: 600; overflow-wrap: anywhere; }
+.det-crono { margin-top: 12px; }
+.det-crono h6 { margin: 0 0 6px; color: var(--cengi-primary-deep); font-size: 12.5px; font-weight: 700; }
+.det-crono h6 i { margin-right: 4px; color: #73BC25; }
+.det-crono h6 small { margin-left: 4px; color: var(--cengi-muted); font-weight: 500; }
+.det-info-side { display: flex; flex-direction: column; gap: 12px; }
+.det-card { padding: 12px 14px; border: 1px solid #edf1ec; border-radius: 10px; background: #fff; }
+.det-ciclo-edad b { font-size: 18px; color: var(--cengi-ink); }
+.det-ciclo-edad span { color: var(--cengi-muted); font-size: 12px; font-weight: 600; }
+.det-ciclo-barra { height: 8px; margin: 8px 0 6px; background: #edf0ee; border-radius: 99px; overflow: hidden; }
+.det-ciclo-barra i { display: block; height: 100%; background: #5a9e1a; border-radius: 99px; }
+.det-ciclo-barra i.is-abierta { background: repeating-linear-gradient(90deg, #5a9e1a 0 8px, #a9d07c 8px 12px); }
+.det-ciclo-fechas { display: flex; justify-content: space-between; color: var(--cengi-muted); font-size: 11px; line-height: 1.3; }
+.det-ciclo-fechas b { color: var(--cengi-ink); font-size: 12px; }
+.det-card > small { display: block; margin-top: 6px; color: var(--cengi-muted); font-size: 11.5px; }
+.det-card > small.is-alerta { color: #b84d00; font-weight: 700; }
+.det-vacio-txt { margin: 0; color: var(--cengi-muted); font-size: 12px; }
+.det-avance { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 6px; border: 0; border-radius: 8px; background: transparent; color: var(--cengi-ink); font-size: 12.5px; text-align: left; text-decoration: none !important; cursor: pointer; }
+.det-avance + .det-avance { border-top: 1px solid #f1f3ef; border-radius: 0; }
+.det-avance:hover { background: #f5faef; color: var(--cengi-ink); }
+.det-avance > i:first-child { width: 18px; color: #73BC25; text-align: center; }
+.det-avance > span { flex: 1; min-width: 0; }
+.det-avance small { display: block; color: var(--cengi-muted); font-size: 11px; }
+.det-avance > i:last-child { color: #b9c2bc; font-size: 10px; }
+div.det-avance { cursor: default; }
+button.det-gps { margin-top: 0; border: 0; cursor: pointer; text-align: left; }
+
+/* ---------- Estructura: filas compactas, campos que parecen texto hasta editarlos ---------- */
+.det-table.is-compacta td, .det-table.is-compacta th { padding: 4px 10px; vertical-align: middle; }
+.det-table.is-compacta th { padding-top: 8px; padding-bottom: 8px; }
+.det-inline.form-control { min-height: 0; height: 30px; padding: 3px 8px; border-color: transparent; background: transparent; box-shadow: none; transition: border-color .12s, background .12s; }
+.det-inline.form-control:hover { border-color: #dfe5dc; background: #fff; }
+.det-inline.form-control:focus { border-color: #73BC25; background: #fff; box-shadow: 0 0 0 2px rgba(115, 188, 37, .18); }
+.det-inline.form-control::placeholder { color: #b5bdb7; font-style: italic; }
+.det-sec-head h6 small { margin-left: 6px; font-size: 11.5px; font-weight: 500; }
+.det-conc { margin: 10px 0; padding: 10px 14px; border-radius: 10px; border: 1px solid #e3eedb; background: #f5faef; font-size: 12.5px; }
+.det-conc.is-warn { border-color: #ffd9bf; background: #fff8f2; }
+.det-conc-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.det-conc-h > i { color: #3f7a12; }
+.det-conc.is-warn .det-conc-h > i { color: #c24f00; }
+.det-conc-h b { color: var(--cengi-ink); }
+.det-conc-h span { color: var(--cengi-muted); font-size: 12px; }
+.det-conc ul { margin: 8px 0 6px; padding: 0; list-style: none; }
+.det-conc li { display: flex; gap: 8px; padding: 3px 0; color: #5a3a1c; }
+.det-conc li i { margin-top: 3px; width: 14px; color: #c24f00; text-align: center; }
+.det-conc-nota { margin: 4px 0 0; color: var(--cengi-muted); font-size: 11.5px; }
+.det-conc-acc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
+/* ---------- Archivos y bitacora: formulario en una linea ---------- */
+.det-barra-form { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid #e3eedb; border-radius: 10px; background: #f7faf3; }
+.det-elegir { cursor: pointer; white-space: nowrap; }
+.det-archivo-sel { flex: 1 1 220px; min-width: 0; align-self: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.det-carpeta { flex: 0 1 170px; width: auto; }
+.det-candado { align-self: center; color: var(--cengi-muted); font-size: 11px; white-space: nowrap; }
+.det-bit-fecha { flex: 0 0 150px; width: auto; }
+.det-bit-tipo { flex: 0 1 190px; width: auto; }
+.det-bit-desc.form-control { flex: 1 1 280px; min-height: 0; height: 31px; resize: none; transition: height .15s ease; }
+.det-bit-desc.form-control:focus { height: 84px; resize: vertical; }
+.det-barra-form .form-control { min-height: 0; }
+.det-timeline .det-entry { margin-bottom: 8px; }
+.det-timeline .det-entry-card { padding: 8px 12px; }
+.det-timeline .det-entry-card p { margin: 4px 0 2px; font-size: 12.5px; }
+
+@media (max-width: 991px) {
+  .det-info:not([style*="none"]) { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

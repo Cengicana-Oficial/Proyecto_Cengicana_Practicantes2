@@ -49,6 +49,8 @@ class RolePermissionSeeder extends Seeder
      */
     protected array $adminOnlyPermissions = [
         'admin_only',
+        // Estaciones y datos de clima (compartidos por todos los ensayos).
+        'gestionar_clima',
     ];
 
     public function run()

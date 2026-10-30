@@ -30,7 +30,7 @@
     <clima-base-datos v-show="vista === 'base'" :configurada="icc.configurada" :puede-sincronizar="puedeSincronizar" :puede-gestionar="puedeGestionar" @actualizado="cargarIcc(); cargarEstaciones()"></clima-base-datos>
     <clima-analisis v-if="vista === 'analisis'" :estaciones="estaciones"></clima-analisis>
     <clima-comparar v-if="vista === 'comparar'" :estaciones="estaciones"></clima-comparar>
-    <clima-estaciones v-if="vista === 'estaciones'" :estaciones="estaciones" :puede-gestionar="puedeGestionar" @recargar="cargarEstaciones"></clima-estaciones>
+    <clima-estaciones v-if="vista === 'estaciones'" :estaciones="estaciones" :puede-gestionar="puedeGestionar" :puede-cargar-datos="puedeSincronizar" @recargar="cargarEstaciones"></clima-estaciones>
 
     <div class="ci-layout" v-show="vista === 'consulta'">
       <!-- ============ Filtros ============ -->

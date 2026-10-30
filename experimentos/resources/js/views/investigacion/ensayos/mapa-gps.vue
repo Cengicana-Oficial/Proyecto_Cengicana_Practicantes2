@@ -461,11 +461,11 @@ export default {
 .mg-vacio strong { color: var(--cengi-primary-deep); }
 .mg-vacio p { max-width: 480px; margin: 0; color: var(--cengi-muted); font-size: 12.5px; }
 .mg-vacio-acc { display: flex; gap: 8px; margin-top: 6px; }
-.mg-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.mg-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 .mg-coord { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: #eef8df; color: #3f7a12; font-size: 12px; font-weight: 600; }
 .mg-tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .mg-mapa-wrap { position: relative; }
-.mg-mapa { height: 520px; border: 1px solid var(--cengi-border); border-radius: 10px; overflow: hidden; z-index: 0; }
+.mg-mapa { height: max(380px, calc(100vh - 380px)); border: 1px solid var(--cengi-border); border-radius: 10px; overflow: hidden; z-index: 0; }
 .mg-opacidad {
   position: absolute; left: 10px; bottom: 28px; z-index: 500; display: flex; align-items: center; gap: 8px;
   padding: 6px 10px; border-radius: 8px; background: rgba(255, 255, 255, .92); box-shadow: 0 1px 5px rgba(0, 0, 0, .25); font-size: 12px; font-weight: 600;

@@ -76,9 +76,9 @@ export default {
 </script>
 
 <style scoped>
-.gb { margin-bottom: 8px; padding: 8px 10px; border-radius: 8px; background: #eef4fb; color: #1d4f80; font-size: 12.5px; }
+.gb { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-bottom: 6px; padding: 6px 10px; border-radius: 8px; background: #eef4fb; color: #1d4f80; font-size: 12.5px; }
 .gb-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.gb-nav { margin-top: 8px; padding-top: 8px; border-top: 1px solid #d6e4f3; }
+.gb-nav { padding-left: 14px; border-left: 1px solid #d6e4f3; }
 .gb .btn.active { border-color: #73BC25; background: #eef8df; }
 .gb-pre { padding: 1px 7px; border-radius: 999px; background: #fff; font-weight: 700; }
 .gb-pre.is-mala { background: #fff1e6; color: #b84d00; }

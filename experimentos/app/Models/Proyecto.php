@@ -12,8 +12,8 @@ class Proyecto extends Model
     ];
 
     protected $casts = [
-        'inicio' => 'date',
-        'fin' => 'date',
+        'inicio' => 'date:Y-m-d',
+        'fin' => 'date:Y-m-d',
     ];
 
     public function programa()

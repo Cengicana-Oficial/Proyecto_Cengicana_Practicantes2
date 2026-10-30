@@ -53,11 +53,15 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('programas/{programa}', [ProgramasController::class, 'destroy'])->name('programas.destroy');
 
         Route::get('proyectos', [ProyectosController::class, 'index'])->name('proyectos.index');
+        Route::get('proyectos/codigo', [ProyectosController::class, 'codigo'])->name('proyectos.codigo');
         Route::post('proyectos', [ProyectosController::class, 'store'])->name('proyectos.store');
         Route::put('proyectos/{proyecto}', [ProyectosController::class, 'update'])->name('proyectos.update');
         Route::delete('proyectos/{proyecto}', [ProyectosController::class, 'destroy'])->name('proyectos.destroy');
+        Route::post('proyectos/{proyecto}/equipo', [ProyectosController::class, 'guardarIntegrante'])->name('proyectos.equipo.store');
+        Route::delete('proyectos/{proyecto}/equipo/{asignacion}', [ProyectosController::class, 'quitarIntegrante'])->name('proyectos.equipo.destroy');
 
         Route::get('ensayos', [EnsayosController::class, 'index'])->name('ensayos.index');
+        Route::get('ensayos/codigo', [EnsayosController::class, 'codigo'])->name('ensayos.codigo');
         Route::post('ensayos', [EnsayosController::class, 'store'])->name('ensayos.store');
         Route::put('ensayos/{ensayo}', [EnsayosController::class, 'update'])->name('ensayos.update');
         Route::delete('ensayos/{ensayo}', [EnsayosController::class, 'destroy'])->name('ensayos.destroy');

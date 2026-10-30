@@ -40,9 +40,6 @@
         <button type="button" class="btn btn-secondary" @click="exportarCsv" :disabled="!filas.length" title="Exportar a CSV (Excel)">
           <i class="fas fa-file-csv"></i>
         </button>
-        <button v-if="puedeGestionar || puedeImportar" type="button" class="btn btn-secondary" :class="{ active: panel }" @click="panel = !panel" title="Estaciones y carga de datos">
-          <i class="fas fa-broadcast-tower"></i>
-        </button>
       </div>
     </div>
     <p class="cl-cercana" v-if="!cargandoEst">
@@ -53,7 +50,7 @@
         <i class="fas fa-map-marker-alt"></i> Estacion mas cercana al ensayo: <b>{{ cercana.nombre }}</b> ({{ cercana.codigo }}) a <b>{{ cercana.distancia_km }} km</b>
         <span v-if="cercana.distancia_km > 25" class="cl-lejos"> · esta lejos: los datos pueden no representar el ensayo</span>
         <a v-if="estacionSel !== cercana.id" href="#" @click.prevent="estacionSel = cercana.id"> · usar esta</a>
-        · <a :href="base + '/investigacion/clima?vista=estaciones'">ver catalogo de estaciones</a>
+        · <a :href="base + '/investigacion/clima?vista=estaciones'">ver estaciones en Clima y estaciones</a>
       </template>
       <template v-else>
         <i class="fas fa-map-marker-alt"></i> Ninguna estacion tiene ubicacion cargada: registrelas en <a :href="base + '/investigacion/clima?vista=estaciones'">Clima y estaciones → Estaciones y ubicaciones</a>.
@@ -63,131 +60,6 @@
       <input type="checkbox" v-model="completar"> Completar dias sin registro de la estacion con Open-Meteo (en sus coordenadas)
     </label>
     <p class="cl-error" v-if="!rangoValido"><i class="fas fa-exclamation-circle"></i> {{ errorRango }}</p>
-
-    <!-- ============ Gestion de estaciones ============ -->
-    <div class="cl-panel" v-if="panel">
-      <div class="cl-panel-head">
-        <h6><i class="fas fa-broadcast-tower"></i> Estaciones meteorologicas</h6>
-        <button v-if="puedeGestionar" type="button" class="btn btn-success btn-sm" @click="nuevaEstacion"><i class="fas fa-plus"></i> Nueva estacion</button>
-      </div>
-
-      <form v-if="formEst" class="cl-form" @submit.prevent="guardarEstacion" novalidate>
-        <div class="form-row">
-          <div class="col-md-2 form-group"><label>Codigo *</label><input class="form-control form-control-sm" maxlength="30" v-model="formEst.codigo" :class="{ 'is-invalid': errEst.codigo }"><span class="invalid-feedback" v-if="errEst.codigo">{{ errEst.codigo[0] }}</span></div>
-          <div class="col-md-4 form-group"><label>Nombre *</label><input class="form-control form-control-sm" maxlength="150" v-model="formEst.nombre" :class="{ 'is-invalid': errEst.nombre }"><span class="invalid-feedback" v-if="errEst.nombre">{{ errEst.nombre[0] }}</span></div>
-          <div class="col-md-3 form-group"><label>Red</label><select class="form-control form-control-sm" v-model="formEst.red"><option v-for="r in redes" :key="r" :value="r">{{ r }}</option></select></div>
-          <div class="col-md-3 form-group"><label>Ubicacion</label><input class="form-control form-control-sm" maxlength="150" v-model="formEst.ubicacion" placeholder="Municipio, finca..."></div>
-        </div>
-        <div class="form-row">
-          <div class="col-md-4 form-group">
-            <label>Codigo en la API ICC</label>
-            <input class="form-control form-control-sm" maxlength="60" v-model="formEst.codigo_api" placeholder="Si difiere del codigo">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="col-md-3 form-group"><label>Latitud *</label><input type="number" step="0.000001" class="form-control form-control-sm" v-model="formEst.lat" :class="{ 'is-invalid': errEst.lat }"><span class="invalid-feedback" v-if="errEst.lat">{{ errEst.lat[0] }}</span></div>
-          <div class="col-md-3 form-group"><label>Longitud *</label><input type="number" step="0.000001" class="form-control form-control-sm" v-model="formEst.lng" :class="{ 'is-invalid': errEst.lng }"><span class="invalid-feedback" v-if="errEst.lng">{{ errEst.lng[0] }}</span></div>
-          <div class="col-md-2 form-group"><label>Altitud (msnm)</label><input type="number" class="form-control form-control-sm" v-model="formEst.altitud"></div>
-          <div class="col-md-2 form-group d-flex align-items-end"><label class="cl-check mb-2"><input type="checkbox" v-model="formEst.activa"> Activa</label></div>
-          <div class="col-md-2 form-group d-flex align-items-end" style="gap:6px">
-            <button type="button" class="btn btn-secondary btn-sm" @click="formEst = null">Cancelar</button>
-            <button type="submit" class="btn btn-success btn-sm" :disabled="guardandoEst"><i class="fas fa-save"></i> Guardar</button>
-          </div>
-        </div>
-      </form>
-
-      <!-- API agromet del ICC -->
-      <div class="cl-api" :class="{ 'is-off': !icc.configurada }">
-        <div class="cl-api-head">
-          <span>
-            <i class="fas fa-plug"></i>
-            <template v-if="icc.configurada">API agromet del ICC conectada · <b>{{ icc.servidor }}</b></template>
-            <template v-else>API agromet del ICC sin configurar</template>
-          </span>
-          <span v-if="icc.configurada" class="d-flex flex-wrap" style="gap:6px">
-            <a :href="base + '/investigacion/clima'" class="btn btn-secondary btn-sm"><i class="fas fa-table"></i> Consultar y exportar</a>
-            <button v-if="puedeImportar" type="button" class="btn btn-success btn-sm" :disabled="sincronizando || !rangoValido" @click="sincronizarIcc">
-              <i :class="sincronizando ? 'fas fa-spinner fa-spin' : 'fas fa-cloud-download-alt'"></i> Descargar {{ fmt(desde) }} → {{ fmt(hasta) }}
-            </button>
-          </span>
-        </div>
-        <p v-if="!icc.configurada" class="cl-help">
-          Defina en el .env del servidor <code>ICC_API_URL</code> y las credenciales (<code>ICC_API_TOKEN</code> o usuario/clave).
-        </p>
-        <template v-else>
-          <p class="cl-help">
-            La API entrega por fechas los datos diarios de <b>todas</b> las estaciones; SIGEC los guarda y aqui se filtra por estacion y periodo.
-            Al consultar se descargan solo los dias que faltan.
-            <template v-if="icc.cobertura"> {{ icc.cobertura.dias }} dias descargados entre {{ fmt(icc.cobertura.desde) }} y {{ fmt(icc.cobertura.hasta) }} · {{ icc.estaciones }} estaciones.</template>
-          </p>
-          <p v-if="icc.sin_coordenadas" class="cl-warn">
-            <i class="fas fa-map-marker-alt"></i> {{ icc.sin_coordenadas }} estacion(es) del ICC sin coordenadas: editelas para calcular la distancia al ensayo y completar con Open-Meteo.
-          </p>
-        </template>
-      </div>
-
-      <div class="cl-table-wrap" v-if="estaciones.length">
-        <table class="table cl-table">
-          <thead><tr><th>Codigo</th><th>Nombre</th><th>Red</th><th>Distancia</th><th>Datos importados</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="s in estaciones" :key="s.id" :class="{ 'is-off': !s.activa }">
-              <td><strong>{{ s.codigo }}</strong></td>
-              <td>{{ s.nombre }}<small v-if="s.ubicacion"> · {{ s.ubicacion }}</small></td>
-              <td>{{ s.red }}</td>
-              <td>
-                <template v-if="s.distancia_km !== null">{{ s.distancia_km }} km</template>
-                <span v-else-if="s.lat === null" class="cl-warn-tag" title="Edite la estacion para agregar latitud y longitud">sin coordenadas</span>
-                <template v-else>—</template>
-              </td>
-              <td>
-                <span v-if="s.registros_count">{{ s.registros_count }} dias · {{ fmt(s.registros_min_fecha) }} → {{ fmt(s.registros_max_fecha) }}</span>
-                <span v-else class="cl-muted">Sin datos</span>
-              </td>
-              <td class="text-right cl-nowrap">
-                <button v-if="puedeImportar" type="button" class="cl-icon" title="Importar datos" @click="importSel = s.id"><i class="fas fa-file-upload"></i></button>
-                <button v-if="puedeGestionar" type="button" class="cl-icon" title="Editar" @click="editarEstacion(s)"><i class="fas fa-pen"></i></button>
-                <button v-if="puedeGestionar" type="button" class="cl-icon cl-icon-danger" title="Eliminar" @click="eliminarEstacion(s)"><i class="fas fa-trash"></i></button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p v-else class="cl-muted mb-2">Aun no hay estaciones registradas. Agregue las estaciones de la red ICC (REDMET) cercanas a sus ensayos.</p>
-
-      <div class="cl-import" v-if="puedeImportar && estaciones.length">
-        <h6><i class="fas fa-file-upload"></i> Importar datos de estacion</h6>
-        <div class="form-row align-items-end">
-          <div class="col-md-4 form-group mb-2">
-            <label>Estacion</label>
-            <select class="form-control form-control-sm" v-model="importSel">
-              <option :value="null">Seleccione...</option>
-              <option v-for="s in estaciones" :key="s.id" :value="s.id">{{ s.nombre }} ({{ s.codigo }})</option>
-            </select>
-          </div>
-          <div class="col-md-5 form-group mb-2">
-            <label>Archivo exportado de REDMET (CSV / Excel, max. 20 MB)</label>
-            <input type="file" ref="archivoClima" accept=".csv,.txt,.xlsx,.xls" class="form-control-file" @change="archivoClima = $event.target.files[0] || null">
-          </div>
-          <div class="col-md-3 form-group mb-2">
-            <button type="button" class="btn btn-success btn-sm btn-block" @click="importar" :disabled="!importSel || !archivoClima || importando">
-              <i :class="importando ? 'fas fa-spinner fa-spin' : 'fas fa-upload'"></i> {{ importando ? 'Importando...' : 'Importar' }}
-            </button>
-          </div>
-        </div>
-        <p class="cl-help">
-          La primera fila debe tener encabezados. Se reconocen: <b>Fecha</b> (o Fecha/Hora; datos diarios o cada 15 min),
-          <b>Lluvia/Precipitacion</b> (mm), <b>Temp. max/min/media</b> o <b>Temperatura</b> (°C), <b>HR/Humedad relativa</b> (%),
-          <b>Velocidad del viento</b> (km/h o m/s), <b>Radiacion</b> (W/m² o MJ/m²) y <b>ETo</b> (mm).
-          Los datos subdiarios se agregan por dia; reimportar un periodo reemplaza sus valores.
-        </p>
-        <div v-if="resultadoImport" class="cl-result">
-          <i class="fas fa-check-circle"></i>
-          {{ resultadoImport.dias }} dias importados ({{ fmt(resultadoImport.desde) }} → {{ fmt(resultadoImport.hasta) }}) de {{ resultadoImport.filas_leidas }} filas.
-          Columnas: {{ Object.keys(resultadoImport.columnas).filter(k => k !== 'fecha').map(k => nombres[k]).join(', ') }}.
-          <span v-if="resultadoImport.omitidas.length"> {{ resultadoImport.omitidas.length }} fila(s) omitidas (p. ej. fila {{ resultadoImport.omitidas[0].fila }}: {{ resultadoImport.omitidas[0].motivo }}).</span>
-        </div>
-      </div>
-    </div>
 
     <!-- ============ Resultados ============ -->
     <div v-if="cargando" class="cl-loading">
@@ -291,8 +163,6 @@ export default {
   name: 'EnsayoClima',
   props: {
     ensayo: { type: Object, required: true },
-    puedeGestionar: { type: Boolean, default: false },
-    puedeImportar: { type: Boolean, default: false },
   },
   data() {
     const hoy = iso(new Date());
@@ -315,18 +185,9 @@ export default {
       error: null,
       dias: [],
       fuente: {},
-      panel: false,
-      formEst: null,
-      errEst: {},
-      guardandoEst: false,
-      importSel: null,
-      archivoClima: null,
-      importando: false,
-      resultadoImport: null,
       // API agromet del ICC
       icc: { configurada: false, servidor: null, cobertura: null, estaciones: 0, sin_coordenadas: 0 },
       sync: null,
-      sincronizando: false,
       cercana: null,
       base: ((document.querySelector('meta[name="app-base"]') || {}).content || '').replace(/\/+$/, ''),
     };
@@ -584,17 +445,6 @@ export default {
     cargarIcc() {
       return window.axios.get('/investigacion/clima/icc').then(({ data }) => { this.icc = data; }).catch(() => {});
     },
-    /** Descarga de la API el periodo elegido (todas las estaciones) y vuelve a consultar. */
-    sincronizarIcc() {
-      this.sincronizando = true;
-      window.axios.post('/investigacion/clima/icc/sincronizar', { desde: this.desde, hasta: this.hasta, forzar: 1 })
-        .then(({ data }) => {
-          this.toast('Datos del ICC descargados', `${data.registros || 0} registros de ${data.dias || 0} dia(s)${data.estaciones_nuevas ? ` · ${data.estaciones_nuevas} estacion(es) nueva(s)` : ''}`);
-          return Promise.all([this.cargarIcc(), this.cargarEstaciones(false)]).then(() => this.consultar());
-        })
-        .catch(this.falla)
-        .finally(() => { this.sincronizando = false; });
-    },
 
     /* ---------------- estaciones ---------------- */
     cargarEstaciones(inicial) {
@@ -618,73 +468,6 @@ export default {
         })
         .catch(() => { if (inicial) this.consultar(); })
         .finally(() => { this.cargandoEst = false; });
-    },
-    nuevaEstacion() {
-      this.errEst = {};
-      this.formEst = {
-        id: null, codigo: '', codigo_api: '', nombre: '', red: this.redes[0] || 'ICC REDMET', ubicacion: '',
-        lat: this.tieneGps ? this.ensayo.lat : '', lng: this.tieneGps ? this.ensayo.lng : '', altitud: '', activa: true,
-      };
-    },
-    editarEstacion(s) {
-      this.errEst = {};
-      this.formEst = { ...s, ubicacion: s.ubicacion || '', codigo_api: s.codigo_api || '', altitud: s.altitud === null ? '' : s.altitud };
-    },
-    guardarEstacion() {
-      const f = this.formEst;
-      const payload = {
-        codigo: String(f.codigo || '').trim(), codigo_api: String(f.codigo_api || '').trim() || null, nombre: String(f.nombre || '').trim(), red: f.red,
-        ubicacion: f.ubicacion || null, lat: f.lat, lng: f.lng, altitud: f.altitud === '' ? null : f.altitud, activa: !!f.activa,
-      };
-      this.guardandoEst = true;
-      this.errEst = {};
-      (f.id ? window.axios.put(`/investigacion/clima/estaciones/${f.id}`, payload) : window.axios.post('/investigacion/clima/estaciones', payload))
-        .then(({ data }) => {
-          this.toast(f.id ? 'Estacion actualizada' : 'Estacion creada', data.nombre);
-          this.formEst = null;
-          return this.cargarEstaciones(false);
-        })
-        .catch((err) => {
-          if (err.response && err.response.status === 422) this.errEst = err.response.data.errors || {};
-          else this.falla(err);
-        })
-        .finally(() => { this.guardandoEst = false; });
-    },
-    eliminarEstacion(s) {
-      this.$swal.fire({
-        title: 'Eliminar estacion', icon: 'warning',
-        text: `Se eliminara ${s.nombre} (${s.codigo})${s.registros_count ? ` y sus ${s.registros_count} dias de datos importados` : ''}.`,
-        showCancelButton: true, confirmButtonText: 'Si, eliminar', cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#FF6B00', cancelButtonColor: '#CED2D5', focusCancel: true,
-      }).then((r) => {
-        if (!r.isConfirmed) return;
-        window.axios.delete(`/investigacion/clima/estaciones/${s.id}`)
-          .then(() => {
-            this.toast('Estacion eliminada', s.nombre);
-            if (this.estacionSel === s.id) this.estacionSel = 'punto';
-            return this.cargarEstaciones(false);
-          })
-          .catch(this.falla);
-      });
-    },
-    importar() {
-      const fd = new FormData();
-      fd.append('archivo', this.archivoClima);
-      this.importando = true;
-      this.resultadoImport = null;
-      window.axios.post(`/investigacion/clima/estaciones/${this.importSel}/importar`, fd)
-        .then(({ data }) => {
-          this.resultadoImport = data;
-          this.archivoClima = null;
-          if (this.$refs.archivoClima) this.$refs.archivoClima.value = '';
-          this.toast('Datos importados', `${data.dias} dias`);
-          return this.cargarEstaciones(false).then(() => {
-            if (this.estacionSel === this.importSel) this.consultar();
-            else this.estacionSel = this.importSel;
-          });
-        })
-        .catch(this.falla)
-        .finally(() => { this.importando = false; });
     },
 
     /* ---------------- periodo ---------------- */
@@ -930,27 +713,9 @@ export default {
 .cl-check { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0; color: var(--cengi-muted); font-size: 12px; font-weight: 500; cursor: pointer; }
 .cl-error { margin: 8px 0 0; color: #b84d00; font-size: 12px; font-weight: 600; }
 
-.cl-panel { margin-top: 12px; padding: 14px; border: 1px solid var(--cengi-border); border-radius: 10px; background: #fff; }
-.cl-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-.cl-panel h6 { margin: 0; color: var(--cengi-primary-deep); font-size: 13.5px; font-weight: 700; }
-.cl-panel h6 i { margin-right: 6px; color: #73BC25; }
-.cl-form { margin-bottom: 12px; padding: 12px; border-radius: 8px; background: #fafbf8; }
-.cl-form label { font-size: 11px; }
-.cl-api { margin-bottom: 12px; padding: 10px 12px; border: 1px solid #d6e4f3; border-radius: 10px; background: #f4f8fd; }
-.cl-api.is-off { border-color: #ecdcb0; background: #fffbea; }
-.cl-api-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; color: #1d4f80; font-size: 12.5px; }
-.cl-api.is-off .cl-api-head { color: #7a5d00; }
-.cl-api-head i { margin-right: 6px; }
 .cl-cercana { margin: 8px 0 0; color: #3f7a12; font-size: 12.5px; }
 .cl-cercana i { margin-right: 4px; }
 .cl-lejos { color: #b84d00; }
-.cl-warn { margin: 4px 0 0; color: #b84d00; font-size: 12px; }
-.cl-warn-tag { padding: 1px 7px; border-radius: 999px; background: #fff1e6; color: #b84d00; font-size: 11px; font-weight: 600; white-space: nowrap; }
-.cl-import { margin-top: 14px; padding-top: 12px; border-top: 1px solid #edf1ec; }
-.cl-import h6 { margin-bottom: 10px; }
-.cl-help { margin: 4px 0 0; color: var(--cengi-muted); font-size: 11.5px; line-height: 1.5; }
-.cl-result { margin-top: 10px; padding: 9px 12px; border-radius: 8px; background: #eef8df; color: #3f7a12; font-size: 12px; }
-.cl-result i { margin-right: 5px; }
 
 .cl-table-wrap { overflow-x: auto; border: 1px solid #edf1ec; border-radius: 10px; }
 .cl-table-scroll { max-height: 360px; overflow-y: auto; }
@@ -959,12 +724,8 @@ export default {
 .cl-table tr.is-off td { color: #9aa3a8; }
 .cl-table small { color: var(--cengi-muted); }
 .cl-nowrap { white-space: nowrap; }
-.cl-muted { color: var(--cengi-muted); font-size: 12px; }
 .cl-neg { color: #b84d00; font-weight: 700; }
 .cl-pos { color: #3f7a12; font-weight: 700; }
-.cl-icon { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--cengi-muted); font-size: 12px; cursor: pointer; }
-.cl-icon:hover { border-color: var(--cengi-border); background: var(--cengi-accent-soft); color: var(--cengi-primary-deep); }
-.cl-icon-danger:hover { border-color: #ffd2b3; background: #fff1e6; color: #FF6B00; }
 
 .cl-loading { padding: 40px; color: var(--cengi-muted); text-align: center; }
 .cl-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 14px; padding: 30px 16px; border: 1px dashed #CED2D5; border-radius: 10px; color: var(--cengi-muted); font-size: 12.5px; text-align: center; }

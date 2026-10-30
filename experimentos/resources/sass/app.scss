@@ -790,3 +790,19 @@ body .swal2-timer-progress-bar { background: rgba(115, 188, 37, .5); }
 [data-highcharts-chart]::backdrop {
     background: #fff;
 }
+
+/* Leaflet: el icono del selector de capas es una imagen con ruta absoluta (/images/...)
+   que no existe bajo el prefijo del modulo; se reemplaza por el icono de Font Awesome. */
+.leaflet-control-layers-toggle {
+    background-image: none !important;
+    display: grid !important;
+    place-items: center;
+    color: #3f4a44;
+    text-decoration: none !important;
+}
+.leaflet-control-layers-toggle::before {
+    content: "\f5fd";
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    font-size: 17px;
+}

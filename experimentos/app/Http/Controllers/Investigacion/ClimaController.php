@@ -155,7 +155,8 @@ class ClimaController extends Controller
      */
     public function importar(Request $request, EstacionMeteo $estacion)
     {
-        Gate::authorize('upload_files');
+        // Datos compartidos por todos los ensayos: solo quien administra el clima.
+        Gate::authorize('gestionar_clima');
 
         $request->validate(['archivo' => 'required|file|mimes:xlsx,xls,csv,txt|max:20480']);
 
@@ -293,7 +294,7 @@ class ClimaController extends Controller
                 abort(403);
             }
         } else {
-            Gate::authorize('upload_files');
+            Gate::authorize('gestionar_clima');
         }
         if ($desde->diffInDays($hasta) > 1100) {
             return response()->json(['message' => 'Sincronice como maximo 3 años por vez.'], 422);
@@ -317,7 +318,7 @@ class ClimaController extends Controller
             'title' => 'Clima · Red de estaciones',
             'component' => 'clima-index',
             'params' => [
-                'puedeSincronizar' => $user->can('upload_files'),
+                'puedeSincronizar' => $user->can('gestionar_clima'),
                 'puedeGestionar' => $user->can('admin_only'),
             ],
         ]);

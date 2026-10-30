@@ -472,7 +472,7 @@ export default {
 .ni-ok { color: #3f7a12; font-weight: 600; }
 .ni-origen { background: #eef4fb; color: #1d4f80; }
 .ni-ayuda { margin-bottom: 6px; color: var(--cengi-muted); font-size: 12px; }
-.ni-galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.ni-galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 .ni-card { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--cengi-border); border-radius: 10px; background: #fff; }
 .ni-thumb { height: 110px; background: #f3f5f1 center / contain no-repeat; border-bottom: 1px solid var(--cengi-border); }
 .ni-card-body { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; }
