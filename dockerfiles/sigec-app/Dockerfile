@@ -38,7 +38,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY dockerfiles/sigec-app/000-default.conf /etc/apache2/sites-available/000-default.conf
 
 WORKDIR /var/www/html/sigec
-COPY sigec/. /var/www/html/sigec
+COPY experimentos/. /var/www/html/sigec
 
 RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
 # public/vendor (AdminLTE, Bootstrap, jQuery, Font Awesome) no se versiona (.gitignore):
