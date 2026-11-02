@@ -329,6 +329,129 @@ if (!function_exists('lab_historial_versiones_muestras')) {
     }
 }
 
+if (!function_exists('lab_historial_versiones_flujo')) {
+    /**
+     * Historial de versiones del flujo actual (Bandeja del analista → Validación técnica).
+     * Cada envío de una hoja crea un formulario con su copia de la captura (lab_hoja_formulario);
+     * un rechazo deja ese formulario "Rechazado" y la nueva captura crea otro; en un reanálisis
+     * parcial la muestra devuelta recibe su propio formulario "Rechazado" con los valores
+     * originales. Por eso cada formulario que cubre una muestra + análisis es una versión, con su
+     * fecha, analista, estado, motivo y datos originales (nada se sobrescribe).
+     *
+     * Devuelve una entrada por muestra + análisis con más de una versión o algún rechazo.
+     */
+    function lab_historial_versiones_flujo(PDO $pdo): array
+    {
+        if (!lab_trazabilidad_tabla_existe($pdo, 'lab_hoja_formulario')) {
+            return [];
+        }
+
+        $filas = $pdo->query("
+            SELECT f.id_formulario, f.id_tipo_analisis, f.fecha, f.analista, ef.nombre AS estado,
+                   ta.nombre AS analisis_nombre, l.codigo_lote, h.hoja, h.datos
+            FROM lab_hoja_formulario h
+            INNER JOIN formulario f ON f.id_formulario = h.id_formulario
+            LEFT JOIN estado_formulario ef ON ef.id_estado = f.id_estado
+            LEFT JOIN tipo_analisis ta ON ta.id_tipo = f.id_tipo_analisis
+            LEFT JOIN lote_rango lr ON lr.id_rango = f.id_rango
+            LEFT JOIN lote l ON l.id_lote = lr.id_lote
+            ORDER BY f.id_formulario
+        ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if (!$filas) {
+            return [];
+        }
+
+        // Eventos de cada formulario: envío, validación y reanálisis (con su motivo).
+        $eventos = [];
+        $ids = array_map(static fn($f) => (int) $f['id_formulario'], $filas);
+        foreach (array_chunk($ids, 500) as $bloque) {
+            $stmt = $pdo->prepare('SELECT id_formulario, accion, estado_nuevo, usuario, fecha, comentario FROM historial_formulario
+                WHERE id_formulario IN (' . implode(',', array_fill(0, count($bloque), '?')) . ') ORDER BY fecha, id_historial');
+            $stmt->execute($bloque);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $ev) {
+                $eventos[(int) $ev['id_formulario']][] = $ev;
+            }
+        }
+
+        $hojas = function_exists('wfConfig') ? (wfConfig()['hojas'] ?? []) : [];
+        $pares = [];
+        foreach ($filas as $f) {
+            $idForm = (int) $f['id_formulario'];
+            $cap = json_decode((string) $f['datos'], true);
+            if (!is_array($cap)) continue;
+
+            $envio = null;
+            $validacion = null;
+            foreach ($eventos[$idForm] ?? [] as $ev) {
+                $accion = lab_historial_normalizar((string) $ev['accion']);
+                if ($accion === 'hoja_enviada' && !$envio) $envio = $ev;
+                if (in_array($accion, ['validacion_tecnica', 'reanalisis'], true)) $validacion = $ev;
+            }
+            $estadoNorm = lab_historial_normalizar((string) $f['estado']);
+            $estado = strpos($estadoNorm, 'rechaz') !== false ? ['key' => 'rechazada', 'label' => 'RECHAZADA']
+                : (strpos($estadoNorm, 'aprob') !== false ? ['key' => 'aprobada', 'label' => 'APROBADA'] : ['key' => 'revision', 'label' => 'EN REVISIÓN']);
+            $esReanalisis = $validacion && lab_historial_normalizar((string) $validacion['accion']) === 'reanalisis';
+
+            $muestras = [];
+            foreach ($cap['muestras'] ?? [] as $m) {
+                $muestras[(int) ($m['id_muestra'] ?? 0)] = $m;
+            }
+            $cols = $hojas[$cap['hoja'] ?? $f['hoja']]['cols'] ?? [];
+
+            foreach (array_map('intval', $cap['seleccion'] ?? []) as $idMuestra) {
+                $m = $muestras[$idMuestra] ?? [];
+                $valores = $cap['filas'][$idMuestra] ?? $cap['filas'][(string) $idMuestra] ?? [];
+                $lecturas = [];
+                foreach ($cols as $col) {
+                    $v = trim((string) ($valores[$col['k']] ?? ''));
+                    if ($v !== '') $lecturas[] = trim(($col['g'] ?? '') !== '' ? $col['g'] . ' · ' . $col['label'] : $col['label']) . ': ' . $v;
+                }
+                $clave = 'wf-' . $idMuestra . '-' . (int) $f['id_tipo_analisis'];
+                $pares[$clave] ??= [
+                    'key' => $clave,
+                    'muestra' => (string) ($m['codigo_muestra'] ?? ('Muestra #' . $idMuestra)),
+                    'lote' => (string) ($m['codigo_lote'] ?? $f['codigo_lote'] ?? '-'),
+                    'tipo_muestra' => (string) ($m['tipo_muestra'] ?? ''),
+                    'analisis' => (string) ($f['analisis_nombre'] ?: ($cap['analisis'] ?? 'Análisis')),
+                    'versiones' => [],
+                ];
+                $pares[$clave]['versiones'][] = [
+                    'id_formulario' => $idForm,
+                    'estado' => $estado,
+                    'fecha' => (string) ($esReanalisis ? ($cap['fecha'] ?? $f['fecha']) : ($envio['fecha'] ?? $f['fecha'])),
+                    'usuario' => trim((string) ($cap['analista'] ?? $f['analista'] ?? '')) ?: 'Sistema',
+                    'equipo' => trim((string) ($cap['equipo'] ?? '')),
+                    'lecturas' => $lecturas,
+                    'motivo' => $estado['key'] === 'rechazada' ? trim((string) ($validacion['comentario'] ?? '')) : null,
+                    'comentario' => $estado['key'] === 'aprobada' ? trim((string) ($validacion['comentario'] ?? '')) : '',
+                    'validado_por' => $validacion ? trim((string) ($validacion['usuario'] ?? '')) : '',
+                    'validado_fecha' => $validacion ? (string) $validacion['fecha'] : '',
+                    'reanalisis' => $esReanalisis,
+                    // Datos de esta muestra para calcular el resultado con las fórmulas de la hoja.
+                    'calc' => [
+                        'hoja' => (string) ($cap['hoja'] ?? $f['hoja']), 'analisis' => (string) ($cap['analisis'] ?? ''),
+                        'encabezado' => $cap['encabezado'] ?? [], 'controles' => $cap['controles'] ?? [], 'curva' => $cap['curva'] ?? [],
+                        'fila' => $valores, 'id' => $idMuestra,
+                    ],
+                ];
+            }
+        }
+
+        $resultado = [];
+        foreach ($pares as $par) {
+            $rechazos = count(array_filter($par['versiones'], static fn($v) => $v['estado']['key'] === 'rechazada'));
+            if (count($par['versiones']) < 2 && !$rechazos) continue;
+            foreach ($par['versiones'] as $i => &$v) $v['numero'] = $i + 1;
+            unset($v);
+            $par['ultima_fecha'] = (string) end($par['versiones'])['fecha'];
+            $par['estado_actual'] = end($par['versiones'])['estado'];
+            $resultado[] = $par;
+        }
+        usort($resultado, static fn($a, $b) => strcmp($b['ultima_fecha'], $a['ultima_fecha']));
+        return $resultado;
+    }
+}
+
 if (!function_exists('lab_trazabilidad_obtener_linea_tiempo')) {
     /**
      * Devuelve la linea de tiempo combinada (eventos genericos +
@@ -419,11 +542,15 @@ if (!function_exists('lab_trazabilidad_actividad_reciente')) {
      * por el dashboard general. Misma combinacion de fuentes que
      * lab_trazabilidad_obtener_linea_tiempo() (lab_evento_trazabilidad +
      * historial_formulario), pero global y limitada a los N eventos mas
-     * recientes.
+     * recientes. Con $offset devuelve las paginas siguientes: se leen los
+     * primeros $offset + $limite de cada fuente, se mezclan por fecha y se
+     * recorta la ventana pedida.
      */
-    function lab_trazabilidad_actividad_reciente(PDO $pdo, int $limite = 12): array
+    function lab_trazabilidad_actividad_reciente(PDO $pdo, int $limite = 12, int $offset = 0): array
     {
         $eventos = [];
+        $offset = max(0, $offset);
+        $leer = $limite + $offset;
 
         if (lab_trazabilidad_tabla_existe($pdo, 'lab_evento_trazabilidad')) {
             $stmt = $pdo->prepare("
@@ -440,7 +567,7 @@ if (!function_exists('lab_trazabilidad_actividad_reciente')) {
                 ORDER BY et.fecha DESC
                 LIMIT ?
             ");
-            $stmt->bindValue(1, $limite, PDO::PARAM_INT);
+            $stmt->bindValue(1, $leer, PDO::PARAM_INT);
             $stmt->execute();
             foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                 $eventos[] = [
@@ -472,7 +599,7 @@ if (!function_exists('lab_trazabilidad_actividad_reciente')) {
             ORDER BY hf.fecha DESC
             LIMIT ?
         ");
-        $stmt->bindValue(1, $limite, PDO::PARAM_INT);
+        $stmt->bindValue(1, $leer, PDO::PARAM_INT);
         $stmt->execute();
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $detalle = trim((string) ($row['estado_anterior'] ?? '')) !== ''
@@ -493,7 +620,26 @@ if (!function_exists('lab_trazabilidad_actividad_reciente')) {
             return strcmp((string) $b['fecha'], (string) $a['fecha']);
         });
 
-        return array_slice($eventos, 0, $limite);
+        return array_slice($eventos, $offset, $limite);
+    }
+}
+
+if (!function_exists('lab_trazabilidad_actividad_total')) {
+    /** Total de eventos de la actividad del flujo (mismas fuentes y joins que la consulta). */
+    function lab_trazabilidad_actividad_total(PDO $pdo): int
+    {
+        $total = 0;
+        if (lab_trazabilidad_tabla_existe($pdo, 'lab_evento_trazabilidad')) {
+            $total += (int) $pdo->query('SELECT COUNT(*) FROM lab_evento_trazabilidad')->fetchColumn();
+        }
+        $total += (int) $pdo->query('
+            SELECT COUNT(*)
+            FROM historial_formulario hf
+            INNER JOIN formulario f ON f.id_formulario = hf.id_formulario
+            INNER JOIN lote_rango lr ON lr.id_rango = f.id_rango
+            INNER JOIN lote l ON l.id_lote = lr.id_lote
+        ')->fetchColumn();
+        return $total;
     }
 }
 

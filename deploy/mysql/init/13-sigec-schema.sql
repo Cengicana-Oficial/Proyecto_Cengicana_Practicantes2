@@ -3,7 +3,7 @@
 -- tablas lo crean las migraciones (`php artisan migrate`), no un dump SQL.
 -- Este archivo solo hace lo que las migraciones no pueden hacer por si
 -- solas: crear la base vacia, dar permisos al usuario compartido de la app,
--- y registrar el modulo "SIGEC" en usuarios_menu.modulos (mismo patron ya
+-- y registrar el modulo "Experimentos" (SIGEC) en usuarios_menu.modulos (mismo patron ya
 -- usado por 12-laboratorio-grants.sql) para que aparezca en el menu
 -- principal tras iniciar sesion.
 --
@@ -16,4 +16,4 @@ CREATE DATABASE IF NOT EXISTS sigec CHARACTER SET utf8mb4 COLLATE utf8mb4_unicod
 GRANT ALL PRIVILEGES ON sigec.* TO 'modulos_user'@'%';
 FLUSH PRIVILEGES;
 
-INSERT IGNORE INTO usuarios_menu.modulos (nombre) VALUES ('SIGEC');
+INSERT IGNORE INTO usuarios_menu.modulos (nombre) VALUES ('Experimentos');

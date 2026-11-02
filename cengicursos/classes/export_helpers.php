@@ -7,9 +7,8 @@
  * exportardashboardingenio.php (prefijo cengi_dbi_pdf_*): la codificacion de
  * texto para el PDF armado a mano, el recorte de celdas y el ensamblado final
  * del archivo PDF; y agrega un helper nuevo para generar un libro de Excel
- * real (via la libreria PHPExcel ya vendorizada en classes/PHPExcel.php,
- * el mismo motor que usan exportarcursos.php y exportaringenios.php) en vez
- * de un CSV de texto plano.
+ * real (con PhpSpreadsheet, en vendor/)
+ * en vez de un CSV de texto plano.
  */
 
 /**
@@ -175,8 +174,8 @@ function cengi_export_nombre_archivo($nombreArchivo, $predeterminado)
 }
 
 /**
- * Genera un libro de Excel real (formato Excel5 / .xls, el mismo que usan
- * exportarcursos.php y exportaringenios.php via PHPExcel) a partir de un
+ * Genera un libro de Excel real (.xls por defecto o .xlsx, con PhpSpreadsheet)
+ * a partir de un
  * arreglo de encabezados y filas, y lo envia al navegador. Reemplaza el
  * antiguo "CSV" (texto separado por comas via fputcsv) que el navegador
  * mostraba como texto plano en vez de descargar un archivo bien formateado.
@@ -187,83 +186,73 @@ function cengi_export_nombre_archivo($nombreArchivo, $predeterminado)
  * @param string $nombreArchivoBase Nombre de archivo sin extension.
  * @param int[] $anchosColumnas Ancho opcional por columna (indice 0..n); si falta, se usa un ancho por defecto.
  */
-function cengi_export_enviar_excel(array $encabezados, array $filas, $tituloHoja, $nombreArchivoBase, array $anchosColumnas = [])
+function cengi_export_enviar_excel(array $encabezados, array $filas, $tituloHoja, $nombreArchivoBase, array $anchosColumnas = [], $formato = 'xls')
 {
-    // La libreria PHPExcel vendorizada es de 2014 y, aunque ya no tiene errores
-    // de sintaxis bajo PHP 8 (ver classes/PHPExcel/*), sigue generando muchos
-    // avisos "Deprecated" (creacion de propiedades dinamicas, conversion
-    // implicita float->int, etc.) bajo PHP 8.1+. Con display_errors=On (el
-    // default de esta imagen de Docker) esos avisos se imprimen como texto
-    // plano ANTES de los header(), lo que rompe el Content-Type y hace que el
-    // navegador muestre el archivo binario como si fuera texto (el mismo bug
-    // reportado originalmente). Se baja error_reporting solo durante la
-    // generacion del archivo (sin ocultar errores fatales) y ademas se
-    // envuelve todo en un buffer de salida que se descarta antes de mandar
-    // los headers, como doble seguro.
-    error_reporting(E_ERROR | E_PARSE | E_COMPILE_ERROR | E_CORE_ERROR);
-    set_error_handler(static function () {
-        return true;
-    }, E_DEPRECATED | E_USER_DEPRECATED);
+    // Genera el libro con PhpSpreadsheet (vendor/), que es compatible con PHP 8. Antes se
+    // usaba PHPExcel (classes/PHPExcel, de 2014), que en PHP 8.2 escribe avisos
+    // "Deprecated" dentro del archivo y lo dejaba dañado. El buffer de salida se descarta
+    // antes de los headers como seguro ante cualquier aviso previo.
     ob_start();
+    require_once dirname(__DIR__) . '/vendor/autoload.php';
 
-    require_once __DIR__ . '/PHPExcel.php';
-    require_once __DIR__ . '/PHPExcel/Cell.php';
-    require_once __DIR__ . '/PHPExcel/Calculation.php';
-
-    $objPHPExcel = new PHPExcel();
-    $objPHPExcel->getProperties()
+    $libro = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+    $libro->getProperties()
         ->setCreator('CENGICANA')
         ->setLastModifiedBy('CENGICANA')
         ->setTitle($tituloHoja)
         ->setSubject($tituloHoja)
         ->setDescription('Reporte generado por cengicursos')
         ->setCategory('Reporte');
+    $libro->getDefaultStyle()->getFont()->setName('Calibri')->setSize(10);
 
-    $hoja = $objPHPExcel->setActiveSheetIndex(0);
-    $ultimaColumna = PHPExcel_Cell::stringFromColumnIndex(max(0, count($encabezados) - 1));
+    $hoja = $libro->getActiveSheet();
+    $columna = static function ($indice) {
+        return \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($indice + 1);
+    };
+    $ultimaColumna = $columna(max(0, count($encabezados) - 1));
 
     foreach ($encabezados as $indice => $titulo) {
-        $columna = PHPExcel_Cell::stringFromColumnIndex($indice);
-        $hoja->setCellValue($columna . '1', $titulo);
-        $hoja->getColumnDimension($columna)->setWidth($anchosColumnas[$indice] ?? 22);
+        $hoja->setCellValue($columna($indice) . '1', $titulo);
+        $hoja->getColumnDimension($columna($indice))->setWidth($anchosColumnas[$indice] ?? 22);
     }
-
-    $boldArray = ['font' => ['bold' => true], 'alignment' => ['horizontal' => PHPExcel_Style_Alignment::HORIZONTAL_CENTER]];
-    $hoja->getStyle('A1:' . $ultimaColumna . '1')->applyFromArray($boldArray);
+    $hoja->getStyle('A1:' . $ultimaColumna . '1')->applyFromArray([
+        'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+        'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1F5632']],
+        'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER, 'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER, 'wrapText' => true],
+    ]);
     $hoja->freezePane('A2');
 
     $fila = 2;
     foreach ($filas as $datosFila) {
         foreach (array_values($datosFila) as $indice => $valor) {
-            $columna = PHPExcel_Cell::stringFromColumnIndex($indice);
-            $hoja->setCellValueExplicit($columna . $fila, (string) $valor, PHPExcel_Cell_DataType::TYPE_STRING);
+            if ($valor === null || $valor === '') {
+                continue;
+            }
+            $hoja->setCellValueExplicit($columna($indice) . $fila, (string) $valor, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
         }
         $fila++;
     }
 
     if ($fila > 2) {
-        $styleArray = [
-            'font' => ['name' => 'Arial', 'size' => 10],
-            'borders' => ['allborders' => ['style' => PHPExcel_Style_Border::BORDER_THIN, 'color' => ['argb' => 'FFCCCCCC']]],
-        ];
-        $hoja->getStyle('A1:' . $ultimaColumna . ($fila - 1))->applyFromArray($styleArray);
+        $hoja->getStyle('A1:' . $ultimaColumna . ($fila - 1))->applyFromArray([
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['argb' => 'FFCED2D5']]],
+        ]);
+        $hoja->setAutoFilter('A1:' . $ultimaColumna . ($fila - 1));
     }
 
-    $hoja->setTitle(mb_substr($tituloHoja, 0, 31, 'UTF-8'));
-    $objPHPExcel->setActiveSheetIndex(0);
+    // Excel no admite \ / ? * [ ] : en el nombre de la hoja.
+    $hoja->setTitle(mb_substr(str_replace(['\\', '/', '?', '*', '[', ']', ':'], ' ', (string) $tituloHoja), 0, 31, 'UTF-8'));
+    $libro->setActiveSheetIndex(0);
 
-    $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel5');
-    $objWriter->save('php://output');
+    $esXlsx = $formato === 'xlsx';
+    $escritor = $esXlsx ? new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($libro) : new \PhpOffice\PhpSpreadsheet\Writer\Xls($libro);
+    $escritor->setPreCalculateFormulas(false);
+    ob_start();
+    $escritor->save('php://output');
     $excelBytes = ob_get_clean();
 
-    // La funcion siempre termina la peticion con exit. No se restaura aqui el
-    // handler porque PHPExcel conserva objetos estaticos y sus destructores se
-    // ejecutan durante el shutdown; en PHP 8.2 esos destructores vuelven a
-    // emitir avisos Deprecated despues del binario y corrompen el .xls.
-
     if (!is_string($excelBytes)
-        || strncmp($excelBytes, "\xD0\xCF\x11\xE0", 4) !== 0
-        || strlen($excelBytes) % 512 !== 0) {
+        || ($esXlsx ? strncmp($excelBytes, "PK\x03\x04", 4) !== 0 : strncmp($excelBytes, "\xD0\xCF\x11\xE0", 4) !== 0)) {
         throw new RuntimeException('No se pudo generar un archivo de Excel valido.');
     }
 
@@ -278,7 +267,7 @@ function cengi_export_enviar_excel(array $encabezados, array $filas, $tituloHoja
     }
     @ini_set('zlib.output_compression', '0');
 
-    $nombreArchivo = cengi_export_nombre_archivo($nombreArchivoBase . '.xls', 'reporte.xls');
+    $nombreArchivo = cengi_export_nombre_archivo($nombreArchivoBase . ($esXlsx ? '.xlsx' : '.xls'), $esXlsx ? 'reporte.xlsx' : 'reporte.xls');
     $nombreAscii = function_exists('iconv')
         ? iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $nombreArchivo)
         : $nombreArchivo;
@@ -288,7 +277,7 @@ function cengi_export_enviar_excel(array $encabezados, array $filas, $tituloHoja
     }
 
     http_response_code(200);
-    header('Content-Type: application/vnd.ms-excel', true);
+    header('Content-Type: ' . ($esXlsx ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/vnd.ms-excel'), true);
     header("Content-Disposition: attachment; filename=\"{$nombreAscii}\"; filename*=UTF-8''" . rawurlencode($nombreArchivo), true);
     header('Content-Transfer-Encoding: binary', true);
     header('Content-Length: ' . strlen($excelBytes), true);

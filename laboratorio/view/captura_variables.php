@@ -22,6 +22,12 @@ if ($hasController) {
     lab_require_analysis_access((string) $capture['key']);
 }
 
+require_once __DIR__ . '/../includes/workflow_trabajo_helper.php';
+$hojaPrototipo = wfHoja((string)$capture['tipo'], (string)$capture['label']);
+if ($hojaPrototipo && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    header('Location: solicitudes_pendientes_tecnico.php?hoja=' . rawurlencode($hojaPrototipo['key']));
+    exit;
+}
 $catalogAnalysis = null;
 $typeKey = labCatalogoMuestrasClaveDesdePrefijo(null, (string) $capture['tipo']);
 $aliases = array_map('lab_captura_variables_normalizar', (array) $capture['aliases']);
@@ -131,7 +137,7 @@ function capture_svg(string $name): string
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Captura de variables</title>
-    <link rel="stylesheet" href="../css/lab_shell.css?v=1">
+    <link rel="stylesheet" href="../css/lab_shell.css?v=20261006">
     <link rel="stylesheet" href="../styles/captura_variables_template.css?v=<?= (int) filemtime(__DIR__ . '/../styles/captura_variables_template.css') ?>">
 </head>
 <body class="cengi-canvas">

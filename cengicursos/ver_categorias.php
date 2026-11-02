@@ -24,7 +24,7 @@ $resultado->execute($params);
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
 	<link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
-	<link rel="stylesheet" type="text/css" href="css/proyecto.css">
+	<link rel="stylesheet" type="text/css" href="css/proyecto.css?v=<?php echo (int) filemtime(__DIR__ . '/css/proyecto.css'); ?>">
 	<script src="js/jquery-3.2.1.min.js"></script>
 	<script src="js/bootstrap.min.js"></script>
 	<meta charset="utf-8">
@@ -76,7 +76,7 @@ $resultado->execute($params);
 						<td><?php echo $row['id']; ?></td>
 						<td><?php echo $row['descripcion_categorias_cursos']; ?></td>
 						<td>
-							<div class="cengi-row-actions">
+							<div class="cengi-row-actions" data-actions-title="Gestionar categoría">
 								<a class="cengi-action-btn is-edit" href="modificar_categorias.php?id=<?php echo $row['id']; ?>" data-tooltip="Editar" aria-label="Editar"><span class="glyphicon glyphicon-pencil"></span><span class="sr-only">Editar</span></a>
 								<a class="cengi-action-btn is-delete" href="#" data-href="eliminar_categorias.php?id=<?php echo $row['id']; ?>" data-toggle="modal" data-target="#confirm-delete" data-tooltip="Eliminar" aria-label="Eliminar"><span class="glyphicon glyphicon-trash"></span><span class="sr-only">Eliminar</span></a>
 							</div>

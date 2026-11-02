@@ -1,13 +1,13 @@
 :root {
   --capture-green: #73bc25;
-  --capture-green-dark: #5b9e1d;
-  --capture-green-deep: #447817;
-  --capture-green-soft: #eef8e5;
-  --capture-ink: #252a2f;
-  --capture-muted: #747d84;
-  --capture-line: #e0e4e6;
-  --capture-soft: #f6f7f7;
-  --capture-shadow: 0 1px 2px rgba(25, 31, 25, .05), 0 2px 8px rgba(25, 31, 25, .05);
+  --capture-green-dark: #5E9B1D;
+  --capture-green-deep: #4E8418;
+  --capture-green-soft: #E3F1D3;
+  --capture-ink: #1F2326;
+  --capture-muted: #636A6F;
+  --capture-line: #E2E5E7;
+  --capture-soft: #F7F8F8;
+  --capture-shadow: 0 1px 2px rgba(31, 35, 38, .05), 0 2px 8px rgba(31, 35, 38, .05);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -65,7 +65,7 @@
   gap: 6px;
   min-height: 31px;
   padding: 6px 10px;
-  color: #70787d;
+  color: #636A6F;
   font: inherit;
   font-size: 10px;
   font-weight: 800;
@@ -133,11 +133,11 @@
   gap: 7px;
   min-height: 35px;
   padding: 7px 11px;
-  color: #596269;
+  color: #636A6F;
   font: inherit;
   font-size: 10px;
   font-weight: 850;
-  border: 1px solid #d8dddf;
+  border: 1px solid #CED2D5;
   border-radius: 7px;
   background: #fff;
   cursor: pointer;
@@ -207,11 +207,11 @@
 .capture-alert {
   margin-bottom: 12px;
   padding: 10px 12px;
-  color: #765600;
+  color: #5C4A00;
   font-size: 10px;
-  border: 1px solid #ead898;
+  border: 1px solid #FFCC00;
   border-radius: 8px;
-  background: #fff8df;
+  background: #FFF8DB;
 }
 
 .capture-workbench {
@@ -281,18 +281,18 @@
 
 .capture-pending-table th {
   padding: 9px 10px;
-  color: #727a80;
+  color: #636A6F;
   font-size: 8.5px;
   font-weight: 900;
   text-align: left;
   letter-spacing: .035em;
   text-transform: uppercase;
-  background: #f5f6f6;
+  background: #F7F8F8;
 }
 
 .capture-pending-table td {
   padding: 9px 10px;
-  border-top: 1px solid #edf0f1;
+  border-top: 1px solid #EEF0F1;
 }
 
 .capture-unconfigured,
@@ -304,8 +304,8 @@
   font-weight: 800;
 }
 
-.capture-unconfigured { color: #765600; background: #fff3c8; }
-.capture-status-pending { color: #566168; background: #eef0f1; }
+.capture-unconfigured { color: #5C4A00; background: #FFF0B3; }
+.capture-status-pending { color: #474D51; background: #eef0f1; }
 .capture-empty { color: var(--capture-muted); text-align: center; }
 
 .capture-page.is-tablet .capture-pending-wrap { border: 0; overflow: visible; }
@@ -324,7 +324,7 @@
   padding: 12px;
   border: 1px solid var(--capture-line);
   border-radius: 9px;
-  background: #f8f9f8;
+  background: #F7F8F8;
 }
 .capture-page.is-tablet .capture-pending-table td {
   padding: 0;

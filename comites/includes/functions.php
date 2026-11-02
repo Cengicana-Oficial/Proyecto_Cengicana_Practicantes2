@@ -70,26 +70,77 @@ function current_user(PDO $menuPdo, PDO $pdo): array
         return [];
     }
 
-    $stmt = $menuPdo->prepare(
-        'SELECT u.id, u.nombre, u.correo, u.rol_id, u.es_superadmin, r.nombre_rol
-         FROM usuarios u
-         INNER JOIN roles r ON r.id = u.rol_id
-         WHERE u.id = ?'
-    );
+    $stmt = $menuPdo->prepare('SELECT u.id, u.nombre, u.correo, u.es_superadmin FROM usuarios u WHERE u.id = ?');
     $stmt->execute([$id]);
     $user = $stmt->fetch();
     if (!$user) {
         return [];
     }
 
-    $permissions = refresh_session_permissions($menuPdo, (int) $user['rol_id']);
+    // Rol y permisos del usuario EN ESTE MODULO (login/config/roles_modulo.php): el rol que
+    // tenga en otros modulos no aplica aqui.
+    require_once __DIR__ . '/../../login/config/roles_modulo.php';
+    $rolModulo = cengi_rm_activar_modulo($menuPdo, current_module_names()[0]);
+    $user['rol_id'] = $rolModulo['rol_id'] ?? 0;
+    $user['nombre_rol'] = $rolModulo['nombre_rol'] ?? '';
+    $permissions = $_SESSION['user_permissions'];
     $moduleStmt = $menuPdo->prepare('SELECT modulo_id FROM usuario_modulo WHERE usuario_id = ?');
     $moduleStmt->execute([$id]);
 
     $user['modulo_ids'] = array_map('intval', $moduleStmt->fetchAll(PDO::FETCH_COLUMN));
-    $user['permissions'] = $permissions;
+    $programa = comites_programa_usuario($menuPdo, $id);
+    $user['programa_id'] = $programa['id'] ?? null;
+    $user['programa'] = $programa['nombre'] ?? null;
+    $derivados = comites_permisos_por_programa((string) $user['nombre_rol'], $user['programa']);
+    $user['perfil_comites'] = $derivados['perfil'];
+    $user['permissions'] = array_values(array_unique(array_merge($permissions, $derivados['permisos'])));
 
     return $user;
+}
+
+/** Base de datos de Solicitudes internas, donde viven los programas compartidos de la plataforma. */
+function comites_programas_db(): string
+{
+    $nombre = app_env_value('DB_SOLICITUDES_NAME', app_env_value('SISTEMA_SOLICITUDES_DB_NAME', 'sistema_solicitudes'));
+    return '`' . str_replace('`', '``', $nombre) . '`';
+}
+
+/** Programa asignado al usuario (el mismo que usa Solicitudes internas), o null. */
+function comites_programa_usuario(PDO $menuPdo, int $usuarioId): ?array
+{
+    try {
+        $db = comites_programas_db();
+        $stmt = $menuPdo->prepare("SELECT p.id, p.nombre FROM {$db}.usuario_programa up JOIN {$db}.programas p ON p.id = up.programa_id WHERE up.usuario_id = ?");
+        $stmt->execute([$usuarioId]);
+        $fila = $stmt->fetch();
+        return $fila ? ['id' => (int) $fila['id'], 'nombre' => (string) $fila['nombre']] : null;
+    } catch (PDOException $e) {
+        return null; // Solicitudes internas aun no creo sus tablas.
+    }
+}
+
+/**
+ * Permisos que se derivan del rol + programa. El Jefe de programa de
+ * Transferencia de Tecnologia es quien administra el modulo (Jefe de
+ * Transferencia): gestiona todas las secciones y hace las revisiones de
+ * Transferencia. La gestion de usuarios queda para el superadmin o para
+ * quien tenga el permiso explicito.
+ */
+function comites_permisos_por_programa(string $rol, ?string $programa): array
+{
+    $rol = normalize_text($rol);
+    if ($programa !== null && in_array($rol, ['jefe de programa', 'jefe de transferencia'], true) && str_contains(normalize_text($programa), 'transferencia')) {
+        $permisos = ['comites.documentos.revisar_transferencia', 'comites.memorias.aprobar_transferencia', 'comites.memorias.ver_todos', 'comites.memorias.entregar', 'comites.usuarios.ver'];
+        foreach (['contactos', 'reuniones', 'eventos', 'acuerdos', 'documentos', 'biblioteca_interna', 'correos', 'tableros', 'informes', 'memorias', 'publicaciones', 'estadisticas', 'configuracion'] as $seccion) {
+            $permisos[] = "comites.$seccion.ver";
+            $permisos[] = "comites.$seccion.gestionar";
+        }
+        return ['perfil' => 'Jefe de Transferencia', 'permisos' => $permisos];
+    }
+    if ($rol === 'director' && $programa !== null && str_contains(normalize_text($programa), 'direccion')) {
+        return ['perfil' => 'Director General', 'permisos' => []];
+    }
+    return ['perfil' => null, 'permisos' => []];
 }
 
 function user_has_module_access(array $user, PDO $menuPdo): bool
@@ -144,20 +195,15 @@ function fetch_module_users(PDO $menuPdo, array $user): array
             u.id,
             u.nombre,
             u.correo,
-            u.rol_id,
+            um.rol_id,
             u.es_superadmin,
             u.ingenio_id,
-            r.nombre_rol,
+            COALESCE(r.nombre_rol, '') AS nombre_rol,
             i.nombre_ingenio AS ingenio
         FROM usuarios u
-        INNER JOIN roles r ON r.id = u.rol_id
+        INNER JOIN usuario_modulo um ON um.usuario_id = u.id AND um.modulo_id IN ({$modulePlaceholders})
+        LEFT JOIN roles r ON r.id = um.rol_id -- rol del usuario en este modulo
         LEFT JOIN ingenios i ON i.id = u.ingenio_id
-        WHERE EXISTS (
-            SELECT 1
-            FROM usuario_modulo um
-            WHERE um.usuario_id = u.id
-              AND um.modulo_id IN ({$modulePlaceholders})
-        )
         ORDER BY u.nombre
     ";
 

@@ -1,0 +1,66 @@
+/* Evaluación de eventos (eventos_evaluacion.php).
+   Usa .nc-page (necesidades_capacitacion.css) e .ir-page (informe_instructores.css); aquí solo lo propio. */
+.ev-eval-page .ir-vistas em.is-gris { background: #e3e7e0; color: #3c4a40; }
+.ev-eval-page .ir-vistas a.is-active em.is-gris { background: rgba(255, 255, 255, .18); color: #fff; }
+.ev-eval-page .nc-form > label:not(.nc-buscar):not(.ir-check) { min-width: 150px; }
+.ev-eval-page .nc-form > label.ev-eval-evento { flex: 1 1 260px; max-width: 360px; }
+
+/* Tabla de resultados */
+.ev-eval-tabla > tbody > tr > td { vertical-align: middle; }
+.ev-eval-tabla > tbody > tr > td:first-child { min-width: 220px; }
+.ev-eval-sub { display: block; margin-top: 3px; font-size: 12px; color: #6b7a72; }
+.ev-eval-etqs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.ev-eval-etq { padding: 1px 8px; border-radius: 20px; background: #f1f3f4; color: #4c575f; font-size: 10.5px; font-weight: 700; }
+.ev-eval-etq.is-en-curso { background: #e3f3cf; color: #2f6a12; }
+.ev-eval-etq.is-planificado { background: #fff5cc; color: #7a6000; }
+.ev-eval-etq.is-colab { background: #1f5632; color: #fff; }
+.ev-eval-tasa-th { min-width: 200px; }
+.ev-eval-tabla .ir-estado { margin-top: 6px; }
+.ev-eval-tema { font-size: 12.5px; min-width: 130px; }
+.ev-eval-tema a { color: #3e7119; font-weight: 600; }
+.ev-eval-acc { white-space: nowrap; text-align: right; }
+.ev-eval-acc .nc-btn { min-height: 32px; padding: 5px 12px; font-size: 12px; }
+.ev-eval-acc .nc-btn + .nc-btn { margin-left: 4px; }
+
+/* Distribución de estrellas: barra apilada 5 → 1 */
+.ev-eval-dist { display: flex; width: 90px; height: 5px; margin: 6px auto 0; border-radius: 4px; overflow: hidden; background: #edf1ea; }
+.ev-eval-dist i { display: block; height: 100%; }
+.ev-eval-dist .s5 { background: #2f6a12; }
+.ev-eval-dist .s4 { background: #73BC25; }
+.ev-eval-dist .s3 { background: #FFCC00; }
+.ev-eval-dist .s2 { background: #FF9A4D; }
+.ev-eval-dist .s1 { background: #FF6B00; }
+
+/* Por tipo y por criterio */
+.ev-eval-page .nc-rankings { margin-bottom: 16px; }
+.ev-eval-page .nc-rankings > .nc-panel { margin: 0; }
+.ev-eval-page .nc-panel h2 small { margin-left: 6px; font-size: 12px; font-weight: 500; }
+.ev-eval-mini > tbody > tr > td { padding: 9px 12px; vertical-align: middle; }
+.ev-eval-mini a { color: #1f5632; font-weight: 600; }
+.ev-eval-criterios { list-style: none; margin: 0; padding: 0; }
+.ev-eval-criterios li { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid #eef1eb; }
+.ev-eval-criterios li:last-child { border-bottom: 0; }
+.ev-eval-criterios li > span:first-child { font-size: 13px; }
+.ev-eval-criterios small { display: block; font-size: 11px; color: #8a968f; }
+.ev-eval-criterios .ir-barra { grid-column: 1 / -1; width: 100%; margin: 0; }
+.ev-eval-page .ir-meta-config { margin-top: 0; }
+
+/* Vista de comentarios */
+.ev-eval-com { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.ev-eval-com > .nc-panel { margin: 0 0 16px; }
+.ev-eval-com .nc-ranking { position: sticky; top: 16px; }
+.ev-eval-com .nc-ranking li a.is-positivo .nc-rk-barra i { background: #A3D300; }
+.ev-eval-ayuda { margin: 10px 0 0; font-size: 12px; color: #6b7a72; }
+.ev-eval-c.is-aliados { border-left-color: #FFCC00; }
+.nc-tag.is-aliado { background: #fff5cc; border-color: #f1d77a; color: #5c4800; }
+.ev-eval-stars { color: #E0A800; letter-spacing: 1px; }
+.ev-eval-stars i { font-style: normal; color: #D5D9D1; }
+
+@media (max-width: 900px) {
+    .ev-eval-com { grid-template-columns: 1fr; }
+    .ev-eval-com .nc-ranking { position: static; }
+}
+@media (max-width: 600px) {
+    .ev-eval-acc { white-space: normal; }
+    .ev-eval-acc .nc-btn { width: 100%; justify-content: center; margin: 0 0 6px !important; }
+}

@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/conexion.php';
+require_once __DIR__ . '/aula_helpers.php';
+date_default_timezone_set('America/Guatemala');
 
 $db = conectar();
 
@@ -10,6 +12,8 @@ if ($token !== '' && preg_match('/^[a-f0-9]{32}$/', $token)) {
     $stmt = $db->prepare("
         SELECT
             e.id AS enlace_id,
+            e.curso_id,
+            e.instructor_id,
             e.token,
             c.nombre_cursos,
             c.tipo AS modalidad,
@@ -32,6 +36,9 @@ if (!$enlace) {
     require __DIR__ . '/404.php';
     exit;
 }
+$aulaSurvey=aula_survey_context($db,$enlace);
+$participanteEvaluacion=aula_survey_participant($db,$enlace['curso_id']);
+if($aulaSurvey){$enlace['modulo_nombre']=null;if(!$aulaSurvey['disponible'])aula_survey_message($aulaSurvey);}
 
 // El formulario oficial replica dos ramas casi identicas (Presencial / Virtual),
 // pero la modalidad ya se conoce por el curso (cursos.tipo): no se vuelve a preguntar,
@@ -477,7 +484,13 @@ $labelCalidadInstalaciones = '¿Cómo calificaría las instalaciones donde se im
         </p>
     <?php endif; ?>
 
-    <?php if ($resultado === 'ok'): ?>
+    <?php if (!empty($aulaSurvey['prueba'])): ?>
+        <div class="cengi-eval-alert" role="status">Modo de prueba de superadmin. Puedes completar y enviar el formulario sin guardar evaluaciones ni modificar los promedios.</div>
+    <?php endif; ?>
+    <?php if ($resultado === 'prueba' && !empty($aulaSurvey['prueba']) && hash_equals((string)($_SESSION['evaluacion_prueba_ok'] ?? ''), hash('sha256', $token))): ?>
+        <div class="cengi-eval-alert is-success" role="status">Prueba completada correctamente. Las respuestas son válidas y no se guardaron como una evaluación real.</div>
+        <?php unset($_SESSION['evaluacion_prueba_ok']); ?>
+    <?php elseif ($resultado === 'ok'): ?>
         <div class="cengi-eval-alert is-success" role="status">
             ¡Gracias! Tu evaluación fue registrada correctamente.
         </div>
@@ -488,6 +501,7 @@ $labelCalidadInstalaciones = '¿Cómo calificaría las instalaciones donde se im
     <?php endif; ?>
 
     <form action="guardar_evaluacion_instructor.php" method="POST">
+        <?php if($aulaSurvey)echo aula_csrf(); ?>
         <input type="hidden" name="token" value="<?php echo cengi_eval_html($enlace['token']); ?>">
 
         <div class="cengi-eval-section-title">Datos generales</div>
@@ -508,7 +522,7 @@ $labelCalidadInstalaciones = '¿Cómo calificaría las instalaciones donde se im
             <select class="cengi-eval-select" id="cengiIngenio" name="ingenio_id" required onchange="cengiToggleIngenioOtro(this)">
                 <option value="">Selecciona tu ingenio...</option>
                 <?php foreach ($ingenios as $ingenioFila): ?>
-                    <option value="<?php echo (int) $ingenioFila['id']; ?>"><?php echo cengi_eval_html($ingenioFila['nombre_ingenios']); ?></option>
+                    <option value="<?php echo (int) $ingenioFila['id']; ?>" <?php echo (int)($participanteEvaluacion['ingenio_id']??0)===(int)$ingenioFila['id']?'selected':''; ?>><?php echo cengi_eval_html($ingenioFila['nombre_ingenios']); ?></option>
                 <?php endforeach; ?>
                 <option value="otro">Otro</option>
             </select>
@@ -521,12 +535,12 @@ $labelCalidadInstalaciones = '¿Cómo calificaría las instalaciones donde se im
 
         <div class="cengi-eval-field">
             <label class="cengi-eval-label" for="cengiCargo">Cargo <span class="cengi-eval-required">*</span></label>
-            <input type="text" class="cengi-eval-input" id="cengiCargo" name="cargo" maxlength="255" required placeholder="Tu cargo o puesto de trabajo">
+            <input type="text" class="cengi-eval-input" id="cengiCargo" name="cargo" maxlength="255" required value="<?php echo cengi_eval_html($participanteEvaluacion['puesto_participantes']??''); ?>" placeholder="Tu cargo o puesto de trabajo">
         </div>
 
         <div class="cengi-eval-field">
             <label class="cengi-eval-label" for="cengiSeccion">Sección <span class="cengi-eval-required">*</span></label>
-            <input type="text" class="cengi-eval-input" id="cengiSeccion" name="seccion" maxlength="255" required placeholder="Tu sección o área">
+            <input type="text" class="cengi-eval-input" id="cengiSeccion" name="seccion" maxlength="255" required value="Única" readonly>
         </div>
 
         <div class="cengi-eval-section-title">Acerca del instructor (<?php echo cengi_eval_html($modalidad); ?>)</div>

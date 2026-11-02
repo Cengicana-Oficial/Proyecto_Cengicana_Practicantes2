@@ -193,7 +193,105 @@ function escapeHtmlComites(value) {
   return div.innerHTML;
 }
 
+/** Menu desplegable de acciones por fila: posicion fija para no quedar recortado por el scroll de la tabla. */
+function initRowMenus() {
+  const closeMenus = (except) => document.querySelectorAll('details.row-menu[open]').forEach((d) => { if (d !== except) d.open = false; });
+  document.addEventListener('toggle', (event) => {
+    const menu = event.target;
+    if (!menu.matches || !menu.matches('details.row-menu') || !menu.open) return;
+    closeMenus(menu);
+    const box = menu.querySelector('summary').getBoundingClientRect();
+    const list = menu.querySelector('.row-menu-list');
+    list.style.left = `${Math.max(8, box.right - list.offsetWidth)}px`;
+    const below = box.bottom + 4;
+    const height = list.offsetHeight;
+    list.style.top = `${below + height > window.innerHeight - 8 ? Math.max(8, box.top - height - 4) : below}px`;
+  }, true);
+  document.addEventListener('click', (event) => { if (!event.target.closest('details.row-menu')) closeMenus(); });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeMenus(); });
+  window.addEventListener('scroll', () => closeMenus(), true);
+  window.addEventListener('resize', () => closeMenus());
+}
+
+/** Formulario de redes: muestra las metricas (y los destinos de WhatsApp) que corresponden a la plataforma. */
+function initRedesForm() {
+  const select = document.getElementById('red-plataforma');
+  const config = document.getElementById('red-metricas-config');
+  if (!select || !config) return;
+  const metricas = JSON.parse(config.textContent);
+  const update = () => {
+    const actual = metricas[select.value] || metricas.Otro;
+    document.querySelectorAll('#red-form [data-metrica]').forEach((label) => {
+      const campo = label.dataset.metrica;
+      label.hidden = !actual[campo];
+      if (actual[campo]) label.querySelector('.form-label').textContent = actual[campo];
+    });
+    document.querySelectorAll('#red-form [data-solo-whatsapp]').forEach((el) => { el.hidden = select.value !== 'WhatsApp'; });
+  };
+  select.addEventListener('change', update);
+}
+
+/**
+ * Redes por API: si alguna conexion tiene el intervalo vencido, sincroniza en
+ * segundo plano y ofrece recargar cuando hay datos nuevos (no recarga sola
+ * para no interrumpir lo que el usuario este haciendo).
+ */
+function initRedesSync() {
+  document.querySelectorAll('[data-sync-btn]').forEach((btn) => btn.closest('form').addEventListener('submit', (event) => {
+    if (event.submitter !== btn) return;
+    btn.classList.add('is-loading');
+    btn.lastChild.textContent = ' Sincronizando…';
+  }));
+  const bar = document.getElementById('red-sync');
+  if (!bar || bar.dataset.auto !== '1') return;
+  const estado = document.getElementById('red-sync-estado');
+  estado.hidden = false;
+  const body = new FormData();
+  body.set('redes_auto', '1');
+  body.set('csrf', bar.dataset.csrf);
+  fetch('index.php?view=publicaciones', { method: 'POST', body })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.ok && data.actualizado) {
+        estado.innerHTML = '<i class="ti ti-circle-check"></i> Métricas actualizadas <button type="button">Recargar</button>';
+        estado.querySelector('button').addEventListener('click', () => window.location.reload());
+      } else {
+        estado.hidden = true;
+      }
+    })
+    .catch(() => { estado.hidden = true; });
+}
+
+/** Campanita: abre y cierra el panel de notificaciones (clic fuera o Esc lo cierra). */
+function initNotifications() {
+  const toggle = document.getElementById('notifToggle');
+  const panel = document.getElementById('notifPanel');
+  if (!toggle || !panel) return;
+  const setOpen = (open) => {
+    panel.hidden = !open;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    toggle.classList.toggle('is-open', open);
+  };
+  toggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setOpen(panel.hidden);
+  });
+  document.addEventListener('click', (event) => {
+    if (!panel.hidden && !panel.contains(event.target)) setOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !panel.hidden) {
+      setOpen(false);
+      toggle.focus();
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  initNotifications();
+  initRowMenus();
+  initRedesForm();
+  initRedesSync();
   initSidebarToggle();
   initModals();
   initPillToggles();

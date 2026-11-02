@@ -1,101 +1,9 @@
 const SOLICITUDES_DB = readJsonData("solicitudes-db", []);
-const CORRELATIVOS_DB = readJsonData("correlativos-db", []);
 const CORRELATIVOS_LOTE_DB = readJsonData("correlativos-lote-db", {});
 const PDF_LOGO_URL = "../assets/logo.png";
 let solicitudSeleccionada = null;
 
 const ANALISIS = readJsonData("analisis-catalogo", {});
-if (false) {
-const ANALISIS = {
-  "suelos": {
-    label: "Suelos",
-    items: [
-      { nombre: "Textura", tipo: "Físico" },
-      { nombre: "Densidad aparente", tipo: "Físico" },
-      { nombre: "Densidad real", tipo: "Físico" },
-      { nombre: "Humedad gravimétrica", tipo: "Físico" },
-      { nombre: "Porosidad total", tipo: "Físico" },
-      { nombre: "pH", tipo: "Químico" },
-      { nombre: "Materia orgánica", tipo: "Químico" },
-      { nombre: "Nitrógeno total", tipo: "Químico" },
-      { nombre: "Fósforo disponible", tipo: "Químico" },
-      { nombre: "Potasio intercambiable", tipo: "Químico" },
-      { nombre: "CIC (capacidad de intercambio catiónico)", tipo: "Químico" },
-    ],
-    metodo: "Los análisis de suelos incluyen pruebas físicas y químicas. Los análisis físicos se ejecutan conforme a protocolos ASTM D422 y métodos gravimétricos normalizados; los químicos siguen normas AOAC y métodos Walkley-Black, Kjeldahl y extracción con acetato de amonio.",
-  },
-  "suelo-fisico": {
-    label: "Suelos Físico",
-    items: [
-      { nombre: "Textura" },
-      { nombre: "Densidad aparente" },
-      { nombre: "Densidad real" },
-      { nombre: "Humedad gravimétrica" },
-      { nombre: "Porosidad total" },
-    ],
-    metodo: "Los análisis físicos de suelo se ejecutan conforme a los protocolos ASTM D422 para textura y métodos gravimétricos normalizados para densidades y humedad. Cada muestra es identificada y trazada desde su recepción hasta la entrega de resultados, con controles de calidad dobles por lote.",
-  },
-  "suelo-quimico": {
-    label: "Suelo Químico",
-    items: [
-      { nombre: "pH" },
-      { nombre: "Materia orgánica" },
-      { nombre: "Nitrógeno total" },
-      { nombre: "Fósforo disponible" },
-      { nombre: "Potasio intercambiable" },
-      { nombre: "CIC (capacidad de intercambio catiónico)" },
-    ],
-    metodo: "Análisis químico bajo normas AOAC y métodos Walkley-Black, Kjeldahl y extracción con acetato de amonio. Los reactivos son de grado analítico certificado y el laboratorio opera con control de temperatura a 20 ± 2°C.",
-  },
-  "foliares": {
-    label: "Foliares",
-    items: [
-      { nombre: "Nitrógeno foliar" },
-      { nombre: "Fósforo foliar" },
-      { nombre: "Potasio foliar" },
-      { nombre: "Calcio y Magnesio" },
-      { nombre: "Micronutrientes (Fe, Mn, Zn, Cu)" },
-    ],
-    metodo: "Las muestras foliares deben presentarse limpias, previamente secadas a 65°C por 48 horas y molidas a malla 40. Los análisis siguen los protocolos del Instituto Internacional de Nutrición de Plantas (IPNI) y la norma AOAC 965.09 para digestión de tejidos.",
-  },
-  "cana": {
-    label: "Caña",
-    items: [
-      { nombre: "Brix (jugo)" },
-      { nombre: "Pol (sacarosa)" },
-      { nombre: "Pureza" },
-      { nombre: "Fibra bruta" },
-      { nombre: "Humedad del bagazo" },
-      { nombre: "Jugo extraído (%)" },
-    ],
-    metodo: "Análisis de caña conforme a los métodos ICUMSA y las normas de la industria azucarera guatemalteca. Las muestras deben procesarse dentro de las 4 horas posteriores al corte para evitar la inversión enzimática de la sacarosa.",
-  },
-  "miel": {
-    label: "Miel",
-    items: [
-      { nombre: "Humedad" },
-      { nombre: "HMF (Hidroximetilfurfural)" },
-      { nombre: "Actividad diastásica" },
-      { nombre: "Sólidos solubles (°Brix)" },
-      { nombre: "pH y acidez libre" },
-    ],
-    metodo: "Análisis de mieles bajo la norma CODEX STAN 12-1981 y métodos AOAC International. Se verifica el cumplimiento del Reglamento Técnico Centroamericano RTCA 67.04.40:07. Las muestras deben entregarse en frascos de vidrio ámbar sellados.",
-  },
-  "agua": {
-    label: "Agua",
-    items: [
-      { nombre: "pH" },
-      { nombre: "Conductividad eléctrica (CE)" },
-      { nombre: "Sólidos totales disueltos (STD)" },
-      { nombre: "Dureza total (CaCO3)" },
-      { nombre: "Coliformes totales y fecales" },
-      { nombre: "Nitratos / Nitritos" },
-    ],
-    metodo: "Análisis de agua para uso agrícola conforme a las normas COGUANOR NGO 29001 y métodos estándar APHA-AWWA-WEF (Standard Methods for the Examination of Water and Wastewater, 23ª edición). Las muestras deben recolectarse en frascos estériles y entregarse refrigeradas (4°C) en un máximo de 6 horas.",
-  },
-};
-}
-
 function readJsonData(id, fallback) {
   const script = document.getElementById(id);
   if (!script) return fallback;
@@ -125,39 +33,39 @@ function getTipoFormularioPorDefecto() {
 function renderAnalisis(tipo) {
   const data = ANALISIS[tipo];
   const body = document.getElementById("analisis-body");
-  if (!data || !body) return;
-
+  if (!body) return;
   setTipoFormulario(tipo);
-  const items = Array.isArray(data.items) ? data.items : [];
-
-  if (!items.length) {
-    body.innerHTML = `
-      <tr>
-        <td colspan="3" class="center" style="padding:24px;color:#4a4d49">
-          No hay análisis activos para este tipo de muestra.
-        </td>
-      </tr>
-    `;
-    document.getElementById("tipo-label-header").textContent = data.label || tipo;
-    updateNumeroLaboratorio();
-    syncSelectAllAnalisis();
-    return;
-  }
-
-  body.innerHTML = items.map((item, i) => `
-    <tr>
-      <td class="name">${item.nombre}</td>
-      <td class="center"><span class="analisis-tag">${item.tipo || data.label}</span></td>
-      <td class="center check-cell">
-        <input type="checkbox" name="analisis[]" value="${item.id_tipo}" id="chk-${tipo}-${i}" aria-label="Solicitar ${item.nombre}"/>
-      </td>
-    </tr>
-  `).join("");
-  document.getElementById("tipo-label-header").textContent = data.label || tipo;
+  CengiRecepcion.renderAnalisis(data, tipo);
+  document.getElementById("tipo-label-header").textContent = data?.label || tipo;
+  const search = document.getElementById("analisis-buscar");
+  if (search) search.value = "";
   updateNumeroLaboratorio();
   syncSelectAllAnalisis();
+  filtrarAnalisisRecepcion();
 }
 
+function normalizarBusquedaRecepcion(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().trim();
+}
+
+function filtrarAnalisisRecepcion() {
+  const query = normalizarBusquedaRecepcion(document.getElementById("analisis-buscar")?.value);
+  let visibles = 0;
+  document.querySelectorAll(".reception-analysis").forEach(card => {
+    card.hidden = !normalizarBusquedaRecepcion(card.dataset.search).includes(query);
+    if (!card.hidden) visibles++;
+  });
+  document.querySelectorAll(".reception-analysis-group").forEach(group => {
+    group.hidden = ![...group.querySelectorAll(".reception-analysis")].some(card => !card.hidden);
+  });
+  const empty = document.getElementById("analisis-vacio");
+  if (empty) {
+    empty.hidden = visibles > 0;
+    empty.textContent = getAnalisisCheckboxes().length
+      ? "No hay análisis que coincidan con la búsqueda."
+      : "No hay análisis activos para este tipo de muestra.";
+  }
+}
 function getAnalisisCheckboxes() {
   return Array.from(document.querySelectorAll('#analisis-body input[name="analisis[]"]'));
 }
@@ -166,19 +74,24 @@ function syncSelectAllAnalisis() {
   const selectAll = document.getElementById('select-all-analisis');
   if (!selectAll) return;
 
-  const checks = getAnalisisCheckboxes();
+  const checks = getAnalisisCheckboxes().filter(input => !input.dataset.implicito);
   const total = checks.length;
   const checked = checks.filter(input => input.checked).length;
 
   selectAll.disabled = total === 0;
   selectAll.checked = total > 0 && checked === total;
   selectAll.indeterminate = checked > 0 && checked < total;
+  CengiRecepcion.actualizarSeleccion();
+  const resumen = document.getElementById("analisis-resumen");
+  if (resumen) resumen.textContent = checked + " de " + total + " análisis seleccionados · Se aplican a todas las muestras del lote.";
+  actualizarAvanceRecepcion();
 }
 
 function toggleSelectAllAnalisis(checked) {
   getAnalisisCheckboxes().forEach(input => {
     input.checked = checked;
   });
+  CengiRecepcion.dependenciasSeleccionadas();
   syncSelectAllAnalisis();
 }
 
@@ -193,6 +106,7 @@ function initSeleccionAnalisis() {
   if (body) {
     body.addEventListener('change', event => {
       if (event.target.matches('input[name="analisis[]"]')) {
+        CengiRecepcion.dependenciasSeleccionadas();
         syncSelectAllAnalisis();
       }
     });
@@ -234,9 +148,9 @@ function getMesAnio(fecha) {
   return `${partes[1]}-${partes[0].slice(-2)}`;
 }
 
-function getSiguienteNumeroPorPrefijo(prefijo) {
-  const correlativo = CORRELATIVOS_DB.find(item => String(item.prefijo || "").toUpperCase() === String(prefijo || "").toUpperCase());
-  return correlativo ? parseInt(correlativo.ultimo_numero, 10) + 1 : 492;
+/* Vista previa: correlativo de laboratorio independiente por tipo (inicia en 1); se confirma al registrar. */
+function getSiguienteNumeroPorTipo(tipo) {
+  return parseInt(CORRELATIVOS_LOTE_DB[tipo]?.siguiente_laboratorio, 10) || 1;
 }
 
 function updateNumeroLote() {
@@ -256,6 +170,16 @@ function updateNumeroLote() {
 }
 
 function updateNumeroLaboratorio() {
+  if (solicitudSeleccionada) {
+    const codigos = JSON.parse(solicitudSeleccionada.codigos_laboratorio || "[]").sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    if (codigos.length) {
+      document.getElementById("n_laboratorio_inicio").value = codigos[0];
+      document.getElementById("n_laboratorio_fin").value = codigos[codigos.length - 1];
+      document.getElementById("n_laboratorio").value = codigos[0] + " / " + codigos[codigos.length - 1];
+      updateNumeroLote();
+      return;
+    }
+  }
   const tipoActivo = document.querySelector(".tipo-btn.active")?.dataset.tipo || "suelos";
   const fecha = document.getElementById("fecha_muestreo")?.value || "";
   const muestras = parseInt(document.getElementById("numero_muestras")?.value, 10);
@@ -270,7 +194,7 @@ function updateNumeroLaboratorio() {
 
   const inicial = getInicialTipo(tipoActivo);
   const inicioGuardado = solicitudSeleccionada?.inicio_laboratorio ? parseInt(solicitudSeleccionada.inicio_laboratorio, 10) : null;
-  const loteInicial = inicioGuardado || getSiguienteNumeroPorPrefijo(inicial);
+  const loteInicial = inicioGuardado || getSiguienteNumeroPorTipo(tipoActivo);
   const mesAnio = getMesAnio(fecha);
 
   if (Number.isNaN(loteInicial) || !mesAnio || Number.isNaN(muestras) || muestras < 1) {
@@ -280,8 +204,8 @@ function updateNumeroLaboratorio() {
     return;
   }
 
-  const longitudLote = Math.max(3, String(loteInicial).length);
   const loteFinal = loteInicial + muestras - 1;
+  const longitudLote = Math.max(3, String(loteFinal).length);
   const codigoInicio = `${inicial}-${formatLote(loteInicial, longitudLote)}-${mesAnio}`;
   const codigoFin = `${inicial}-${formatLote(loteFinal, longitudLote)}-${mesAnio}`;
 
@@ -363,9 +287,27 @@ function obtenerDiasCompromisoVisual(tipo) {
   }
 }
 
+/* Días de entrega: la mayor "Duración (días)" del Catálogo de análisis entre los análisis
+   marcados (el reporte sale cuando termina el más largo); sin duración configurada se usan
+   los días de compromiso por tipo de muestra. Mismo criterio que el servidor al guardar. */
+function diasEntregaSeleccion(tipo) {
+  const items = (ANALISIS[tipo] && ANALISIS[tipo].items) || [];
+  const marcados = new Set(getAnalisisCheckboxes().filter(c => c.checked).map(c => String(c.value)));
+  let max = 0;
+  let analisisMax = "";
+  items.forEach(item => {
+    const dias = Number(item.duracion_dias) || 0;
+    if (marcados.has(String(item.id_tipo)) && dias > max) {
+      max = dias;
+      analisisMax = item.nombre || "";
+    }
+  });
+  return { dias: max, analisis: analisisMax };
+}
+
 function calcularFechaEstimadaVisual(fechaIngresoTexto, tipo) {
   const fechaIngreso = parsearFechaVisual(fechaIngresoTexto);
-  const diasCompromiso = obtenerDiasCompromisoVisual(tipo);
+  const diasCompromiso = diasEntregaSeleccion(tipo).dias || obtenerDiasCompromisoVisual(tipo);
 
   if (!fechaIngreso || diasCompromiso <= 0) {
     return "";
@@ -548,9 +490,12 @@ function initSolicitudDesdeQuery(solicitudSelect) {
   const params = new URLSearchParams(window.location.search);
   const idSolicitud = params.get("id_solicitud");
 
-  if (idSolicitud && solicitudSelect) {
-    solicitudSelect.value = idSolicitud;
+  if (idSolicitud) {
+    if (solicitudSelect) solicitudSelect.value = idSolicitud;
     aplicarSolicitudDb(idSolicitud);
+    document.getElementById("numero_muestras").readOnly = true;
+    document.querySelectorAll(".tipo-btn").forEach(btn => btn.disabled = true);
+    document.getElementById("ticket-finalizar").textContent = "Guardar cambios de recepción";
   }
 }
 
@@ -660,11 +605,11 @@ function getInputValue(selector) {
 
 function getAnalisisSeleccionados() {
   return Array.from(document.querySelectorAll('input[name="analisis[]"]:checked')).map(input => {
-    const row = input.closest("tr");
+    const row = input.closest(".reception-analysis, tr");
     const nombre = row?.querySelector(".name")?.textContent || input.getAttribute("aria-label") || input.value;
     return {
       nombre: limpiarTextoPdf(nombre.replace(/^Solicitar\s+/i, "")),
-      tipo: limpiarTextoPdf(row?.querySelector(".analisis-tag")?.textContent || ""),
+      tipo: limpiarTextoPdf(row?.dataset.grupo || row?.querySelector(".analisis-tag")?.textContent || input.dataset.grupo || ""),
     };
   });
 }
@@ -716,6 +661,8 @@ function getDatosSolicitudPdf() {
   syncFirmaInputs();
 
   return {
+    idSolicitud: getInputValue("#id_solicitud"),
+    preview: true,
     tipo: getInputValue("#tipo-label-header"),
     institucion: getInputValue("#institucion"),
     responsableEnvio: getInputValue("#responsable_envio"),
@@ -891,150 +838,29 @@ async function enviarPdfPorCorreo(pdfBytes, fileName, datos) {
   };
 }
 
-async function generarPdfSolicitud(options = {}) {
-  const boton = document.getElementById("btn-generar-pdf");
-  let pdfGenerado = false;
-  let pdfDescargado = false;
-  const download = options.download !== false;
-
-  if (!window.PDFLib) {
-    alert("No se pudo cargar la libreria para generar PDF.");
-    return;
-  }
-
-  if (!window.CengiSolicitudPdf) {
-    alert("No se pudo cargar el diseno de la boleta PDF.");
-    return;
-  }
-
-  if (!validarCorreosResponsables()) return;
-
-  const datos = getDatosSolicitudPdf();
-
-  try {
-    if (boton) {
-      boton.disabled = true;
-      boton.title = "Generando PDF...";
-    }
-
-    const { PDFDocument } = window.PDFLib;
-    const pdfDoc = await PDFDocument.create();
-    const logoCengicana = await cargarLogoPdf(pdfDoc);
-    const pdfBytes = await window.CengiSolicitudPdf.crearPdfSolicitud({
-      pdfDoc,
-      PDFLib: window.PDFLib,
-      datos,
-      logo: logoCengicana,
-    });
-    pdfGenerado = true;
-    const fileName = buildPdfFileName(datos);
-    if (download) {
-      descargarPdf(pdfBytes, fileName);
-      pdfDescargado = true;
-    }
-
-    const envio = await enviarPdfPorCorreo(pdfBytes, fileName, datos);
-    if (download) alert(envio.message);
-    return envio;
-  } catch (error) {
-    console.error(error);
-    const mensaje = pdfDescargado
-      ? `El PDF se genero y se descargo, pero no se pudo enviar por correo: ${error.message}`
-      : pdfGenerado
-        ? `El PDF se genero, pero no se pudo enviar por correo: ${error.message}`
-        : `No se pudo generar el PDF: ${error.message}`;
-    alert(mensaje);
-  } finally {
-    if (boton) {
-      boton.disabled = false;
-      boton.title = "Generar PDF";
-    }
-  }
-}
-
-async function finalizarSolicitud(event) {
+/* Registrar primero (prototipo): al guardar se asignan lote y números de laboratorio
+   definitivos; la boleta de ese registro se ve, descarga o envía después. */
+function finalizarSolicitud() {
   const form = document.getElementById('solicitud-form');
   if (!form || !form.reportValidity()) return;
   if (!validarCorreosResponsables()) return;
 
-  const btn = document.getElementById('btn-finalizar-solicitud');
-  if (btn) btn.disabled = true;
-
-  try {
-    const envio = await generarPdfSolicitud({ download: true });
-    if (!envio) return;
-
-    syncFirmaInputs();
-    form.submit();
-  } catch (err) {
-    alert('No se pudo generar o enviar el PDF: ' + (err.message || err));
-  } finally {
-    if (btn) btn.disabled = false;
+  const faltan = [];
+  const motivo = document.getElementById('motivo_edicion');
+  if (motivo && motivo.value.trim().length < 5) faltan.push('el motivo de la edición');
+  if (!getAnalisisCheckboxes().some(input => input.checked)) faltan.push('al menos un análisis');
+  if (!canvasTieneFirma(document.getElementById('canvas-ingreso'))) faltan.push('firma de quien ingresa');
+  if (!canvasTieneFirma(document.getElementById('canvas-recibe'))) faltan.push('firma de quien recibe');
+  if (faltan.length) {
+    alert('Falta: ' + faltan.join(', ') + '.');
+    if (motivo && motivo.value.trim().length < 5) motivo.focus();
+    return;
   }
-}
 
-function initPdfButton() {
-  const boton = document.getElementById("btn-generar-pdf");
-  if (boton) boton.addEventListener("click", generarPdfSolicitud);
-}
-
-function closeFabMenu() {
-  const dropdown = document.getElementById('fab-actions');
-  const toggle = document.getElementById('fab-actions-toggle');
-  const menu = document.getElementById('fab-actions-menu');
-
-  if (!dropdown || !toggle || !menu) return;
-
-  dropdown.classList.remove('open');
-  toggle.setAttribute('aria-expanded', 'false');
-  menu.hidden = true;
-}
-
-function openFabMenu() {
-  const dropdown = document.getElementById('fab-actions');
-  const toggle = document.getElementById('fab-actions-toggle');
-  const menu = document.getElementById('fab-actions-menu');
-
-  if (!dropdown || !toggle || !menu) return;
-
-  dropdown.classList.add('open');
-  toggle.setAttribute('aria-expanded', 'true');
-  menu.hidden = false;
-}
-
-function initFabMenu() {
-  const dropdown = document.getElementById('fab-actions');
-  const toggle = document.getElementById('fab-actions-toggle');
-  const menu = document.getElementById('fab-actions-menu');
-
-  if (!dropdown || !toggle || !menu) return;
-
-  toggle.addEventListener('click', event => {
-    event.stopPropagation();
-    if (menu.hidden) {
-      openFabMenu();
-    } else {
-      closeFabMenu();
-    }
-  });
-
-  menu.addEventListener('click', event => {
-    if (event.target.closest('.fab-menu-item')) {
-      closeFabMenu();
-    }
-  });
-
-  document.addEventListener('click', event => {
-    if (!dropdown.contains(event.target)) {
-      closeFabMenu();
-    }
-  });
-
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') {
-      closeFabMenu();
-    }
-  });
+  const btn = document.getElementById('ticket-finalizar');
+  if (btn) btn.disabled = true;
+  syncFirmaInputs();
+  form.submit();
 }
 
 function initFirmaSubmitSync() {
@@ -1042,81 +868,43 @@ function initFirmaSubmitSync() {
   if (form) form.addEventListener("submit", syncFirmaInputs);
 }
 
-function escaparTicket(valor) {
-  return String(valor ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
+/* Sin vista previa lateral: solo actualiza el avance (Datos · Análisis · Firmas). */
 function actualizarVistaBoleta() {
-  const lote = getInputValue("#lote");
-  const cliente = getInputValue("#institucion");
-  const campo = getInputValue("#numero_de_muestra");
-  const tipo = getInputValue("#tipo-label-header");
-  const fecha = getInputValue("#fecha_muestreo");
-  const cantidad = Math.max(0, parseInt(getInputValue("#numero_muestras"), 10) || 0);
-  const codigoInicio = getInputValue("#n_laboratorio_inicio");
-  const codigoFin = getInputValue("#n_laboratorio_fin");
-  const analisis = getAnalisisSeleccionados().map(item => item.nombre).filter(Boolean);
-
-  const ticketLote = document.getElementById("ticket-lote");
-  const ticketCliente = document.getElementById("ticket-cliente");
-  const ticketCampo = document.getElementById("ticket-campo");
-  const ticketMeta = document.getElementById("ticket-meta");
-  const ticketMuestras = document.getElementById("ticket-muestras");
-
-  if (ticketLote) ticketLote.textContent = lote ? `LOTE ${lote}` : "LOTE —";
-  if (ticketCliente) ticketCliente.textContent = cliente ? cliente : "Cliente —";
-  if (ticketCampo) ticketCampo.textContent = campo ? `Lote de campo ${campo}` : "Lote de campo —";
-  if (ticketMeta) {
-    ticketMeta.textContent = fecha
-      ? `${cantidad || 0} muestra(s) · Muestreo ${fecha} · Ingreso ${getInputValue("#fecha_ingreso") || "—"}`
-      : "Completa los datos para ver aqui el resumen de la recepcion.";
-  }
-
-  if (!ticketMuestras) return;
-  if (!cantidad || !fecha) {
-    ticketMuestras.innerHTML = '<tr><td colspan="3" class="ticket-empty">Aun no se ha completado la muestra.</td></tr>';
-    return;
-  }
-
-  const codigos = codigoInicio && codigoFin && codigoInicio !== codigoFin
-    ? `${codigoInicio} — ${codigoFin}`
-    : (codigoInicio || "Pendiente");
-  const resumenAnalisis = analisis.length ? analisis.join(", ") : "Sin analisis seleccionados";
-  ticketMuestras.innerHTML = `<tr><td>${escaparTicket(codigos)}</td><td>${escaparTicket(tipo || "Muestra")}</td><td>${escaparTicket(resumenAnalisis)}</td></tr>`;
+  actualizarAvanceRecepcion();
+  actualizarFechaEstimadaPorAnalisis();
 }
 
+/* Recalcula la fecha estimada al marcar o desmarcar análisis (solo en recepciones nuevas:
+   al editar se conserva la fecha comprometida) y explica de dónde sale. */
+function actualizarFechaEstimadaPorAnalisis() {
+  const fechaIngresoInput = document.getElementById("fecha_ingreso");
+  const fechaEstimadaInput = document.getElementById("fecha_estimada");
+  if (!fechaIngresoInput || !fechaEstimadaInput || solicitudSeleccionada) return;
+  const tipo = document.querySelector(".tipo-btn.active")?.dataset.tipo || "suelos";
+  fechaEstimadaInput.value = calcularFechaEstimadaVisual(fechaIngresoInput.value, tipo);
+  let ayuda = document.getElementById("fecha_estimada_ayuda");
+  if (!ayuda) {
+    ayuda = document.createElement("small");
+    ayuda.id = "fecha_estimada_ayuda";
+    ayuda.className = "fecha-estimada-ayuda";
+    ayuda.setAttribute("aria-live", "polite");
+    fechaEstimadaInput.insertAdjacentElement("afterend", ayuda);
+  }
+  const entrega = diasEntregaSeleccion(tipo);
+  ayuda.textContent = entrega.dias
+    ? entrega.dias + " día(s) · análisis más largo: " + entrega.analisis
+    : (obtenerDiasCompromisoVisual(tipo) ? obtenerDiasCompromisoVisual(tipo) + " día(s) · plazo general del tipo de muestra" : "");
+}
 function initVistaBoleta() {
   const form = document.getElementById("solicitud-form");
   if (form) {
     form.addEventListener("input", actualizarVistaBoleta);
     form.addEventListener("change", actualizarVistaBoleta);
   }
-
-  const tipoLabel = document.getElementById("tipo-label-header");
-  if (tipoLabel && window.MutationObserver) {
-    new MutationObserver(actualizarVistaBoleta).observe(tipoLabel, { childList: true, characterData: true, subtree: true });
-  }
-
-  const proxyPdf = document.getElementById("ticket-generar-pdf");
-  if (proxyPdf) {
-    proxyPdf.addEventListener("click", () => document.getElementById("btn-generar-pdf")?.click());
-  }
-
-  const proxyFinalizar = document.getElementById("ticket-finalizar");
-  if (proxyFinalizar) {
-    proxyFinalizar.addEventListener("click", () => document.getElementById("btn-finalizar-solicitud")?.click());
-  }
-
   actualizarVistaBoleta();
 }
 
 initSeleccionAnalisis();
-initFabMenu();
 initTipoButtons();
 initLaboratorioInputs();
 const solicitudSelect = initSolicitudSelect();
@@ -1124,13 +912,119 @@ sincronizarFechasSolicitudVisuales();
 initTipoDesdeQuery();
 initSolicitudDesdeQuery(solicitudSelect);
 initFirmas();
-initPdfButton();
 initFirmaSubmitSync();
 initVistaBoleta();
-function initFinalizarButton() {
-  const boton = document.getElementById('btn-finalizar-solicitud');
-  if (boton) boton.addEventListener('click', finalizarSolicitud);
+document.getElementById('ticket-finalizar')?.addEventListener('click', finalizarSolicitud);
+
+function actualizarAvanceRecepcion() {
+  const datos = Boolean(getInputValue("#institucion") && getInputValue("#fecha_muestreo") && Number(getInputValue("#numero_muestras")) > 0);
+  const analisis = getAnalisisCheckboxes().some(input => input.checked);
+  const firmas = Boolean(getInputValue('input[name="ingresado_por"]') && getInputValue('input[name="recibido_por"]')
+    && canvasTieneFirma(document.getElementById("canvas-ingreso")) && canvasTieneFirma(document.getElementById("canvas-recibe")));
+  Object.entries({ datos, analisis, firmas }).forEach(([paso, completo]) => {
+    const item = document.querySelector('[data-step="' + paso + '"]');
+    if (item) {
+      item.classList.toggle("complete", completo);
+      item.setAttribute("aria-label", paso + (completo ? ": completo" : ": pendiente"));
+    }
+  });
 }
-initFinalizarButton();
 
+// Recepciones registradas: 25 por página y por tipo de muestra. La primera página llega con la
+// vista; las demás páginas, el cambio de pestaña y la búsqueda se piden al servidor.
+const estadoRecepciones = Object.assign({ pagina: 1, paginas: 1, total: 0, por_pagina: 25 }, readJsonData("recepciones-estado", {}));
+let peticionRecepciones = 0;
+let temporizadorBusquedaRec = null;
 
+function pintarPaginadorRecepciones() {
+  const { pagina, paginas, total, por_pagina: porPagina } = estadoRecepciones;
+  const pager = document.getElementById("recepciones-paginas");
+  if (!pager) return;
+  pager.hidden = paginas <= 1;
+  const inicio = total ? (pagina - 1) * porPagina + 1 : 0;
+  document.getElementById("recepciones-rango").textContent = total ? inicio + "–" + Math.min(pagina * porPagina, total) + " de " + total : "";
+  document.getElementById("recepciones-pagina-info").textContent = "Página " + pagina + " de " + paginas;
+  document.getElementById("recepciones-anterior").disabled = pagina <= 1;
+  document.getElementById("recepciones-siguiente").disabled = pagina >= paginas;
+}
+
+async function cargarRecepciones(pagina) {
+  const tipo = document.getElementById("recepciones-tipo")?.value || "0";
+  const q = (document.getElementById("recepciones-buscar")?.value || "").trim();
+  const aviso = document.getElementById("recepciones-aviso");
+  const body = document.getElementById("recepciones-body");
+  const version = ++peticionRecepciones;
+  document.querySelectorAll("[data-rec-tipo]").forEach(tab => tab.setAttribute("aria-selected", String(tab.dataset.recTipo === tipo)));
+  body.setAttribute("aria-busy", "true");
+  try {
+    const params = new URLSearchParams({ tipo, pagina: String(pagina), q });
+    const resp = await fetch("../controllers/recepciones_historial.php?" + params, { headers: { Accept: "application/json" }, credentials: "same-origin" });
+    const datos = await resp.json();
+    if (version !== peticionRecepciones) return;
+    if (!resp.ok) throw new Error(datos.error || "No se pudieron cargar las recepciones.");
+    body.innerHTML = datos.html;
+    Object.assign(estadoRecepciones, { pagina: datos.pagina, paginas: datos.paginas, total: datos.total, por_pagina: datos.por_pagina });
+    const totales = Object.fromEntries((datos.tabs || []).map(t => [String(t.id), t.total]));
+    document.querySelectorAll("[data-rec-tipo]").forEach(tab => {
+      const contador = tab.querySelector("[data-rec-count]");
+      if (contador) contador.textContent = "(" + (tab.dataset.recTipo === "0" ? datos.todas : (totales[tab.dataset.recTipo] || 0)) + ")";
+    });
+    document.getElementById("recepciones-resumen").textContent = datos.total + " recepciones · " + datos.muestras + " muestras";
+    document.getElementById("recepciones-vacio").hidden = datos.total > 0;
+    aviso.textContent = "";
+    pintarPaginadorRecepciones();
+  } catch (error) {
+    if (version === peticionRecepciones) aviso.textContent = error.message || "No se pudieron cargar las recepciones.";
+  } finally {
+    if (version === peticionRecepciones) body.removeAttribute("aria-busy");
+  }
+}
+
+document.getElementById("analisis-buscar")?.addEventListener("input", filtrarAnalisisRecepcion);
+document.getElementById("recepciones-buscar")?.addEventListener("input", () => {
+  clearTimeout(temporizadorBusquedaRec);
+  temporizadorBusquedaRec = setTimeout(() => cargarRecepciones(1), 300);
+});
+document.querySelectorAll("[data-rec-tipo]").forEach(tab => tab.addEventListener("click", () => {
+  document.getElementById("recepciones-tipo").value = tab.dataset.recTipo;
+  cargarRecepciones(1);
+}));
+[["recepciones-anterior", -1], ["recepciones-siguiente", 1]].forEach(([id, paso]) => {
+  document.getElementById(id)?.addEventListener("click", async () => {
+    await cargarRecepciones(estadoRecepciones.pagina + paso);
+    document.getElementById("recepciones-titulo")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
+document.querySelectorAll(".firma-canvas").forEach(canvas => {
+  canvas.addEventListener("pointerup", actualizarAvanceRecepcion);
+  canvas.addEventListener("pointercancel", actualizarAvanceRecepcion);
+});
+document.querySelectorAll("[data-clear-canvas]").forEach(button => button.addEventListener("click", actualizarAvanceRecepcion));
+pintarPaginadorRecepciones();
+actualizarAvanceRecepcion();
+CengiRecepcion.init();
+async function recuperarFirmasEdicion() {
+  const id = document.getElementById("id_solicitud")?.value;
+  if (!id) return;
+  try {
+    const datos = await CengiRecepcion.consultarBoleta(id);
+    for (const [canvasId, firma] of [["canvas-ingreso", datos.firmaIngreso], ["canvas-recibe", datos.firmaRecibe]]) {
+      if (!firma) continue;
+      const canvas = document.getElementById(canvasId);
+      const img = new Image();
+      img.onload = () => {
+        if (canvasTieneFirma(canvas)) return;
+        const ctx = canvas.getContext("2d");
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+        actualizarVistaBoleta();
+      };
+      img.src = firma;
+    }
+  } catch (error) {
+    document.getElementById("ticket-aviso").textContent = error.message;
+  }
+}
+recuperarFirmasEdicion();

@@ -1,0 +1,143 @@
+{
+  "campos": [
+    {
+      "key": "fecha",
+      "label": "Fecha"
+    },
+    {
+      "key": "labor",
+      "label": "Labor"
+    },
+    {
+      "key": "ensayo",
+      "label": "Ensayo"
+    },
+    {
+      "key": "descripcion",
+      "label": "Descripción"
+    },
+    {
+      "key": "estrato",
+      "label": "Estrato"
+    },
+    {
+      "key": "finca",
+      "label": "Finca"
+    },
+    {
+      "key": "seccion",
+      "label": "Sección"
+    },
+    {
+      "key": "loteCampo",
+      "label": "Lote"
+    },
+    {
+      "key": "pante",
+      "label": "Pante"
+    },
+    {
+      "key": "parcela",
+      "label": "Parcela"
+    },
+    {
+      "key": "bloque",
+      "label": "Bloque"
+    },
+    {
+      "key": "profundidad",
+      "label": "Profundidad"
+    },
+    {
+      "key": "tratamiento",
+      "label": "Tratamiento"
+    },
+    {
+      "key": "repeticion",
+      "label": "Repetición"
+    },
+    {
+      "key": "variedad",
+      "label": "Variedad"
+    },
+    {
+      "key": "requerimiento",
+      "label": "Requerimiento"
+    },
+    {
+      "key": "obs",
+      "label": "Observaciones"
+    }
+  ],
+  "plantillas": {
+    "Precosecha / jugos": [
+      "fecha",
+      "labor",
+      "ensayo",
+      "descripcion",
+      "estrato",
+      "finca",
+      "seccion",
+      "loteCampo",
+      "parcela",
+      "requerimiento"
+    ],
+    "Muestreo de suelos": [
+      "fecha",
+      "finca",
+      "loteCampo",
+      "profundidad",
+      "tratamiento",
+      "repeticion",
+      "parcela",
+      "obs"
+    ],
+    "Muestreo foliar": [
+      "fecha",
+      "finca",
+      "loteCampo",
+      "pante",
+      "variedad",
+      "obs"
+    ],
+    "Agua": [
+      "finca",
+      "descripcion",
+      "fecha",
+      "obs"
+    ],
+    "Caña": [
+      "ensayo",
+      "finca",
+      "parcela",
+      "fecha",
+      "obs"
+    ],
+    "Todos los campos": [
+      "fecha",
+      "labor",
+      "ensayo",
+      "descripcion",
+      "estrato",
+      "finca",
+      "seccion",
+      "loteCampo",
+      "pante",
+      "parcela",
+      "bloque",
+      "profundidad",
+      "tratamiento",
+      "repeticion",
+      "variedad",
+      "requerimiento",
+      "obs"
+    ]
+  },
+  "porTipo": {
+    "suelos": "Muestreo de suelos",
+    "foliares": "Muestreo foliar",
+    "agua": "Agua",
+    "cana": "Caña",
+    "miel": "Todos los campos"
+  }
+}

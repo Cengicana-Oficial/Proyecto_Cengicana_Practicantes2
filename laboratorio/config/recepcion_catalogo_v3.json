@@ -1,0 +1,743 @@
+{
+  "suelos": {
+    "grupos": [
+      {
+        "nombre": "Químicos",
+        "analisis": [
+          "pH",
+          "Conductividad eléctrica",
+          "Materia orgánica",
+          "Nitrógeno total",
+          "Fósforo disponible",
+          "Macronutrientes",
+          "Capacidad de intercambio catiónico (CIC)",
+          "Micronutrientes",
+          "Azufre",
+          "Boro"
+        ]
+      },
+      {
+        "nombre": "Físicos",
+        "analisis": [
+          "Humedad residual",
+          "Textura",
+          "Humedad gravimétrica",
+          "Densidad aparente",
+          "Capacidad de campo (CC)",
+          "Punto de marchitez permanente (PMP)"
+        ]
+      }
+    ],
+    "paquetes": [
+      {
+        "nombre": "Fertilidad básica",
+        "analisis": [
+          "pH",
+          "Materia orgánica",
+          "Fósforo disponible",
+          "Macronutrientes"
+        ]
+      },
+      {
+        "nombre": "Fertilidad completa",
+        "analisis": [
+          "pH",
+          "Conductividad eléctrica",
+          "Materia orgánica",
+          "Nitrógeno total",
+          "Fósforo disponible",
+          "Macronutrientes",
+          "Capacidad de intercambio catiónico (CIC)",
+          "Micronutrientes",
+          "Azufre",
+          "Boro"
+        ]
+      },
+      {
+        "nombre": "Física completa",
+        "analisis": [
+          "Humedad residual",
+          "Textura",
+          "Humedad gravimétrica",
+          "Densidad aparente",
+          "Capacidad de campo (CC)",
+          "Punto de marchitez permanente (PMP)"
+        ]
+      },
+      {
+        "nombre": "Retención de humedad",
+        "analisis": [
+          "Densidad aparente",
+          "Capacidad de campo (CC)",
+          "Punto de marchitez permanente (PMP)"
+        ]
+      }
+    ],
+    "items": [
+      {
+        "nombre": "pH",
+        "aliases": [],
+        "metodo": "pH en agua-suelo 1:2.5",
+        "norma": "ISO 10390",
+        "unidad": "",
+        "tiempo_estimado_min": 15,
+        "dependencias": []
+      },
+      {
+        "nombre": "Conductividad eléctrica",
+        "aliases": [
+          "Conductividad eléctrica (CE)"
+        ],
+        "metodo": "Conductimetría 1:2.5, corregida a 25 °C",
+        "norma": "ISO 11265",
+        "unidad": "dS/m",
+        "tiempo_estimado_min": 10,
+        "dependencias": []
+      },
+      {
+        "nombre": "Materia orgánica",
+        "aliases": [],
+        "metodo": "Walkley-Black",
+        "norma": "ISO 14235",
+        "unidad": "%",
+        "tiempo_estimado_min": 45,
+        "dependencias": []
+      },
+      {
+        "nombre": "Nitrógeno total",
+        "aliases": [],
+        "metodo": "Kjeldahl",
+        "norma": "AOAC 984.13",
+        "unidad": "%",
+        "tiempo_estimado_min": 40,
+        "dependencias": []
+      },
+      {
+        "nombre": "Fósforo disponible",
+        "aliases": [],
+        "metodo": "Olsen modificado (colorimetría)",
+        "norma": "AOAC 967.10",
+        "unidad": "ppm",
+        "tiempo_estimado_min": 35,
+        "dependencias": []
+      },
+      {
+        "nombre": "Macronutrientes",
+        "aliases": [],
+        "metodo": "Acetato de amonio 1 N · absorción atómica (Ca, Mg, K, Na)",
+        "norma": "AOAC 985.01",
+        "unidad": "meq/100g",
+        "tiempo_estimado_min": 50,
+        "dependencias": []
+      },
+      {
+        "nombre": "Capacidad de intercambio catiónico (CIC)",
+        "aliases": [
+          "CIC (capacidad de intercambio catiónico)",
+          "CIC"
+        ],
+        "metodo": "Acetato de amonio 1 N · titulación",
+        "norma": "",
+        "unidad": "meq/100g",
+        "tiempo_estimado_min": 60,
+        "dependencias": []
+      },
+      {
+        "nombre": "Micronutrientes",
+        "aliases": [],
+        "metodo": "Extracción DTPA · absorción atómica (Cu, Zn, Fe, Mn)",
+        "norma": "ISO 14870",
+        "unidad": "ppm",
+        "tiempo_estimado_min": 50,
+        "dependencias": []
+      },
+      {
+        "nombre": "Azufre",
+        "aliases": [],
+        "metodo": "Turbidimetría con BaCl₂",
+        "norma": "",
+        "unidad": "ppm SO₄",
+        "tiempo_estimado_min": 40,
+        "dependencias": []
+      },
+      {
+        "nombre": "Boro",
+        "aliases": [],
+        "metodo": "Azometina-H (colorimetría)",
+        "norma": "",
+        "unidad": "ppm",
+        "tiempo_estimado_min": 40,
+        "dependencias": []
+      },
+      {
+        "nombre": "Humedad residual",
+        "aliases": [],
+        "metodo": "Gravimetría (105 °C), ~5 g de suelo seco al aire",
+        "norma": "",
+        "unidad": "%",
+        "tiempo_estimado_min": 60,
+        "implicito_con": [
+          "Textura"
+        ],
+        "dependencias": []
+      },
+      {
+        "nombre": "Textura",
+        "aliases": [],
+        "metodo": "Bouyoucos (hidrómetro)",
+        "norma": "ASTM D422",
+        "unidad": "clase",
+        "tiempo_estimado_min": 120,
+        "dependencias": [
+          {
+            "nombre": "Humedad residual",
+            "motivo": "la textura usa el % H.R. de la muestra"
+          }
+        ]
+      },
+      {
+        "nombre": "Humedad gravimétrica",
+        "aliases": [],
+        "metodo": "Gravimetría (105 °C)",
+        "norma": "ASTM D2216",
+        "unidad": "%",
+        "tiempo_estimado_min": 60,
+        "dependencias": []
+      },
+      {
+        "nombre": "Densidad aparente",
+        "aliases": [],
+        "metodo": "Probeta / suelo tamizado",
+        "norma": "",
+        "unidad": "g/cm³",
+        "tiempo_estimado_min": 30,
+        "dependencias": []
+      },
+      {
+        "nombre": "Capacidad de campo (CC)",
+        "aliases": [
+          "Capacidad de campo"
+        ],
+        "metodo": "Olla de presión (1/3 bar)",
+        "norma": "ASTM D2325",
+        "unidad": "%",
+        "tiempo_estimado_min": 180,
+        "dependencias": []
+      },
+      {
+        "nombre": "Punto de marchitez permanente (PMP)",
+        "aliases": [
+          "Punto de marchitez permanente"
+        ],
+        "metodo": "Olla de presión (15 bar)",
+        "norma": "ASTM D2325",
+        "unidad": "%",
+        "tiempo_estimado_min": 180,
+        "dependencias": []
+      }
+    ]
+  },
+  "foliares": {
+    "grupos": [
+      {
+        "nombre": "Nutrientes",
+        "analisis": [
+          "Nitrógeno",
+          "Macronutrientes",
+          "Fósforo",
+          "Boro",
+          "Micronutrientes"
+        ]
+      },
+      {
+        "nombre": "Físicos",
+        "analisis": [
+          "Humedad"
+        ]
+      }
+    ],
+    "paquetes": [
+      {
+        "nombre": "Foliar completo",
+        "analisis": [
+          "Nitrógeno",
+          "Macronutrientes",
+          "Fósforo",
+          "Boro",
+          "Micronutrientes",
+          "Humedad"
+        ]
+      },
+      {
+        "nombre": "N · P · K",
+        "analisis": [
+          "Nitrógeno",
+          "Fósforo",
+          "Macronutrientes"
+        ]
+      }
+    ],
+    "items": [
+      {
+        "nombre": "Macronutrientes",
+        "aliases": [],
+        "metodo": "Digestión vía seca · HCl 6 M · absorción atómica (Ca, Mg, K, Na)",
+        "norma": "AOAC 985.01",
+        "unidad": "%",
+        "tiempo_estimado_min": 50,
+        "dependencias": []
+      },
+      {
+        "nombre": "Micronutrientes",
+        "aliases": [],
+        "metodo": "Digestión húmeda · absorción atómica (Cu, Zn, Fe, Mn)",
+        "norma": "AOAC 985.01",
+        "unidad": "ppm",
+        "tiempo_estimado_min": 50,
+        "dependencias": []
+      },
+      {
+        "nombre": "Fósforo",
+        "aliases": [
+          "Fósforo foliar"
+        ],
+        "metodo": "Colorimetría (azul de molibdeno)",
+        "norma": "AOAC 965.17",
+        "unidad": "%",
+        "tiempo_estimado_min": 35,
+        "dependencias": []
+      },
+      {
+        "nombre": "Nitrógeno",
+        "aliases": [
+          "Nitrógeno foliar"
+        ],
+        "metodo": "Kjeldahl",
+        "norma": "AOAC 984.13",
+        "unidad": "%",
+        "tiempo_estimado_min": 40,
+        "dependencias": []
+      },
+      {
+        "nombre": "Boro",
+        "aliases": [],
+        "metodo": "Azometina-H (colorimetría)",
+        "norma": "",
+        "unidad": "ppm",
+        "tiempo_estimado_min": 40,
+        "dependencias": []
+      },
+      {
+        "nombre": "Humedad",
+        "aliases": [],
+        "metodo": "Gravimetría",
+        "norma": "",
+        "unidad": "%",
+        "tiempo_estimado_min": 60,
+        "dependencias": []
+      }
+    ]
+  },
+  "agua": {
+    "grupos": [
+      {
+        "nombre": "Lecturas directas",
+        "analisis": [
+          "Conductividad eléctrica",
+          "pH",
+          "Sólidos totales disueltos",
+          "Salinidad",
+          "Resistividad"
+        ]
+      },
+      {
+        "nombre": "Titulaciones",
+        "analisis": [
+          "Cloruros",
+          "Dureza",
+          "Alcalinidad total",
+          "Carbonatos",
+          "Bicarbonatos"
+        ]
+      },
+      {
+        "nombre": "Nutrientes",
+        "analisis": [
+          "Macronutrientes",
+          "Razón de adsorción de sodio (RAS)",
+          "Micronutrientes",
+          "Fósforo",
+          "Boro"
+        ]
+      }
+    ],
+    "paquetes": [
+      {
+        "nombre": "Agua para riego (completo)",
+        "analisis": [
+          "Conductividad eléctrica",
+          "pH",
+          "Sólidos totales disueltos",
+          "Cloruros",
+          "Dureza",
+          "Alcalinidad total",
+          "Carbonatos",
+          "Bicarbonatos",
+          "Razón de adsorción de sodio (RAS)",
+          "Resistividad",
+          "Salinidad",
+          "Fósforo",
+          "Boro",
+          "Macronutrientes",
+          "Micronutrientes"
+        ]
+      },
+      {
+        "nombre": "Fisicoquímico básico",
+        "analisis": [
+          "Conductividad eléctrica",
+          "pH",
+          "Sólidos totales disueltos"
+        ]
+      },
+      {
+        "nombre": "Iones y titulaciones",
+        "analisis": [
+          "Cloruros",
+          "Dureza",
+          "Alcalinidad total",
+          "Carbonatos",
+          "Bicarbonatos"
+        ]
+      }
+    ],
+    "items": [
+      {
+        "nombre": "Conductividad eléctrica",
+        "aliases": [
+          "Conductividad eléctrica (CE)"
+        ],
+        "metodo": "Conductimetría (corrección 0.9985)",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "dS/m",
+        "tiempo_estimado_min": 10,
+        "dependencias": []
+      },
+      {
+        "nombre": "pH",
+        "aliases": [],
+        "metodo": "Potenciometría",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "",
+        "tiempo_estimado_min": 10,
+        "dependencias": []
+      },
+      {
+        "nombre": "Sólidos totales disueltos",
+        "aliases": [
+          "Sólidos totales disueltos (STD)",
+          "Sólidos totales disueltos (TDS)"
+        ],
+        "metodo": "Potenciometría (TDS)",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "mg/L",
+        "tiempo_estimado_min": 10,
+        "dependencias": []
+      },
+      {
+        "nombre": "Cloruros",
+        "aliases": [],
+        "metodo": "Argentometría (Mohr)",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "mg/L",
+        "tiempo_estimado_min": 20,
+        "dependencias": []
+      },
+      {
+        "nombre": "Dureza",
+        "aliases": [
+          "Dureza total (CaCO₃)",
+          "Dureza total (CaCO3)"
+        ],
+        "metodo": "Titulación con EDTA",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "mg CaCO₃/L",
+        "tiempo_estimado_min": 20,
+        "dependencias": []
+      },
+      {
+        "nombre": "Alcalinidad total",
+        "aliases": [],
+        "metodo": "Titulación con H₂SO₄ (método B)",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "mg CaCO₃/L",
+        "tiempo_estimado_min": 20,
+        "dependencias": []
+      },
+      {
+        "nombre": "Carbonatos",
+        "aliases": [],
+        "metodo": "Titulación con H₂SO₄",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "mg/L",
+        "tiempo_estimado_min": 15,
+        "dependencias": []
+      },
+      {
+        "nombre": "Bicarbonatos",
+        "aliases": [],
+        "metodo": "Titulación con H₂SO₄",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "mg/L",
+        "tiempo_estimado_min": 15,
+        "dependencias": []
+      },
+      {
+        "nombre": "Razón de adsorción de sodio (RAS)",
+        "aliases": [
+          "RAS"
+        ],
+        "metodo": "Cálculo matemático (Na, Ca, Mg)",
+        "norma": "",
+        "unidad": "Un",
+        "tiempo_estimado_min": 5,
+        "dependencias": [
+          {
+            "nombre": "Macronutrientes",
+            "motivo": "la RAS se calcula con Na, Ca y Mg"
+          }
+        ]
+      },
+      {
+        "nombre": "Resistividad",
+        "aliases": [],
+        "metodo": "Potenciometría",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "kΩ·cm",
+        "tiempo_estimado_min": 10,
+        "dependencias": []
+      },
+      {
+        "nombre": "Salinidad",
+        "aliases": [],
+        "metodo": "Potenciometría",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "UPS",
+        "tiempo_estimado_min": 10,
+        "dependencias": []
+      },
+      {
+        "nombre": "Fósforo",
+        "aliases": [
+          "Fósforo foliar"
+        ],
+        "metodo": "Espectrofotometría",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "mg/L",
+        "tiempo_estimado_min": 35,
+        "dependencias": []
+      },
+      {
+        "nombre": "Boro",
+        "aliases": [],
+        "metodo": "Espectrofotometría",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "mg/L",
+        "tiempo_estimado_min": 35,
+        "dependencias": []
+      },
+      {
+        "nombre": "Macronutrientes",
+        "aliases": [],
+        "metodo": "Absorción atómica (Ca, Mg, K, Na)",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "mg/L",
+        "tiempo_estimado_min": 40,
+        "dependencias": []
+      },
+      {
+        "nombre": "Micronutrientes",
+        "aliases": [],
+        "metodo": "Absorción atómica (Cu, Zn, Fe, Mn)",
+        "norma": "Standard Methods 23 ed.",
+        "unidad": "mg/L",
+        "tiempo_estimado_min": 40,
+        "dependencias": []
+      }
+    ]
+  },
+  "cana": {
+    "grupos": [
+      {
+        "nombre": "Jugo y rendimiento",
+        "analisis": [
+          "Brix",
+          "Pol",
+          "Rendimiento",
+          "pH"
+        ]
+      },
+      {
+        "nombre": "Caña",
+        "analisis": [
+          "% Humedad",
+          "% Fibra"
+        ]
+      }
+    ],
+    "paquetes": [
+      {
+        "nombre": "Calidad de caña",
+        "analisis": [
+          "Brix",
+          "Pol",
+          "Rendimiento",
+          "% Humedad",
+          "% Fibra"
+        ]
+      }
+    ],
+    "items": [
+      {
+        "nombre": "Brix",
+        "aliases": [],
+        "metodo": "Refractometría",
+        "norma": "ICUMSA GS1/3/4/7/8-22",
+        "unidad": "°Brix",
+        "tiempo_estimado_min": 10,
+        "dependencias": []
+      },
+      {
+        "nombre": "Pol",
+        "aliases": [],
+        "metodo": "Polarimetría (sacarosa aparente)",
+        "norma": "ICUMSA GS1/2/3-1",
+        "unidad": "%",
+        "tiempo_estimado_min": 20,
+        "dependencias": []
+      },
+      {
+        "nombre": "Rendimiento",
+        "aliases": [],
+        "metodo": "Cálculo: pureza, jugo %, pol % caña y rendimiento",
+        "norma": "",
+        "unidad": "lb/tc",
+        "tiempo_estimado_min": 15,
+        "implicito_con": [
+          "Brix",
+          "Pol"
+        ],
+        "dependencias": [
+          {
+            "nombre": "Brix",
+            "motivo": "el rendimiento usa Brix y Pol"
+          },
+          {
+            "nombre": "Pol",
+            "motivo": "el rendimiento usa Brix y Pol"
+          }
+        ]
+      },
+      {
+        "nombre": "pH",
+        "aliases": [],
+        "metodo": "Potenciometría en jugo",
+        "norma": "",
+        "unidad": "",
+        "tiempo_estimado_min": 10,
+        "dependencias": []
+      },
+      {
+        "nombre": "% Humedad",
+        "aliases": [
+          "Humedad",
+          "Humedad del bagazo"
+        ],
+        "metodo": "Gravimetría (secado)",
+        "norma": "",
+        "unidad": "%",
+        "tiempo_estimado_min": 120,
+        "dependencias": []
+      },
+      {
+        "nombre": "% Fibra",
+        "aliases": [
+          "Fibra bruta",
+          "Fibra"
+        ],
+        "metodo": "Método Tanimoto",
+        "norma": "",
+        "unidad": "%",
+        "tiempo_estimado_min": 60,
+        "dependencias": []
+      }
+    ]
+  },
+  "miel": {
+    "grupos": [
+      {
+        "nombre": "Calidad de miel",
+        "analisis": null
+      }
+    ],
+    "paquetes": [
+      {
+        "nombre": "Calidad de miel",
+        "analisis": [
+          "Brix",
+          "Pol",
+          "Pureza",
+          "Azúcares reductores",
+          "Cenizas"
+        ]
+      }
+    ],
+    "items": [
+      {
+        "nombre": "Brix",
+        "aliases": [],
+        "metodo": "Refractometría",
+        "norma": "ICUMSA GS4/3-13",
+        "unidad": "°Brix",
+        "tiempo_estimado_min": 10,
+        "dependencias": []
+      },
+      {
+        "nombre": "Pol",
+        "aliases": [],
+        "metodo": "Polarimetría",
+        "norma": "ICUMSA GS4/3-13",
+        "unidad": "%",
+        "tiempo_estimado_min": 20,
+        "dependencias": []
+      },
+      {
+        "nombre": "Pureza",
+        "aliases": [],
+        "metodo": "Cálculo Pol ÷ Brix",
+        "norma": "ICUMSA",
+        "unidad": "%",
+        "tiempo_estimado_min": 5,
+        "dependencias": []
+      },
+      {
+        "nombre": "Azúcares reductores",
+        "aliases": [],
+        "metodo": "Lane y Eynon",
+        "norma": "ICUMSA GS4/3-3",
+        "unidad": "%",
+        "tiempo_estimado_min": 40,
+        "dependencias": []
+      },
+      {
+        "nombre": "Cenizas",
+        "aliases": [],
+        "metodo": "Gravimetría (conductimétrica)",
+        "norma": "ICUMSA GS4/3-11",
+        "unidad": "%",
+        "tiempo_estimado_min": 60,
+        "dependencias": []
+      }
+    ]
+  }
+}

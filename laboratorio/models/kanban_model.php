@@ -79,8 +79,8 @@ if (!function_exists('lab_planificacion_tareas')) {
                 tm.nombre AS tipo_muestra,
                 ta.id_tipo AS id_tipo_analisis,
                 ta.nombre AS analisis_nombre,
-                ultimo.id_formulario,
-                CASE WHEN ultimo.id_formulario IS NULL THEN 0 ELSE 1 END AS versiones,
+                f.id_formulario,
+                CASE WHEN f.id_formulario IS NULL THEN 0 ELSE 1 END AS versiones,
                 f.analista,
                 f.fecha AS fecha_formulario,
                 ef.nombre AS estado_nombre
@@ -90,20 +90,10 @@ if (!function_exists('lab_planificacion_tareas')) {
             INNER JOIN tipo_muestra tm ON tm.id_tipo = s.id_tipo
             INNER JOIN solicitud_analisis sa ON sa.id_solicitud = s.id_solicitud
             INNER JOIN tipo_analisis ta ON ta.id_tipo = sa.id_tipo_analisis
-            LEFT JOIN lote_rango lr_tarea
-                ON lr_tarea.id_lote = s.id_lote
-               AND m.numero_muestra BETWEEN lr_tarea.inicio AND lr_tarea.fin
-            LEFT JOIN (
-                SELECT
-                    f2.id_rango,
-                    f2.id_tipo_analisis,
-                    MAX(f2.id_formulario) AS id_formulario
-                FROM formulario f2
-                GROUP BY f2.id_rango, f2.id_tipo_analisis
-            ) ultimo
-                ON ultimo.id_rango = lr_tarea.id_rango
-               AND ultimo.id_tipo_analisis = ta.id_tipo
-            LEFT JOIN formulario f ON f.id_formulario = ultimo.id_formulario
+            LEFT JOIN formulario f ON f.id_formulario = (
+                SELECT MAX(f2.id_formulario) FROM formulario f2 JOIN lote_rango lr ON lr.id_rango=f2.id_rango
+                WHERE lr.id_lote=s.id_lote AND m.numero_muestra BETWEEN lr.inicio AND lr.fin AND f2.id_tipo_analisis=ta.id_tipo
+            )
             LEFT JOIN estado_formulario ef ON ef.id_estado = f.id_estado
             WHERE COALESCE(ta.activo, 1) = 1
             ORDER BY tm.nombre, ta.nombre, l.codigo_lote, m.numero_muestra, m.id_muestra

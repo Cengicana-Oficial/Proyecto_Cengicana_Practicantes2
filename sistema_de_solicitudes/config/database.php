@@ -105,7 +105,11 @@ function app_normalize(string $value): string
     return preg_replace('/[^a-z0-9]+/', ' ', $value) ?: '';
 }
 
-function app_bootstrap_database(PDO $pdo): void
+/**
+ * Tablas y columnas del modulo. Solo corre al desplegar (deploy/mysql/migrar-esquema.php, con el
+ * usuario de migraciones): las peticiones no hacen DDL (AUD-2026-001/I-2).
+ */
+function app_esquema_database(PDO $pdo): void
 {
     // El modulo ahora usa usuarios de la base principal `usuarios_menu`.
     // Estas FK antiguas apuntaban a la tabla local `usuarios` y rompen al guardar
@@ -183,6 +187,68 @@ function app_bootstrap_database(PDO $pdo): void
         ) ENGINE=InnoDB"
     );
 
+    // Notificaciones: cada seguimiento es un evento; aqui se registra cuales ya leyo cada usuario.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS notificaciones_leidas (
+            usuario_id INT NOT NULL,
+            seguimiento_id INT NOT NULL,
+            leido_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (usuario_id, seguimiento_id),
+            FOREIGN KEY (seguimiento_id) REFERENCES seguimientos(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB"
+    );
+
+    // Buzon de ideas: formulario publico (buzon.php), no requiere sesion.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS ideas (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            area VARCHAR(80) NOT NULL,
+            area_otra VARCHAR(80) NULL,
+            situacion TEXT NOT NULL,
+            propuesta TEXT NOT NULL,
+            beneficio TEXT NOT NULL,
+            foto_ruta VARCHAR(255) NULL,
+            foto_mime VARCHAR(40) NULL,
+            anonimo TINYINT(1) NOT NULL DEFAULT 0,
+            nombre VARCHAR(80) NULL,
+            correo VARCHAR(120) NULL,
+            estado ENUM('nueva','revisada','archivada') NOT NULL DEFAULT 'nueva',
+            creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_ideas_estado (estado)
+        ) ENGINE=InnoDB"
+    );
+
+    // Avisos por correo (includes/mailer.php): que se envia y el historial de envios.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS configuracion_correo (
+            clave VARCHAR(60) NOT NULL PRIMARY KEY,
+            valor TEXT NOT NULL,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB"
+    );
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS correo_registro (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            tipo VARCHAR(20) NOT NULL,
+            solicitud_codigo VARCHAR(20) NULL,
+            destinatario VARCHAR(190) NOT NULL,
+            asunto VARCHAR(255) NOT NULL,
+            estado ENUM('enviado','fallido') NOT NULL,
+            error VARCHAR(255) NULL,
+            creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_correo_registro_creado (creado_en)
+        ) ENGINE=InnoDB"
+    );
+}
+
+function app_bootstrap_database(PDO $pdo): void
+{
+    if (defined('ESQUEMA_MIGRANDO')) {
+        app_esquema_database($pdo);
+    }
+
     if ((int) $pdo->query('SELECT COUNT(*) FROM programas')->fetchColumn() === 0) {
         $pdo->exec(
             "INSERT INTO programas (id, nombre) VALUES
@@ -214,21 +280,65 @@ function app_bootstrap_menu_data(PDO $menuPdo): void
     }
 
     $permissions = [
-        'solicitudes_internas.crear' => 'Permite crear solicitudes en el modulo Solicitudes internas',
-        'solicitudes_internas.ver' => 'Permite ver las solicitudes del modulo Sistema de solicitudes',
-        'solicitudes_internas.gestionar' => 'Permite gestionar las solicitudes del modulo Sistema de solicitudes',
+        'solicitudes_internas.crear' => 'Permite crear solicitudes desde su programa y ver las que el usuario envio',
+        'solicitudes_internas.ver' => 'Permite ver las solicitudes que otros programas envian al programa del usuario',
+        'solicitudes_internas.gestionar' => 'Permite cambiar estado y dar seguimiento a las solicitudes recibidas por el programa del usuario',
+        'solicitudes_internas.ver_todas' => 'Permite ver (solo lectura) todas las solicitudes entre programas',
         'solicitudes_internas.usuarios.ver' => 'Permite ver usuarios del modulo Sistema de solicitudes',
         'solicitudes_internas.usuarios.gestionar' => 'Permite crear, editar y eliminar usuarios del modulo Sistema de solicitudes',
         'solicitudes_internas.programas.ver' => 'Permite ver programas del modulo Sistema de solicitudes',
         'solicitudes_internas.programas.gestionar' => 'Permite crear, editar y eliminar programas del modulo Sistema de solicitudes',
+        'solicitudes_internas.buzon.ver' => 'Permite ver las ideas recibidas en el Buzon de ideas',
+        'solicitudes_internas.buzon.gestionar' => 'Permite marcar como revisadas o archivar las ideas del Buzon de ideas',
     ];
 
     $stmt = $menuPdo->prepare(
-        'INSERT IGNORE INTO permisos (nombre_permiso, descripcion) VALUES (?, ?)'
+        'INSERT INTO permisos (nombre_permiso, descripcion) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE descripcion = VALUES(descripcion)'
     );
 
     foreach ($permissions as $name => $description) {
         $stmt->execute([$name, $description]);
+    }
+
+    app_bootstrap_module_roles($menuPdo);
+}
+
+/**
+ * Crea en la plataforma (login/roles/roles.php) los roles base del modulo si no
+ * existen. Solo asigna permisos al crearlos: si despues se editan desde la
+ * gestion de roles, esos cambios se respetan.
+ */
+function app_bootstrap_module_roles(PDO $menuPdo): void
+{
+    if (!app_table_exists($menuPdo, 'roles') || !app_table_exists($menuPdo, 'rol_permiso')) {
+        return;
+    }
+
+    $roles = [
+        'Jefe de programa' => ['solicitudes_internas.crear', 'solicitudes_internas.ver', 'solicitudes_internas.gestionar'],
+        'Colaborador de programa' => ['solicitudes_internas.crear'],
+        'Director' => ['solicitudes_internas.crear', 'solicitudes_internas.ver', 'solicitudes_internas.gestionar', 'solicitudes_internas.ver_todas'],
+    ];
+
+    $findRole = $menuPdo->prepare('SELECT id FROM roles WHERE nombre_rol = ? LIMIT 1');
+    $insertRole = $menuPdo->prepare('INSERT INTO roles (nombre_rol) VALUES (?)');
+    $assignPermission = $menuPdo->prepare(
+        'INSERT IGNORE INTO rol_permiso (rol_id, permiso_id)
+         SELECT ?, id FROM permisos WHERE nombre_permiso = ?'
+    );
+
+    foreach ($roles as $roleName => $rolePermissions) {
+        $findRole->execute([$roleName]);
+        if ($findRole->fetchColumn()) {
+            continue;
+        }
+
+        $insertRole->execute([$roleName]);
+        $roleId = (int) $menuPdo->lastInsertId();
+        foreach ($rolePermissions as $permission) {
+            $assignPermission->execute([$roleId, $permission]);
+        }
     }
 }
 
@@ -238,6 +348,11 @@ $dbUser = app_env_value('DB_MENU_USER', app_env_value('DB_USER', 'root'));
 $dbPass = app_env_value('DB_MENU_PASS', app_env_value('DB_PASS', ''));
 $menuDbName = app_env_value('DB_MENU_NAME', app_env_value('DB_NAME', 'usuarios_menu'));
 $solicitudesDbName = app_env_value('DB_SOLICITUDES_NAME', app_env_value('SISTEMA_SOLICITUDES_DB_NAME', 'sistema_solicitudes'));
+if (defined('ESQUEMA_MIGRANDO')) {
+    // deploy/mysql/migrar-esquema.php: el esquema se crea con el usuario de migraciones.
+    $dbUser = (string) getenv('MIGRADOR_USER');
+    $dbPass = (string) getenv('MIGRADOR_PASS');
+}
 
 try {
     $pdoOptions = [
@@ -247,16 +362,18 @@ try {
         PDO::ATTR_TIMEOUT => 10,
     ];
 
-    $serverPdo = new PDO(
-        "mysql:host={$dbHost};port={$dbPort};charset=utf8mb4",
-        $dbUser,
-        $dbPass,
-        $pdoOptions
-    );
+    if (defined('ESQUEMA_MIGRANDO')) {
+        $serverPdo = new PDO(
+            "mysql:host={$dbHost};port={$dbPort};charset=utf8mb4",
+            $dbUser,
+            $dbPass,
+            $pdoOptions
+        );
 
-    $serverPdo->exec(
-        'CREATE DATABASE IF NOT EXISTS `' . str_replace('`', '``', $solicitudesDbName) . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
-    );
+        $serverPdo->exec(
+            'CREATE DATABASE IF NOT EXISTS `' . str_replace('`', '``', $solicitudesDbName) . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+        );
+    }
 
     $pdo = new PDO(
         "mysql:host={$dbHost};port={$dbPort};dbname={$solicitudesDbName};charset=utf8mb4",
@@ -275,6 +392,9 @@ try {
     app_bootstrap_database($pdo);
     app_bootstrap_menu_data($menuPdo);
 } catch (PDOException $e) {
+    if (defined('ESQUEMA_MIGRANDO')) {
+        throw $e;
+    }
     http_response_code(500);
     exit(
         'No se pudo conectar a la base de datos. Verifica la configuracion de MySQL. Detalle: '

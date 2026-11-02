@@ -105,24 +105,24 @@ $sampleVisuals = [
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Catálogo de tipos de muestra</title>
-    <link rel="stylesheet" href="styles/base.css">
-    <link rel="stylesheet" href="css/laboratorio.css?v=2">
+    <link rel="stylesheet" href="styles/base.css?v=20261006">
+    <link rel="stylesheet" href="css/laboratorio.css?v=20261006">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         :root {
-            --bg: #f4f7f1;
+            --bg: #F7F8F8;
             --panel: #ffffff;
-            --text: #20311f;
-            --muted: #617061;
-            --primary: #2f641c;
-            --primary-2: #3c7a23;
-            --border: #dbe5d5;
-            --shadow: 0 16px 36px rgba(33, 57, 25, 0.08);
+            --text: #1F2326;
+            --muted: #636A6F;
+            --primary: #3A6312;
+            --primary-2: #4E8418;
+            --border: #C7E4A8;
+            --shadow: 0 16px 36px rgba(38, 66, 12, 0.08);
         }
         body {
             margin: 0;
-            background: radial-gradient(circle at top left, rgba(69, 120, 38, 0.08), transparent 34%),
-                        linear-gradient(180deg, #f9fbf7 0%, var(--bg) 100%);
+            background: radial-gradient(circle at top left, rgba(78, 132, 24, 0.08), transparent 34%),
+                        linear-gradient(180deg, #F7F8F8 0%, var(--bg) 100%);
             color: var(--text);
             font-family: 'Hanken Grotesk', system-ui, sans-serif;
         }
@@ -153,7 +153,7 @@ $sampleVisuals = [
             gap: 8px;
             padding: 8px 12px;
             border-radius: 999px;
-            background: rgba(47, 100, 28, 0.08);
+            background: rgba(58, 99, 18, 0.08);
             color: var(--primary);
             font-weight: 700;
             letter-spacing: .02em;
@@ -271,8 +271,8 @@ $sampleVisuals = [
             box-sizing: border-box;
         }
         .field input[readonly] {
-            background: #f6f9f4;
-            color: #526051;
+            background: #F7F8F8;
+            color: #474D51;
         }
         .meta-list {
             display: grid;
@@ -285,8 +285,8 @@ $sampleVisuals = [
             gap: 12px;
             padding: 10px 12px;
             border-radius: 10px;
-            background: #f8fbf6;
-            color: #415041;
+            background: #F7F8F8;
+            color: #474D51;
         }
         @media (max-width: 1024px) {
             .hero, .layout {
@@ -300,14 +300,14 @@ $sampleVisuals = [
         }
 
         body {
-            --bg: #f8f9f7;
+            --bg: #F7F8F8;
             --panel: rgba(255, 255, 255, 0.96);
-            --text: #232628;
-            --muted: #667077;
+            --text: #1F2326;
+            --muted: #636A6F;
             --primary: #73BC25;
             --primary-2: #A3D300;
             --border: rgba(206, 210, 213, 0.92);
-            --shadow: 0 18px 40px rgba(35, 37, 35, 0.08);
+            --shadow: 0 18px 40px rgba(31, 35, 38, 0.08);
 
             --color-primary-50: rgba(115, 188, 37, 0.12);
             --color-primary-100: rgba(115, 188, 37, 0.18);
@@ -316,9 +316,9 @@ $sampleVisuals = [
             --color-primary-400: rgba(115, 188, 37, 0.50);
             --color-primary-500: #73BC25;
             --color-primary-600: #73BC25;
-            --color-primary-700: #5E991E;
-            --color-primary-800: #477617;
-            --color-primary-900: #315010;
+            --color-primary-700: #5E9B1D;
+            --color-primary-800: #4E8418;
+            --color-primary-900: #26420C;
 
             --color-secondary-50: rgba(163, 211, 0, 0.12);
             --color-secondary-100: rgba(163, 211, 0, 0.18);
@@ -327,8 +327,8 @@ $sampleVisuals = [
             --color-secondary-400: rgba(163, 211, 0, 0.50);
             --color-secondary-500: #A3D300;
             --color-secondary-600: #A3D300;
-            --color-secondary-700: #7F9E00;
-            --color-secondary-800: #607800;
+            --color-secondary-700: #A3D300;
+            --color-secondary-800: #5C7700;
 
             --color-tertiary-50: rgba(255, 107, 0, 0.12);
             --color-tertiary-100: rgba(255, 107, 0, 0.18);
@@ -337,19 +337,19 @@ $sampleVisuals = [
             --color-tertiary-400: rgba(255, 107, 0, 0.50);
             --color-tertiary-500: #FF6B00;
             --color-tertiary-600: #FF6B00;
-            --color-tertiary-700: #D85A00;
-            --color-tertiary-800: #A94400;
+            --color-tertiary-700: #B34B00;
+            --color-tertiary-800: #B34B00;
 
-            --color-neutral-50: #F8F9F7;
+            --color-neutral-50: #F7F8F8;
             --color-neutral-100: #EEF0F1;
             --color-neutral-200: #CED2D5;
-            --color-neutral-300: #B8BDC1;
-            --color-neutral-400: #9CA2A6;
-            --color-neutral-500: #808589;
-            --color-neutral-600: #666B6E;
-            --color-neutral-700: #4E5356;
-            --color-neutral-800: #35393B;
-            --color-neutral-900: #232628;
+            --color-neutral-300: #A9AFB3;
+            --color-neutral-400: #858C91;
+            --color-neutral-500: #858C91;
+            --color-neutral-600: #636A6F;
+            --color-neutral-700: #474D51;
+            --color-neutral-800: #30353A;
+            --color-neutral-900: #1F2326;
 
             --color-warning-50: rgba(255, 204, 0, 0.16);
             --color-warning-100: rgba(255, 204, 0, 0.22);
@@ -358,7 +358,7 @@ $sampleVisuals = [
             --color-warning-400: rgba(255, 204, 0, 0.52);
             --color-warning-500: #FFCC00;
             --color-warning-600: #FFCC00;
-            --color-warning-700: #9A7300;
+            --color-warning-700: #8A6E00;
 
             --green-50: rgba(115, 188, 37, 0.12);
             --green-100: rgba(115, 188, 37, 0.18);
@@ -367,9 +367,9 @@ $sampleVisuals = [
             --green-400: rgba(115, 188, 37, 0.50);
             --green-500: #73BC25;
             --green-600: #73BC25;
-            --green-700: #5E991E;
-            --green-800: #477617;
-            --green-900: #315010;
+            --green-700: #5E9B1D;
+            --green-800: #4E8418;
+            --green-900: #26420C;
 
             --teal-50: rgba(163, 211, 0, 0.12);
             --teal-100: rgba(163, 211, 0, 0.18);
@@ -378,8 +378,8 @@ $sampleVisuals = [
             --teal-400: rgba(163, 211, 0, 0.50);
             --teal-500: #A3D300;
             --teal-600: #A3D300;
-            --teal-700: #7F9E00;
-            --teal-800: #607800;
+            --teal-700: #A3D300;
+            --teal-800: #5C7700;
 
             --tertiary-50: rgba(255, 107, 0, 0.12);
             --tertiary-100: rgba(255, 107, 0, 0.18);
@@ -388,44 +388,44 @@ $sampleVisuals = [
             --tertiary-400: rgba(255, 107, 0, 0.50);
             --tertiary-500: #FF6B00;
             --tertiary-600: #FF6B00;
-            --tertiary-700: #D85A00;
-            --tertiary-800: #A94400;
+            --tertiary-700: #B34B00;
+            --tertiary-800: #B34B00;
 
-            --neutral-50: #F8F9F7;
+            --neutral-50: #F7F8F8;
             --neutral-100: #EEF0F1;
             --neutral-200: #CED2D5;
-            --neutral-300: #B8BDC1;
-            --neutral-400: #9CA2A6;
-            --neutral-500: #808589;
-            --neutral-600: #666B6E;
-            --neutral-700: #4E5356;
-            --neutral-800: #35393B;
-            --neutral-900: #232628;
+            --neutral-300: #A9AFB3;
+            --neutral-400: #858C91;
+            --neutral-500: #858C91;
+            --neutral-600: #636A6F;
+            --neutral-700: #474D51;
+            --neutral-800: #30353A;
+            --neutral-900: #1F2326;
 
             --state-success-bg: rgba(115, 188, 37, 0.10);
-            --state-success-text: #477617;
+            --state-success-text: #4E8418;
             --state-success-border: rgba(115, 188, 37, 0.24);
             --state-info-bg: rgba(163, 211, 0, 0.10);
-            --state-info-text: #607800;
+            --state-info-text: #5C7700;
             --state-info-border: rgba(163, 211, 0, 0.24);
             --state-warning-bg: rgba(255, 204, 0, 0.14);
-            --state-warning-text: #9A7300;
+            --state-warning-text: #8A6E00;
             --state-warning-border: rgba(255, 204, 0, 0.30);
             --state-danger-bg: rgba(255, 107, 0, 0.12);
-            --state-danger-text: #D85A00;
+            --state-danger-text: #B34B00;
             --state-danger-border: rgba(255, 107, 0, 0.28);
 
             --lab-body-surface: rgba(255, 255, 255, 0.94);
             --lab-body-surface-strong: #ffffff;
             --lab-body-border-soft: rgba(206, 210, 213, 0.68);
-            --lab-body-border-strong: rgba(184, 189, 193, 0.84);
+            --lab-body-border-strong: rgba(169, 175, 179, 0.84);
 
             --table-border: 1px solid rgba(206, 210, 213, 0.88);
             --table-head-bg: linear-gradient(180deg, rgba(115, 188, 37, 0.10), rgba(255, 255, 255, 0.98));
             --table-row-alt-bg: rgba(206, 210, 213, 0.18);
             --table-row-hover-bg: rgba(163, 211, 0, 0.08);
             --table-row-selected-bg: rgba(115, 188, 37, 0.09);
-            --table-shadow: 0 14px 30px rgba(35, 37, 35, 0.08);
+            --table-shadow: 0 14px 30px rgba(31, 35, 38, 0.08);
             --table-empty-color: var(--muted);
 
             background:
@@ -551,7 +551,7 @@ $sampleVisuals = [
         .notice.error {
             border-color: rgba(255, 107, 0, 0.28);
             background: rgba(255, 107, 0, 0.12);
-            color: #D85A00;
+            color: #B34B00;
         }
 
         .meta-item {
@@ -581,7 +581,7 @@ $sampleVisuals = [
 
         .table-wrap {
             border-color: rgba(206, 210, 213, 0.88);
-            box-shadow: 0 14px 30px rgba(35, 37, 35, 0.08);
+            box-shadow: 0 14px 30px rgba(31, 35, 38, 0.08);
         }
 
         .stats-card strong {
@@ -592,7 +592,7 @@ $sampleVisuals = [
         .panel,
         .stats-card,
         .table-wrap {
-            box-shadow: 0 18px 40px rgba(35, 37, 35, 0.08);
+            box-shadow: 0 18px 40px rgba(31, 35, 38, 0.08);
         }
 
         .hero-card,
@@ -605,12 +605,12 @@ $sampleVisuals = [
             color: var(--text);
         }
 
-        small[style*="#6b7c68"] {
+        small[style*="#636A6F"] {
             color: var(--muted) !important;
         }
     </style>
-    <link rel="stylesheet" href="styles/tables.css">
-    <link rel="stylesheet" href="css/lab_shell.css?v=1">
+    <link rel="stylesheet" href="styles/tables.css?v=20261006">
+    <link rel="stylesheet" href="css/lab_shell.css?v=20261006">
 </head>
 <body class="cengi-canvas">
 <?php lab_shell_open('catalogo_muestras.php', 'Catalogo de tipos de muestra', 'Tipos de muestra y prefijos usados al generar codigos de laboratorio'); ?>
@@ -723,7 +723,7 @@ $sampleVisuals = [
                                     <tr>
                                         <td>
                                             <strong><?= catalogoMuestrasE((string) ($fila['nombre'] ?? '')) ?></strong><br>
-                                            <small style="color:#6b7c68"><?= catalogoMuestrasE((string) ($fila['label_plural'] ?? '')) ?></small>
+                                            <small style="color:#636A6F"><?= catalogoMuestrasE((string) ($fila['label_plural'] ?? '')) ?></small>
                                         </td>
                                         <td>
                                             <span class="pill pill-on">

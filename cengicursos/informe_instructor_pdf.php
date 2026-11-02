@@ -72,35 +72,8 @@ $db = conectar();
 $esAdminIngenioReporte = cengi_es_administrador_ingenio();
 $ingenioIdReporte = cengi_ingenio_id_actual();
 
-$paramsInstructorStmt = [];
-$filtroTotalCursosIngenioReporte = '';
-$filtroEvaluacionPromedioIngenioReporte = '';
-if ($esAdminIngenioReporte) {
-    if ($ingenioIdReporte > 0) {
-        $filtroTotalCursosIngenioReporte = ' AND ' . cengi_frag_curso_participante_ingenio('c', 'tc', $paramsInstructorStmt, $ingenioIdReporte);
-        $filtroEvaluacionPromedioIngenioReporte = ' AND ' . cengi_frag_curso_participante_ingenio('c', 'ep', $paramsInstructorStmt, $ingenioIdReporte);
-    } else {
-        // Sin ingenio asignado: no puede haber curso que califique, se fuerza vacio.
-        $filtroTotalCursosIngenioReporte = ' AND 1 = 0';
-        $filtroEvaluacionPromedioIngenioReporte = ' AND 1 = 0';
-    }
-}
-
-$stmt = $db->prepare("
-    SELECT
-        i.*,
-        (SELECT COUNT(*) FROM cursos c WHERE c.instructor_id = i.id{$filtroTotalCursosIngenioReporte}) AS total_cursos,
-        (
-            SELECT AVG(CAST(cc.posevaluacion AS DECIMAL(6,2)))
-            FROM cursos c
-            INNER JOIN asignaciones a ON a.cursos_id = c.id
-            INNER JOIN control_cursos cc ON cc.asignacion_id = a.id
-            WHERE c.instructor_id = i.id AND cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?$'{$filtroEvaluacionPromedioIngenioReporte}
-        ) AS evaluacion_promedio
-    FROM instructores i
-    WHERE i.id = ?
-");
-$stmt->execute(array_merge($paramsInstructorStmt, [$id]));
+$stmt = $db->prepare("SELECT i.* FROM instructores i WHERE i.id = ?");
+$stmt->execute([$id]);
 $instructor = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$instructor) {
@@ -162,7 +135,7 @@ if (!$esAdminIngenioReporte) {
             AVG(ei.recomendaria_contexto) AS avg_recomendaria_contexto
         FROM evaluaciones_instructor ei
         INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-        WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NULL
+        WHERE eei.instructor_id = ?
     ");
     $statsStmt->execute([$id]);
     $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
@@ -189,10 +162,9 @@ if (!$esAdminIngenioReporte) {
         SELECT ei.areas_mejora, ei.capacitaciones_necesarias, ei.creado
         FROM evaluaciones_instructor ei
         INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-        WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NULL
+        WHERE eei.instructor_id = ?
             AND (
                 (ei.areas_mejora IS NOT NULL AND TRIM(ei.areas_mejora) <> '')
-                OR (ei.capacitaciones_necesarias IS NOT NULL AND TRIM(ei.capacitaciones_necesarias) <> '')
             )
         ORDER BY ei.creado DESC, ei.id DESC
         LIMIT 5
@@ -200,108 +172,39 @@ if (!$esAdminIngenioReporte) {
     $comentariosStmt->execute([$id]);
     $comentarios = $comentariosStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $evaluacionesModuloStmt = $db->prepare("
-        SELECT
-            cm.id AS modulo_id,
-            cm.nombre AS modulo_nombre,
-            cm.orden AS modulo_orden,
-            c.nombre_cursos,
-            COUNT(*) AS total,
-            AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
-            AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
-            AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
-            AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
-            AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
-            AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor
-        FROM evaluaciones_instructor ei
-        INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-        INNER JOIN curso_modulos cm ON cm.id = eei.curso_modulo_id
-        INNER JOIN cursos c ON c.id = eei.curso_id
-        WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NOT NULL
-        GROUP BY cm.id, cm.nombre, c.nombre_cursos, cm.orden
-        ORDER BY c.nombre_cursos, cm.orden
-    ");
-    $evaluacionesModuloStmt->execute([$id]);
-    $evaluacionesModulo = $evaluacionesModuloStmt->fetchAll(PDO::FETCH_ASSOC);
+
 }
 
-// Scoping por ingenio (Administrador de ingenio): el listado de cursos del
-// instructor solo debe incluir cursos con un participante de su ingenio, y
-// el promedio de evaluacion de cada curso debe calcularse solo sobre esos
-// participantes (no sobre todos los inscritos del curso, que puede tener
-// participantes de varios ingenios). El join a "participantes" dentro del
-// subquery de evaluacion_promedio solo se agrega cuando aplica el scoping,
-// para no alterar la consulta original en el resto de roles.
-$joinEvaluacionPromedioIngenio = '';
-$filtroEvaluacionPromedioIngenio = '';
-$evaluacionPromedioIngenioParam = [];
-$filtroEdicionesIngenio = '';
-$paramsFragEdiciones = [];
-if ($esAdminIngenioReporte) {
-    if ($ingenioIdReporte > 0) {
-        $joinEvaluacionPromedioIngenio = 'INNER JOIN participantes p ON p.id = a.participantes_id';
-        $filtroEvaluacionPromedioIngenio = ' AND p.ingenio_id = ?';
-        $evaluacionPromedioIngenioParam = [$ingenioIdReporte];
-        $filtroEdicionesIngenio = ' AND ' . cengi_frag_curso_participante_ingenio('c', 'ed', $paramsFragEdiciones, $ingenioIdReporte);
-    } else {
-        $filtroEdicionesIngenio = ' AND 1 = 0';
-    }
+// Cursos como instructor principal, sin notas académicas de participantes.
+$scopeParams=[];
+$scopeCursos=$esAdminIngenioReporte ? ' AND '.cengi_frag_curso_participante_ingenio('c','informe',$scopeParams,$ingenioIdReporte) : '';
+$edicionesStmt = $db->prepare("SELECT c.id,c.nombre_cursos,c.tipo AS modalidad,c.inicio,c.fin,
+    ing.nombre_ingenios AS ingenio,
+    (SELECT COUNT(*) FROM asignaciones a WHERE a.cursos_id=c.id) AS total_inscritos,
+    (SELECT AVG((ei.instructor_lenguaje_claro+ei.instructor_material_adecuado+ei.instructor_conocimiento_tema+ei.instructor_respeto_participantes+ei.instructor_puntualidad_objetivos)/5.0)
+     FROM evaluaciones_instructor ei JOIN enlaces_evaluacion_instructor e ON e.id=ei.enlace_id
+     WHERE e.curso_id=c.id AND e.instructor_id=? AND e.curso_modulo_id IS NULL) AS evaluacion_promedio
+    FROM cursos c LEFT JOIN ingenios ing ON ing.id=c.ingenio_id
+    WHERE c.instructor_id=? $scopeCursos ORDER BY c.inicio DESC,c.nombre_cursos");
+$edicionesStmt->execute(array_merge([$id,$id],$scopeParams));
+$ediciones=$edicionesStmt->fetchAll(PDO::FETCH_ASSOC);
+// Asignaciones de módulo explícitas o heredadas; mostrar también sin encuestas.
+$modulosStmt=$db->prepare("SELECT cm.id AS modulo_id,cm.nombre AS modulo_nombre,c.nombre_cursos,
+    cm.orden,cm.horas,
+    (SELECT COUNT(*) FROM evaluaciones_instructor ei JOIN enlaces_evaluacion_instructor e ON e.id=ei.enlace_id WHERE e.curso_modulo_id=cm.id AND e.instructor_id=?) AS total,
+    (SELECT AVG((ei.instructor_lenguaje_claro+ei.instructor_material_adecuado+ei.instructor_conocimiento_tema+ei.instructor_respeto_participantes+ei.instructor_puntualidad_objetivos)/5.0)
+      FROM evaluaciones_instructor ei JOIN enlaces_evaluacion_instructor e ON e.id=ei.enlace_id WHERE e.curso_modulo_id=cm.id AND e.instructor_id=?) AS nota
+    FROM curso_modulos cm JOIN cursos c ON c.id=cm.curso_id
+    WHERE (EXISTS(SELECT 1 FROM curso_modulo_instructores m WHERE m.curso_modulo_id=cm.id AND m.instructor_id=?)
+      OR (c.instructor_id=? AND NOT EXISTS(SELECT 1 FROM curso_modulo_instructores m WHERE m.curso_modulo_id=cm.id))) $scopeCursos
+    ORDER BY c.nombre_cursos,c.inicio DESC,cm.orden,cm.id");
+$modulosStmt->execute(array_merge([$id,$id,$id,$id],$scopeParams));
+$modulosAsignados=$modulosStmt->fetchAll(PDO::FETCH_ASSOC);
+if($esAdminIngenioReporte){
+    foreach($ediciones as &$fila)$fila['evaluacion_promedio']=null;unset($fila);
+    foreach($modulosAsignados as &$fila){$fila['nota']=null;$fila['total']=0;}unset($fila);
 }
-
-// Orden de los "?" tal como aparecen en el SQL resultante: primero el del
-// subquery de evaluacion_promedio (esta en la lista SELECT, antes del
-// WHERE), luego $id (WHERE c.instructor_id = ?), y por ultimo el del
-// fragmento EXISTS de $filtroEdicionesIngenio (al final del WHERE).
-$paramsEdiciones = array_merge($evaluacionPromedioIngenioParam, [$id], $paramsFragEdiciones);
-
-$evaluacionesModuloStmt = $db->prepare("
-    SELECT
-        cm.id AS modulo_id,
-        cm.nombre AS modulo_nombre,
-        cm.orden AS modulo_orden,
-        c.nombre_cursos,
-        COUNT(*) AS total,
-        AVG(ei.instructor_lenguaje_claro) AS avg_lenguaje_claro,
-        AVG(ei.instructor_material_adecuado) AS avg_material_adecuado,
-        AVG(ei.instructor_conocimiento_tema) AS avg_conocimiento_tema,
-        AVG(ei.instructor_respeto_participantes) AS avg_respeto_participantes,
-        AVG(ei.instructor_puntualidad_objetivos) AS avg_puntualidad_objetivos,
-        AVG(ei.recomendaria_instructor) AS avg_recomendaria_instructor
-    FROM evaluaciones_instructor ei
-    INNER JOIN enlaces_evaluacion_instructor eei ON eei.id = ei.enlace_id
-    INNER JOIN curso_modulos cm ON cm.id = eei.curso_modulo_id
-    INNER JOIN cursos c ON c.id = eei.curso_id
-    WHERE eei.instructor_id = ? AND eei.curso_modulo_id IS NOT NULL
-    GROUP BY cm.id, cm.nombre, c.nombre_cursos, cm.orden
-    ORDER BY c.nombre_cursos, cm.orden
-");
-$evaluacionesModuloStmt->execute([$id]);
-$evaluacionesModulo = $evaluacionesModuloStmt->fetchAll(PDO::FETCH_ASSOC);
-
-$edicionesStmt = $db->prepare("
-    SELECT
-        c.nombre_cursos,
-        c.tipo AS modalidad,
-        c.inicio,
-        c.fin,
-        ing.nombre_ingenios AS ingenio,
-        (SELECT COUNT(*) FROM asignaciones a WHERE a.cursos_id = c.id) AS total_inscritos,
-        (
-            SELECT AVG(CAST(cc.posevaluacion AS DECIMAL(6,2)))
-            FROM asignaciones a
-            INNER JOIN control_cursos cc ON cc.asignacion_id = a.id
-            {$joinEvaluacionPromedioIngenio}
-            WHERE a.cursos_id = c.id AND cc.posevaluacion REGEXP '^[0-9]+(\\.[0-9]+)?$'{$filtroEvaluacionPromedioIngenio}
-        ) AS evaluacion_promedio
-    FROM cursos c
-    INNER JOIN categorias_cursos ca ON ca.id = c.categoria_curso_id
-    INNER JOIN ingenios ing ON ing.id = c.ingenio_id
-    WHERE c.instructor_id = ?{$filtroEdicionesIngenio}
-    ORDER BY c.nombre_cursos, c.inicio DESC
-");
-$edicionesStmt->execute($paramsEdiciones);
-$ediciones = $edicionesStmt->fetchAll(PDO::FETCH_ASSOC);
-
+$instructor['total_cursos']=count($ediciones);
 $ingeniosInstructor = [];
 foreach ($ediciones as $edicionFila) {
     $nombreIngenio = trim((string) ($edicionFila['ingenio'] ?? ''));
@@ -334,7 +237,7 @@ $fechaGeneracion = date('d/m/Y H:i');
 
 $filasCursos = '';
 if (empty($ediciones)) {
-    $filasCursos = '<tr><td colspan="5" class="pdf-empty">Este instructor todavía no tiene cursos asociados.</td></tr>';
+    $filasCursos = '<tr><td colspan="6" class="pdf-empty">Este instructor todavía no tiene cursos asociados.</td></tr>';
 } else {
     foreach ($ediciones as $curso) {
         $rango = cengi_pdf_formato_fecha($curso['inicio']);
@@ -347,7 +250,7 @@ if (empty($ediciones)) {
             . '<td>' . $rango . '</td>'
             . '<td>' . cengi_pdf_html($curso['modalidad'] ?: '—') . '</td>'
             . '<td>' . (int) $curso['total_inscritos'] . '</td>'
-            . '<td>' . cengi_pdf_evaluacion_texto($curso['evaluacion_promedio']) . '</td>'
+            . '<td>' . ($curso['evaluacion_promedio']===null?'Sin evaluaciones':number_format((float)$curso['evaluacion_promedio'],2).'/4') . '</td>'
             . '</tr>';
     }
 }
@@ -419,9 +322,6 @@ if (!empty($comentarios)) {
         if (!empty($comentario['areas_mejora'])) {
             $partes .= '<div><strong>Oportunidades de mejora:</strong> ' . cengi_pdf_html($comentario['areas_mejora']) . '</div>';
         }
-        if (!empty($comentario['capacitaciones_necesarias'])) {
-            $partes .= '<div><strong>Capacitaciones necesarias:</strong> ' . cengi_pdf_html($comentario['capacitaciones_necesarias']) . '</div>';
-        }
         $itemsComentarios .= '<div class="pdf-comment-item">' . $partes
             . '<div class="pdf-comment-date">' . cengi_pdf_formato_fecha($comentario['creado']) . '</div></div>';
     }
@@ -429,46 +329,13 @@ if (!empty($comentarios)) {
 }
 
 $seccionEvaluacionesModulo = '<p class="pdf-empty">Este instructor todavía no tiene evaluaciones de módulo registradas.</p>';
-if (!empty($evaluacionesModulo)) {
-    $filasModulo = '';
-    foreach ($evaluacionesModulo as $filaModulo) {
-        $aspectosPromedio = array_filter([
-            $filaModulo['avg_lenguaje_claro'],
-            $filaModulo['avg_material_adecuado'],
-            $filaModulo['avg_conocimiento_tema'],
-            $filaModulo['avg_respeto_participantes'],
-            $filaModulo['avg_puntualidad_objetivos'],
-        ], static function ($valor) {
-            return $valor !== null;
-        });
-        $promedioGeneral = !empty($aspectosPromedio)
-            ? array_sum(array_map('floatval', $aspectosPromedio)) / count($aspectosPromedio)
-            : null;
-        $recomendaria = $filaModulo['avg_recomendaria_instructor'] !== null ? (float) $filaModulo['avg_recomendaria_instructor'] : null;
-        $filasModulo .= '<tr>'
-            . '<td>' . cengi_pdf_html($filaModulo['nombre_cursos']) . '</td>'
-            . '<td>' . cengi_pdf_html($filaModulo['modulo_nombre']) . '</td>'
-            . '<td>' . (int) $filaModulo['total'] . '</td>'
-            . '<td>' . ($promedioGeneral !== null ? number_format($promedioGeneral, 1) . '/4' : '—/4') . '</td>'
-            . '<td>' . ($recomendaria !== null ? number_format($recomendaria, 1) . '/10' : '—/10') . '</td>'
-            . '</tr>';
-    }
-    $seccionEvaluacionesModulo = '
-        <table class="pdf-table">
-            <thead>
-                <tr><th>Curso</th><th>Módulo</th><th>Respuestas</th><th>Promedio general</th><th>Recomendaría al instructor</th></tr>
-            </thead>
-            <tbody>' . $filasModulo . '</tbody>
-        </table>';
+$filasModulo='';
+foreach($modulosAsignados as $modulo){
+    $filasModulo.='<tr><td>'.cengi_pdf_html($modulo['nombre_cursos']).'</td><td>'.cengi_pdf_html($modulo['modulo_nombre']).'</td><td>'.cengi_pdf_html($modulo['horas']).'</td><td>'.(int)$modulo['total'].'</td><td>'.($modulo['nota']===null?'Sin evaluaciones':number_format((float)$modulo['nota'],2).'/4').'</td></tr>';
 }
-
-$evaluacionPromedio = $instructor['evaluacion_promedio'] !== null ? (float) $instructor['evaluacion_promedio'] : null;
-$cursosConEvaluacion = 0;
-foreach ($ediciones as $curso) {
-    if ($curso['evaluacion_promedio'] !== null) {
-        $cursosConEvaluacion++;
-    }
-}
+$seccionEvaluacionesModulo=$filasModulo ? '<table class="pdf-table"><thead><tr><th>Diplomado / curso</th><th>Módulo asignado</th><th>Horas</th><th>Respuestas</th><th>Evaluación del instructor</th></tr></thead><tbody>'.$filasModulo.'</tbody></table>' : '<p class="pdf-empty">Este instructor no tiene módulos asignados.</p>';
+$aspectosNota=array_values(array_filter($encuesta['instructor'],static function($v){return $v!==null;}));
+$evaluacionPromedio=$aspectosNota?array_sum($aspectosNota)/count($aspectosNota):null;
 $nombreInstructor = (string) ($instructor['nombre'] ?? 'Instructor');
 $especialidadInstructor = trim((string) ($instructor['especialidad'] ?? '')) !== ''
     ? (string) $instructor['especialidad']
@@ -488,10 +355,10 @@ $html = '<!DOCTYPE html>
     .pdf-header-sub { font-size: 12px; color: #4B5A45; margin-top: 3px; }
     .pdf-header-meta { font-size: 9.5px; color: #4B5A45; margin-top: 6px; }
     table.pdf-stats { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-    table.pdf-stats td { width: 33.33%; text-align: center; border: 1px solid #E4E7E1; padding: 10px 6px; }
+    table.pdf-stats td { width: 25%; text-align: center; border: 1px solid #E4E7E1; padding: 10px 6px; }
     .pdf-stat-value { font-size: 18px; font-weight: bold; color: #3E7A12; }
     .pdf-stat-label { font-size: 9.5px; color: #4B5A45; margin-top: 3px; }
-    .pdf-section { margin-bottom: 18px; }
+    .pdf-section { margin-bottom: 18px; } tr, .pdf-comment-item { page-break-inside: avoid; } .pdf-section-title { page-break-after: avoid; }
     .pdf-section-title { font-size: 13px; font-weight: bold; color: #3E7A12; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid #E4E7E1; padding-bottom: 5px; margin-bottom: 10px; }
     table.pdf-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
     table.pdf-table th, table.pdf-table td { border: 1px solid #E4E7E1; padding: 6px 8px; font-size: 10px; text-align: left; }
@@ -522,7 +389,8 @@ $html = '<!DOCTYPE html>
     <table class="pdf-stats">
         <tr>
             <td><div class="pdf-stat-value">' . (int) ($instructor['total_cursos'] ?? 0) . '</div><div class="pdf-stat-label">Cursos impartidos</div></td>
-            <td><div class="pdf-stat-value">' . cengi_pdf_evaluacion_texto($evaluacionPromedio) . '</div><div class="pdf-stat-label">Evaluación promedio (post-evaluación académica)</div></td>
+            <td><div class="pdf-stat-value">' . count($modulosAsignados) . '</div><div class="pdf-stat-label">Módulos asignados</div></td>
+            <td><div class="pdf-stat-value">' . ($evaluacionPromedio===null?'—':number_format($evaluacionPromedio,2).'/4') . '</div><div class="pdf-stat-label">Evaluación del instructor (1–4)</div></td>
             <td><div class="pdf-stat-value">' . cengi_pdf_html($estadoTexto) . '</div><div class="pdf-stat-label">Estado del instructor</div></td>
         </tr>
     </table>
@@ -531,7 +399,7 @@ $html = '<!DOCTYPE html>
         <div class="pdf-section-title">Cursos impartidos</div>
         <table class="pdf-table">
             <thead>
-                <tr><th>Curso</th><th>Ingenio</th><th>Fecha</th><th>Modalidad</th><th>Participantes</th><th>Evaluación</th></tr>
+                <tr><th>Curso</th><th>Ingenio</th><th>Fecha</th><th>Modalidad</th><th>Participantes</th><th>Evaluación del instructor</th></tr>
             </thead>
             <tbody>' . $filasCursos . '</tbody>
         </table>
@@ -539,28 +407,17 @@ $html = '<!DOCTYPE html>
 
     <div class="pdf-section">
         <div class="pdf-section-title">Satisfacción de los participantes (encuesta al instructor)</div>
-        ' . $seccionSatisfaccion . '
+        <p class="pdf-hint">Nota del instructor: promedio de los cinco criterios de Acerca del instructor; no incluye exámenes de participantes, logística ni recomendación.</p>' . $seccionSatisfaccion . '
     </div>
 
     <div class="pdf-section">
-        <div class="pdf-section-title">Evaluaciones por módulo</div>
+        <div class="pdf-section-title">Módulos asignados de diplomados y cursos</div>
         ' . $seccionEvaluacionesModulo . '
     </div>
 
     <div class="pdf-section">
         <div class="pdf-section-title">Comentarios recientes</div>
         ' . $seccionComentarios . '
-    </div>
-
-    <div class="pdf-section">
-        <div class="pdf-section-title">Desempeño académico</div>
-        <table class="pdf-stats">
-            <tr>
-                <td><div class="pdf-stat-value">' . cengi_pdf_evaluacion_texto($evaluacionPromedio) . '</div><div class="pdf-stat-label">Evaluación promedio registrada</div></td>
-                <td><div class="pdf-stat-value">' . $cursosConEvaluacion . '</div><div class="pdf-stat-label">Cursos con datos de evaluación</div></td>
-            </tr>
-        </table>
-        <p class="pdf-hint">Nota de examen posterior al curso de los participantes; no mide la satisfacción con el instructor.</p>
     </div>
 
     <div class="pdf-footer">CENGICAÑA &middot; Cengicursos &middot; Informe generado automáticamente</div>

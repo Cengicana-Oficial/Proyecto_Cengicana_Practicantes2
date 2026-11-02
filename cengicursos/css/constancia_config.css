@@ -1,0 +1,42 @@
+/* Configuración de la constancia de notas (constancia_notas_config.php). Todo bajo .cnc-page. */
+.cnc-page .cnc-card { margin: 0 0 16px; padding: 20px 22px; background: #fff; border: 1px solid var(--cg-line, #e0e5dc); border-radius: 14px; }
+.cnc-page h2 { margin: 0; font-size: 17px; font-weight: 700; color: #1f5632; }
+.cnc-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; margin-bottom: 14px; }
+.cnc-head span { font-size: 12.5px; color: #6b7a72; }
+.cnc-page label { display: flex; flex-direction: column; gap: 5px; margin: 0; font-size: 12.5px; font-weight: 700; color: #34413a; }
+.cnc-page label small { font-weight: 400; color: #6b7a72; }
+.cnc-page .form-control { border-radius: 9px; border-color: #c9d3c2; box-shadow: none; }
+.cnc-page .form-control:focus { border-color: #73BC25; box-shadow: 0 0 0 3px rgba(115, 188, 37, .2); }
+
+/* Botones (también en la banda verde) */
+.cnc-page .cnc-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 8px 16px; border: 1px solid #73BC25; border-radius: 9px; background: #73BC25; color: #fff; font-weight: 700; font-size: 13px; text-decoration: none; cursor: pointer; }
+.cnc-page .cnc-btn:hover { background: #5fa01b; border-color: #5fa01b; color: #fff; text-decoration: none; }
+.cnc-page .cnc-btn.is-claro { background: #FFCC00; border-color: #FFCC00; color: #3e3300; }
+.cnc-page .cnc-btn.is-claro:hover { background: #ffda45; color: #3e3300; }
+.cnc-page .cnc-btn.is-linea-claro { background: transparent; border-color: rgba(255, 255, 255, .55); color: #fff; }
+.cnc-page .cnc-btn.is-linea-claro:hover { background: rgba(255, 255, 255, .12); }
+
+/* Firmantes */
+.cnc-firmas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.cnc-firma { display: flex; flex-direction: column; gap: 10px; min-width: 0; margin: 0; padding: 14px; border: 1px solid #e0e5dc; border-top: 4px solid #73BC25; border-radius: 12px; }
+.cnc-firma legend { width: auto; margin: 0; padding: 0 6px; border: 0; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #6b7a72; }
+/* Así se verá en la constancia: imagen sobre la línea, nombre y cargo debajo */
+.cnc-firma-vista { padding: 12px 10px 10px; border: 1px dashed #CED2D5; border-radius: 10px; background: #fafbf9; text-align: center; }
+.cnc-firma-img { display: flex; align-items: flex-end; justify-content: center; height: 70px; }
+.cnc-firma-img img { max-height: 66px; max-width: 100%; }
+.cnc-firma-img span { align-self: center; font-size: 12px; color: #8a968f; line-height: 1.35; }
+.cnc-firma-linea { margin-top: 2px; padding-top: 5px; border-top: 1px solid #263238; }
+.cnc-firma-linea b { display: block; font-size: 12.5px; color: #1f2b24; }
+.cnc-firma-linea small { display: block; font-size: 11px; color: #3c4a40; line-height: 1.35; }
+.cnc-archivo { position: relative; flex-direction: row !important; align-items: center; justify-content: center; gap: 6px !important; padding: 8px 10px; border: 1px dashed #73BC25; border-radius: 9px; background: #f7fbf1; color: #2f6a12 !important; cursor: pointer; }
+.cnc-archivo input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.cnc-check { flex-direction: row !important; align-items: center; gap: 6px !important; font-weight: 500 !important; color: #b34a00 !important; }
+.cnc-check input { margin: 0; }
+.cnc-ayuda { margin: 14px 0 0; font-size: 12.5px; color: #55605a; }
+.cnc-ayuda .glyphicon { color: #73BC25; margin-right: 4px; }
+
+.cnc-dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 16px; }
+.cnc-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 20px; }
+.cnc-acciones small { color: #6b7a72; }
+
+@media (max-width: 1000px) { .cnc-firmas { grid-template-columns: 1fr; } .cnc-dos { grid-template-columns: 1fr; } }

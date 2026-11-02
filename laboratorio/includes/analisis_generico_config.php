@@ -212,7 +212,7 @@ function lab_generic_analysis_configs(): array
             'elemento' => 'Fibra',
             'table' => 'cana_fibra',
             'tipos' => ['canas', 'cana', 'canas', 'cana'],
-            'analisis' => ['Fibra', 'Fibra bruta'],
+            'analisis' => ['% Fibra', 'Fibra', 'Fibra bruta'],
             'fields' => [
                 ['name' => 'vd', 'label' => 'VD', 'type' => 'text'],
                 ['name' => 'brix_jugo', 'label' => 'Brix jugo'],

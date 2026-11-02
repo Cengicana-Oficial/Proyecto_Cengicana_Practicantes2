@@ -67,8 +67,9 @@ if (strtolower($rol['nombre_rol']) === 'superadmin') {
     roles_mostrar_aviso("Acción no permitida", "No se puede eliminar el rol Superadmin.");
 }
 
-$stmtUsers = $conn->prepare("SELECT id FROM usuarios WHERE rol_id = ?");
-$stmtUsers->execute([$id]);
+// Usado como rol de la plataforma o como rol en algun modulo (usuario_modulo.rol_id).
+$stmtUsers = $conn->prepare("SELECT id FROM usuarios WHERE rol_id = ? UNION SELECT usuario_id FROM usuario_modulo WHERE rol_id = ?");
+$stmtUsers->execute([$id, $id]);
 
 if ($stmtUsers->rowCount() > 0) {
     roles_mostrar_aviso(
@@ -77,24 +78,56 @@ if ($stmtUsers->rowCount() > 0) {
     );
 }
 
-try {
-    $stmtRM = $conn->prepare("SELECT * FROM rol_modulo WHERE rol_id = ?");
-    $stmtRM->execute([$id]);
-
-    if ($stmtRM->rowCount() > 0) {
-        roles_mostrar_aviso(
-            "No se puede eliminar",
-            "Este rol tiene módulos asignados. Quítalos antes de eliminarlo."
-        );
-    }
-} catch (Exception $e) {
+if (empty($_SESSION['roles_eliminar_csrf'])) {
+    $_SESSION['roles_eliminar_csrf'] = bin2hex(random_bytes(32));
 }
 
-$stmtPermisos = $conn->prepare("DELETE FROM rol_permiso WHERE rol_id = ?");
-$stmtPermisos->execute([$id]);
+// Con GET solo se confirma: el borrado va por POST con token (un enlace no puede borrar roles).
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    ?>
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Eliminar rol | CENGICAÑA</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="../assets/ingenios.css?v=<?= @filemtime(__DIR__ . '/../assets/ingenios.css') ?: '1' ?>">
+    </head>
+    <body>
+    <div class="ingenios-shell">
+        <a href="roles.php" class="btn-back">
+            <span class="material-symbols-outlined">arrow_back</span>
+            Volver a roles
+        </a>
+        <form method="POST" action="eliminar_rol.php?id=<?= (int) $rol['id'] ?>" class="confirm-card">
+            <div class="confirm-icon">
+                <span class="material-symbols-outlined">warning</span>
+            </div>
+            <h1>Eliminar rol</h1>
+            <p>Se eliminará el rol <?= htmlspecialchars($rol['nombre_rol']) ?> con sus permisos. Esta acción no se puede deshacer.</p>
+            <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['roles_eliminar_csrf']) ?>">
+            <button type="submit" class="btn-primary">Eliminar</button>
+            <a href="roles.php" class="btn-secondary">Cancelar</a>
+        </form>
+    </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
 
-$stmt = $conn->prepare("DELETE FROM roles WHERE id = ?");
-$stmt->execute([$id]);
+if (!is_string($_POST['csrf'] ?? null) || !hash_equals($_SESSION['roles_eliminar_csrf'], $_POST['csrf'])) {
+    roles_mostrar_aviso("Acción no permitida", "La sesión del formulario expiró. Vuelve a intentarlo.");
+}
+
+$conn->beginTransaction();
+// Los modulos del rol (rol_modulo) solo indican donde se ofrece: se borran con el rol.
+$conn->prepare("DELETE FROM rol_modulo WHERE rol_id = ?")->execute([$id]);
+$conn->prepare("DELETE FROM rol_permiso WHERE rol_id = ?")->execute([$id]);
+$conn->prepare("DELETE FROM roles WHERE id = ?")->execute([$id]);
+$conn->commit();
 
 header("Location: roles.php");
 exit;

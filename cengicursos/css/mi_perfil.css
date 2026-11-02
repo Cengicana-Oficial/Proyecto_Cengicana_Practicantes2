@@ -1,0 +1,107 @@
+/* Mi perfil del estudiante (mi_perfil.php). Todo bajo .mp-page. */
+.mp-page { color: #263238; }
+.mp-page .mp-card { margin: 0 0 16px; padding: 20px 22px; background: #fff; border: 1px solid var(--cg-line, #e0e5dc); border-radius: 14px; }
+.mp-page h2 { margin: 0; font-size: 17px; font-weight: 700; color: #1f5632; }
+.mp-page .mp-muted { color: #8a968f; font-weight: 500; }
+.mp-page .mp-nota { margin: 14px 0 0; font-size: 12.5px; color: #6b7a72; }
+.mp-page .mp-nota .glyphicon { color: #73BC25; margin-right: 4px; }
+
+/* Botones */
+.mp-page .mp-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid #73BC25; border-radius: 9px; background: #73BC25; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none; margin: 0; }
+.mp-page .mp-btn:hover { background: #5fa01b; border-color: #5fa01b; color: #fff; text-decoration: none; }
+.mp-page .mp-btn.is-sm { padding: 6px 11px; font-size: 12px; }
+.mp-page .mp-btn.is-linea { background: #fff; color: #1f5632; border-color: #CED2D5; }
+.mp-page .mp-btn.is-linea:hover { background: #f2f9e9; border-color: #73BC25; color: #1f5632; }
+.mp-page .mp-link { padding: 0; border: 0; background: none; color: #3e7119; font-size: 12px; font-weight: 600; cursor: pointer; }
+.mp-page .mp-link:hover { text-decoration: underline; }
+.mp-page .mp-btn:focus-visible, .mp-page .mp-link:focus-visible, .mp-filtros button:focus-visible { outline: 3px solid #FFCC00; outline-offset: 2px; }
+
+/* Tarjeta de perfil */
+.mp-perfil { display: flex; gap: 28px; align-items: flex-start; border-top: 4px solid #73BC25 !important; }
+.mp-foto-col { flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 170px; }
+.mp-foto-col form { margin: 0; }
+.mp-foto { display: grid; place-items: center; width: 148px; height: 148px; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, #1f5632, #4a8a22); box-shadow: 0 0 0 4px #fff, 0 0 0 7px #A3D300; }
+.mp-foto img { width: 100%; height: 100%; object-fit: cover; }
+.mp-foto span { color: #fff; font-family: 'Space Grotesk', sans-serif; font-size: 48px; font-weight: 700; }
+.mp-foto.is-subiendo { opacity: .65; }
+.mp-ayuda { color: #8a968f; font-size: 11px; }
+.mp-datos { flex: 1; min-width: 0; }
+.mp-datos h2 { font-size: 24px; font-family: 'Space Grotesk', sans-serif; }
+.mp-cargo { margin: 4px 0 2px; font-size: 14px; color: #3c4a40; }
+.mp-ingenio { margin: 0; font-size: 13px; font-weight: 700; color: #3e7119; }
+.mp-ficha { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid #edf1ea; }
+.mp-ficha dt { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #6b7a72; }
+.mp-ficha dd { margin: 2px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+
+/* Indicadores */
+.mp-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin: 0 0 16px; }
+.mp-kpi { padding: 12px 14px; background: #fff; border: 1px solid var(--cg-line, #e0e5dc); border-top: 4px solid #1f5632; border-radius: 12px; }
+.mp-kpi b { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 24px; line-height: 1.1; color: #1f5632; }
+.mp-kpi span { font-size: 12px; color: #55605a; }
+.mp-kpi.is-verde { border-top-color: #73BC25; }
+.mp-kpi.is-verde2 { border-top-color: #A3D300; }
+.mp-kpi.is-amarillo { border-top-color: #FFCC00; }
+.mp-kpi.is-naranja { border-top-color: #FF6B00; }
+.mp-kpi.is-gris { border-top-color: #CED2D5; }
+
+/* Encabezado de sección y filtros */
+.mp-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.mp-head h2 .glyphicon { color: #73BC25; margin-right: 6px; }
+.mp-head > span { padding: 2px 10px; border-radius: 20px; background: #f1f3f4; font-size: 12px; font-weight: 700; }
+.mp-filtros { display: flex; flex-wrap: wrap; gap: 6px; }
+.mp-filtros button { padding: 5px 12px; border: 1px solid #CED2D5; border-radius: 20px; background: #fff; color: #3c4a40; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.mp-filtros button b { margin-left: 3px; color: #6b7a72; }
+.mp-filtros button.is-active { background: #1f5632; border-color: #1f5632; color: #fff; }
+.mp-filtros button.is-active b { color: #D9F2A6; }
+
+/* Diplomas */
+.mp-diplomas { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.mp-diploma { display: flex; gap: 12px; padding: 14px; border: 1px solid #f0dcc8; border-left: 4px solid #FF6B00; border-radius: 12px; background: #fffaf5; }
+.mp-sello { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #ffe9d9; color: #c95400; font-size: 18px; }
+.mp-diploma strong { display: block; font-size: 14px; color: #263238; }
+.mp-diploma small { display: block; margin-top: 2px; color: #6b7a72; font-size: 12px; }
+.mp-diploma .mp-acciones { margin-top: 10px; }
+
+/* Historial */
+.mp-cursos { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.mp-curso { display: flex; flex-direction: column; padding: 14px 16px; border: 1px solid #e0e5dc; border-top: 4px solid #73BC25; border-radius: 12px; background: #fff; }
+.mp-curso[hidden] { display: none; }
+.mp-curso.is-proximo { border-top-color: #FFCC00; }
+.mp-curso.is-fin { border-top-color: #CED2D5; }
+.mp-curso-top { display: flex; flex-wrap: wrap; gap: 6px; }
+.mp-estado, .mp-res { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+.mp-estado.is-curso { background: #e3f3cf; color: #2f6a12; }
+.mp-estado.is-proximo { background: #fff5cc; color: #7a6000; }
+.mp-estado.is-fin { background: #f1f3f4; color: #55605a; }
+.mp-res.is-ok { background: #73BC25; color: #fff; }
+.mp-res.is-no { background: #ffe9d9; color: #b34a00; }
+.mp-res.is-dip { background: #ffe9d9; color: #c95400; }
+.mp-curso h3 { margin: 10px 0 2px; font-size: 15px; font-weight: 700; line-height: 1.35; color: #1f2b24; }
+.mp-sub { margin: 0; font-size: 12px; color: #6b7a72; }
+.mp-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: #3c4a40; }
+.mp-meta .glyphicon { color: #8a968f; margin-right: 3px; }
+.mp-indicadores { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 0; padding: 10px 0 0; border-top: 1px dashed #e0e5dc; }
+.mp-indicadores span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #6b7a72; }
+.mp-indicadores b { font-size: 15px; color: #1f5632; }
+.mp-indicadores b.is-ok { color: #2f6a12; }
+.mp-indicadores b.is-no { color: #b34a00; }
+.mp-indicadores b.mp-muted { font-size: 13px; }
+.mp-barra { display: block !important; height: 5px; margin-top: 4px; border-radius: 4px; background: #edf1ea; overflow: hidden; }
+.mp-barra i { display: block; height: 100%; border-radius: 4px; background: #73BC25; }
+.mp-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: auto; padding-top: 12px; }
+.mp-diploma .mp-acciones { padding-top: 0; }
+
+.mp-vacio { padding: 30px 16px; text-align: center; color: #55605a; }
+.mp-vacio > .glyphicon { font-size: 32px; color: #73BC25; }
+.mp-vacio h2 { margin: 10px 0 6px; }
+
+@media (max-width: 1000px) { .mp-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+    .mp-perfil { flex-direction: column; align-items: center; text-align: center; }
+    .mp-ficha { grid-template-columns: 1fr; text-align: left; }
+    .mp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .mp-cursos, .mp-diplomas { grid-template-columns: 1fr; }
+}
+/* El input de la foto va oculto dentro del botón (una regla global lo mostraba aunque tuviera hidden). */
+.mp-page input[data-mp-input] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); border: 0; opacity: 0; }
+.mp-page label.mp-btn { position: relative; }

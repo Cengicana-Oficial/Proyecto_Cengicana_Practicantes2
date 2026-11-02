@@ -1,0 +1,25 @@
+.inf-files{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.inf-files>div{padding:12px;background:#f8f9f9;border-radius:10px}.inf-files strong{display:block;margin-bottom:7px}.inf-files a{display:block;margin:4px 0;overflow-wrap:anywhere}.inf-meter{display:flex;gap:8px;align-items:center;min-width:110px}.inf-meter progress{width:85px;accent-color:#73bc25}.inf-own{background:#f6fbe066}.inf-pending{border:1px solid #ffc499;background:#fff0e6;border-radius:10px;padding:12px;margin:8px 0}.inf-resolved{border-color:#c7e4a8;background:#f1f8e9}.inf-area{display:grid;grid-template-columns:1.1fr 1fr 1fr auto;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #e2e4e6}.bib-badge.entregado{background:#edf6bf;color:#5a7500}.bib-badge.observado{background:#ffe1cc;color:#b34b00}.bib-badge.atendido{background:#fff5cc;color:#7a6100}.bib-badge.revisado{background:#e3f2d3;color:#3d6614}#inf-actions{justify-content:flex-end}#inf-content .bib-table{min-width:850px}#inf-content .bib-table td{max-width:250px;overflow-wrap:anywhere}@media(max-width:700px){.inf-files{grid-template-columns:1fr}.inf-area{grid-template-columns:1fr}.inf-area input{width:100%}}
+#inf-content .inf-report-table{table-layout:fixed;min-width:720px}#inf-content .inf-report-table td:first-child{overflow-wrap:normal;word-break:normal}.inf-report-table .bib-btn{max-width:100%;white-space:normal}.inf-download{max-width:100%;min-width:0}.inf-download span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.inf-download i{flex-shrink:0}.inf-files a.inf-download{display:flex}.inf-download-compact{gap:5px}.bib-log .inf-download{max-width:100%}
+/* Barra de cuatrimestres como pestañas */
+#inf-nav{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin-bottom:14px}
+#inf-nav select{max-width:110px;align-self:center}
+#inf-nav .bib-btn{flex:1 1 170px;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:9px 12px;white-space:normal;text-align:left;font-weight:700;font-size:12.5px}
+#inf-nav .bib-btn small{display:block;font-size:10.5px;font-weight:500;color:#5f666c;line-height:1.35}
+#inf-nav .bib-btn.primary small{color:#f1f8e9}
+#inf-nav .bib-btn[data-inf="annual"]{flex:0 0 auto;align-items:center}
+/* Franja de resumen del cuatrimestre */
+.inf-summary{gap:8px;padding:10px 12px;margin-bottom:12px;background:#f8f9f9;border:1px solid #e2e4e6;border-radius:12px;font-size:12px}
+.inf-summary>span{display:inline-flex;align-items:center;gap:4px}
+.inf-summary .bib-note{margin-left:auto}
+/* Tabla compacta */
+.inf-report-table .inf-col-area{width:31%}.inf-report-table .inf-col-poa{width:25%}.inf-report-table .inf-col-state{width:26%}.inf-report-table .inf-col-action{width:18%}
+.inf-report-table td{vertical-align:middle}
+.inf-docs{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.inf-docs span{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:999px;font-size:10.5px;font-weight:600;background:#f0f1f2;color:#8b9298}
+.inf-docs span.ok{background:#e3f2d3;color:#3d6614}
+.inf-docs i{font-size:12px}
+.inf-pend-count{display:flex;align-items:center;gap:3px;margin-top:4px;font-size:11px;font-weight:600;color:#b34b00}
+.inf-report-table .bib-menu .bib-btn{white-space:nowrap}
+.inf-report-table .bib-action-list .bib-btn{white-space:normal}
+.inf-report-table .inf-meter{min-width:0;width:100%}.inf-report-table .inf-meter progress{flex:1;width:auto;min-width:60px;max-width:160px}
+.bib-menu-main .bib-note{border-left:0}

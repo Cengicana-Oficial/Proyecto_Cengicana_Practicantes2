@@ -11,7 +11,7 @@ $db = conectar();
 	<meta name="viewport" content="width=device-widht, initial-scale=1">
 	<link href="css/bootstrap.min.css" rel="stylesheet">
 	<link href="css/bootstrap-theme.css" rel="stylesheet">
-	<link href="css/proyecto.css" rel="stylesheet">
+	<link href="css/proyecto.css?v=<?php echo (int) filemtime(__DIR__ . '/css/proyecto.css'); ?>" rel="stylesheet">
 	<script src="js/jquery-3.2.1.min.js"></script>
 	<script src="js/bootstrap.min.js"></script>
 	<meta content="text/html;" http-equiv="content-type" charset="utf-8">
@@ -60,9 +60,14 @@ $db = conectar();
 					<input id="archivo" accept=".csv,.xls,.xlsx" class="form-control" name="archivo" type="file" required />
 				</div>
 				</div>
-				<div class="alert alert-info">
-					<strong>Columnas:</strong> INGENIO, CUI, NOMBRE, PUESTO, AREA, CORREO_ELECTRONICO, GRADO_ACADEMICO, TELEFONO.
-					<a href="plantilla_participantes.csv" download>Descargar plantilla CSV</a>
+				<div class="cengi-upload-guide">
+					<strong>Formato requerido</strong>
+					<span>INGENIO, CUI, NOMBRE, PUESTO, AREA, CORREO_ELECTRONICO, GRADO_ACADEMICO, TELEFONO</span>
+					<small>Admite archivos CSV, XLS y XLSX. El INGENIO debe escribirse igual que en el directorio de ingenios. Reemplaza la fila de ejemplo por tus participantes.</small>
+					<span class="cengi-upload-template-group">
+						<a class="btn btn-default btn-sm cengi-upload-template" href="plantilla_participantes.php"><span class="glyphicon glyphicon-download-alt"></span> Plantilla Excel</a>
+						<a class="btn btn-default btn-sm cengi-upload-template" href="plantilla_participantes.csv" download><span class="glyphicon glyphicon-download-alt"></span> Plantilla CSV</a>
+					</span>
 				</div>
 
 				<div class="cengi-form-actions">

@@ -2,6 +2,7 @@
 require_once 'revisar_permisos.php';
 require_once 'conexion.php';
 require_once 'curso_form_helpers.php';
+require_once 'planificacion_helpers.php';
 
 cengi_require_admin('ver_cursos.php');
 
@@ -72,6 +73,8 @@ try {
     } else {
         cengi_asegurar_enlace_evaluacion_instructor($db, $cursoId, $datos['instructor_id']);
     }
+    // Si el curso viene de una planificación, el plan refleja los cambios (y quedan en su bitácora).
+    cengi_pp_actualizar_plan_desde_curso($db, $cursoId);
     $db->commit();
     header('Location: ver_cursos.php?mensaje=actualizado');
 } catch (Throwable $e) {

@@ -1,0 +1,454 @@
+/* Tema de marca para Planificación de cursos, Cursos, Calendario general,
+   Programa de sesiones, Participantes por curso y Seguimiento por curso.
+   Solo aplica con <body class="cengi-canvas cg-tema">; se carga después de
+   proyecto.css / planificacion.css / course_actions.css y sobrescribe colores
+   y acabados, no la estructura.
+   Paleta: verde #73BC25, verde secundario #A3D300, amarillo #FFCC00,
+   naranja #FF6B00, gris #CED2D5. */
+
+.cg-tema {
+    --cg-verde: #73BC25;
+    --cg-verde-strong: #5e9b1d;
+    --cg-verde-2: #A3D300;
+    --cg-amarillo: #FFCC00;
+    --cg-naranja: #FF6B00;
+    --cg-gris: #CED2D5;
+    --cg-deep: #1f5632;
+    --cg-verde-text: #3E7A12;
+    --cg-verde-soft: #EEF7E3;
+    --cg-verde2-text: #4d6400;
+    --cg-verde2-soft: #F4FAD9;
+    --cg-amarillo-text: #7A5C00;
+    --cg-amarillo-soft: #FFF7D6;
+    --cg-naranja-text: #B34E00;
+    --cg-naranja-soft: #FFEEE0;
+    --cg-gris-text: #5B6459;
+    --cg-gris-soft: #F1F3F4;
+    --cg-line: #E4E7E1;
+    --cg-franja: linear-gradient(90deg, #73BC25 0 25%, #A3D300 25% 50%, #FFCC00 50% 75%, #FF6B00 75% 100%);
+    --cg-banda:
+        radial-gradient(circle at 95% -40%, rgba(163, 211, 0, .42) 0, rgba(163, 211, 0, 0) 45%),
+        radial-gradient(circle at 60% 160%, rgba(115, 188, 37, .5) 0, rgba(115, 188, 37, 0) 50%),
+        #1f5632;
+    --cg-foco: 0 0 0 3px rgba(115, 188, 37, .22);
+}
+
+/* Fondo de página neutro: sin los degradados verdes de proyecto.css. */
+body.cengi-canvas.cg-tema {
+    background: #F5F6F7;
+}
+
+/* ================================================================ banda de navegación
+   La subnavegación de Planificar se presenta como banda verde con la franja de la paleta. */
+.cg-tema .pp-subnav {
+    position: relative;
+    gap: 4px;
+    margin-bottom: 18px;
+    padding: 10px 10px 15px;
+    overflow: hidden;
+    border-radius: 14px;
+    background: var(--cg-banda);
+    box-shadow: 0 10px 26px -12px rgba(31, 86, 50, .55);
+}
+.cg-tema .pp-subnav::after,
+.cg-tema .cengi-seg-hero::before,
+.cg-tema .cengi-courses-filter-card::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 5px;
+    background: var(--cg-franja);
+    pointer-events: none;
+}
+.cg-tema .pp-subnav a {
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: rgba(255, 255, 255, .86);
+    font-size: 12.5px;
+    transition: background-color .15s ease, color .15s ease;
+}
+.cg-tema .pp-subnav a .glyphicon { color: var(--cg-verde-2); }
+.cg-tema .pp-subnav a:hover { border: 0; background: rgba(255, 255, 255, .12); color: #fff; }
+.cg-tema .pp-subnav a.is-active {
+    border: 0;
+    background: var(--cg-verde);
+    color: #fff;
+    box-shadow: 0 6px 14px -6px rgba(0, 0, 0, .45);
+}
+.cg-tema .pp-subnav a.is-active .glyphicon { color: #fff; }
+
+/* ================================================================ tarjetas y KPIs */
+.cg-tema .pp-card,
+.cg-tema .cengi-courses-section,
+.cg-tema .cengi-participants-table-card {
+    border: 1px solid var(--cg-line);
+    border-radius: 12px;
+}
+.cg-tema .pp-card-head h3 { display: flex; align-items: center; gap: 8px; font-size: 14.5px; }
+.cg-tema .pp-card-head h3::before {
+    content: "";
+    flex: 0 0 4px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--cg-verde);
+}
+
+.cg-tema .cengi-kpi { padding: 16px 18px 18px; border-radius: 12px; }
+.cg-tema .cengi-kpi-bar { height: 4px; }
+.cg-tema .cengi-kpi-icon { width: 40px; height: 40px; border-radius: 11px; font-size: 16px; }
+.cg-tema .cengi-kpi-val { font-size: 28px; line-height: 1.1; }
+.cg-tema .cengi-kpi-label { color: #1E2A1A; font-size: 12.5px; font-weight: 700; }
+
+.cg-tema .pp-mini-stat {
+    position: relative;
+    padding: 12px 14px 12px 18px;
+    overflow: hidden;
+    border-radius: 12px;
+    box-shadow: var(--cengi-shadow);
+}
+.cg-tema .pp-mini-stat::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--cg-gris);
+}
+.cg-tema .pp-mini-stat:nth-child(5n+1)::before { background: var(--cg-verde); }
+.cg-tema .pp-mini-stat:nth-child(5n+2)::before { background: var(--cg-verde-2); }
+.cg-tema .pp-mini-stat:nth-child(5n+3)::before { background: var(--cg-amarillo); }
+.cg-tema .pp-mini-stat:nth-child(5n+4)::before { background: var(--cg-naranja); }
+.cg-tema .pp-mini-stat span { color: var(--cg-gris-text); font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; }
+.cg-tema .pp-mini-stat strong { font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 22px; }
+
+/* ================================================================ barras de filtros */
+.cg-tema .pp-toolbar select,
+.cg-tema .pp-toolbar input[type="search"],
+.cg-tema .pp-toolbar input[type="date"],
+.cg-tema .pp-toolbar input[type="month"],
+.cg-tema .cengi-courses-filters select,
+.cg-tema .cengi-course-search input {
+    height: 36px;
+    border: 1px solid var(--cg-gris);
+    border-radius: 9px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.cg-tema .pp-toolbar select:focus,
+.cg-tema .pp-toolbar input:focus,
+.cg-tema .cengi-courses-filters select:focus,
+.cg-tema .cengi-course-search input:focus,
+.cg-tema .form-control:focus {
+    border-color: var(--cg-verde) !important;
+    outline: 0;
+    box-shadow: var(--cg-foco) !important;
+}
+
+/* ================================================================ botones */
+.cg-tema .btn-primary {
+    background: linear-gradient(180deg, var(--cg-verde), var(--cg-verde-strong)) !important;
+    border-color: var(--cg-verde-strong) !important;
+    color: #fff !important;
+    font-weight: 700;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, .18);
+}
+.cg-tema .btn-primary:hover,
+.cg-tema .btn-primary:focus,
+.cg-tema .btn-primary:active {
+    background: var(--cg-deep) !important;
+    border-color: var(--cg-deep) !important;
+}
+.cg-tema .btn-primary[disabled],
+.cg-tema .btn-primary.disabled { background: var(--cg-gris) !important; border-color: var(--cg-gris) !important; color: #5B6459 !important; text-shadow: none; }
+.cg-tema .btn-success {
+    background: var(--cg-verde-strong) !important;
+    border-color: var(--cg-verde-strong) !important;
+}
+.cg-tema .btn-success:hover,
+.cg-tema .btn-success:focus { background: var(--cg-deep) !important; border-color: var(--cg-deep) !important; }
+.cg-tema .btn-default { border-color: var(--cg-gris) !important; }
+.cg-tema .btn-default:hover,
+.cg-tema .btn-default:focus {
+    border-color: var(--cg-verde) !important;
+    background: var(--cg-verde-soft) !important;
+    color: var(--cg-deep) !important;
+}
+.cg-tema .btn:focus-visible { box-shadow: var(--cg-foco) !important; }
+
+.cg-tema .pp-link { color: var(--cg-verde-text); text-decoration-color: rgba(115, 188, 37, .5); text-underline-offset: 2px; }
+.cg-tema .pp-link:hover { color: var(--cg-deep); text-decoration-color: currentColor; }
+
+/* ================================================================ tablas */
+.cg-tema .cengi-org-table th,
+.cg-tema .cengi-courses-table th {
+    background: #F7F9F4;
+    border-bottom: 2px solid var(--cg-gris);
+    color: #3c5245;
+}
+.cg-tema .table > thead > tr > th {
+    background: #F7F9F4 !important;
+    border-bottom: 2px solid var(--cg-gris) !important;
+    color: #3c5245 !important;
+}
+.cg-tema .cengi-org-table tbody tr:hover > td,
+.cg-tema .cengi-courses-table tbody tr:hover > td { background: #FAFCF6; }
+.cg-tema .cengi-org-table tbody tr:hover > td:first-child,
+.cg-tema .cengi-courses-table tbody .cengi-course-row:hover > td:first-child { box-shadow: inset 3px 0 0 var(--cg-verde); }
+.cg-tema .pp-empty,
+.cg-tema .cengi-courses-empty { color: var(--cg-gris-text); }
+
+/* ================================================================ estados (badges y chips) */
+.cg-tema .cengi-status-badge.is-active,
+.cg-tema .cengi-status-badge.is-approved { border-color: #CFE6B4; background: var(--cg-verde-soft); color: var(--cg-verde-text); }
+.cg-tema .cengi-status-badge.is-active i,
+.cg-tema .cengi-status-badge.is-approved i { background: var(--cg-verde); }
+.cg-tema .cengi-status-badge.is-pending { border-color: #F5E39A; background: var(--cg-amarillo-soft); color: var(--cg-amarillo-text); }
+.cg-tema .cengi-status-badge.is-pending i { background: var(--cg-amarillo); }
+.cg-tema .cengi-status-badge.is-upcoming { border-color: #F5E39A; background: #FFFBEA; color: var(--cg-amarillo-text); }
+.cg-tema .cengi-status-badge.is-upcoming i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--cg-amarillo); }
+.cg-tema .cengi-status-badge.is-rejected { border-color: #FFD2B0; background: var(--cg-naranja-soft); color: var(--cg-naranja-text); }
+.cg-tema .cengi-status-badge.is-rejected i { background: var(--cg-naranja); }
+.cg-tema .cengi-status-badge.is-running { border-color: #DCEF9A; background: var(--cg-verde2-soft); color: var(--cg-verde2-text); }
+.cg-tema .cengi-status-badge.is-running i { background: var(--cg-verde-2); }
+.cg-tema .cengi-status-badge.is-finished,
+.cg-tema .cengi-status-badge.is-neutral { border-color: var(--cg-gris); background: var(--cg-gris-soft); color: var(--cg-gris-text); }
+.cg-tema .cengi-status-badge.is-finished i,
+.cg-tema .cengi-status-badge.is-neutral i { background: #9AA39C; }
+
+.cg-tema .pp-chip { padding: 3px 9px; }
+.cg-tema .pp-chip.is-ok { background: var(--cg-verde-soft); color: var(--cg-verde-text); }
+.cg-tema .pp-chip.is-yellow { background: var(--cg-amarillo-soft); color: var(--cg-amarillo-text); }
+.cg-tema .pp-chip.is-warn { background: var(--cg-naranja-soft); color: var(--cg-naranja-text); }
+
+/* ================================================================ avance */
+.cg-tema .pp-prog-track { height: 7px; background: var(--cg-gris-soft); box-shadow: inset 0 0 0 1px #E1E4E6; }
+.cg-tema .pp-prog-track span { border-radius: 99px; background: linear-gradient(90deg, var(--cg-verde), var(--cg-verde-2)); }
+.cg-tema .pp-prog.is-incomplete .pp-prog-track span { background: var(--cg-amarillo); }
+.cg-tema .pp-prog.is-over .pp-prog-track span { background: var(--cg-naranja); }
+.cg-tema .pp-sem .pp-prog-track span { background: var(--pp-sem, var(--cg-verde)); }
+.cg-tema .cengi-course-progress { height: 7px; background: var(--cg-gris-soft); }
+.cg-tema .cengi-course-progress > span { background: linear-gradient(90deg, var(--cg-verde), var(--cg-verde-2)); }
+
+/* ================================================================ avisos */
+.cg-tema .cengi-feedback { border-color: #CFE6B4; border-left-color: var(--cg-verde); background: var(--cg-verde-soft); }
+.cg-tema .cengi-feedback-icon { background: var(--cg-verde); color: #fff; }
+.cg-tema .cengi-feedback.is-warning { border-color: #F5E39A; border-left-color: var(--cg-amarillo); background: var(--cg-amarillo-soft); color: #5f4700; }
+.cg-tema .cengi-feedback.is-warning .cengi-feedback-icon { background: var(--cg-amarillo); color: #3b2f00; }
+.cg-tema .cengi-feedback.is-error .cengi-feedback-icon { background: var(--cengi-danger); color: #fff; }
+
+.cg-tema .pp-alert .pp-dot { box-shadow: 0 0 0 3px rgba(255, 204, 0, .22); background: var(--cg-amarillo); }
+.cg-tema .pp-alert.is-warn .pp-dot { box-shadow: 0 0 0 3px rgba(255, 107, 0, .18); background: var(--cg-naranja); }
+.cg-tema .pp-alert.is-danger .pp-dot { box-shadow: 0 0 0 3px rgba(228, 84, 74, .18); }
+
+.cg-tema .pp-ses-aviso { border-color: #F5E39A; border-left: 5px solid var(--cg-amarillo); background: var(--cg-amarillo-soft); }
+.cg-tema .pp-ses-aviso > .glyphicon { color: var(--cg-amarillo-text); }
+.cg-tema .pp-ses-aviso.is-ok { border-color: #CFE6B4; border-left-color: var(--cg-verde); background: var(--cg-verde-soft); }
+.cg-tema .pp-ses-aviso.is-ok > .glyphicon { color: var(--cg-verde); }
+.cg-tema .pp-ses-correr { border-color: #F5E39A; background: var(--cg-amarillo-soft); }
+.cg-tema .pp-ses-programar { border-color: var(--cg-verde) !important; color: var(--cg-verde-text) !important; }
+.cg-tema .pp-ses-programar:hover { background: var(--cg-verde) !important; color: #fff !important; }
+.cg-tema .pp-ses-num b { color: var(--cg-verde-text); font-family: 'Space Grotesk', 'Inter', sans-serif; }
+
+.cg-tema .alert-success { border-color: #CFE6B4; border-left: 5px solid var(--cg-verde); background: var(--cg-verde-soft); color: var(--cg-deep); }
+.cg-tema .alert-danger { border-left: 5px solid var(--cengi-danger); }
+
+/* ================================================================ Planificación de cursos */
+.cg-tema .pp-estado-chip { height: 30px; padding: 0 12px; border-color: var(--cg-gris); }
+.cg-tema .pp-estado-chip[class*="is-"]::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--cg-gris);
+}
+.cg-tema .pp-estado-chip.is-aprobado::before { background: var(--cg-verde); }
+.cg-tema .pp-estado-chip.is-reprogramado::before { background: var(--cg-amarillo); }
+.cg-tema .pp-estado-chip.is-ejecucion::before { background: var(--cg-verde-2); }
+.cg-tema .pp-estado-chip.is-cancelado::before { background: var(--cg-naranja); }
+.cg-tema .pp-estado-chip.is-active::before { box-shadow: 0 0 0 2px #fff; }
+.cg-tema .pp-estado-chip:hover { border-color: var(--cg-verde); background: var(--cg-verde-soft); }
+.cg-tema .pp-estado-chip.is-active { border-color: var(--cg-deep); background: var(--cg-deep); color: #fff; }
+
+.cg-tema .pp-planes .pp-mes th { background: #F4F8EE !important; box-shadow: inset 4px 0 0 var(--cg-verde); }
+.cg-tema .pp-mes-toggle { color: var(--cg-deep); font-size: 12.5px; letter-spacing: .02em; text-transform: uppercase; }
+.cg-tema .pp-mes-toggle .glyphicon { color: var(--cg-verde); }
+.cg-tema .pp-mes-n { padding: 1px 8px; border-radius: 99px; background: #fff; color: var(--cg-gris-text); font-size: 11px; text-transform: none; letter-spacing: 0; }
+
+.cg-tema .pp-alertas-resumen .pp-chip { cursor: pointer; transition: transform .12s ease; }
+.cg-tema .pp-alertas-resumen .pp-chip:hover { transform: translateY(-1px); }
+
+/* ================================================================ Calendario general */
+.cg-tema .pp-cal-grid { gap: 6px; }
+.cg-tema .pp-cal-dow { color: var(--cg-gris-text); font-size: 11px; letter-spacing: .06em; }
+.cg-tema .pp-cal-day { border-color: var(--cg-line); border-radius: 10px; transition: border-color .15s ease, box-shadow .15s ease; }
+.cg-tema .pp-cal-day:hover { border-color: var(--cg-verde); box-shadow: 0 4px 12px -6px rgba(31, 86, 50, .35); text-decoration: none; }
+.cg-tema .pp-cal-day.is-weekend { background: #F8F9F9; }
+.cg-tema .pp-cal-day.is-today { border-color: var(--cg-verde); box-shadow: inset 0 0 0 1px var(--cg-verde); }
+.cg-tema .pp-cal-day.is-today .pp-cal-n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--cg-verde);
+    color: #fff;
+}
+.cg-tema .pp-cal-day.is-selected { border-color: var(--cg-deep); background: var(--cg-verde-soft); }
+.cg-tema .pp-cal-ev { padding: 1px 6px; border-left: 3px solid transparent; border-radius: 4px; }
+.cg-tema .pp-cal-ev.is-inicio,
+.cg-tema .pp-cal-legend i.is-inicio { border-left-color: var(--cg-verde); background: #DDEFC8; }
+.cg-tema .pp-cal-ev.is-fin,
+.cg-tema .pp-cal-legend i.is-fin { border-left-color: var(--cg-naranja); background: #FFDCC2; }
+.cg-tema .pp-cal-ev.is-sesion,
+.cg-tema .pp-cal-legend i.is-sesion { border-left-color: var(--cg-amarillo); background: #FFF0B3; }
+.cg-tema .pp-cal-ev.is-conflicto,
+.cg-tema .pp-cal-legend i.is-conflicto { border-left-color: #E4544A; background: #F9D3CF; }
+.cg-tema .pp-cal-legend i { width: 12px; border-left: 3px solid transparent; }
+.cg-tema .pp-cal-more { color: var(--cg-verde-text); font-weight: 700; }
+.cg-tema .pp-cal-mes { min-width: 170px; color: var(--cg-deep); font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 17px; text-align: center; }
+.cg-tema .pp-day-item { padding: 10px 0 10px 12px; border-left: 3px solid var(--cg-gris); margin-bottom: 4px; }
+.cg-tema .pp-day-item + .pp-day-item { border-top: 0; }
+.cg-tema .pp-sem { padding: 12px; margin-bottom: 8px; border: 1px solid var(--cg-line); border-left: 4px solid var(--pp-sem, var(--cg-verde)); border-radius: 10px; transition: box-shadow .15s ease; }
+.cg-tema .pp-sem:last-child { margin-bottom: 0; border-bottom: 1px solid var(--cg-line); }
+.cg-tema .pp-sem:hover { box-shadow: 0 6px 14px -8px rgba(31, 86, 50, .4); }
+.cg-tema .pp-mini-row b { color: var(--cg-naranja-text); }
+
+/* ================================================================ Cursos (ver_cursos.php) */
+.cg-tema .cengi-courses-filter-card {
+    position: relative;
+    border: 0;
+    border-radius: 14px;
+    background: var(--cg-banda);
+    box-shadow: 0 10px 26px -12px rgba(31, 86, 50, .55);
+}
+.cg-tema .cengi-courses-filters { padding: 16px 18px 21px; }
+.cg-tema .cengi-courses-filters select,
+.cg-tema .cengi-course-search input { border-color: rgba(255, 255, 255, .3); background-color: #fff; }
+.cg-tema .cengi-course-search .glyphicon { color: var(--cg-verde-strong); }
+.cg-tema .cengi-filter-submit { border-color: var(--cg-amarillo); background: var(--cg-amarillo); color: #3b2f00; }
+.cg-tema .cengi-filter-submit:hover { border-color: #ffd633; background: #ffd633; color: #3b2f00; }
+.cg-tema .cengi-filter-clear { border-color: rgba(255, 255, 255, .35); background: transparent; color: #fff; }
+.cg-tema .cengi-filter-clear:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+.cg-tema .cengi-course-bulk { border-color: rgba(255, 255, 255, .35) !important; background: rgba(255, 255, 255, .1) !important; color: #fff !important; }
+.cg-tema .cengi-course-bulk:hover,
+.cg-tema .cengi-course-bulk:focus { border-color: #fff !important; background: rgba(255, 255, 255, .2) !important; color: #fff !important; }
+.cg-tema .cengi-course-create { border-color: var(--cg-verde) !important; background: var(--cg-verde) !important; }
+.cg-tema .cengi-course-create:hover { border-color: #fff !important; background: var(--cg-verde-strong) !important; }
+
+.cg-tema .cengi-courses-tabs { gap: 4px; border-bottom: 2px solid var(--cg-gris); }
+.cg-tema .cengi-courses-tab { border-radius: 10px 10px 0 0; }
+.cg-tema .cengi-courses-tab:hover { background: var(--cg-verde-soft); color: var(--cg-deep); }
+.cg-tema .cengi-courses-tab.is-active { box-shadow: inset 0 4px 0 var(--cg-verde); color: var(--cg-deep); }
+.cg-tema .cengi-courses-tab b { background: var(--cg-verde-soft); color: var(--cg-verde-text); }
+.cg-tema .cengi-courses-tab.is-active b { background: var(--cg-verde); color: #fff; }
+.cg-tema .cengi-courses-tab b.is-convocatoria { background: var(--cg-amarillo-soft); color: var(--cg-amarillo-text); }
+.cg-tema .cengi-courses-tab.is-active b.is-convocatoria { background: var(--cg-amarillo); color: #3b2f00; }
+
+.cg-tema .course-compact-code {
+    display: table;
+    margin-bottom: 3px;
+    padding: 1px 7px;
+    border-radius: 6px;
+    background: var(--cg-verde-soft);
+    color: var(--cg-verde-text);
+    font-size: 10.5px;
+    font-weight: 700;
+}
+.cg-tema .cengi-course-expand[aria-expanded="true"] { background: var(--cg-verde); color: #fff; }
+.cg-tema .cengi-course-detail-row > td { background: #FAFCF6; box-shadow: inset 3px 0 0 var(--cg-verde); }
+.cg-tema .cengi-convocatorias-head { background: var(--cg-amarillo-soft); }
+.cg-tema .cengi-action-btn.is-view:hover,
+.cg-tema .cengi-action-btn.is-edit:hover { border-color: var(--cg-verde); background: var(--cg-verde-soft); color: var(--cg-deep); }
+.cg-tema .cengi-action-btn.is-copy-link:hover { border-color: var(--cg-amarillo); background: var(--cg-amarillo-soft); color: var(--cg-amarillo-text); }
+
+/* ================================================================ Participantes y Seguimiento por curso */
+.cg-tema .cengi-seg-hero { border-radius: 16px; padding-bottom: 29px; }
+.cg-tema .cengi-seg-hero::before { z-index: 2; }
+.cg-tema .cengi-seg-eyebrow,
+.cg-tema .cengi-seg-meta .glyphicon { color: var(--cg-verde-2); }
+.cg-tema .cengi-seg-hero-link { background: var(--cg-amarillo); color: #3b2f00; }
+.cg-tema .cengi-seg-hero-link:hover,
+.cg-tema .cengi-seg-hero-link:focus { background: #ffd633; color: #3b2f00; }
+.cg-tema .cengi-seg-back:hover { background: rgba(163, 211, 0, .25); }
+
+.cg-tema .cengi-seg-kpi { --kpi: var(--cg-deep); --kpi-soft: var(--cg-verde-soft); position: relative; overflow: hidden; border-radius: 14px; }
+.cg-tema .cengi-seg-kpi::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--kpi-line, var(--cg-deep)); }
+.cg-tema .cengi-seg-kpi.is-ok { --kpi: var(--cg-verde-text); --kpi-soft: var(--cg-verde-soft); --kpi-line: var(--cg-verde); }
+.cg-tema .cengi-seg-kpi.is-info { --kpi: var(--cg-verde2-text); --kpi-soft: var(--cg-verde2-soft); --kpi-line: var(--cg-verde-2); }
+.cg-tema .cengi-seg-kpi.is-gold { --kpi: var(--cg-amarillo-text); --kpi-soft: var(--cg-amarillo-soft); --kpi-line: var(--cg-amarillo); }
+.cg-tema .cengi-seg-kpi.is-violet { --kpi: var(--cg-naranja-text); --kpi-soft: var(--cg-naranja-soft); --kpi-line: var(--cg-naranja); }
+.cg-tema .cengi-seg-kpi-bar { background: var(--cg-gris-soft); }
+.cg-tema .cengi-seg-kpi-bar > span { background: var(--kpi-line, var(--cg-verde)); }
+
+.cg-tema .cengi-seg-tabs { border-color: var(--cg-line); border-radius: 14px; background: #fff; }
+.cg-tema .cengi-seg-tab:hover,
+.cg-tema .cengi-seg-tab:focus { background: var(--cg-verde-soft); }
+.cg-tema .cengi-seg-tab .glyphicon { color: var(--cg-verde); }
+.cg-tema .cengi-seg-tab b { background: var(--cg-verde-soft); color: var(--cg-verde-text); }
+.cg-tema .cengi-seg-tab.is-active { background: var(--cg-deep); box-shadow: inset 0 -3px 0 var(--cg-verde-2), 0 6px 14px -6px rgba(31, 86, 50, .6); }
+.cg-tema .cengi-seg-tab.is-active .glyphicon { color: var(--cg-amarillo); }
+
+.cg-tema .cengi-part-estados { background: var(--cg-gris-soft); }
+.cg-tema .cengi-part-estado.is-active b { background: var(--cg-verde); }
+.cg-tema .cengi-part-busqueda-aviso { border-left: 4px solid var(--cg-amarillo); background: var(--cg-amarillo-soft); color: var(--cg-amarillo-text); }
+
+.cg-tema .panel.panel-success { border-radius: 12px; overflow: hidden; }
+.cg-tema .panel.panel-success > .panel-heading { border-bottom: 2px solid var(--cg-gris) !important; }
+.cg-tema .panel.panel-success > .panel-heading .panel-title { display: flex; align-items: center; gap: 8px; }
+.cg-tema .panel.panel-success > .panel-heading .panel-title::before {
+    content: "";
+    flex: 0 0 4px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--cg-verde);
+}
+.cg-tema .cengi-seg-modulo-num { background: var(--cg-verde); color: #fff; }
+.cg-tema .cengi-seg-modulo:hover { border-color: var(--cg-verde); }
+
+/* ================================================================ modales */
+.cg-tema .modal-header { border-bottom: 3px solid var(--cg-verde); }
+
+/* ================================================================ responsive */
+@media (max-width: 767px) {
+    .cg-tema .pp-subnav { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .cg-tema .pp-subnav a { flex: 0 0 auto; }
+    .cg-tema .cengi-seg-hero { padding-bottom: 26px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cg-tema .pp-subnav a,
+    .cg-tema .pp-cal-day,
+    .cg-tema .pp-sem,
+    .cg-tema .pp-alertas-resumen .pp-chip { transition: none; }
+}
+/* Encabezado común para los procesos académicos con administración. */
+.ins-process-header { padding:20px 22px; margin-bottom:16px; border-radius:12px; color:#fff; background:linear-gradient(115deg,#244e35,#4c7934); border-bottom:4px solid #b4cf3c; }
+.ins-process-header small { font-size:10px; letter-spacing:.08em; color:#d4eaaa; }
+.ins-process-header h1 { margin:6px 0 8px; font-size:24px; font-weight:700; }
+.ins-process-header p { margin:0; color:#eef4e5; font-size:12px; line-height:1.6; }
+.ins-financial-heading { color:#244e35; font-size:18px; margin:22px 0 14px; }
+
+/* Revisión de pagos propios (pagos_revision_capacitacion.php). */
+.pp-revision { overflow: hidden; }
+.pp-revision .pp-card-head { display: block; padding: 18px 20px 6px; border-bottom: 0; }
+.pp-revision .pp-card-head h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; color: #1E2A1A; font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 16px; font-weight: 700; }
+.pp-revision .pp-card-head h3::before { content: ""; flex: 0 0 4px; height: 18px; border-radius: 2px; background: #73BC25; }
+.pp-revision-count { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; padding: 0 8px; border-radius: 11px; background: #EEF7E3; color: #3E7A12; font-size: 12px; font-weight: 700; }
+.pp-revision .pp-card-head .pp-sub { display: block; max-width: 900px; margin: 0 0 4px 12px; color: #5B6459; font-size: 12.5px; line-height: 1.55; }
+.pp-revision-search { display: block; padding: 10px 20px 16px; border-bottom: 1px solid #E4E7E1; }
+.pp-revision-search label { display: block; margin: 0 0 6px; color: #1E2A1A; font-size: 12px; font-weight: 700; }
+.pp-revision-search-row { display: flex; gap: 8px; max-width: 560px; }
+.pp-revision-search-row input[type="search"] { flex: 1 1 auto; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid #CED2D5; border-radius: 9px; font-size: 13px; }
+.pp-revision-search-row input[type="search"]:focus { border-color: #73BC25; outline: 0; box-shadow: 0 0 0 3px rgba(115, 188, 37, .2); }
+.pp-revision-search-row .btn { height: 36px; border-radius: 9px; background: #73BC25; border-color: #73BC25; font-weight: 700; }
+.pp-revision-search-row .btn:hover, .pp-revision-search-row .btn:focus { background: #5FA01C; border-color: #5FA01C; }
+.pp-revision .pp-table-wrap .cengi-org-table { margin: 0; }
+@media (max-width: 600px) {
+    .pp-revision-search-row { flex-direction: column; }
+    .pp-revision-search-row .btn { width: 100%; }
+}

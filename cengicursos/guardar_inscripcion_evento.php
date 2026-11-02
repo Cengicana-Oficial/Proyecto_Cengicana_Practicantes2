@@ -7,7 +7,7 @@ function cengi_inscripcion_evento_redirigir($token, $resultado, $mensaje = '', $
     // Ante un error se conservan los datos escritos (excepto el archivo) para que
     // inscripcion_evento.php vuelva a llenar el formulario.
     if ($resultado === 'error') {
-        $_SESSION['cengi_ins_evt_previo'] = array_intersect_key($_POST, array_flip(['nombre', 'cui', 'correo', 'telefono', 'institucion', 'pago_boleta', 'pago_fecha', 'pago_banco', 'pago_monto']));
+        $_SESSION['cengi_ins_evt_previo'] = array_intersect_key($_POST, array_flip(['nombre', 'cui', 'correo', 'telefono', 'institucion', 'pago_boleta', 'pago_fecha', 'pago_banco', 'pago_monto', 'origen', 'sin_comprobante']));
     }
     $parametros = ['token' => $token, 'resultado' => $resultado];
     if ($mensaje !== '') {
@@ -66,7 +66,7 @@ $_SESSION['cengi_ins_evt_nombre'] = $nombre;
 
 $db = conectar();
 $stmtEvento = $db->prepare("
-    SELECT id, nombre, modalidad_pago, cupo
+    SELECT id, nombre, modalidad_pago, cupo, costo, costo_usd, permitir_sin_comprobante, fecha, hora, lugar
     FROM eventos
     WHERE token_inscripcion = ?
       AND estado NOT IN ('Finalizado', 'Cancelado')
@@ -90,7 +90,7 @@ $condicionCui = $cui !== ''
     ? " OR COALESCE(NULLIF(ep.cui_invitado, ''), NULLIF(p.cui_participantes, '')) = ?"
     : '';
 $stmtDuplicado = $db->prepare("
-    SELECT ep.codigo_qr, ep.pagado
+    SELECT ep.codigo_qr, ep.confirmado_en
     FROM evento_participantes ep
     LEFT JOIN participantes p ON p.id = ep.participante_id
     WHERE ep.evento_id = ?
@@ -109,7 +109,7 @@ $duplicado = $stmtDuplicado->fetch(PDO::FETCH_ASSOC);
 if ($duplicado) {
     // Si el evento es pagado y ese registro previo aun no fue verificado, no se le
     // muestra el codigo QR (mismo criterio que una inscripcion nueva pendiente de pago).
-    if ($eventoPagado && !(int) $duplicado['pagado']) {
+    if (!$duplicado['confirmado_en']) {
         cengi_inscripcion_evento_redirigir($token, 'pendiente');
     }
     cengi_inscripcion_evento_redirigir($token, 'existente', '', (string) $duplicado['codigo_qr']);
@@ -139,7 +139,15 @@ $pagoBanco = null;
 $pagoFecha = null;
 $pagoMonto = null;
 
-if ($eventoPagado) {
+// Quien paga desde el extranjero (solo si el evento tiene costo en US$).
+$pagoOrigen = $eventoPagado && (float) $evento['costo_usd'] > 0 && ($_POST['origen'] ?? '') === 'extranjero' ? 'extranjero' : 'nacional';
+// Si el evento lo permite, la persona puede reservar su lugar y enviar el comprobante
+// despues (queda 'pendiente' y Administracion le da seguimiento con recordatorios).
+$archivoEnviado = isset($_FILES['recibo_pago']) && (int) $_FILES['recibo_pago']['error'] !== UPLOAD_ERR_NO_FILE;
+$sinComprobante = $eventoPagado && (int) $evento['permitir_sin_comprobante'] === 1 && (!empty($_POST['sin_comprobante'])
+    || (!$archivoEnviado && trim((string) ($_POST['pago_boleta'] ?? '')) === '' && trim((string) ($_POST['pago_monto'] ?? '')) === ''));
+
+if ($eventoPagado && !$sinComprobante) {
     $pagoBoleta = trim((string) ($_POST['pago_boleta'] ?? ''));
     $pagoBanco = trim((string) ($_POST['pago_banco'] ?? ''));
     $pagoFecha = trim((string) ($_POST['pago_fecha'] ?? ''));
@@ -212,18 +220,21 @@ if ($participanteId === null) {
 try {
     // El codigo QR se genera siempre (codigo_qr es NOT NULL/UNIQUE), incluso para un
     // evento pagado: se guarda como identificador interno del participante, pero no se
-    // muestra en el redirect ni se envia gafete hasta que el pago quede verificado
-    // (evento_participantes.pagado = 1, panel de administracion).
+    // muestra ni se envia gafete hasta que Administracion valida el pago y Capacitacion
+    // confirma la participacion (confirmado_en, Control QR de eventos). En un evento
+    // gratuito la participacion queda confirmada de inmediato.
     $codigo = cengi_evento_generar_codigo_qr($db);
     $stmt = $db->prepare("
         INSERT INTO evento_participantes
           (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, telefono_invitado,
-           institucion_invitado, ingenio_id, codigo_qr, recibo_pago, pago_boleta, pago_banco, pago_fecha, pago_monto)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           institucion_invitado, ingenio_id, codigo_qr, recibo_pago, pago_boleta, pago_banco, pago_fecha, pago_monto,
+           pago_estado, pago_origen, confirmado_en)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $stmt->execute([
         (int) $evento['id'], $participanteId, $nombre, $cui, $correo, $telefono,
         $institucion, $ingenioId, $codigo, $reciboPago, $pagoBoleta, $pagoBanco, $pagoFecha, $pagoMonto,
+        $eventoPagado ? ($sinComprobante ? 'pendiente' : 'por_validar') : null, $pagoOrigen, $eventoPagado ? null : date('Y-m-d H:i:s'),
     ]);
 } catch (Throwable $e) {
     error_log('Error en inscripción pública al evento ' . $evento['id'] . ': ' . $e->getMessage());
@@ -231,8 +242,26 @@ try {
 }
 
 if ($eventoPagado) {
-    cengi_inscripcion_evento_redirigir($token, 'pendiente');
+    // Acuse por correo (queda en Comunicaciones): estado del tramite y, si aun no envio el
+    // comprobante, como pagar y a quien pedir los datos de la cuenta.
+    try {
+        require_once __DIR__ . '/planificacion_helpers.php';
+        $usd = $pagoOrigen === 'extranjero';
+        $costoTexto = ($usd ? 'US$' : 'Q') . number_format((float) ($usd ? $evento['costo_usd'] : $evento['costo']), 2, '.', ',');
+        $soporte = cengi_evento_soporte_pagos($db);
+        $contacto = implode("\n", array_filter([$soporte['correo'] ? 'Correo: ' . $soporte['correo'] : '', $soporte['whatsapp'] ? 'WhatsApp: ' . $soporte['whatsapp'] : '', $soporte['horario'] ? 'Horario: ' . $soporte['horario'] : '']));
+        $mensajeAcuse = "Hola {nombre}:\n\nRecibimos tu inscripción a {$evento['nombre']}.\n\n"
+            . ($sinComprobante
+                ? "Tu lugar queda reservado mientras realizas el pago ({$costoTexto}). Solicita los datos de la cuenta a {$soporte['nombre']} y envía tu comprobante (foto o PDF con número de boleta, fecha y monto).\n{$contacto}\n\n"
+                : "Administración revisará tu comprobante de pago ({$costoTexto}). ")
+            . "Cuando el pago quede validado confirmaremos tu participación y te enviaremos tu gafete con el código QR de ingreso.\n\nCENGICAÑA nunca te pedirá pagar a cuentas personales.\n\nCoordinación de Capacitación — CENGICAÑA";
+        cengi_pp_enviar_comunicacion($db, ['categoria' => 'Eventos', 'origen' => 'sistema', 'referencia' => 'evento:' . $evento['id'],
+            'asunto' => 'Inscripción recibida: ' . $evento['nombre'], 'mensaje' => $mensajeAcuse, 'usuario' => 'Formulario público'],
+            [['nombre' => $nombre, 'correo' => $correo]]);
+    } catch (Throwable $e) {
+        error_log('Acuse de inscripción al evento ' . $evento['id'] . ': ' . $e->getMessage());
+    }
+    cengi_inscripcion_evento_redirigir($token, $sinComprobante ? 'reservado' : 'pendiente');
 }
 
 cengi_inscripcion_evento_redirigir($token, 'ok', '', $codigo);
-

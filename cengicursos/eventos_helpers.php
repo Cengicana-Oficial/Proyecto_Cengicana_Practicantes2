@@ -24,6 +24,95 @@ if (!defined('CENGI_EVENTO_CORREO_PAGO')) {
     define('CENGI_EVENTO_CORREO_PAGO', 'aadmon@cengicana.org');
 }
 
+/**
+ * Contacto de soporte de pagos (formulario publico, recordatorios de pago y gafetes):
+ * lo edita Administracion desde Control QR de eventos (tabla eventos_config); si aun no
+ * se configuro se usan las constantes anteriores.
+ */
+function cengi_evento_soporte_pagos(PDO $db)
+{
+    $soporte = [
+        'nombre' => CENGI_EVENTO_SOPORTE_PAGO_NOMBRE,
+        'whatsapp' => preg_match('/\d{8}/', preg_replace('/\D/', '', CENGI_EVENTO_TELEFONO_PAGO)) ? CENGI_EVENTO_TELEFONO_PAGO : '',
+        'correo' => CENGI_EVENTO_CORREO_PAGO,
+        'horario' => CENGI_EVENTO_SOPORTE_PAGO_HORARIO,
+    ];
+    try {
+        $guardado = json_decode((string) $db->query("SELECT valor FROM eventos_config WHERE clave = 'soporte_pagos'")->fetchColumn(), true);
+    } catch (PDOException $e) {
+        $guardado = null;
+    }
+    if (is_array($guardado)) {
+        foreach ($soporte as $k => $v) {
+            if (isset($guardado[$k]) && is_string($guardado[$k])) {
+                $soporte[$k] = $guardado[$k];
+            }
+        }
+    }
+    return $soporte;
+}
+
+/**
+ * Imagen o logo del evento ("Editar evento"): llega como data URL ya reducida en el
+ * navegador; se valida el contenido real (finfo) y se guarda en uploads/eventos/.
+ * Devuelve la ruta /uploads/... o lanza InvalidArgumentException.
+ */
+function cengi_evento_guardar_imagen($dataUrl, $prefijo)
+{
+    if (!preg_match('#^data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$#', (string) $dataUrl, $m)) {
+        throw new InvalidArgumentException('La imagen del evento no es válida (usa PNG, JPG o WebP).');
+    }
+    $bytes = base64_decode($m[2], true);
+    if ($bytes === false || strlen($bytes) > 3 * 1024 * 1024) {
+        throw new InvalidArgumentException('La imagen del evento supera 3 MB.');
+    }
+    $tipos = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp'];
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->buffer($bytes);
+    if (!isset($tipos[$mime])) {
+        throw new InvalidArgumentException('La imagen del evento no es válida (usa PNG, JPG o WebP).');
+    }
+    // No es un archivo subido (llega en el formulario como texto), asi que se escribe
+    // directamente en uploads/eventos/ en vez de usar cengi_guardar_archivo_subido().
+    $directorio = __DIR__ . '/../uploads/eventos';
+    if (!is_dir($directorio) && !@mkdir($directorio, 0775, true) && !is_dir($directorio)) {
+        throw new RuntimeException('No se pudo crear uploads/eventos.');
+    }
+    $nombre = $prefijo . '-' . bin2hex(random_bytes(12)) . '.' . $tipos[$mime];
+    if (@file_put_contents($directorio . '/' . $nombre, $bytes) === false) {
+        throw new RuntimeException('No se pudo escribir en uploads/eventos (revisar permisos del volumen).');
+    }
+    return '/uploads/eventos/' . $nombre;
+}
+
+/** Ruta absoluta de una imagen de uploads/eventos/ (null si no existe o esta fuera de la carpeta). */
+function cengi_evento_imagen_archivo($ruta)
+{
+    $url = cengi_normalizar_url_archivo($ruta);
+    $base = realpath(__DIR__ . '/../uploads/eventos');
+    $archivo = $url !== '' ? realpath(__DIR__ . '/..' . $url) : false;
+    return $base && $archivo && strpos($archivo, $base . DIRECTORY_SEPARATOR) === 0 && is_file($archivo) ? $archivo : null;
+}
+
+/** Imagen del evento como data URI (gafete PDF y diseño de constancias). */
+function cengi_evento_imagen_data_uri($ruta)
+{
+    $archivo = cengi_evento_imagen_archivo($ruta);
+    if (!$archivo) {
+        return null;
+    }
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($archivo);
+    return in_array($mime, ['image/png', 'image/jpeg', 'image/webp'], true) ? 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($archivo)) : null;
+}
+
+/** Borra una imagen anterior del evento (solo dentro de uploads/eventos/). */
+function cengi_evento_borrar_imagen($ruta)
+{
+    $archivo = cengi_evento_imagen_archivo($ruta);
+    if ($archivo) {
+        @unlink($archivo);
+    }
+}
+
 function cengi_evento_generar_codigo_qr(PDO $db)
 {
     do {

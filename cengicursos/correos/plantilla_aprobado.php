@@ -3,6 +3,36 @@
 $nombre = htmlspecialchars($solicitud['nombre_participante']);
 $curso = htmlspecialchars($solicitud['nombre_cursos'] ?? 'curso solicitado');
 
+// Cuenta nueva de estudiante: enlace para crear su contrasena (inscripcion_helpers.php).
+$enlaceCuenta = function_exists('cengi_ins_enlace_cuenta') ? cengi_ins_enlace_cuenta($solicitud['correo'] ?? '') : '';
+$bloqueCuenta = '';
+if ($enlaceCuenta !== '') {
+    $enlaceCuentaHtml = htmlspecialchars($enlaceCuenta, ENT_QUOTES, 'UTF-8');
+    $bloqueCuenta = "
+                        <p style='
+                            color:#555555;
+                            font-size:15px;
+                            line-height:1.7;
+                        '>
+                            Se creó su cuenta en la plataforma de cursos con este correo.
+                            Cree su contraseña en el siguiente enlace (vence en 7 días; después
+                            puede usar «¿Olvidaste tu contraseña?» en el inicio de sesión):
+                        </p>
+
+                        <p style='text-align:center; margin:25px 0;'>
+                            <a href='{$enlaceCuentaHtml}' style='
+                                background:#176b3a;
+                                color:#ffffff;
+                                padding:12px 24px;
+                                border-radius:6px;
+                                text-decoration:none;
+                                font-weight:bold;
+                                display:inline-block;
+                            '>Crear mi contraseña</a>
+                        </p>
+";
+}
+
 $html = "
 <!DOCTYPE html>
 <html lang='es'>
@@ -164,7 +194,7 @@ $html = "
                             Por favor, esté atento/a a futuras comunicaciones
                             relacionadas con el curso.
                         </p>
-
+{$bloqueCuenta}
 
                         <p style='
                             margin-top:35px;

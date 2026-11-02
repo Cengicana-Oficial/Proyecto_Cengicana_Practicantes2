@@ -44,25 +44,38 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * Paleta oficial CENGICAÑA: Verde principal #73BC25 · Verde secundario #A3D300 ·
+ * Amarillo #FFCC00 · Naranja #FF6B00 · Gris #CED2D5. Los demás tonos son tintes (con blanco)
+ * o sombras de esos cinco colores; las sombras oscuras se usan para texto y para fondos con
+ * texto blanco, porque el blanco sobre los colores base no tiene contraste suficiente.
+ */
 :root {
   --cengi-primary: #73BC25;
-  --cengi-primary-strong: #5e9b1d;
-  --cengi-primary-deep: #1f5632;
-  --cengi-primary-deep-2: #163d24;
+  --cengi-primary-strong: #5E9B1D;
+  --cengi-primary-deep: #3A6312;
+  --cengi-primary-deep-2: #26420C;
+  --cengi-primary-text: #4E8418;
   --cengi-secondary: #A3D300;
   --cengi-amarillo: #FFCC00;
+  --cengi-amarillo-soft: #FFF8DB;
+  --cengi-amarillo-text: #8A6E00;
   --cengi-naranja: #FF6B00;
-  --cengi-accent-soft: #eef8df;
-  --cengi-border: #dbe8dc;
-  --cengi-ink: #294033;
-  --cengi-muted: #55705f;
+  --cengi-naranja-soft: #FFF0E6;
+  --cengi-naranja-text: #B34B00;
+  --cengi-gris: #CED2D5;
+  --cengi-gris-soft: #F3F4F5;
+  --cengi-accent-soft: #F1F8E9;
+  --cengi-border: #CED2D5;
+  --cengi-ink: #30353A;
+  --cengi-muted: #636A6F;
   --cengi-surface: #ffffff;
-  --cengi-danger: #c94f4f;
-  --cengi-danger-strong: #a63f3f;
+  --cengi-danger: #FF6B00;
+  --cengi-danger-strong: #B34B00;
   --cengi-sidebar-width: 248px;
   --cengi-topbar-height: 64px;
   --cengi-radius: 12px;
-  --cengi-shadow: 0 1px 2px rgba(30, 42, 26, 0.06), 0 4px 16px rgba(30, 42, 26, 0.05);
+  --cengi-shadow: 0 1px 2px rgba(31, 35, 38, 0.06), 0 4px 16px rgba(31, 35, 38, 0.05);
 }
 
 /*
@@ -79,13 +92,17 @@ body.cengi-canvas {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  background: #F6F7F3;
+  background: #F7F8F8;
   color: var(--cengi-ink);
   font-family: 'Inter', Arial, sans-serif;
 }
 
 /* ===== Sidebar (identico en estructura a cengicursos/menu.php) ===== */
 
+/* ===== Menú lateral — paleta oficial CENGICAÑA =====
+ * Fondo blanco con borde Gris #CED2D5; franja de marca con los cuatro colores; íconos en verde;
+ * sección activa en Verde principal #73BC25 con marca Amarillo #FFCC00; contadores en Amarillo;
+ * "Cerrar sesión" en Naranja. Sobre los colores base el texto va en tinta oscura (contraste AA). */
 .cengi-sidebar {
   position: fixed;
   top: 0;
@@ -95,25 +112,43 @@ body.cengi-canvas {
   z-index: 1060;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #26401A 0%, #1E3315 100%);
-  color: #EAF2DE;
+  background: #ffffff;
+  border-right: 1px solid var(--cengi-gris);
+  color: var(--cengi-ink);
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cengi-gris) transparent;
 }
 
 .cengi-brand {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 18px;
-  border-bottom: 3px solid var(--cengi-naranja);
+  padding: 16px 18px 19px;
   background: #ffffff;
   text-decoration: none;
   flex: 0 0 auto;
 }
 
+/* Franja de marca: verde principal · verde secundario · amarillo · naranja */
+.cengi-brand::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: linear-gradient(90deg,
+    var(--cengi-primary) 0 40%,
+    var(--cengi-secondary) 40% 65%,
+    var(--cengi-amarillo) 65% 85%,
+    var(--cengi-naranja) 85% 100%);
+}
+
 .cengi-brand:hover,
 .cengi-brand:focus {
-  background: #f6faf3;
+  background: var(--cengi-accent-soft);
   text-decoration: none;
 }
 
@@ -129,18 +164,18 @@ body.cengi-canvas {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   flex: none;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 10px;
   background: linear-gradient(135deg, var(--cengi-secondary), var(--cengi-primary));
 }
 
 .cengi-brand-mark .material-symbols-outlined,
 .cengi-brand-mark i {
-  font-size: 18px;
-  color: #1E3315;
+  font-size: 19px;
+  color: #1F2326;
 }
 
 .cengi-brand-copy {
@@ -151,9 +186,9 @@ body.cengi-canvas {
 
 .cengi-brand-copy strong {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  color: #1E3315;
+  color: var(--cengi-primary-deep);
   letter-spacing: 0.02em;
 }
 
@@ -171,17 +206,36 @@ body.cengi-canvas {
 }
 
 .cengi-nav-group {
-  padding: 10px 0;
+  padding: 10px 0 6px;
+}
+
+.cengi-nav-group + .cengi-nav-group {
+  border-top: 1px solid var(--cengi-gris-soft);
 }
 
 .cengi-nav-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 10px 6px;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: #8AA271;
+  color: var(--cengi-muted);
 }
+
+/* Marca de color por grupo: Flujo (verde), Calidad (amarillo), Sistema (gris) */
+.cengi-nav-label::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--cengi-primary);
+}
+
+.cengi-nav-group:nth-child(2) .cengi-nav-label::before { background: var(--cengi-amarillo); }
+.cengi-nav-group:nth-child(3) .cengi-nav-label::before { background: var(--cengi-gris); }
 
 .cengi-nav-item {
   display: flex;
@@ -190,75 +244,97 @@ body.cengi-canvas {
   padding: 9px 10px;
   margin-bottom: 2px;
   border-radius: 8px;
-  border-left: 2.5px solid transparent;
-  color: #D9E6C8;
+  border-left: 4px solid transparent;
+  color: var(--cengi-ink);
   font-size: 13.5px;
   font-weight: 500;
   text-decoration: none;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .cengi-nav-item .material-symbols-outlined {
-  font-size: 18px;
-  width: 18px;
+  font-size: 19px;
+  width: 19px;
   text-align: center;
-  opacity: 0.9;
+  color: var(--cengi-primary-text);
 }
 
 .cengi-nav-item:hover,
 .cengi-nav-item:focus {
-  background: rgba(255, 255, 255, 0.06);
-  color: #D9E6C8;
+  background: var(--cengi-accent-soft);
+  border-left-color: var(--cengi-secondary);
+  color: var(--cengi-primary-deep-2);
   text-decoration: none;
 }
 
+.cengi-nav-item:focus-visible {
+  outline: 2px solid var(--cengi-amarillo);
+  outline-offset: 1px;
+}
+
 .cengi-nav-item.is-active {
-  background: rgba(163, 211, 0, 0.16);
-  border-left-color: var(--cengi-secondary);
-  color: #ffffff;
+  background: var(--cengi-primary);
+  border-left-color: var(--cengi-amarillo);
+  color: #1F2326;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(115, 188, 37, 0.28);
+}
+
+.cengi-nav-item.is-active .material-symbols-outlined {
+  color: #1F2326;
 }
 
 .cengi-nav-badge {
   margin-left: auto;
+  min-width: 20px;
   background: var(--cengi-amarillo);
-  color: #5C4400;
-  font-size: 9.5px;
+  color: #1F2326;
+  font-size: 10px;
   font-weight: 800;
-  padding: 1px 7px;
+  line-height: 18px;
+  text-align: center;
+  padding: 0 7px;
   border-radius: 20px;
+}
+
+.cengi-nav-item.is-active .cengi-nav-badge {
+  background: #ffffff;
 }
 
 .cengi-sidebar-foot {
   flex: 0 0 auto;
   padding: 12px 12px 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--cengi-gris);
+  background: var(--cengi-gris-soft);
 }
 
 .cengi-menu-link {
-  color: #D9E6C8;
+  color: var(--cengi-ink);
 }
 
 .cengi-menu-link:hover,
 .cengi-menu-link:focus {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ffffff;
+  background: var(--cengi-accent-soft);
+  color: var(--cengi-primary-deep-2);
 }
 
-.cengi-logout-link {
-  color: #f3b3ab;
+.cengi-logout-link,
+.cengi-logout-link .material-symbols-outlined {
+  color: var(--cengi-naranja-text);
 }
 
 .cengi-logout-link:hover,
 .cengi-logout-link:focus {
-  background: rgba(230, 90, 74, 0.18);
-  color: #ffd7d1;
+  background: var(--cengi-naranja-soft);
+  border-left-color: var(--cengi-naranja);
+  color: var(--cengi-naranja-text);
 }
 
 .cengi-sidebar-version {
   margin-top: 10px;
   padding: 0 10px;
   font-size: 10.5px;
-  color: #8AA271;
+  color: var(--cengi-muted);
 }
 
 /* ===== Topbar ===== */
@@ -307,7 +383,7 @@ body.cengi-canvas {
   padding: 5px 11px;
   border-radius: 100px;
   background: var(--cengi-accent-soft);
-  border: 1px solid #DCEFC4;
+  border: 1px solid #C7E4A8;
   color: var(--cengi-primary-deep);
   font-size: 11px;
   font-weight: 700;
@@ -386,7 +462,7 @@ body.cengi-canvas {
 
   .cengi-sidebar.is-open {
     left: 0;
-    box-shadow: 18px 0 40px rgba(15, 30, 18, 0.35);
+    box-shadow: 18px 0 40px rgba(31, 35, 38, 0.35);
   }
 
   .cengi-topbar,
@@ -473,7 +549,7 @@ body.cengi-canvas {
   border: 1px solid var(--cengi-border);
   border-radius: 14px;
   background: var(--cengi-surface);
-  box-shadow: 0 1px 2px rgba(31, 86, 50, 0.04);
+  box-shadow: 0 1px 2px rgba(58, 99, 18, 0.04);
 }
 
 .cengi-card h3 {
@@ -518,12 +594,12 @@ body.cengi-canvas {
 .cengi-table-wrap tbody td {
   padding: 11px 14px;
   font-size: 12.5px;
-  border-top: 1px solid #edf2ea;
+  border-top: 1px solid #E3F1D3;
   vertical-align: middle;
 }
 
 .cengi-table-wrap tbody tr:hover td {
-  background: #fbfdf9;
+  background: #F1F8E9;
 }
 
 .cengi-status-badge {
@@ -548,18 +624,18 @@ body.cengi-canvas {
   display: inline-block;
 }
 
-.cengi-status-badge.is-pending { border-color: #ecd998; background: #fff7df; color: #94610a; }
-.cengi-status-badge.is-info { border-color: #bcd7ef; background: #eaf3fc; color: #2160a0; }
-.cengi-status-badge.is-progress { border-color: #f4e5ac; background: #FFF6DA; color: #8A6600; }
-.cengi-status-badge.is-review { border-color: #f2c9a0; background: #fdeee0; color: #a15b0a; }
-.cengi-status-badge.is-approved { border-color: #cbe2b3; background: #eff9e4; color: var(--cengi-primary-strong); }
-.cengi-status-badge.is-rejected { border-color: #edc4bf; background: #fff1ef; color: var(--cengi-danger-strong); }
+.cengi-status-badge.is-pending { border-color: #FFCC00; background: #FFF8DB; color: #B34B00; }
+.cengi-status-badge.is-info { border-color: #CED2D5; background: #EEF0F1; color: #474D51; }
+.cengi-status-badge.is-progress { border-color: #FFF0B3; background: #FFF8DB; color: #8A6E00; }
+.cengi-status-badge.is-review { border-color: #FF6B00; background: #FFD9BF; color: #B34B00; }
+.cengi-status-badge.is-approved { border-color: #C7E4A8; background: #E3F1D3; color: var(--cengi-primary-strong); }
+.cengi-status-badge.is-rejected { border-color: #FF6B00; background: #FFF0E6; color: var(--cengi-danger-strong); }
 .cengi-status-badge.is-delivered { border-color: var(--cengi-primary-deep); background: var(--cengi-primary); color: #fff; }
-.cengi-status-badge.is-neutral { border-color: var(--cengi-border); background: #F2F4EF; color: var(--cengi-muted); }
+.cengi-status-badge.is-neutral { border-color: var(--cengi-border); background: #E3F1D3; color: var(--cengi-muted); }
 
 .cengi-empty {
-  background: #f7fbf5;
-  border: 1px dashed #c4d7c0;
+  background: #F7F8F8;
+  border: 1px dashed #C7E4A8;
   border-radius: 12px;
   padding: 22px;
   color: var(--cengi-muted);
@@ -587,7 +663,7 @@ body.cengi-canvas {
   background: var(--cengi-primary-deep);
   border-color: var(--cengi-primary-deep);
   color: #fff;
-  box-shadow: 0 5px 12px rgba(31, 86, 50, 0.12);
+  box-shadow: 0 5px 12px rgba(58, 99, 18, 0.12);
 }
 
 .cengi-btn-primary:hover { background: var(--cengi-primary-deep-2); color: #fff; }
@@ -598,7 +674,7 @@ body.cengi-canvas {
   color: var(--cengi-ink);
 }
 
-.cengi-btn-ghost:hover { background: #f6faf3; }
+.cengi-btn-ghost:hover { background: #F7F8F8; }
 
 .cengi-btn-sm { min-height: 30px; padding: 6px 11px; font-size: 11.5px; }
 
@@ -752,7 +828,7 @@ body.cengi-canvas {
 .cengi-step.done .dot { background: var(--cengi-primary); color: #fff; box-shadow: 0 0 0 1px var(--cengi-primary); }
 .cengi-step.done .line { background: var(--cengi-primary); }
 .cengi-step.done .lbl { color: var(--cengi-ink); }
-.cengi-step.current .dot { background: var(--cengi-amarillo); color: #5C4400; box-shadow: 0 0 0 3px #fff6da; }
+.cengi-step.current .dot { background: var(--cengi-amarillo); color: #5C4A00; box-shadow: 0 0 0 3px #FFF8DB; }
 .cengi-step.current .lbl { color: var(--cengi-ink); }
 .cengi-step.rejected .dot { background: var(--cengi-danger); color: #fff; }
 .cengi-step.rejected .lbl { color: var(--cengi-danger-strong); }
@@ -786,7 +862,7 @@ body.cengi-canvas {
   font-size: 11px;
 }
 .cengi-timeline-item.is-ok .cengi-timeline-dot { border-color: var(--cengi-primary); background: var(--cengi-accent-soft); color: var(--cengi-primary-deep); }
-.cengi-timeline-item.is-warn .cengi-timeline-dot { border-color: var(--cengi-danger); background: #fff1ef; color: var(--cengi-danger-strong); }
+.cengi-timeline-item.is-warn .cengi-timeline-dot { border-color: var(--cengi-danger); background: #FFF0E6; color: var(--cengi-danger-strong); }
 .cengi-timeline-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .cengi-timeline-head b { font-size: 13px; }
 .cengi-timeline-fecha { font-size: 11px; color: var(--cengi-muted); font-weight: 700; }
@@ -803,7 +879,7 @@ body.cengi-canvas {
 }
 
 .cengi-kanban-col {
-  background: #f7fbf5;
+  background: #F7F8F8;
   border: 1px solid var(--cengi-border);
   border-radius: 14px;
   padding: 10px;
@@ -832,7 +908,7 @@ body.cengi-canvas {
   border: 1px solid var(--cengi-border);
   border-radius: 10px;
   padding: 10px 12px;
-  box-shadow: 0 1px 2px rgba(31, 86, 50, 0.06);
+  box-shadow: 0 1px 2px rgba(58, 99, 18, 0.06);
   cursor: grab;
 }
 
@@ -846,7 +922,7 @@ body.cengi-canvas {
 .cengi-matrix-wrap { overflow-x: auto; }
 table.cengi-matrix { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
 table.cengi-matrix thead th {
-  background: #fafcf8;
+  background: #F7F8F8;
   color: var(--cengi-muted);
   font-size: 9.5px;
   text-transform: uppercase;
@@ -858,18 +934,18 @@ table.cengi-matrix thead th {
   text-align: center;
 }
 table.cengi-matrix thead th.vc-hcol1 { text-align: left; }
-table.cengi-matrix tbody td { padding: 8px 10px; border-bottom: 1px solid #edf2ea; vertical-align: middle; white-space: nowrap; }
-table.cengi-matrix tbody tr:hover td { background: #fbfdf9; }
+table.cengi-matrix tbody td { padding: 8px 10px; border-bottom: 1px solid #E3F1D3; vertical-align: middle; white-space: nowrap; }
+table.cengi-matrix tbody tr:hover td { background: #F1F8E9; }
 td.vc-muestra, th.vc-hcol1 { position: sticky; left: 0; background: #fff; z-index: 2; box-shadow: 2px 0 0 var(--cengi-border); text-align: left; }
-table.cengi-matrix thead th.vc-hcol1 { z-index: 3; background: #fafcf8; }
+table.cengi-matrix thead th.vc-hcol1 { z-index: 3; background: #F7F8F8; }
 .vc-cell { text-align: center; border-radius: 8px; min-width: 90px; }
-.vc-empty { color: #c9d3ca; text-align: center; }
+.vc-empty { color: #CED2D5; text-align: center; }
 .vc-tag { display: block; font-size: 8.5px; font-weight: 800; margin-top: 2px; text-transform: uppercase; }
 .vc-aprobada { background: var(--cengi-accent-soft); }
 .vc-aprobada .vc-tag { color: var(--cengi-primary-deep); }
-.vc-rechazada { background: #fff1ef; }
+.vc-rechazada { background: #FFF0E6; }
 .vc-rechazada .vc-tag { color: var(--cengi-danger-strong); }
-.vc-pending { background: #fafcf8; color: #b7c2b9; font-size: 10.5px; }
+.vc-pending { background: #F7F8F8; color: #A9AFB3; font-size: 10.5px; }
 .vc-actions { display: flex; gap: 4px; justify-content: center; margin-top: 5px; }
 .vc-actions button { width: 22px; height: 22px; border-radius: 6px; border: none; font-size: 12px; font-weight: 900; cursor: pointer; }
 .vc-ok { background: var(--cengi-primary); color: #fff; }
@@ -877,18 +953,18 @@ table.cengi-matrix thead th.vc-hcol1 { z-index: 3; background: #fafcf8; }
 
 .vt-table-wrap { overflow-x: auto; }
 .vt-table { min-width: 1080px; }
-.vt-table tbody tr.vt-row-pending td { background: #fffdf8; }
-.vt-table tbody tr.vt-row-pending:hover td { background: #fffaf0; }
+.vt-table tbody tr.vt-row-pending td { background: #FFF8DB; }
+.vt-table tbody tr.vt-row-pending:hover td { background: #FFF8DB; }
 .vt-analysis-cell { min-width: 210px; font-weight: 700; color: var(--cengi-ink); }
 .vt-line-actions { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
 .vt-line-actions .material-symbols-outlined { font-size: 16px; }
 .vt-line-actions .cengi-btn { min-height: 32px; }
 .vt-line-actions .vt-reject {
-  border-color: #e5b5af;
-  background: #fff4f2;
+  border-color: #FF6B00;
+  background: #FFF0E6;
   color: var(--cengi-danger-strong);
 }
-.vt-line-actions .vt-reject:hover { background: #ffe9e6; }
+.vt-line-actions .vt-reject:hover { background: #FFF0E6; }
 .vt-line-actions button:disabled { cursor: wait; opacity: .58; transform: none; }
 
 @media (max-width: 900px) {
@@ -935,7 +1011,7 @@ table.cengi-matrix thead th.vc-hcol1 { z-index: 3; background: #fafcf8; }
 .cengi-barchart-track {
   height: 10px;
   border-radius: 999px;
-  background: #eef2ea;
+  background: #E3F1D3;
   overflow: hidden;
 }
 

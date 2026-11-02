@@ -6,10 +6,12 @@ lab_require_permission('laboratorio.lotes.ver');
 require_once __DIR__ . '/../conexion.php';
 require_once __DIR__ . '/../includes/solicitud_formulario_helpers.php';
 require_once __DIR__ . '/../includes/shell_sidebar.php';
-require_once __DIR__ . '/../includes/muestra_identificacion_helper.php';
+require_once __DIR__ . '/../includes/identificacion_lote_helper.php';
 
 lab_ensure_schema_safe(fn() => asegurarColumnasFirmasSolicitud($conexion), 'solicitud_firmas');
 lab_ensure_schema_safe(fn() => labMuestraIdentificacionEnsureSchema($conexion), 'muestra_identificacion');
+lab_ensure_schema_safe(fn() => labIdentificacionLoteSchema($conexion), 'identificacion_lote_v3');
+labIdentificacionCargarCamposTipo($conexion); // formato de etiqueta por tipo, desde el Catálogo de análisis
 
 if (empty($_SESSION['muestra_identificacion_csrf'])) {
     $_SESSION['muestra_identificacion_csrf'] = bin2hex(random_bytes(32));
@@ -41,7 +43,7 @@ function ident_svg(string $name): string
 
 function ident_estado(array $muestra): string
 {
-    if (empty($muestra['id_identificacion'])) {
+    if (($muestra['estado_etiqueta'] ?? null) === 'pendiente' || empty($muestra['id_identificacion'])) {
         return 'Recibida · pendiente de identificación';
     }
     $requeridos = (int) ($muestra['analisis_requeridos'] ?? 0);
@@ -110,12 +112,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             }
 
             if ($accion === 'guardar') {
+                $conexion->beginTransaction();
+                labIdentificacionFichaProtegida($conexion, (int) ($_POST['id_muestra'] ?? 0), $_POST);
                 $codigoGuardado = labMuestraIdentificacionGuardar(
                     $conexion,
                     (int) ($_POST['id_muestra'] ?? 0),
                     $_POST,
                     $nombreUsuario
                 );
+                $conexion->commit();
                 $_SESSION['muestra_identificacion_flash'] = ['tipo' => 'ok', 'mensaje' => 'Identificación guardada correctamente para ' . $codigoGuardado . '.'];
                 header('Location: listar_lotes.php?muestra=' . rawurlencode($codigoGuardado));
                 exit;
@@ -123,6 +128,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
             throw new InvalidArgumentException('La acción solicitada no es válida.');
         } catch (Throwable $e) {
+            if ($conexion->inTransaction()) $conexion->rollBack();
             $postError = $e->getMessage();
         }
     }
@@ -168,12 +174,32 @@ $fechaMuestreoInput = $fechaMuestreo !== '' ? date('Y-m-d\TH:i', strtotime($fech
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Identificación de muestra</title>
-    <link rel="stylesheet" href="../css/lab_shell.css?v=1">
+    <link rel="stylesheet" href="../css/lab_shell.css?v=20261006">
     <link rel="stylesheet" href="../css/listar_lotes.css?v=<?= (int) filemtime(__DIR__ . '/../css/listar_lotes.css') ?>">
+<link rel="stylesheet" href="../css/identificacion_lote.css?v=<?= (int) filemtime(__DIR__ . '/../css/identificacion_lote.css') ?>">
 </head>
 <body class="cengi-canvas">
-<?php lab_shell_open('listar_lotes.php', 'Identificación de muestra', 'Registro único mediante QR, código de barras o captura manual'); ?>
+<?php lab_shell_open('listar_lotes.php', 'Identificación de muestras', 'Registro por lote, etiquetas e historial de correcciones'); ?>
 <main class="sample-ident-page" data-ident-page>
+    <?php require __DIR__ . '/../includes/identificacion_lote_vista.php'; ?>
+    <details id="ficha-individual" <?= $codigoBusqueda !== '' || $postError !== '' || is_array($flash) ? 'open' : '' ?>>
+    <summary>Ficha individual · ubicación, muestreo y condición física</summary>
+    <?php
+    $etiquetaVersionada = false;
+    foreach ($identLotes as $identLote) {
+        if ($muestraActual && (int) $identLote['id_solicitud'] === (int) $muestraActual['id_solicitud']) {
+            $etiquetaVersionada = (int) $identLote['version'] > 0;
+            foreach ($identLote['muestras'] as $identMuestra) {
+                if ((int) $identMuestra['id_muestra'] === (int) $muestraActual['id_muestra']) {
+                    $muestraActual['estado_etiqueta'] = $identMuestra['estado'];
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    ?>
+    <?php if ($etiquetaVersionada): ?><p class="ident-help">Los datos de etiqueta se corrigen en Registrar etiquetas, indicando el motivo. Aquí puede completar los datos técnicos de la muestra.</p><?php endif; ?>
     <p class="ident-intro">
         Registro único de identificación de muestras — un solo formulario por pestañas, válido para cualquier tipo de muestra. Identifícala escaneando el <strong>QR</strong> o <strong>código de barras</strong> impreso en la boleta; si no cuentas con lector, <strong>tabula el código manualmente</strong>. La identificación queda enlazada al lote y al informe de resultados.
     </p>
@@ -277,15 +303,15 @@ $fechaMuestreoInput = $fechaMuestreo !== '' ? date('Y-m-d\TH:i', strtotime($fech
                             <label class="ident-field"><span>Cultivo</span><select name="cultivo"><?php foreach ($cultivos as $cultivo): ?><option value="<?= ident_e($cultivo) ?>" <?= $cultivo === $cultivoActual ? 'selected' : '' ?>><?= ident_e($cultivo) ?></option><?php endforeach; ?></select></label>
                             <label class="ident-field"><span>Estado de la muestra</span><input value="<?= ident_e(ident_estado($muestraActual)) ?>" disabled></label>
                             <label class="ident-field"><span>Lote asociado</span><input value="<?= ident_e($muestraActual['codigo_lote']) ?>" disabled></label>
-                            <label class="ident-field ident-field--full"><span>Lectura QR / código de barras</span><input name="lectura_codigo" value="<?= ident_e($muestraActual['lectura_codigo'] ?: $muestraActual['codigo_lab']) ?>" placeholder="Valor leído del QR o código de barras"></label>
+                            <label class="ident-field ident-field--full"><span>Lectura QR / código de barras</span><input name="lectura_codigo" <?= $etiquetaVersionada ? 'readonly' : '' ?> value="<?= ident_e($muestraActual['lectura_codigo'] ?: $muestraActual['codigo_lab']) ?>" placeholder="Valor leído del QR o código de barras"></label>
                         </div>
                     </section>
 
                     <section class="ident-tab-panel" data-ident-tab-panel="ubicacion" hidden>
                         <div class="ident-form-grid">
                             <label class="ident-field"><span>Finca</span><input value="No registrada en recepción" disabled></label>
-                            <label class="ident-field"><span>Bloque</span><input name="bloque" value="<?= ident_e($muestraActual['bloque']) ?>" placeholder="Ej. B-04"></label>
-                            <label class="ident-field"><span>Parcela</span><input name="parcela" value="<?= ident_e($muestraActual['parcela']) ?>" placeholder="Ej. P-12"></label>
+                            <label class="ident-field"><span>Bloque</span><input name="bloque" <?= $etiquetaVersionada ? 'readonly' : '' ?> value="<?= ident_e($muestraActual['bloque']) ?>" placeholder="Ej. B-04"></label>
+                            <label class="ident-field"><span>Parcela</span><input name="parcela" <?= $etiquetaVersionada ? 'readonly' : '' ?> value="<?= ident_e($muestraActual['parcela']) ?>" placeholder="Ej. P-12"></label>
                             <label class="ident-field"><span>Punto de muestreo</span><input name="punto_muestreo" value="<?= ident_e($muestraActual['punto_muestreo']) ?>"></label>
                             <label class="ident-field ident-field--full"><span>Georreferencia (lat, long)</span><input name="georreferencia" value="<?= ident_e($muestraActual['georreferencia']) ?>" placeholder="Ej. 14.3417, -90.9500"></label>
                         </div>
@@ -294,10 +320,10 @@ $fechaMuestreoInput = $fechaMuestreo !== '' ? date('Y-m-d\TH:i', strtotime($fech
                     <section class="ident-tab-panel" data-ident-tab-panel="muestreo" hidden>
                         <div class="ident-form-grid">
                             <label class="ident-field"><span>Fecha y hora de muestreo</span><input type="datetime-local" name="fecha_muestreo" value="<?= ident_e($fechaMuestreoInput) ?>"></label>
-                            <label class="ident-field"><span>Repetición</span><input name="repeticion" value="<?= ident_e($muestraActual['repeticion']) ?>" placeholder="Ej. R1"></label>
-                            <label class="ident-field"><span>Variedad</span><input name="variedad" value="<?= ident_e($muestraActual['variedad']) ?>" placeholder="Ej. CP 72-2086"></label>
+                            <label class="ident-field"><span>Repetición</span><input name="repeticion" <?= $etiquetaVersionada ? 'readonly' : '' ?> value="<?= ident_e($muestraActual['repeticion']) ?>" placeholder="Ej. R1"></label>
+                            <label class="ident-field"><span>Variedad</span><input name="variedad" <?= $etiquetaVersionada ? 'readonly' : '' ?> value="<?= ident_e($muestraActual['variedad']) ?>" placeholder="Ej. CP 72-2086"></label>
                             <label class="ident-field"><span>Corte</span><input name="corte" value="<?= ident_e($muestraActual['corte']) ?>" placeholder="Ej. Corte 2"></label>
-                            <label class="ident-field"><span>Tratamiento</span><input name="tratamiento" value="<?= ident_e($muestraActual['tratamiento']) ?>" placeholder="Ej. T3 - Fertilización foliar"></label>
+                            <label class="ident-field"><span>Tratamiento</span><input name="tratamiento" <?= $etiquetaVersionada ? 'readonly' : '' ?> value="<?= ident_e($muestraActual['tratamiento']) ?>" placeholder="Ej. T3 - Fertilización foliar"></label>
                             <label class="ident-field"><span>Tomada / recibida por</span><select name="tomado_por"><option value="">Seleccione…</option><?php foreach ($tomadores as $tomador): ?><option value="<?= ident_e($tomador) ?>" <?= $tomador === ($muestraActual['tomado_por'] ?? '') ? 'selected' : '' ?>><?= ident_e($tomador) ?></option><?php endforeach; ?></select></label>
                         </div>
                     </section>
@@ -313,7 +339,7 @@ $fechaMuestreoInput = $fechaMuestreo !== '' ? date('Y-m-d\TH:i', strtotime($fech
                     </section>
 
                     <section class="ident-tab-panel" data-ident-tab-panel="observaciones" hidden>
-                        <label class="ident-field ident-field--full"><span>Observaciones</span><textarea name="observaciones" placeholder="Estado del empaque, incidencias durante el traslado, etc."><?= ident_e($muestraActual['observaciones']) ?></textarea></label>
+                        <label class="ident-field ident-field--full"><span>Observaciones</span><textarea name="observaciones" <?= $etiquetaVersionada ? 'readonly' : '' ?> placeholder="Estado del empaque, incidencias durante el traslado, etc."><?= ident_e($muestraActual['observaciones']) ?></textarea></label>
                     </section>
                 </div>
 
@@ -325,45 +351,7 @@ $fechaMuestreoInput = $fechaMuestreo !== '' ? date('Y-m-d\TH:i', strtotime($fech
         </section>
     <?php endif; ?>
 
-    <section class="ident-base-section">
-        <div class="ident-section-title"><h2>Base de identificación de muestras</h2><span data-base-count><?= count($baseIdentificaciones) ?> registradas</span></div>
-        <p>Registro consolidado de todas las muestras identificadas — permite ubicar rápidamente muestra, lote, lectura QR o código de barras y datos de campo.</p>
-        <div class="ident-table-toolbar">
-            <label class="ident-table-search"><?= ident_svg('search') ?><input type="search" placeholder="Buscar por muestra, lote, lectura QR, parcela…" data-base-filter></label>
-            <label class="ident-type-filter">
-                <span>Tipo de muestra</span>
-                <select data-base-type-filter aria-label="Filtrar por tipo de muestra">
-                    <option value="">Todos los tipos</option>
-                    <?php foreach ($tiposFiltro as $clave => $meta): ?><option value="<?= ident_e($clave) ?>"><?= ident_e($meta['prefix'] . ' · ' . $meta['label']) ?></option><?php endforeach; ?>
-                </select>
-            </label>
-        </div>
-        <div class="ident-table-wrap">
-            <table>
-                <thead><tr><th>Número lab</th><th>Lote</th><th>Lectura QR / código de barras</th><th>Parcela / Tratamiento / Repetición</th><th>Observaciones</th></tr></thead>
-                <tbody data-base-body>
-                <?php if (!$baseIdentificaciones): ?><tr data-empty-row><td colspan="5">Aún no hay muestras identificadas.</td></tr><?php endif; ?>
-                <?php foreach ($baseIdentificaciones as $registro): ?>
-                    <?php
-                        $campo = implode(' / ', array_filter([$registro['parcela'], $registro['tratamiento'], $registro['repeticion']])) ?: '—';
-                        $tipoClave = ident_tipo_muestra_clave($registro);
-                        $tipoMeta = $tiposFiltro[$tipoClave] ?? ['label' => ($registro['tipo_muestra'] ?: 'Otro'), 'prefix' => '?'];
-                    ?>
-                    <tr data-base-row data-type="<?= ident_e($tipoClave) ?>" data-search="<?= ident_e(strtolower(implode(' ', [$registro['codigo_lab'], $registro['codigo_lote'], $registro['lectura_codigo'], $campo, $registro['observaciones'], $registro['cliente'], $tipoMeta['label'], $tipoMeta['prefix']]))) ?>">
-                        <td>
-                            <div class="ident-lab-number"><span class="ident-prefix ident-prefix--<?= ident_e($tipoClave) ?>"><?= ident_e($tipoMeta['prefix']) ?></span><a href="listar_lotes.php?muestra=<?= rawurlencode((string) $registro['codigo_lab']) ?>"><?= ident_e($registro['codigo_lab']) ?></a></div>
-                            <small class="ident-type-caption"><?= ident_e($tipoMeta['label']) ?></small>
-                        </td>
-                        <td><?= ident_e($registro['codigo_lote']) ?><small><?= ident_e($registro['cliente']) ?></small></td>
-                        <td><?= ident_e($registro['lectura_codigo'] ?: $registro['codigo_lab']) ?></td>
-                        <td><?= ident_e($campo) ?></td>
-                        <td><?= ident_e($registro['observaciones'] ?: '—') ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </section>
+    </details>
 </main>
 
 <div class="ident-modal" data-scanner-modal hidden>
@@ -379,6 +367,8 @@ $fechaMuestreoInput = $fechaMuestreo !== '' ? date('Y-m-d\TH:i', strtotime($fech
 </div>
 
 <form method="GET" data-scanner-submit hidden><input name="muestra" data-scanner-value></form>
+<script src="../../cengicursos/js/qrcode-generator.js"></script>
+<script src="../js/identificacion_lote.js?v=<?= (int) filemtime(__DIR__ . '/../js/identificacion_lote.js') ?>"></script>
 <script src="../js/identificacion_muestra.js?v=<?= (int) filemtime(__DIR__ . '/../js/identificacion_muestra.js') ?>"></script>
 <?php lab_shell_content_close(); ?>
 </body>

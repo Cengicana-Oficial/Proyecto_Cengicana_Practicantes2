@@ -254,19 +254,19 @@
 
 :where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-admin {
   --status-border-color: var(--teal-100);
-  --status-bg: linear-gradient(180deg, var(--teal-50), rgba(200, 211, 203, 0.72));
+  --status-bg: linear-gradient(180deg, var(--teal-50), rgba(206, 210, 213, 0.72));
   --status-color: var(--teal-700);
 }
 
 :where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-analyst {
   --status-border-color: var(--tertiary-100);
-  --status-bg: linear-gradient(180deg, var(--tertiary-50), rgba(228, 194, 207, 0.76));
+  --status-bg: linear-gradient(180deg, var(--tertiary-50), rgba(255, 107, 0, 0.76));
   --status-color: var(--tertiary-700);
 }
 
 :where(.status-badge, .status-pill, .status-chip, .status-counter, .badge, .count-pill, .type-pill, .mini-chip, .meta-badge, .estado-badge, .revision-pill, .role-badge, .bc-count, .bc-status, .pill).role-tech {
   --status-border-color: var(--green-100);
-  --status-bg: linear-gradient(180deg, var(--green-50), rgba(198, 219, 201, 0.82));
+  --status-bg: linear-gradient(180deg, var(--green-50), rgba(199, 228, 168, 0.82));
   --status-color: var(--green-700);
 }
 

@@ -105,6 +105,12 @@
       white: rgb(1, 1, 1),
     };
 
+    let qr = null;
+    if (datos.idSolicitud && typeof globalThis.qrcode === "function") {
+      qr = globalThis.qrcode(0, "M");
+      qr.addData(["SIGELAB", datos.lote, datos.numeroLaboratorioInicio, datos.numeroLaboratorioFin, datos.idSolicitud].join("|"));
+      qr.make();
+    }
     let page;
     let y;
 
@@ -123,98 +129,38 @@
     };
 
     const addHeader = continuation => {
-      page.drawRectangle({
-        x: 0,
-        y: height - 8,
-        width,
-        height: 8,
-        color: colors.brand,
+      drawLogo(margin, height - 26, 42, 42);
+      page.drawText("CENGICAÑA", { x: margin + 52, y: height - 40, size: 14, font: boldFont, color: colors.brandDark });
+      page.drawText("Laboratorio Agroindustrial", { x: margin + 52, y: height - 55, size: 8.5, font: regularFont, color: colors.muted });
+      const metaX = width - margin - (qr ? 200 : 140);
+      [
+        ["Codigo", "CG-R-SLA-001"],
+        ["Version", "001"],
+        ["Fecha", formatearFecha(datos.fechaIngreso)],
+      ].forEach(([label, value], index) => {
+        const top = height - 32 - index * 13;
+        page.drawText(label, { x: metaX, y: top, size: 7.5, font: regularFont, color: colors.muted });
+        page.drawText(textoOGuion(value), { x: metaX + 47, y: top, size: 7.5, font: boldFont, color: colors.ink });
       });
-
-      if (continuation) {
-        drawLogo(margin, height - 24, 34, 30);
-        page.drawText("CENGICAÑA", {
-          x: margin + 44,
-          y: height - 33,
-          size: 11,
-          font: boldFont,
-          color: colors.brandDark,
-        });
-        page.drawText("Boleta de solicitud de analisis - continuacion", {
-          x: margin + 44,
-          y: height - 47,
-          size: 8.5,
-          font: regularFont,
-          color: colors.muted,
-        });
-        page.drawLine({
-          start: { x: margin, y: height - 61 },
-          end: { x: width - margin, y: height - 61 },
-          thickness: 0.8,
-          color: colors.border,
-        });
-        y = height - 80;
-        return;
+      if (qr) {
+        const cell = 46 / (qr.getModuleCount() + 8);
+        for (let row = 0; row < qr.getModuleCount(); row++) {
+          for (let col = 0; col < qr.getModuleCount(); col++) {
+            if (qr.isDark(row, col)) page.drawRectangle({
+              x: width - margin - 46 + (col + 4) * cell,
+              y: height - 24 - (row + 5) * cell,
+              width: cell, height: cell, color: rgb(0, 0, 0),
+            });
+          }
+        }
       }
-
-      drawLogo(margin, height - 22, 54, 50);
-      page.drawText("CENGICAÑA", {
-        x: margin + 66,
-        y: height - 37,
-        size: 15,
-        font: boldFont,
-        color: colors.brandDark,
-      });
-      page.drawText("Laboratorio Agroindustrial", {
-        x: margin + 66,
-        y: height - 53,
-        size: 9,
-        font: regularFont,
-        color: colors.muted,
-      });
-      page.drawText("BOLETA DE SOLICITUD DE ANALISIS", {
-        x: margin + 66,
-        y: height - 72,
-        size: 10.5,
-        font: boldFont,
-        color: colors.ink,
-      });
-
-      const documentBoxWidth = 96;
-      const documentBoxX = width - margin - documentBoxWidth;
-      page.drawRectangle({
-        x: documentBoxX,
-        y: height - 75,
-        width: documentBoxWidth,
-        height: 48,
-        color: colors.pale,
-        borderColor: colors.border,
-        borderWidth: 0.8,
-      });
-      page.drawText("DOCUMENTO", {
-        x: documentBoxX + 12,
-        y: height - 43,
-        size: 7,
-        font: boldFont,
-        color: colors.muted,
-      });
-      page.drawText("VF-005", {
-        x: documentBoxX + 12,
-        y: height - 62,
-        size: 13,
-        font: boldFont,
-        color: colors.brandDark,
-      });
-
-      page.drawLine({
-        start: { x: margin, y: height - 88 },
-        end: { x: width - margin, y: height - 88 },
-        thickness: 1,
-        color: colors.brand,
-      });
-      y = height - 108;
+      page.drawLine({ start: { x: margin, y: height - 78 }, end: { x: width - margin, y: height - 78 }, thickness: 1, color: colors.brand });
+      const titulo = "Registro de recepcion de muestras" + (continuation ? " - continuacion" : "");
+      page.drawText(titulo, { x: (width - boldFont.widthOfTextAtSize(titulo, 12)) / 2, y: height - 101, size: 12, font: boldFont, color: colors.ink });
+      const estado = datos.preview ? "Vista previa - cambios sin guardar" : "Recepcion registrada";
+      page.drawText(estado, { x: (width - regularFont.widthOfTextAtSize(estado, 8)) / 2, y: height - 116, size: 8, font: regularFont, color: colors.muted });
+      y = height - 140;
     };
-
     const newPage = continuation => {
       page = pdfDoc.addPage(pageSize);
       addHeader(continuation);
@@ -248,203 +194,60 @@
     };
 
     const drawHero = () => {
-      const heroHeight = 80;
-      page.drawRectangle({
-        x: margin,
-        y: y - heroHeight,
-        width: contentWidth,
-        height: heroHeight,
-        color: colors.brandDark,
+      page.drawRectangle({ x: margin, y: y - 82, width: contentWidth, height: 82, color: colors.pale, borderColor: colors.border, borderWidth: 0.6 });
+      const claves = [["Numero de lote", datos.lote], ["Tipo de muestra", datos.tipo], ["Muestras", datos.numeroMuestras]];
+      claves.forEach(([label, value], index) => {
+        const x = margin + 12 + index * (contentWidth / 3);
+        page.drawText(label, { x, y: y - 16, size: 7, font: regularFont, color: colors.muted });
+        const text = textoOGuion(value);
+        const size = Math.min(10, (contentWidth / 3 - 20) / Math.max(1, boldFont.widthOfTextAtSize(text, 1)));
+        page.drawText(text, { x, y: y - 32, size, font: boldFont, color: colors.ink });
       });
-      page.drawRectangle({
-        x: margin,
-        y: y - heroHeight,
-        width: 7,
-        height: heroHeight,
-        color: colors.lime,
-      });
-
-      page.drawText("LOTE", {
-        x: margin + 22,
-        y: y - 20,
-        size: 7.5,
-        font: boldFont,
-        color: colors.paleStrong,
-      });
-      page.drawText(textoOGuion(datos.lote), {
-        x: margin + 22,
-        y: y - 47,
-        size: 22,
-        font: boldFont,
-        color: colors.white,
-      });
-
-      const typeText = textoOGuion(datos.tipo).toUpperCase();
-      const typeSize = 8;
-      const typeWidth = Math.min(180, boldFont.widthOfTextAtSize(typeText, typeSize) + 22);
-      page.drawRectangle({
-        x: width - margin - typeWidth - 14,
-        y: y - 27,
-        width: typeWidth,
-        height: 20,
-        color: colors.brand,
-      });
-      page.drawText(typeText, {
-        x: width - margin - typeWidth - 3,
-        y: y - 21,
-        size: typeSize,
-        font: boldFont,
-        color: colors.white,
-      });
-
-      const summaryX = margin + 220;
-      const summaryY = y - 47;
-      const drawSummary = (label, value, x) => {
-        page.drawText(label, {
-          x,
-          y: summaryY + 13,
-          size: 6.5,
-          font: boldFont,
-          color: colors.paleStrong,
-        });
-        page.drawText(textoOGuion(value), {
-          x,
-          y: summaryY - 2,
-          size: 9.5,
-          font: boldFont,
-          color: colors.white,
-        });
-      };
-      drawSummary("MUESTRAS", datos.numeroMuestras, summaryX);
-      drawSummary("RANGO DE LABORATORIO", `${textoOGuion(datos.numeroLaboratorioInicio)} a ${textoOGuion(datos.numeroLaboratorioFin)}`, summaryX + 84);
-      y -= heroHeight + 25;
+      page.drawText("Numero de laboratorio", { x: margin + 12, y: y - 53, size: 7, font: regularFont, color: colors.muted });
+      page.drawText(textoOGuion(datos.numeroLaboratorioInicio) + " a " + textoOGuion(datos.numeroLaboratorioFin), { x: margin + 12, y: y - 68, size: 9, font: boldFont, color: colors.ink });
+      y -= 105;
     };
-
     const drawInfoGrid = rows => {
-      const gap = 10;
-      const cellWidth = (contentWidth - gap) / 2;
-      const cellHeight = 43;
-
-      rows.forEach((row, index) => {
-        if (index % 2 === 0) ensureSpace(cellHeight + 9);
-        const column = index % 2;
-        const rowTop = y;
-        const x = margin + column * (cellWidth + gap);
-
-        page.drawRectangle({
-          x,
-          y: rowTop - cellHeight,
-          width: cellWidth,
-          height: cellHeight,
-          color: colors.surface,
-          borderColor: colors.border,
-          borderWidth: 0.6,
+      const cellWidth = (contentWidth - 16) / 2;
+      for (let index = 0; index < rows.length; index += 2) {
+        const pair = rows.slice(index, index + 2).map(([label, value]) => ({
+          label, lines: envolverTexto(textoOGuion(value), regularFont, 9, cellWidth - 12),
+        }));
+        const rowHeight = Math.max(...pair.map(cell => cell.lines.length * 12 + 24));
+        ensureSpace(rowHeight);
+        pair.forEach((cell, column) => {
+          const x = margin + column * (cellWidth + 16);
+          page.drawText(cell.label, { x, y: y - 8, size: 7.5, font: regularFont, color: colors.muted });
+          cell.lines.forEach((line, i) => page.drawText(line, { x, y: y - 23 - i * 12, size: 9, font: regularFont, color: colors.ink }));
         });
-        page.drawText(limpiarTexto(row[0]).toUpperCase(), {
-          x: x + 11,
-          y: rowTop - 14,
-          size: 6.5,
-          font: boldFont,
-          color: colors.muted,
-        });
-
-        const valueLines = envolverTexto(textoOGuion(row[1]), regularFont, 9.5, cellWidth - 22).slice(0, 2);
-        valueLines.forEach((line, lineIndex) => {
-          page.drawText(line, {
-            x: x + 11,
-            y: rowTop - 30 - lineIndex * 10,
-            size: 9.5,
-            font: regularFont,
-            color: colors.ink,
-          });
-        });
-
-        if (column === 1 || index === rows.length - 1) y -= cellHeight + 9;
-      });
-    };
-
-    const drawAnalysisHeader = () => {
-      const headerHeight = 24;
-      page.drawRectangle({
-        x: margin,
-        y: y - headerHeight,
-        width: contentWidth,
-        height: headerHeight,
-        color: colors.brandDark,
-      });
-      page.drawText("ANALISIS", {
-        x: margin + 12,
-        y: y - 16,
-        size: 7.5,
-        font: boldFont,
-        color: colors.white,
-      });
-      page.drawText("CATEGORIA", {
-        x: margin + 382,
-        y: y - 16,
-        size: 7.5,
-        font: boldFont,
-        color: colors.white,
-      });
-      y -= headerHeight;
+        y -= rowHeight;
+      }
+      y -= 10;
     };
 
     const drawAnalyses = () => {
-      const analyses = Array.isArray(datos.analisis) && datos.analisis.length
-        ? datos.analisis
-        : [{ nombre: "Sin analisis seleccionados", tipo: "-" }];
-
-      drawAnalysisHeader();
-      analyses.forEach((item, index) => {
-        const nameLines = envolverTexto(textoOGuion(item.nombre), regularFont, 8.8, 350);
-        const typeLines = envolverTexto(textoOGuion(item.tipo), regularFont, 8.2, 108);
-        const rowHeight = Math.max(28, Math.max(nameLines.length, typeLines.length) * 11 + 12);
-
-        if (y - rowHeight < contentBottom) {
-          newPage(true);
-          drawSectionTitle("Analisis solicitados");
-          drawAnalysisHeader();
-        }
-
-        page.drawRectangle({
-          x: margin,
-          y: y - rowHeight,
-          width: contentWidth,
-          height: rowHeight,
-          color: index % 2 === 0 ? colors.white : colors.surface,
-          borderColor: colors.border,
-          borderWidth: 0.45,
-        });
-        page.drawRectangle({
-          x: margin + 10,
-          y: y - 17,
-          width: 5,
-          height: 5,
-          color: colors.brand,
-        });
-        nameLines.forEach((line, lineIndex) => {
-          page.drawText(line, {
-            x: margin + 24,
-            y: y - 18 - lineIndex * 11,
-            size: 8.8,
-            font: regularFont,
-            color: colors.ink,
-          });
-        });
-        typeLines.forEach((line, lineIndex) => {
-          page.drawText(line, {
-            x: margin + 382,
-            y: y - 18 - lineIndex * 10,
-            size: 8.2,
-            font: regularFont,
-            color: colors.muted,
-          });
+      const analyses = Array.isArray(datos.analisis) && datos.analisis.length ? datos.analisis : [];
+      if (!analyses.length) {
+        page.drawText("Sin analisis seleccionados.", { x: margin, y, size: 9, font: regularFont, color: colors.muted });
+        y -= 25;
+        return;
+      }
+      const cellWidth = (contentWidth - 14) / 2;
+      for (let index = 0; index < analyses.length; index += 2) {
+        const pair = analyses.slice(index, index + 2).map(item => envolverTexto(textoOGuion(item.nombre), regularFont, 9, cellWidth - 22));
+        const rowHeight = Math.max(...pair.map(lines => lines.length * 12 + 8));
+        if (ensureSpace(rowHeight + 10)) drawSectionTitle("Analisis solicitados - continuacion");
+        pair.forEach((lines, column) => {
+          const x = margin + column * (cellWidth + 14);
+          page.drawRectangle({ x, y: y - 9, width: 8, height: 8, borderColor: colors.brand, borderWidth: 0.7 });
+          page.drawLine({ start: { x: x + 1.5, y: y - 5 }, end: { x: x + 3.5, y: y - 7 }, thickness: 0.8, color: colors.brandDark });
+          page.drawLine({ start: { x: x + 3.5, y: y - 7 }, end: { x: x + 7, y: y - 2.5 }, thickness: 0.8, color: colors.brandDark });
+          lines.forEach((line, i) => page.drawText(line, { x: x + 16, y: y - 8 - i * 12, size: 9, font: regularFont, color: colors.ink }));
         });
         y -= rowHeight;
-      });
-      y -= 18;
+      }
+      y -= 15;
     };
-
     const drawObservations = () => {
       const pendingLines = envolverTexto(datos.observaciones || "Sin observaciones.", regularFont, 8.8, contentWidth - 28);
       let firstChunk = true;
@@ -615,16 +418,15 @@
 
     newPage(false);
     drawHero();
-    drawSectionTitle("Datos de la solicitud");
+    drawSectionTitle("Datos del muestreo");
     drawInfoGrid([
-      ["Tipo de muestra", datos.tipo],
       ["Cliente / institucion", datos.institucion],
       ["Responsable del envio", datos.responsableEnvio],
-      ["Codigo de muestreo", datos.codigoMuestreo],
+      ["Nombre del ensayo", datos.codigoMuestreo],
       ["Fecha de muestreo", formatearFecha(datos.fechaMuestreo)],
       ["Fecha de ingreso", formatearFecha(datos.fechaIngreso)],
       ["Fecha estimada", formatearFecha(datos.fechaEstimada)],
-      ["Estado de recepcion", "Recibida"],
+
     ]);
     y -= 5;
     drawSectionTitle("Analisis solicitados");

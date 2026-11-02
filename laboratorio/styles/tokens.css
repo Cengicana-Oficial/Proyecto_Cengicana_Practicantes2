@@ -1,46 +1,46 @@
 :root {
   /* Brand palette */
-  --color-primary-50: #edf5ee;
-  --color-primary-100: #c6dbc9;
-  --color-primary-200: #9dbfa2;
-  --color-primary-300: #74a27a;
-  --color-primary-400: #4a8551;
-  --color-primary-500: #2d6d35;
-  --color-primary-600: #1b5e20;
-  --color-primary-700: #154c1a;
-  --color-primary-800: #103d15;
-  --color-primary-900: #0b2d10;
+  --color-primary-50: #F1F8E9;
+  --color-primary-100: #E3F1D3;
+  --color-primary-200: #C7E4A8;
+  --color-primary-300: #ACD77C;
+  --color-primary-400: #8FC951;
+  --color-primary-500: #73BC25;
+  --color-primary-600: #5E9B1D;
+  --color-primary-700: #4E8418;
+  --color-primary-800: #3A6312;
+  --color-primary-900: #26420C;
 
-  --color-secondary-50: #eef2ef;
-  --color-secondary-100: #c8d3cb;
-  --color-secondary-200: #a3b5a8;
-  --color-secondary-300: #7d9684;
-  --color-secondary-400: #67816d;
-  --color-secondary-500: #4e7055;
-  --color-secondary-600: #3f5a45;
-  --color-secondary-700: #314636;
-  --color-secondary-800: #233328;
+  --color-secondary-50: #F6FBE3;
+  --color-secondary-100: #ECF6C2;
+  --color-secondary-200: #D9EC85;
+  --color-secondary-300: #C3E14D;
+  --color-secondary-400: #B2DA22;
+  --color-secondary-500: #A3D300;
+  --color-secondary-600: #7E9F00;
+  --color-secondary-700: #5C7700;
+  --color-secondary-800: #3E5000;
 
-  --color-tertiary-50: #f7eef2;
-  --color-tertiary-100: #e4c2cf;
-  --color-tertiary-200: #cf95aa;
-  --color-tertiary-300: #ba6786;
-  --color-tertiary-400: #a74a6b;
-  --color-tertiary-500: #883454;
-  --color-tertiary-600: #712942;
-  --color-tertiary-700: #5b2035;
-  --color-tertiary-800: #451828;
+  --color-tertiary-50: #FFF0E6;
+  --color-tertiary-100: #FFD9BF;
+  --color-tertiary-200: #FFB580;
+  --color-tertiary-300: #FF9040;
+  --color-tertiary-400: #FF7D1F;
+  --color-tertiary-500: #FF6B00;
+  --color-tertiary-600: #B34B00;
+  --color-tertiary-700: #8A3A00;
+  --color-tertiary-800: #5C2700;
 
-  --color-neutral-50: #f2f3f2;
-  --color-neutral-100: #d8dad7;
-  --color-neutral-200: #bdc0bc;
-  --color-neutral-300: #a2a6a1;
-  --color-neutral-400: #8b8f89;
-  --color-neutral-500: #747871;
-  --color-neutral-600: #5f625c;
-  --color-neutral-700: #4a4d49;
-  --color-neutral-800: #363936;
-  --color-neutral-900: #232523;
+  --color-neutral-50: #F7F8F8;
+  --color-neutral-100: #EEF0F1;
+  --color-neutral-200: #E2E5E7;
+  --color-neutral-300: #CED2D5;
+  --color-neutral-400: #A9AFB3;
+  --color-neutral-500: #858C91;
+  --color-neutral-600: #636A6F;
+  --color-neutral-700: #474D51;
+  --color-neutral-800: #30353A;
+  --color-neutral-900: #1F2326;
 
   --color-info-50: var(--color-secondary-50);
   --color-info-100: var(--color-secondary-100);
@@ -51,14 +51,14 @@
   --color-info-600: var(--color-secondary-600);
   --color-info-700: var(--color-secondary-700);
 
-  --color-warning-50: var(--color-tertiary-50);
-  --color-warning-100: var(--color-tertiary-100);
-  --color-warning-200: var(--color-tertiary-200);
-  --color-warning-300: var(--color-tertiary-300);
-  --color-warning-400: var(--color-tertiary-400);
-  --color-warning-500: var(--color-tertiary-500);
-  --color-warning-600: var(--color-tertiary-600);
-  --color-warning-700: var(--color-tertiary-700);
+  --color-warning-50: #FFF8DB;
+  --color-warning-100: #FFF0B3;
+  --color-warning-200: #FFE580;
+  --color-warning-300: #FFDB4D;
+  --color-warning-400: #FFD426;
+  --color-warning-500: #FFCC00;
+  --color-warning-600: #8A6E00;
+  --color-warning-700: #5C4A00;
 
   --color-danger-50: var(--color-tertiary-50);
   --color-danger-100: var(--color-tertiary-100);
@@ -70,16 +70,16 @@
   --color-danger-700: var(--color-tertiary-700);
 
   /* Neutral surfaces */
-  --color-surface: #eceeea;
-  --color-surface-subtle: #e4e7e2;
-  --color-surface-elevated: rgba(242, 243, 242, 0.82);
-  --color-surface-raised: rgba(247, 248, 246, 0.94);
-  --color-surface-strong: #f8f8f6;
+  --color-surface: #F7F8F8;
+  --color-surface-subtle: #E2E5E7;
+  --color-surface-elevated: rgba(238, 240, 241, 0.82);
+  --color-surface-raised: rgba(247, 248, 248, 0.94);
+  --color-surface-strong: #F7F8F8;
   --color-text-primary: var(--color-neutral-900);
   --color-text-secondary: var(--color-neutral-700);
   --color-text-muted: var(--color-neutral-500);
-  --color-border: #c8cec7;
-  --color-border-strong: #b6beb5;
+  --color-border: #CED2D5;
+  --color-border-strong: #A9AFB3;
 
   /* Legacy aliases */
   --green-50: var(--color-primary-50);
@@ -186,16 +186,16 @@
 
   /* Shadows */
   --shadow-none: none;
-  --shadow-xs: 0 2px 8px rgba(35, 37, 35, 0.04);
-  --shadow-sm: 0 5px 16px rgba(35, 37, 35, 0.05);
-  --shadow-md: 0 10px 22px rgba(35, 37, 35, 0.08);
-  --shadow-lg: 0 16px 36px rgba(35, 37, 35, 0.1);
-  --shadow-xl: 0 24px 48px rgba(35, 37, 35, 0.14);
-  --shadow-soft: 0 8px 20px rgba(35, 37, 35, 0.06);
-  --shadow-card: 0 14px 30px rgba(35, 37, 35, 0.09);
-  --shadow-strong: 0 18px 36px rgba(78, 112, 85, 0.16);
+  --shadow-xs: 0 2px 8px rgba(31, 35, 38, 0.04);
+  --shadow-sm: 0 5px 16px rgba(31, 35, 38, 0.05);
+  --shadow-md: 0 10px 22px rgba(31, 35, 38, 0.08);
+  --shadow-lg: 0 16px 36px rgba(31, 35, 38, 0.1);
+  --shadow-xl: 0 24px 48px rgba(31, 35, 38, 0.14);
+  --shadow-soft: 0 8px 20px rgba(31, 35, 38, 0.06);
+  --shadow-card: 0 14px 30px rgba(31, 35, 38, 0.09);
+  --shadow-strong: 0 18px 36px rgba(71, 77, 81, 0.16);
   --shadow-1: var(--shadow-md);
-  --shadow-2: 0 18px 34px rgba(35, 37, 35, 0.12);
+  --shadow-2: 0 18px 34px rgba(31, 35, 38, 0.12);
   --panel-shadow: var(--shadow-lg);
   --panel-shadow-strong: var(--shadow-xl);
 
@@ -208,8 +208,8 @@
   --transition-color: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
 
   /* Focus and states */
-  --focus-ring: 0 0 0 4px rgba(27, 94, 32, 0.14);
-  --focus-ring-secondary: 0 0 0 4px rgba(78, 112, 85, 0.16);
+  --focus-ring: 0 0 0 4px rgba(58, 99, 18, 0.14);
+  --focus-ring-secondary: 0 0 0 4px rgba(71, 77, 81, 0.16);
   --state-success-bg: var(--green-50);
   --state-success-text: var(--green-700);
   --state-success-border: var(--green-200);
@@ -225,22 +225,22 @@
 
   /* Shared chromatic atmosphere */
   --lab-body-background:
-    linear-gradient(180deg, rgba(242, 243, 242, 0.98), rgba(216, 218, 215, 0.84)),
-    linear-gradient(to right, rgba(116, 120, 113, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(116, 120, 113, 0.08) 1px, transparent 1px),
-    radial-gradient(circle at top left, rgba(27, 94, 32, 0.05), transparent 34%),
-    radial-gradient(circle at top right, rgba(78, 112, 85, 0.05), transparent 28%),
-    radial-gradient(circle at bottom left, rgba(136, 52, 84, 0.035), transparent 24%);
+    linear-gradient(180deg, rgba(238, 240, 241, 0.98), rgba(206, 210, 213, 0.84)),
+    linear-gradient(to right, rgba(99, 106, 111, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(99, 106, 111, 0.08) 1px, transparent 1px),
+    radial-gradient(circle at top left, rgba(58, 99, 18, 0.05), transparent 34%),
+    radial-gradient(circle at top right, rgba(71, 77, 81, 0.05), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(179, 75, 0, 0.035), transparent 24%);
   --lab-body-background-size: auto, 24px 24px, 24px 24px, auto, auto, auto;
   --lab-body-background-position: center, center, center, top left, top right, bottom left;
-  --lab-body-surface: rgba(247, 248, 246, 0.92);
-  --lab-body-surface-strong: rgba(248, 248, 246, 0.96);
-  --lab-body-border-soft: rgba(182, 190, 181, 0.68);
-  --lab-body-border-strong: rgba(116, 120, 113, 0.22);
+  --lab-body-surface: rgba(247, 248, 248, 0.92);
+  --lab-body-surface-strong: rgba(247, 248, 248, 0.96);
+  --lab-body-border-soft: rgba(169, 175, 179, 0.68);
+  --lab-body-border-strong: rgba(99, 106, 111, 0.22);
 
   /* Layout */
   --app-sidebar: 250px;
   --app-gap: 24px;
   --content-max-width: 1180px;
-  --panel-border: rgba(116, 120, 113, 0.2);
+  --panel-border: rgba(99, 106, 111, 0.2);
 }

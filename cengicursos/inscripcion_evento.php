@@ -12,7 +12,7 @@ $evento = null;
 
 if (preg_match('/^[a-f0-9]{32}$/', $token)) {
     $stmt = $db->prepare("
-        SELECT id, nombre, tipo, modalidad_pago, costo, fecha, estado, hora, lugar, cupo,
+        SELECT id, nombre, tipo, modalidad_pago, costo, costo_usd, permitir_sin_comprobante, imagen, logo, color, fecha, estado, hora, lugar, cupo,
                (SELECT COUNT(*) FROM evento_participantes ep WHERE ep.evento_id = eventos.id) AS registrados
         FROM eventos
         WHERE token_inscripcion = ?
@@ -41,12 +41,16 @@ $ingeniosLista = $evento !== null
     ? $db->query('SELECT nombre_ingenios FROM ingenios ORDER BY nombre_ingenios')->fetchAll(PDO::FETCH_COLUMN)
     : [];
 
-// WhatsApp de soporte de pagos: solo se muestra el boton si el numero ya esta configurado.
-$whatsappPago = preg_replace('/\D/', '', CENGI_EVENTO_TELEFONO_PAGO);
+// Soporte de pagos (lo edita Administracion en Control QR de eventos). El boton de
+// WhatsApp solo se muestra si el numero ya esta configurado.
+$soportePagos = cengi_evento_soporte_pagos($db);
+$whatsappPago = preg_replace('/\D/', '', $soportePagos['whatsapp']);
 $whatsappUrl = '';
 if ($evento !== null && strlen($whatsappPago) >= 8) {
-    $whatsappUrl = 'https://wa.me/' . $whatsappPago . '?text=' . rawurlencode('Hola, quiero pagar mi inscripción al evento ' . $evento['nombre'] . ' desde Guatemala. ¿Me comparten los datos de la cuenta?');
+    $whatsappUrl = 'https://wa.me/' . $whatsappPago . '?text=' . rawurlencode('Hola, quiero pagar mi inscripción al evento ' . $evento['nombre'] . '. ¿Me comparten los datos de la cuenta?');
 }
+$costoUsd = $evento !== null ? (float) ($evento['costo_usd'] ?? 0) : 0;
+$permiteSinComprobante = $evento !== null && (int) ($evento['permitir_sin_comprobante'] ?? 0) === 1;
 
 function cengi_ins_evt_html($valor)
 {
@@ -77,7 +81,7 @@ function cengi_ins_evt_previo(array $previo, $campo)
 // Cupo lleno: el formulario ya no se muestra (guardar_inscripcion_evento.php tambien lo valida).
 $cupoLleno = $evento !== null && (int) ($evento['cupo'] ?? 0) > 0 && (int) $evento['registrados'] >= (int) $evento['cupo'];
 $mostrarQr = $evento !== null && $codigo !== '' && in_array($resultado, ['ok', 'existente'], true);
-$mostrarPendiente = $evento !== null && $resultado === 'pendiente';
+$mostrarPendiente = $evento !== null && in_array($resultado, ['pendiente', 'reservado'], true);
 $primerNombre = $nombreInscrito !== '' ? explode(' ', $nombreInscrito)[0] : '';
 $urlOtraPersona = 'inscripcion_evento.php?' . http_build_query(['token' => $token]);
 ?>
@@ -93,7 +97,12 @@ $urlOtraPersona = 'inscripcion_evento.php?' . http_build_query(['token' => $toke
     <link rel="stylesheet" href="css/eventos_publico.css">
 </head>
 <body>
-<div class="ep-hero">
+<?php
+// Imagen del evento ("Editar evento") como portada, con el degradado encima para leer el titulo.
+$imagenPortada = $evento && $evento['imagen'] && cengi_evento_imagen_archivo($evento['imagen']) ? cengi_normalizar_url_archivo($evento['imagen']) : '';
+$logoEvento = $evento && $evento['logo'] && cengi_evento_imagen_archivo($evento['logo']) ? cengi_normalizar_url_archivo($evento['logo']) : '';
+?>
+<div class="ep-hero"<?php if ($imagenPortada !== ''): ?> style="background:linear-gradient(120deg, rgba(15,42,28,.88), rgba(15,42,28,.55)), url('<?php echo cengi_ins_evt_html($imagenPortada); ?>') center / cover no-repeat;"<?php endif; ?>>
     <div class="ep-wrap">
         <div class="ep-kicker">CENGICURSOS · EVENTOS</div>
         <h1 class="ep-h1">Inscripción a evento</h1>
@@ -125,8 +134,13 @@ $urlOtraPersona = 'inscripcion_evento.php?' . http_build_query(['token' => $toke
                 <div class="ep-ok-i">✓</div>
                 <h2 class="ep-h2">¡Inscripción recibida!</h2>
                 <p><?php echo $nombreInscrito !== '' ? cengi_ins_evt_html($nombreInscrito) . ', tu' : 'Tu'; ?> lugar en <b><?php echo cengi_ins_evt_html($evento['nombre']); ?></b> quedó registrado.</p>
-                <div class="ep-estado"><span class="ok">① Inscripción y pago recibidos</span><span>② Validación del pago</span><span>③ Confirmación y código QR</span></div>
-                <p>Administración revisará tu comprobante. Cuando confirmemos tu participación recibirás tu <b>código QR de ingreso</b> por correo.</p>
+                <?php if ($resultado === 'reservado'): ?>
+                    <div class="ep-estado"><span class="ok">① Lugar reservado</span><span>② Pago y validación</span><span>③ Confirmación y código QR</span></div>
+                    <p>Te enviamos a tu correo cómo realizar el pago. Solicita los datos de la cuenta a <b><?php echo cengi_ins_evt_html($soportePagos['nombre']); ?></b><?php echo $soportePagos['correo'] !== '' ? ' (' . cengi_ins_evt_html($soportePagos['correo']) . ')' : ''; ?> y envía tu comprobante. Cuando se valide el pago y confirmemos tu participación recibirás tu <b>código QR de ingreso</b> por correo.</p>
+                <?php else: ?>
+                    <div class="ep-estado"><span class="ok">① Inscripción y pago recibidos</span><span>② Validación del pago</span><span>③ Confirmación y código QR</span></div>
+                    <p>Administración revisará tu comprobante. Cuando confirmemos tu participación recibirás tu <b>código QR de ingreso</b> por correo.</p>
+                <?php endif; ?>
                 <a class="ep-btn is-secundario" href="<?php echo cengi_ins_evt_html($urlOtraPersona); ?>">Inscribir a otra persona</a>
             </div>
         <?php elseif ($cupoLleno): ?>
@@ -150,16 +164,20 @@ $urlOtraPersona = 'inscripcion_evento.php?' . http_build_query(['token' => $toke
                 <?php if ($eventoPagado): ?>
                     <h2 class="ep-h2" style="margin-top:22px;">💳 Pago del evento</h2>
                     <div class="ep-f"><label>¿Desde dónde realizará el pago?</label>
-                        <div class="ep-radios"><label><input type="radio" name="origen" value="nacional" checked> Guatemala · <b><?php echo cengi_ins_evt_html(cengi_ins_evt_q($evento['costo'])); ?></b></label></div></div>
+                        <div class="ep-radios"><label><input type="radio" name="origen" value="nacional"<?php echo ($previo['origen'] ?? '') !== 'extranjero' ? ' checked' : ''; ?>> Guatemala · <b><?php echo cengi_ins_evt_html(cengi_ins_evt_q($evento['costo'])); ?></b></label>
+                            <?php if ($costoUsd > 0): ?><label><input type="radio" name="origen" value="extranjero"<?php echo ($previo['origen'] ?? '') === 'extranjero' ? ' checked' : ''; ?>> Desde el extranjero · <b>US$<?php echo cengi_ins_evt_html(number_format($costoUsd, fmod($costoUsd, 1.0) ? 2 : 0)); ?></b></label><?php endif; ?></div></div>
                     <div class="ep-f" style="margin-top:14px;"><label>Forma de pago</label>
                         <div class="ep-radios"><label><input type="radio" name="metodo" value="deposito" checked> 🏦 Depósito o transferencia</label></div></div>
                     <div id="epDepositoBox">
                         <div class="ep-pago" id="epCuentaBox">
                             <b>¿A qué cuenta deposito?</b>
-                            <p>Por seguridad, los datos de la cuenta no se publican aquí. Te los envía <b><?php echo cengi_ins_evt_html(CENGI_EVENTO_SOPORTE_PAGO_NOMBRE); ?></b> (<?php echo cengi_ins_evt_html(CENGI_EVENTO_SOPORTE_PAGO_HORARIO); ?>), y también llegan al correo que registres.</p>
-                            <div class="ep-contacto"><?php if ($whatsappUrl !== ''): ?><a class="ep-wa" href="<?php echo cengi_ins_evt_html($whatsappUrl); ?>" target="_blank" rel="noopener">WhatsApp de soporte de pagos</a><?php endif; ?><a class="ep-mail" href="<?php echo cengi_ins_evt_html('mailto:' . CENGI_EVENTO_CORREO_PAGO . '?subject=' . rawurlencode('Datos de pago — ' . $evento['nombre'])); ?>"><?php echo cengi_ins_evt_html(CENGI_EVENTO_CORREO_PAGO); ?></a></div>
+                            <p>Por seguridad, los datos de la cuenta no se publican aquí. Te los envía <b><?php echo cengi_ins_evt_html($soportePagos['nombre']); ?></b><?php echo $soportePagos['horario'] !== '' ? ' (' . cengi_ins_evt_html($soportePagos['horario']) . ')' : ''; ?>, y también llegan al correo que registres.</p>
+                            <div class="ep-contacto"><?php if ($whatsappUrl !== ''): ?><a class="ep-wa" href="<?php echo cengi_ins_evt_html($whatsappUrl); ?>" target="_blank" rel="noopener">WhatsApp de soporte de pagos</a><?php endif; ?><?php if ($soportePagos['correo'] !== ''): ?><a class="ep-mail" href="<?php echo cengi_ins_evt_html('mailto:' . $soportePagos['correo'] . '?subject=' . rawurlencode('Datos de pago — ' . $evento['nombre'])); ?>"><?php echo cengi_ins_evt_html($soportePagos['correo']); ?></a><?php endif; ?></div>
                             <p class="ep-seg">Verifica que los datos te lleguen desde un correo @cengicana.org o desde el WhatsApp oficial. CENGICAÑA nunca te pedirá pagar a cuentas personales.</p>
                         </div>
+                        <?php if ($permiteSinComprobante): ?>
+                            <label class="ep-check" style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:13px;"><input type="checkbox" id="epSinComp" name="sin_comprobante" value="1"<?php echo !empty($previo['sin_comprobante']) ? ' checked' : ''; ?>> <span>Aún no he pagado: reservar mi lugar y enviar el comprobante después</span></label>
+                        <?php endif; ?>
                         <div class="ep-grid2" id="epCompBox" style="margin-top:12px;">
                             <div class="ep-f"><label for="epBoleta">N.° de boleta o transferencia</label><input id="epBoleta" name="pago_boleta" maxlength="60" value="<?php echo cengi_ins_evt_previo($previo, 'pago_boleta'); ?>"></div>
                             <div class="ep-f"><label for="epFecha">Fecha del pago</label><input id="epFecha" name="pago_fecha" type="date" max="<?php echo date('Y-m-d'); ?>" value="<?php echo cengi_ins_evt_previo($previo, 'pago_fecha'); ?>"></div>
@@ -184,17 +202,18 @@ $urlOtraPersona = 'inscripcion_evento.php?' . http_build_query(['token' => $toke
     </div>
     <div>
         <div class="ep-info" id="epInfo">
+            <?php if ($logoEvento !== ''): ?><div style="background:#fff;border-radius:10px;padding:8px 12px;display:inline-block;margin-bottom:12px;"><img src="<?php echo cengi_ins_evt_html($logoEvento); ?>" alt="Logo del evento" style="max-height:48px;max-width:200px;display:block;"></div><?php endif; ?>
             <div class="ep-k"><?php echo cengi_ins_evt_html(mb_strtoupper((string) $evento['tipo'], 'UTF-8')); ?></div>
             <div class="ep-t"><?php echo cengi_ins_evt_html($evento['nombre']); ?></div>
             <div class="ep-row"><span>📅</span><div><div class="ep-l">Fecha</div><b><?php echo cengi_ins_evt_html(cengi_ins_evt_fecha($evento['fecha']) . (trim((string) $evento['hora']) !== '' ? ' · ' . $evento['hora'] : '')); ?></b></div></div>
             <?php if (trim((string) $evento['lugar']) !== ''): ?>
             <div class="ep-row"><span>📍</span><div><div class="ep-l">Lugar</div><b><?php echo cengi_ins_evt_html($evento['lugar']); ?></b></div></div>
             <?php endif; ?>
-            <div class="ep-row"><span>🎟️</span><div><div class="ep-l">Acceso</div><b><?php echo $eventoPagado ? 'Pagado · ' . cengi_ins_evt_html(cengi_ins_evt_q($evento['costo'])) : 'Gratuito'; ?></b></div></div>
+            <div class="ep-row"><span>🎟️</span><div><div class="ep-l">Acceso</div><b><?php echo $eventoPagado ? 'Pagado · ' . cengi_ins_evt_html(cengi_ins_evt_q($evento['costo']) . ($costoUsd > 0 ? ' · US$' . number_format($costoUsd, fmod($costoUsd, 1.0) ? 2 : 0) . ' desde el extranjero' : '')) : 'Gratuito'; ?></b></div></div>
         </div>
         <div class="ep-aviso" id="epAviso">
             <?php if ($eventoPagado): ?>
-                <b>ⓘ Evento pagado</b><p>Adjunta tu comprobante al inscribirte. Tu código QR de ingreso te llegará cuando Administración valide el pago y confirmemos tu participación.</p>
+                <b>ⓘ Evento pagado</b><p><?php echo $permiteSinComprobante ? 'Adjunta tu comprobante al inscribirte o reserva tu lugar y envíalo después.' : 'Adjunta tu comprobante al inscribirte.'; ?> Tu código QR de ingreso te llegará cuando Administración valide el pago y confirmemos tu participación.</p>
             <?php else: ?>
                 <b>ⓘ Evento gratuito</b><p>Al inscribirte recibes de inmediato tu código QR de ingreso.</p>
             <?php endif; ?>
@@ -275,6 +294,15 @@ $urlOtraPersona = 'inscripcion_evento.php?' . http_build_query(['token' => $toke
         });
     }
 
+    // "Reservar y enviar el comprobante despues" (si el evento lo permite) oculta los datos del pago.
+    var reservar = document.getElementById('epSinComp');
+    function sincronizarReserva() {
+        var caja = document.getElementById('epCompBox'), btn = document.getElementById('epBtn');
+        if (caja) caja.style.display = reservar && reservar.checked ? 'none' : '';
+        if (btn && eventoPagado) btn.textContent = reservar && reservar.checked ? 'Reservar mi lugar' : 'Inscribirme y enviar comprobante';
+    }
+    if (reservar) { reservar.addEventListener('change', sincronizarReserva); sincronizarReserva(); }
+
     // Validacion previa al envio, con los mismos mensajes que ppEpEnviar del prototipo.
     var form = document.getElementById('formInscripcionEvento');
     var boton = document.getElementById('epBtn');
@@ -285,7 +313,8 @@ $urlOtraPersona = 'inscripcion_evento.php?' . http_build_query(['token' => $toke
             if (g('epN').value.trim().replace(/\s+/g, ' ').length < 5) errs.push('Escribe tu nombre completo.');
             if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(g('epCorreo').value.trim())) errs.push('Escribe un correo válido.');
             if (g('epTel').value.replace(/\D/g, '').length < 8) errs.push('Escribe un teléfono o WhatsApp de al menos 8 dígitos.');
-            if (eventoPagado) {
+            var sinComp = document.getElementById('epSinComp');
+            if (eventoPagado && !(sinComp && sinComp.checked)) {
                 if (!(archivo.files && archivo.files[0])) errs.push('Adjunta la foto o PDF de tu comprobante.');
                 if (!g('epBoleta').value.trim()) errs.push('Escribe el número de boleta o transferencia.');
                 if (!/^\d{4}-\d{2}-\d{2}$/.test(g('epFecha').value)) errs.push('Indica la fecha del pago.');

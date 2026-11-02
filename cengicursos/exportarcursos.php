@@ -1,15 +1,16 @@
 <?php
-require_once("revisar_permisos.php");
+/**
+ * "Excel por curso": participantes asignados a cada curso (todos, o uno con ?curso_id=),
+ * como .xlsx real (PhpSpreadsheet vía cengi_cob_excel). Antes usaba PHPExcel, que en
+ * PHP 8 escribe avisos "Deprecated" dentro del archivo y lo dejaba dañado.
+ */
+require_once __DIR__ . '/revisar_permisos.php';
 cengi_require_ver_participantes();
-require_once("conexion.php");
+require_once __DIR__ . '/conexion.php';
+require_once __DIR__ . '/cobranza_helpers.php';
 $db = conectar();
 $cursoId = (int) ($_GET['curso_id'] ?? 0);
-//include menu
-/** Incluye PHPExcel */
-require_once dirname(__FILE__) . '/classes/PHPExcel.php';
-require_once dirname(__FILE__) . '/classes/PHPExcel/Cell.php';
-require_once dirname(__FILE__) . '/classes/PHPExcel/Calculation.php';
-/*Extraer datos de MYSQL*/
+
 $condiciones = [];
 $params = [];
 if ($cursoId > 0) {
@@ -22,136 +23,33 @@ if (!cengi_ve_todo_por_rol_o_ingenio()) {
 }
 $where = $condiciones ? 'WHERE ' . implode(' AND ', $condiciones) : '';
 
-	$sql = "
-SELECT
-    c.nombre_cursos,
-    c.jornada_cursos,
-    c.dias,
-    c.horario,
-    p.nombre_participantes,
-    p.correo_participantes,
-    p.grado_academico_participantes,
-    p.telefono_participantes,
-    i.nombre_ingenios
-FROM asignaciones a
-INNER JOIN cursos c ON a.cursos_id = c.id
-INNER JOIN participantes p ON a.participantes_id = p.id
-INNER JOIN ingenios i ON p.ingenio_id = i.id
-$where
-ORDER BY i.id, c.id
-";
-
-$stmt = $db->prepare($sql);
+$stmt = $db->prepare("SELECT
+        c.nombre_cursos,
+        c.dias,
+        c.horario,
+        p.nombre_participantes,
+        p.correo_participantes,
+        p.grado_academico_participantes,
+        p.telefono_participantes,
+        i.nombre_ingenios
+    FROM asignaciones a
+    INNER JOIN cursos c ON a.cursos_id = c.id
+    INNER JOIN participantes p ON a.participantes_id = p.id
+    INNER JOIN ingenios i ON p.ingenio_id = i.id
+    $where
+    ORDER BY i.id, c.id");
 $stmt->execute($params);
 
-// Crear nuevo objeto PHPExcel
-$objPHPExcel = new PHPExcel();
-//propiedades del documento
-$objPHPExcel->getProperties()->setCreator("Monica Galiego de Brán")
-							 ->setLastModifiedBy("Monica Galiego de Brán")
-							 ->setTitle("Office 2010 XLSX Documento de prueba")
-							 ->setSubject("Office 2010 XLSX Documento de prueba")
-							 ->setDescription("Reporte")
-							 ->setKeywords("office 2010 openxml php")
-							 ->setCategory("Reporte");
+$filas = array_map(static function ($r) {
+    return [$r['nombre_cursos'], $r['dias'], $r['horario'], $r['nombre_participantes'], $r['correo_participantes'],
+        $r['grado_academico_participantes'], $r['telefono_participantes'], $r['nombre_ingenios']];
+}, $stmt->fetchAll(PDO::FETCH_ASSOC));
 
-// Combino las celdas desde A1 hasta E1
-$objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:H1');
- 
-$objPHPExcel->setActiveSheetIndex(0)
-            ->setCellValue('A1', 'Reporte Participantes por Ingenio')
-            ->setCellValue('A2', 'Curso')
-            ->setCellValue('B2', 'dias')
-            ->setCellValue('C2', 'Horario')
-			->setCellValue('D2', 'Participante')
-			->setCellValue('E2', 'Correo electrónico')
-			->setCellValue('F2', 'Grado académico')
-			->setCellValue('G2', 'Teléfono')
-			->setCellValue('H2', 'Ingenio');
-			
-// Fuente de la primera fila en negrita
-$boldArray = array('font' => array('bold' => true,),'alignment' => array('horizontal' => PHPExcel_Style_Alignment::HORIZONTAL_CENTER));
- 
-$objPHPExcel->getActiveSheet()->getStyle('A1:H2')->applyFromArray($boldArray);
-
-//Ancho de las columnas
-$objPHPExcel->getActiveSheet()->getColumnDimension('A')->setWidth(20);	
-$objPHPExcel->getActiveSheet()->getColumnDimension('B')->setWidth(40);	
-$objPHPExcel->getActiveSheet()->getColumnDimension('C')->setWidth(25);	
-$objPHPExcel->getActiveSheet()->getColumnDimension('D')->setWidth(25);	
-$objPHPExcel->getActiveSheet()->getColumnDimension('E')->setWidth(25);
-$objPHPExcel->getActiveSheet()->getColumnDimension('F')->setWidth(25);
-$objPHPExcel->getActiveSheet()->getColumnDimension('G')->setWidth(18);
-$objPHPExcel->getActiveSheet()->getColumnDimension('H')->setWidth(25);
-
-
-
-	$cel=3;//Numero de fila donde empezara a crear  el reporte
-
-	while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-		
-		$cursos=$row['nombre_cursos'];
-		$dias=$row['dias'];
-		$horario=$row['horario'];
-		$participante=$row['nombre_participantes'];
-		$correo=$row['correo_participantes'];
-		$grado=$row['grado_academico_participantes'];
-		$telefono=$row['telefono_participantes'];
-		$ingenio=$row['nombre_ingenios'];
-		
-		
-			$a="A".$cel;
-			$b="B".$cel;
-			$c="C".$cel;
-			$d="D".$cel;
-			$e="E".$cel;
-			$f="F".$cel;
-			$g="G".$cel;
-			$h="H".$cel;
-			// Agregar datos
-			$objPHPExcel->setActiveSheetIndex(0)
-           	->setCellValue($a, $cursos)
-            ->setCellValue($b, $dias)
-            ->setCellValue($c, $horario)
-            ->setCellValue($d, $participante)
-			->setCellValue($e, $correo)
-			->setCellValue($f, $grado)
-			->setCellValue($g, $telefono)
-			->setCellValue($h, $ingenio);
-			
-	$cel+=1;
-	}
- 
-/*Fin extracion de datos MYSQL*/
-
-//formato celdas
-$rango="A2:H2";
-$styleArray = array('font' => array( 'name' => 'Arial','size' => 10),
-'borders'=>array('allborders'=>array('style'=> PHPExcel_Style_Border::BORDER_THIN,'color'=>array('argb' => 'FFF')))
-);
-$objPHPExcel->getActiveSheet()->getStyle($rango)->applyFromArray($styleArray);
-
-// Cambiar el nombre de hoja de cálculo
-$objPHPExcel->getActiveSheet()->setTitle('Participantes por Cursos');
- 
- 
-// Establecer índice de hoja activa a la primera hoja , por lo que Excel abre esto como la primera hoja
-$objPHPExcel->setActiveSheetIndex(0);
-
-// Redirigir la salida al navegador web de un cliente ( Excel5 )
-header('Content-Type: application/vnd.ms-excel');
-header('Content-Disposition: attachment;filename="participantes_curso.xls"');
-header('Cache-Control: max-age=0');
-// Si usted está sirviendo a IE 9 , a continuación, puede ser necesaria la siguiente
-header('Cache-Control: max-age=1');
- 
-// Si usted está sirviendo a IE a través de SSL , a continuación, puede ser necesaria la siguiente
-header ('Expires: Mon, 26 Jul 1997 05:00:00 GMT'); // Date in the past
-header ('Last-Modified: '.gmdate('D, d M Y H:i:s').' GMT'); // always modified
-header ('Cache-Control: cache, must-revalidate'); // HTTP/1.1
-header ('Pragma: public'); // HTTP/1.0
- 
-$objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel5');
-$objWriter->save('php://output');
-exit;
-?>
+$titulo = 'Participantes por curso';
+if ($cursoId > 0 && $filas) {
+    $titulo .= ' - ' . $filas[0][0];
+}
+cengi_cob_excel('Participantes por curso', ($cursoId > 0 && $filas ? $filas[0][0] . ' · ' : '') . count($filas) . ' asignación(es)', [
+    ['Curso', 34, 'texto'], ['Días', 18, 'texto'], ['Horario', 16, 'texto'], ['Participante', 32, 'texto'], ['Correo electrónico', 32, 'texto'],
+    ['Grado académico', 20, 'texto'], ['Teléfono', 14, 'texto'], ['Ingenio', 24, 'texto'],
+], $filas, $titulo);

@@ -18,7 +18,7 @@ $telefono = trim((string) ($_POST['telefono_participantes'] ?? ''));
 $estado = (int) ($_POST['estado_participantes'] ?? 1) === 1 ? 1 : 0;
 $destino = 'participantes.php?curso_id=' . $cursoId;
 
-if ($id <= 0 || $ingenioId <= 0 || $cui === '' || $nombre === '' || $puesto === '' || $area === '') {
+if ($id <= 0 || $ingenioId <= 0 || $nombre === '' || $puesto === '' || $area === '') {
     header('Location: ' . $destino . '&error=actualizar');
     exit;
 }
@@ -48,6 +48,9 @@ try {
         throw new RuntimeException('Participante fuera del alcance permitido.');
     }
 
+    // Documento vacío: se conserva (o se asigna un código de referencia); si cambia, el anterior queda en el historial.
+    [$cui, $cuiHistorial] = cengi_cui_para_guardar($db, $id, $cui);
+
     $asignacionId = 0;
     if ($cursoId > 0) {
         $stmtAsignacionScope = $db->prepare("
@@ -66,6 +69,7 @@ try {
     $campos = [
         'ingenio_id = ?',
         'cui_participantes = ?',
+        'cui_anterior = COALESCE(?, cui_anterior)',
         'nombre_participantes = ?',
         'puesto_participantes = ?',
         'area_participantes = ?',
@@ -73,7 +77,7 @@ try {
         'grado_academico_participantes = ?',
         'telefono_participantes = ?',
     ];
-    $params = [$ingenioId, $cui, $nombre, $puesto, $area, $correo, $gradoAcademico, $telefono];
+    $params = [$ingenioId, $cui, $cuiHistorial, $nombre, $puesto, $area, $correo, $gradoAcademico, $telefono];
 
     if ($cursoId <= 0 || $estado === 1) {
         $campos[] = 'estado_participantes = ?';

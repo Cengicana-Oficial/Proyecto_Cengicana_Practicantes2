@@ -7,6 +7,7 @@
 
 require_once "revisar_permisos.php";
 require_once "conexion.php";
+require_once __DIR__ . '/inscripcion_registro.php';
 
 cengi_require_admin('ver_cursos.php');
 
@@ -74,14 +75,7 @@ $stmtActualizarAsignacion = $db->prepare("
 try {
     $db->beginTransaction();
 
-    $stmtBuscarAsignacion->execute([$participanteID, $cursoID]);
-    $asignacionID = $stmtBuscarAsignacion->fetchColumn();
-
-    if (!$asignacionID) {
-        $stmtInsertAsignacion->execute([$participanteID, $usuarioID, $cursoID]);
-    } else {
-        $stmtActualizarAsignacion->execute([$usuarioID, $asignacionID]);
-    }
+    cengi_ins_alta_curso($db, $participanteID, $cursoID);
 
     $db->commit();
 } catch (Throwable $e) {
@@ -92,5 +86,5 @@ try {
     exit;
 }
 
-header("Location: ver_participante_curso.php?id=" . $cursoID);
+header("Location: inscripciones.php?curso=" . $cursoID);
 exit;

@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/conexion.php';
+require_once __DIR__ . '/aula_helpers.php';
+date_default_timezone_set('America/Guatemala');
 
 $db = conectar();
 
@@ -27,6 +29,8 @@ if ($token === '' || !preg_match('/^[a-f0-9]{32}$/', $token)) {
 $stmt = $db->prepare("
     SELECT
         e.id AS enlace_id,
+        e.curso_id,
+        e.instructor_id,
         c.nombre_cursos,
         c.tipo AS modalidad,
         c.inicio,
@@ -44,6 +48,12 @@ $enlace = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$enlace) {
     require __DIR__ . '/404.php';
     exit;
+}
+$aulaSurvey=aula_survey_context($db,$enlace);
+if($aulaSurvey){
+    if(!$aulaSurvey['disponible'])evaluacion_error($token,'La evaluación está cerrada o ya fue respondida.');
+    try{aula_check_csrf();}catch(RuntimeException $e){evaluacion_error($token,$e->getMessage());}
+    $enlace['modulo_nombre']=null;
 }
 
 $modalidad = ($enlace['modalidad'] === 'Virtual') ? 'Virtual' : 'Presencial';
@@ -79,6 +89,10 @@ function evaluacion_entero_rango($valorCrudo, $max)
 }
 
 // --- Ingenio: seleccionado por id (FK real) o "otro" con texto libre ---
+$participanteEvaluacion = aula_survey_participant($db, $enlace['curso_id']);
+if (!empty($participanteEvaluacion['ingenio_id'])) $_POST['ingenio_id'] = $participanteEvaluacion['ingenio_id'];
+if (trim((string)($participanteEvaluacion['puesto_participantes'] ?? '')) !== '') $_POST['cargo'] = $participanteEvaluacion['puesto_participantes'];
+$_POST['seccion'] = 'Única';
 $ingenioCrudo = trim((string) ($_POST['ingenio_id'] ?? ''));
 $ingenioOtro = trim((string) ($_POST['ingenio_otro'] ?? ''));
 
@@ -187,7 +201,15 @@ if ($areasMejora === '') {
 }
 $areasMejora = evaluacion_truncar($areasMejora, 2000);
 
+if (!empty($aulaSurvey['prueba'])) {
+    $_SESSION['evaluacion_prueba_ok'] = hash('sha256', $token);
+    header('Location: evaluacion.php?token=' . rawurlencode($token) . '&resultado=prueba');
+    exit;
+}
+
 try {
+    $db->beginTransaction();
+    if($aulaSurvey)aula_survey_reserve($db,$aulaSurvey);
     $stmtInsertar = $db->prepare('
         INSERT INTO evaluaciones_instructor (
             enlace_id,
@@ -242,7 +264,14 @@ try {
         $capacitacionesNecesarias,
         $areasMejora,
     ]);
-} catch (PDOException $e) {
+    $evaluationId=(int)$db->lastInsertId();
+    $db->prepare('UPDATE evaluaciones_instructor SET area_participante=? WHERE id=?')->execute([trim((string)($participanteEvaluacion['area_participantes']??'')) ?: null,$evaluationId]);
+    if($aulaSurvey){
+        $db->prepare('UPDATE aula_instructor_respuestas SET evaluacion_id=? WHERE asignacion_id=? AND instructor_id=?')->execute([$evaluationId,$aulaSurvey['asignacion_id'],$aulaSurvey['instructor_id']]);
+    }
+    $db->commit();
+} catch (Throwable $e) {
+    if($db->inTransaction())$db->rollBack();
     error_log('Error al guardar evaluacion de instructor: ' . $e->getMessage());
     evaluacion_error($token, 'No fue posible enviar tu evaluación. Intenta más tarde.');
 }

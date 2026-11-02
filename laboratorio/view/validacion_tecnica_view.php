@@ -7,22 +7,46 @@ require_once __DIR__ . '/../models/validacion_tecnica_model.php';
 lab_require_permission('laboratorio.validacion_tecnica.ver');
 
 $puedeResolver = lab_can('laboratorio.validacion_tecnica.aprobar');
+$puedeVerErroneos = lab_can_view_error_forms();
 
 $pdo = Conexion::conectar();
 
 $idLoteFiltro = !empty($_GET['id_lote']) ? (int) $_GET['id_lote'] : null;
-$lotesDisponibles = $pdo->query("
-    SELECT DISTINCT l.id_lote, l.codigo_lote
-    FROM formulario f
-    INNER JOIN lote_rango lr ON lr.id_rango = f.id_rango
-    INNER JOIN lote l ON l.id_lote = lr.id_lote
-    LEFT JOIN estado_formulario ef ON ef.id_estado = f.id_estado
-    WHERE LOWER(TRIM(COALESCE(ef.nombre, ''))) LIKE '%revis%'
-    ORDER BY l.codigo_lote DESC
-")->fetchAll(PDO::FETCH_ASSOC);
+$tipoFiltro = trim((string) ($_GET['tipo'] ?? ''));
 
-$matriz = lab_validacion_obtener_matriz($pdo, $idLoteFiltro);
-$totalPendientes = lab_validacion_contar_pendientes($pdo);
+// Formato del prototipo: lista de formularios en revision + validados recientes.
+$pendientesTodos = lab_validacion_lineas($pdo, 'revision');
+$pendientes = array_values(array_filter($pendientesTodos, static function ($l) use ($idLoteFiltro, $tipoFiltro) {
+    return (!$idLoteFiltro || (int) $l['id_lote'] === $idLoteFiltro)
+        && ($tipoFiltro === '' || $l['tipo_muestra'] === $tipoFiltro);
+}));
+$validados = lab_validacion_lineas($pdo, 'validado', null, null, 15);
+$snapshots = lab_validacion_snapshots($pdo, array_merge(array_column($pendientesTodos, 'id_formulario'), array_column($validados, 'id_formulario')));
+
+$lotesDisponibles = [];
+$tiposDisponibles = [];
+foreach ($pendientesTodos as $l) {
+    $lotesDisponibles[(int) $l['id_lote']] = $l['codigo_lote'];
+    $tiposDisponibles[$l['tipo_muestra']] = true;
+}
+asort($lotesDisponibles);
+ksort($tiposDisponibles);
+
+// Datos para calcular en el navegador los resultados fuera de rango (mismas formulas que el detalle).
+$datosLista = ['endpoint' => '../controllers/validacion_tecnica_controller.php', 'motivos' => LAB_MOTIVOS_RECHAZO, 'formularios' => []];
+foreach ($pendientesTodos as $l) {
+    $idf = (int) $l['id_formulario'];
+    if (isset($snapshots[$idf])) {
+        $datosLista['formularios'][$idf] = [
+            'cap' => $snapshots[$idf],
+            'rango' => [
+                'min' => $l['limite_min'] !== null ? (float) $l['limite_min'] : null,
+                'max' => $l['limite_max'] !== null ? (float) $l['limite_max'] : null,
+                'unidad' => $l['unidad'],
+            ],
+        ];
+    }
+}
 
 function vt_e($value): string
 {
@@ -39,13 +63,87 @@ function vt_fecha($fecha): string
     return $ts ? date('d/m/Y', $ts) : $fecha;
 }
 
-lab_shell_head('Validacion tecnica', 'Matriz de aprobacion/rechazo de analisis capturados, por lote y tipo de analisis', [
-    '../css/lab_shell.css?v=2',
+function vt_rango(array $linea, ?array $snapshot): string
+{
+    $codigos = $snapshot ? array_values(array_filter(array_map(static function ($m) {
+        return (string) ($m['codigo_muestra'] ?? '');
+    }, $snapshot['muestras'] ?? []))) : [];
+    $inicio = $codigos ? $codigos[0] : trim((string) ($linea['codigo_inicio'] ?? $linea['inicio'] ?? ''));
+    $fin = $codigos ? end($codigos) : trim((string) ($linea['codigo_fin'] ?? $linea['fin'] ?? ''));
+    if ($inicio === '' || $fin === '') {
+        return '-';
+    }
+    return $inicio === $fin ? $inicio : $inicio . ' – ' . $fin;
+}
+
+/** Una fila por formulario, como filaFormularioLista() del prototipo. */
+function vt_fila(array $linea, ?array $snapshot, string $modo, bool $puedeResolver, bool $puedeVerErroneos): string
+{
+    $id = (int) $linea['id_formulario'];
+    $rango = vt_rango($linea, $snapshot);
+    $nMuestras = $snapshot ? count($snapshot['seleccion'] ?? []) : null;
+    $href = $snapshot
+        ? 'hoja_revision.php?id_formulario=' . $id
+        : (!empty($linea['id_rango']) && $puedeVerErroneos ? '../controllers/formulario_revision_controller.php?id_rango=' . (int) $linea['id_rango'] : null);
+    $ref = 'Formulario #' . $id . ' · ' . ($linea['analisis_nombre'] ?: 'Análisis') . ' · ' . $linea['tipo_muestra'] . ($nMuestras !== null ? ' · ' . $nMuestras . ' muestras' : '');
+    $chip = $modo === 'revisor'
+        ? '<span class="vt-chip is-review">Revisar</span>'
+        : '<span class="vt-chip is-approved">Validado · en informe</span>';
+
+    ob_start(); ?>
+    <tr data-id-formulario="<?= $id ?>" data-ref="<?= vt_e($ref) ?>">
+        <td class="vt-mono"><strong>#<?= $id ?></strong></td>
+        <td class="vt-mono"><strong><?= vt_e($linea['codigo_lote'] ?: '-') ?></strong></td>
+        <td class="vt-mono" style="white-space:nowrap;"><?= vt_e($rango) ?></td>
+        <td><?= vt_e($linea['tipo_muestra']) ?></td>
+        <td class="vt-analysis-cell"><?= vt_e($linea['analisis_nombre'] ?: 'Analisis sin identificar') ?><span data-fuera-slot="<?= $id ?>"></span></td>
+        <td><?= vt_e($linea['analista'] ?: 'Sin analista') ?></td>
+        <td style="white-space:nowrap;"><?= vt_e(vt_fecha($linea['fecha'] ?? null)) ?></td>
+        <td><?= $chip ?></td>
+        <td>
+            <?php $resolver = $modo === 'revisor' && $puedeResolver; ?>
+            <?php if ($href || $resolver): ?>
+                <details class="vt-menu">
+                    <summary class="cengi-btn cengi-btn-ghost cengi-btn-sm" aria-label="Acciones del formulario #<?= $id ?>">Acciones <span aria-hidden="true">▾</span></summary>
+                    <div class="vt-menu-list" role="menu">
+                        <span class="vt-menu-title">Formulario #<?= $id ?></span>
+                        <?php if ($href): ?>
+                            <a role="menuitem" href="<?= vt_e($href) ?>" title="Datos del analista, blancos aplicados, cálculos y curva"><span class="material-symbols-outlined" aria-hidden="true">visibility</span>Ver detalle</a>
+                        <?php endif; ?>
+                        <?php if ($resolver): ?>
+                            <span class="vt-menu-title">Resolución</span>
+                            <button type="button" role="menuitem" class="js-vt-accion is-ok" data-accion="aprobar"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span>Validar</button>
+                            <button type="button" role="menuitem" class="js-vt-accion is-bad" data-accion="rechazar"><span class="material-symbols-outlined" aria-hidden="true">replay</span>Rechazar y enviar a reanálisis</button>
+                        <?php endif; ?>
+                    </div>
+                </details>
+            <?php else: ?>
+                <span class="small muted">—</span>
+            <?php endif; ?>
+        </td>
+    </tr>
+    <?php
+    return (string) ob_get_clean();
+}
+
+function vt_tabla(array $lineas, array $snapshots, string $modo, bool $puedeResolver, bool $puedeVerErroneos): string
+{
+    $html = '<div class="cengi-table-wrap vt-table-wrap"><table class="vt-table"><thead><tr>'
+        . '<th>Formulario</th><th>Lote</th><th>Rango</th><th>Tipo</th><th>Análisis</th><th>Analista</th><th>Fecha</th><th>Estado</th><th style="text-align:right;">Acciones</th>'
+        . '</tr></thead><tbody>';
+    foreach ($lineas as $linea) {
+        $html .= vt_fila($linea, $snapshots[(int) $linea['id_formulario']] ?? null, $modo, $puedeResolver, $puedeVerErroneos);
+    }
+    return $html . '</tbody></table></div>';
+}
+
+lab_shell_head('Validación técnica', 'Revisión de datos capturados, cálculos y curvas', [
+    '../css/lab_shell.css?v=20261006',
+    '../styles/validacion_tecnica.css?v=' . filemtime(__DIR__ . '/../styles/validacion_tecnica.css'),
 ]);
 lab_shell_open('validacion_tecnica_view.php');
-
-$puedeVerErroneos = lab_can_view_error_forms();
 ?>
+<section class="vt-wrap">
 
 <?php if ($puedeVerErroneos): ?>
     <a href="../controllers/formularios_erroneos_controller.php" class="cengi-btn cengi-btn-ghost cengi-btn-sm" style="margin-bottom:14px;">
@@ -54,185 +152,78 @@ $puedeVerErroneos = lab_can_view_error_forms();
     </a>
 <?php endif; ?>
 
-<div class="cengi-kpi-grid">
+<div class="cengi-kpi-grid vt-kpis">
     <article class="cengi-kpi">
         <span class="cengi-kpi-icon"><span class="material-symbols-outlined" style="font-size:16px;">fact_check</span></span>
-        <div class="cengi-kpi-val"><?= (int) $totalPendientes ?></div>
-        <div class="cengi-kpi-label">Analisis pendientes de validar</div>
-        <div class="cengi-kpi-trend is-flat">Estado "En revision" / "Revisar"</div>
+        <div class="cengi-kpi-val"><?= count($pendientesTodos) ?></div>
+        <div class="cengi-kpi-label">Formularios pendientes de validar</div>
         <span class="cengi-kpi-bar"></span>
     </article>
     <article class="cengi-kpi">
         <span class="cengi-kpi-icon"><span class="material-symbols-outlined" style="font-size:16px;">inventory_2</span></span>
-        <div class="cengi-kpi-val"><?= count($matriz['lotes']) ?></div>
-        <div class="cengi-kpi-label">Lotes con analisis en revision</div>
-        <div class="cengi-kpi-trend is-flat">Filas de la matriz actual</div>
+        <div class="cengi-kpi-val"><?= count($lotesDisponibles) ?></div>
+        <div class="cengi-kpi-label">Lotes con análisis en revisión</div>
+        <span class="cengi-kpi-bar"></span>
+    </article>
+    <article class="cengi-kpi vt-kpi-alert">
+        <span class="cengi-kpi-icon"><span class="material-symbols-outlined" style="font-size:16px;">warning</span></span>
+        <div class="cengi-kpi-val" id="kpiValFuera">0</div>
+        <div class="cengi-kpi-label">Resultados fuera de rango</div>
         <span class="cengi-kpi-bar"></span>
     </article>
 </div>
 
-<div class="cengi-card" style="margin-bottom:18px;">
-    <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <select name="id_lote" style="min-width:220px;padding:9px 10px;border-radius:8px;border:1px solid var(--cengi-border);">
-            <option value="">Todos los lotes con analisis en revision</option>
-            <?php foreach ($lotesDisponibles as $lote): ?>
-                <option value="<?= (int) $lote['id_lote'] ?>" <?= $idLoteFiltro === (int) $lote['id_lote'] ? 'selected' : '' ?>>
-                    Lote <?= vt_e($lote['codigo_lote']) ?>
-                </option>
+<div class="vt-toolbar">
+    <h3>Líneas para validación técnica</h3>
+    <form method="GET">
+        <select name="id_lote" aria-label="Filtrar por lote" onchange="this.form.submit()">
+            <option value="">Todos los lotes con análisis en revisión</option>
+            <?php foreach ($lotesDisponibles as $idLote => $codigo): ?>
+                <option value="<?= (int) $idLote ?>" <?= $idLoteFiltro === (int) $idLote ? 'selected' : '' ?>><?= vt_e($codigo) ?></option>
             <?php endforeach; ?>
         </select>
-        <button type="submit" class="cengi-btn cengi-btn-ghost">Filtrar</button>
+        <select name="tipo" aria-label="Filtrar por tipo de muestra" onchange="this.form.submit()">
+            <option value="">Todo tipo de muestra</option>
+            <?php foreach (array_keys($tiposDisponibles) as $tipo): ?>
+                <option value="<?= vt_e($tipo) ?>" <?= $tipoFiltro === $tipo ? 'selected' : '' ?>><?= vt_e($tipo) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <noscript><button type="submit" class="cengi-btn cengi-btn-ghost">Filtrar</button></noscript>
     </form>
 </div>
 
-<?php if (empty($matriz['lineas'])): ?>
-    <div class="cengi-empty">
-        No hay analisis pendientes de validacion tecnica en este momento
-        (ningun <code>formulario</code> con estado "En revision"/"Revisar"),
-        o ninguno coincide con el filtro seleccionado.
+<p class="vt-intro">
+    Cada línea corresponde a un formulario capturado. <b>Detalle</b> muestra los datos del analista junto con los blancos
+    aplicados, los resultados calculados y la curva de calibración; desde ahí puedes devolver muestras puntuales a reanálisis.
+    Cuando todos los análisis de un lote están validados, su <b>informe</b> pasa a aprobación del jefe de laboratorio.
+</p>
+
+<?php if (!$pendientes): ?>
+    <div class="cengi-empty vt-empty-ok">
+        <span class="material-symbols-outlined">task_alt</span>
+        Sin formularios pendientes de validación con los filtros actuales.
     </div>
 <?php else: ?>
-    <div class="cengi-card">
-        <h3>Lineas para validacion tecnica</h3>
-        <div class="cengi-card-sub">
-            Cada linea corresponde a un formulario capturado. Los botones de validacion
-            se muestran en la ultima columna para los analisis que estan en revision.
-        </div>
+    <?= vt_tabla($pendientes, $snapshots, 'revisor', $puedeResolver, $puedeVerErroneos) ?>
+<?php endif; ?>
 
-        <div class="cengi-table-wrap vt-table-wrap">
-            <table class="vt-table">
-                <thead>
-                    <tr>
-                        <th>Formulario</th>
-                        <th>Lote</th>
-                        <th>Rango</th>
-                        <th>Tipo</th>
-                        <th>Analisis</th>
-                        <th>Analista</th>
-                        <th>Fecha</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($matriz['lineas'] as $linea): ?>
-                        <?php
-                            $estado = mb_strtolower(trim((string) ($linea['estado_nombre'] ?? '')));
-                            $esRevision = lab_validacion_estado_es_revision($linea['estado_nombre'] ?? '');
-                            $esAprobado = strpos($estado, 'aprob') !== false;
-                            $esRechazado = strpos($estado, 'rechaz') !== false;
-                            $claseEstado = $esAprobado ? 'is-approved' : ($esRechazado ? 'is-rejected' : ($esRevision ? 'is-review' : 'is-neutral'));
-                            $inicio = trim((string) ($linea['inicio'] ?? ''));
-                            $fin = trim((string) ($linea['fin'] ?? ''));
-                            $rango = $inicio !== '' && $fin !== ''
-                                ? ($inicio === $fin ? $inicio : $inicio . ' - ' . $fin)
-                                : '-';
-                        ?>
-                        <tr class="<?= $esRevision ? 'vt-row-pending' : '' ?>" data-id-formulario="<?= (int) $linea['id_formulario'] ?>">
-                            <td><strong>#<?= (int) $linea['id_formulario'] ?></strong></td>
-                            <td><strong><?= vt_e($linea['codigo_lote'] ?: '-') ?></strong></td>
-                            <td><?= vt_e($rango) ?></td>
-                            <td><?= vt_e($linea['tipo_muestra'] ?: 'Sin tipo') ?></td>
-                            <td class="vt-analysis-cell"><?= vt_e($linea['analisis_nombre'] ?: 'Analisis sin identificar') ?></td>
-                            <td><?= vt_e($linea['analista'] ?: 'Sin analista') ?></td>
-                            <td><?= vt_e(vt_fecha($linea['fecha'] ?? null)) ?></td>
-                            <td>
-                                <span class="cengi-status-badge <?= $claseEstado ?>">
-                                    <i></i><?= vt_e($linea['estado_nombre'] ?: 'Sin estado') ?>
-                                </span>
-                            </td>
-                            <td>
-                                <div class="vt-line-actions">
-                                    <?php if (!empty($linea['id_rango']) && $puedeVerErroneos): ?>
-                                        <a
-                                            class="cengi-btn cengi-btn-ghost cengi-btn-sm vt-detail"
-                                            href="../controllers/formulario_revision_controller.php?id_rango=<?= (int) $linea['id_rango'] ?>"
-                                            title="Ver los datos capturados">
-                                            <span class="material-symbols-outlined">visibility</span>
-                                            Detalle
-                                        </a>
-                                    <?php endif; ?>
-                                    <?php if ($esRevision && $puedeResolver): ?>
-                                        <button type="button" class="cengi-btn cengi-btn-primary cengi-btn-sm vt-validate js-vt-accion" data-accion="aprobar">
-                                            <span class="material-symbols-outlined">check_circle</span>
-                                            Validar
-                                        </button>
-                                        <button type="button" class="cengi-btn cengi-btn-sm vt-reject js-vt-accion" data-accion="rechazar">
-                                            <span class="material-symbols-outlined">cancel</span>
-                                            Rechazar
-                                        </button>
-                                    <?php elseif (!$esRevision): ?>
-                                        <span class="muted">Resuelto</span>
-                                    <?php endif; ?>
-                                </div>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
+<h2 class="vt-section-title">Validados · pasan al informe del lote</h2>
+<?php if (!$validados): ?>
+    <div class="cengi-empty">Aún no hay formularios validados.</div>
+<?php else: ?>
+    <?= vt_tabla($validados, $snapshots, 'lectura', $puedeResolver, $puedeVerErroneos) ?>
 <?php endif; ?>
 
 <?php if (!$puedeResolver): ?>
-    <p class="muted" style="margin-top:14px;font-size:11.5px;color:var(--cengi-muted);">
-        Tu rol solo tiene permiso de consulta sobre esta matriz (<code>laboratorio.validacion_tecnica.ver</code>);
-        no puedes aprobar ni rechazar analisis.
+    <p class="vt-intro" style="margin-top:14px;font-size:11.5px;">
+        Tu rol solo tiene permiso de consulta (<code>laboratorio.validacion_tecnica.ver</code>); no puedes validar ni rechazar análisis.
     </p>
 <?php endif; ?>
 
-<div id="vtToast" style="position:fixed;bottom:24px;right:24px;background:#20242A;color:#fff;padding:12px 18px;border-radius:10px;font-size:12.5px;font-weight:600;box-shadow:0 6px 20px rgba(20,24,20,.2);z-index:200;display:flex;align-items:center;gap:9px;transform:translateY(20px);opacity:0;transition:all .25s ease;"></div>
-<style>#vtToast.show{transform:translateY(0);opacity:1;}</style>
+</section>
 
-<?php if ($puedeResolver): ?>
-<script>
-(function () {
-    var toast = document.getElementById('vtToast');
-    function showToast(msg, isError) {
-        if (!toast) return;
-        toast.textContent = msg;
-        toast.style.borderLeft = '4px solid ' + (isError ? '#c94f4f' : '#73BC25');
-        toast.classList.add('show');
-        window.clearTimeout(toast._timer);
-        toast._timer = window.setTimeout(function () { toast.classList.remove('show'); }, 2600);
-    }
-
-    document.querySelectorAll('.js-vt-accion').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var linea = btn.closest('tr[data-id-formulario]');
-            var idFormulario = linea ? linea.dataset.idFormulario : null;
-            var accion = btn.dataset.accion;
-            if (!idFormulario || !accion) return;
-
-            var comentario = '';
-            if (accion === 'rechazar') {
-                comentario = window.prompt('Motivo del rechazo (opcional):', '') || '';
-            }
-
-            var acciones = btn.closest('.vt-line-actions');
-            acciones.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
-
-            fetch('../controllers/validacion_tecnica_controller.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id_formulario: idFormulario, accion: accion, comentario: comentario }),
-            })
-                .then(function (res) { return res.json(); })
-                .then(function (result) {
-                    if (!result || !result.ok) {
-                        throw new Error((result && result.error) || 'Error al guardar');
-                    }
-                    showToast(accion === 'aprobar' ? 'Analisis aprobado.' : 'Analisis rechazado.');
-                    window.setTimeout(function () { window.location.reload(); }, 700);
-                })
-                .catch(function () {
-                    showToast('No se pudo guardar la decision, intenta de nuevo.', true);
-                    acciones.querySelectorAll('button').forEach(function (b) { b.disabled = false; });
-                });
-        });
-    });
-})();
-</script>
-<?php endif; ?>
+<script type="application/json" id="vt-list-data"><?= json_encode($datosLista, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS) ?></script>
+<script src="../js/hojas_definiciones.js?v=<?= filemtime(__DIR__ . '/../js/hojas_definiciones.js') ?>"></script>
+<script src="../js/validacion_tecnica.js?v=<?= filemtime(__DIR__ . '/../js/validacion_tecnica.js') ?>"></script>
 
 <?php lab_shell_close(); ?>

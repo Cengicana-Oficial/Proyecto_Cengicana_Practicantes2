@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS solicitud_historial_cambios (
     usuario_nombre VARCHAR(255) DEFAULT NULL,
     fecha_cambio TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resumen VARCHAR(255) NOT NULL,
+    motivo VARCHAR(500) DEFAULT NULL,
     cambios_json LONGTEXT NOT NULL,
     ip VARCHAR(45) DEFAULT NULL,
     PRIMARY KEY (id_historial),

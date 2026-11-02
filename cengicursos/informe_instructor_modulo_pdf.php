@@ -188,7 +188,6 @@ if (!$esAdminIngenioReporte) {
         WHERE eei.instructor_id = ? AND eei.curso_modulo_id = ?
             AND (
                 (ei.areas_mejora IS NOT NULL AND TRIM(ei.areas_mejora) <> '')
-                OR (ei.capacitaciones_necesarias IS NOT NULL AND TRIM(ei.capacitaciones_necesarias) <> '')
             )
         ORDER BY ei.creado DESC, ei.id DESC
         LIMIT 5
@@ -291,9 +290,6 @@ if (!empty($comentarios)) {
         $partes = '';
         if (!empty($comentario['areas_mejora'])) {
             $partes .= '<div><strong>Oportunidades de mejora:</strong> ' . cengi_pdf_modulo_html($comentario['areas_mejora']) . '</div>';
-        }
-        if (!empty($comentario['capacitaciones_necesarias'])) {
-            $partes .= '<div><strong>Capacitaciones necesarias:</strong> ' . cengi_pdf_modulo_html($comentario['capacitaciones_necesarias']) . '</div>';
         }
         $itemsComentarios .= '<div class="pdf-comment-item">' . $partes
             . '<div class="pdf-comment-date">' . cengi_pdf_modulo_formato_fecha($comentario['creado']) . '</div></div>';

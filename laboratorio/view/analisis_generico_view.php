@@ -12,7 +12,7 @@ $resultado = $resultado ?? null;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($doc_elemento, ENT_QUOTES, 'UTF-8') ?></title>
-    <link rel="stylesheet" href="../../styles/formularios.css">
+    <link rel="stylesheet" href="../../styles/formularios.css?v=20261006">
 </head>
 <body>
     <div class="page-wrap">

@@ -1,0 +1,106 @@
+/* Informe consolidado por instructor (informe_instructores_resumen.php).
+   Usa la base .nc-page de necesidades_capacitacion.css; aquí solo lo propio, bajo .ir-page. */
+.ir-page .ir-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.ir-page .nc-kpi.is-gris { border-top-color: #CED2D5; }
+.ir-page .nc-kpi b.is-bien { color: #2f6a12; }
+.ir-page .nc-kpi b.is-medio { color: #7a6000; }
+.ir-page .nc-kpi b.is-bajo { color: #b34a00; }
+.ir-page .nc-kpi b.is-sin { color: #8a968f; }
+
+.ir-page .ir-check { flex-direction: row !important; align-items: center; gap: 8px !important; height: 38px; font-weight: 600 !important; }
+.ir-page .ir-check input { margin: 0; }
+
+.ir-table { margin: 0; }
+.ir-table > thead > tr > th { padding: 10px 12px; border-bottom: 1px solid #dfe6d8; background: #f7f9f4; color: #52634c; font-size: 11px; letter-spacing: .03em; text-transform: uppercase; vertical-align: bottom; }
+.ir-table th small { display: block; margin-top: 2px; font-size: 10px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #8a968f; }
+.ir-table > tbody > tr > td { padding: 14px 12px; border-top: 1px solid #e8ece4; vertical-align: top; }
+.ir-table > tbody > tr:hover > td { background: #fafcf7; }
+.ir-table .ir-c { text-align: center; white-space: nowrap; }
+.ir-table > thead > tr > th.ir-c { min-width: 96px; width: 11%; white-space: normal !important; text-transform: none; letter-spacing: 0; font-size: 12px; line-height: 1.3; }
+.ir-nombre { display: block; font-weight: 700; color: #1f5632; }
+.ir-nombre:hover { color: #3e7119; }
+.ir-codigo { display: block; margin-top: 2px; font-size: 11px; font-weight: 700; letter-spacing: .05em; color: #527438; }
+.ir-muted { color: #8a968f; }
+.ir-asig { min-width: 220px; font-size: 12.5px; }
+.ir-asig ul { margin: 0; padding-left: 16px; }
+.ir-asig li { margin-bottom: 2px; }
+.ir-asig details summary { margin-top: 4px; cursor: pointer; color: #3e7119; font-weight: 600; font-size: 12px; }
+.is-sin-eval .ir-nombre { color: #4c575f; }
+
+/* Puntaje con semáforo y barra */
+.ir-score { display: inline-block; padding: 2px 10px; border-radius: 20px; font-weight: 700; font-size: 13px; }
+.ir-score.is-bien { background: #e3f3cf; color: #2f6a12; }
+.ir-score.is-medio { background: #fff5cc; color: #7a6000; }
+.ir-score.is-bajo { background: #ffe9d9; color: #b34a00; }
+.ir-barra { display: block; width: 70px; height: 4px; margin: 6px auto 0; border-radius: 4px; background: #edf1ea; overflow: hidden; }
+.ir-barra i { display: block; height: 100%; border-radius: 4px; background: #73BC25; }
+.ir-barra.is-medio i { background: #FFCC00; }
+.ir-barra.is-bajo i { background: #FF6B00; }
+
+.ir-leyenda { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 16px; font-size: 12px; color: #55605a; }
+.ir-leyenda i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; border-radius: 50%; vertical-align: -1px; }
+.ir-leyenda i.is-bien { background: #73BC25; }
+.ir-leyenda i.is-medio { background: #FFCC00; }
+.ir-leyenda i.is-bajo { background: #FF6B00; }
+
+@media (max-width: 1100px) { .ir-page .ir-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .ir-page .ir-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Vistas del informe: resultados / participación (meta del 40 %) */
+.ir-vistas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 16px 0 0; }
+.ir-vistas a { position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--cg-line, #e0e5dc); border-radius: 12px; background: #fff; color: #263238; text-decoration: none; }
+.ir-vistas a:hover { border-color: #73BC25; text-decoration: none; color: #263238; }
+.ir-vistas a > .glyphicon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: #f2f9e9; color: #3e7119; }
+.ir-vistas b { display: block; color: #1f5632; font-size: 14px; }
+.ir-vistas small { color: #6b7a72; font-size: 12px; }
+.ir-vistas a.is-active { background: #1f5632; border-color: #1f5632; box-shadow: inset 0 -4px 0 #73BC25; }
+.ir-vistas a.is-active b { color: #fff; }
+.ir-vistas a.is-active small { color: #d6ecbd; }
+.ir-vistas a.is-active > .glyphicon { background: rgba(255, 255, 255, .14); color: #D9F2A6; }
+.ir-vistas em { margin-left: auto; padding: 3px 10px; border-radius: 20px; background: #FF6B00; color: #fff; font-size: 11.5px; font-style: normal; font-weight: 700; white-space: nowrap; }
+.ir-page a.ir-kpi-link { display: block; color: inherit; text-decoration: none; }
+.ir-page a.ir-kpi-link:hover { box-shadow: 0 8px 20px -14px rgba(22, 61, 36, .45); }
+a.ir-score { text-decoration: none; }
+a.ir-score:hover { text-decoration: none; filter: brightness(.95); }
+.ir-score.is-sin { background: #f1f3f4; color: #6b7a72; }
+.ir-meta-pct { display: block; margin-top: 4px; font-size: 11px; color: #6b7a72; }
+.ir-nowrap { white-space: nowrap; }
+
+/* Grupo por instructor en la vista de participación */
+.ir-grupo { margin-top: 14px; border: 1px solid var(--cg-line, #e0e5dc); border-radius: 12px; overflow: hidden; }
+.ir-grupo-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; padding: 12px 16px; background: #f7f9f4; border-bottom: 1px solid #e0e5dc; }
+.ir-grupo-res { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: #6b7a72; }
+.ir-grupo-pct b { color: #1f5632; font-size: 14px; }
+.ir-part > tbody > tr > td { padding: 11px 12px; vertical-align: middle; font-size: 13px; }
+.ir-part > thead > tr > th { background: #fff; }
+.ir-part-barra-th { min-width: 190px; }
+.ir-part-barra { position: relative; display: block; height: 8px; margin-top: 6px; border-radius: 5px; background: #edf1ea; }
+.ir-part-barra i { display: block; height: 100%; border-radius: 5px; background: #8a968f; }
+.ir-part-barra.is-bien i { background: #73BC25; }
+.ir-part-barra.is-medio i { background: #FFCC00; }
+.ir-part-barra.is-bajo i { background: #FF6B00; }
+.ir-part-barra em { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #1f5632; }
+.ir-part-num { display: block; margin-top: 4px; font-size: 12px; color: #55605a; }
+.ir-part-num b { color: #1f5632; }
+.ir-estado { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.ir-estado.is-bien { background: #e3f3cf; color: #2f6a12; }
+.ir-estado.is-medio { background: #fff5cc; color: #7a6000; }
+.ir-estado.is-bajo { background: #ffe9d9; color: #b34a00; }
+.ir-estado.is-sin { background: #f1f3f4; color: #6b7a72; }
+.ir-ir { font-weight: 700; color: #3e7119; white-space: nowrap; }
+.ir-leyenda i.is-sin { background: #CED2D5; }
+@media (max-width: 700px) { .ir-vistas { grid-template-columns: 1fr; } }
+
+/* Configuración de la meta de participación */
+.ir-meta-config { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 24px; border-left: 5px solid #73BC25 !important; scroll-margin-top: 90px; }
+.ir-meta-actual { display: flex; align-items: center; gap: 16px; flex: 1 1 420px; }
+.ir-meta-actual h2 { margin: 0 0 4px; }
+.ir-meta-actual p { margin: 0 0 4px; font-size: 13px; color: #3c4a40; }
+.ir-meta-valor { flex: none; display: flex; align-items: center; justify-content: center; gap: 1px; width: 84px; height: 84px; border-radius: 50%; background: #1f5632; box-shadow: inset 0 0 0 5px #73BC25; color: #fff; font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700; line-height: 1; }
+.ir-meta-valor small { font-size: 14px; color: #D9F2A6; }
+.ir-meta-form { display: flex; align-items: flex-end; gap: 10px; }
+.ir-meta-form label { display: flex; flex-direction: column; gap: 6px; margin: 0; font-size: 12.5px; font-weight: 700; color: #34413a; }
+.ir-meta-input { display: flex; align-items: center; gap: 6px; }
+.ir-meta-input .form-control { width: 96px; height: 38px; border-radius: 9px; border-color: #c9d3c2; box-shadow: none; font-size: 16px; font-weight: 700; text-align: center; }
+.ir-meta-input .form-control:focus { border-color: #73BC25; box-shadow: 0 0 0 3px rgba(115, 188, 37, .2); }
+.ir-meta-alerta { flex: 1 1 100%; margin: 0; }

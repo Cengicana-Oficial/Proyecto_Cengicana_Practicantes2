@@ -1,32 +1,97 @@
 <?php
 require_once __DIR__ . '/conexion.php';
+// cengi_texto_normalizado() y cengi_usuario_actual_id(): tambien las usan paginas publicas.
+require_once __DIR__ . '/cengi_texto.php';
 require_once __DIR__ . '/../login/config/session.php';
+require_once __DIR__ . '/../login/config/roles_modulo.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     cengi_session_start();
 }
 
-function cengi_texto_normalizado($valor)
+/**
+ * Proteccion CSRF de todas las paginas que incluyen este archivo (las del panel; las
+ * publicas como inscripcion.php no lo incluyen). Con sesion iniciada, todo POST debe traer
+ * el token de la sesion en el campo _csrf o en la cabecera X-CSRF-Token. El token se agrega
+ * solo: en el HTML de salida a cada <form method="post"> y, con un script en <head>, a los
+ * formularios creados por JS y a fetch / XMLHttpRequest (jQuery) del mismo origen.
+ */
+function cengi_csrf_token()
 {
-    $valor = trim((string) $valor);
-    $valor = mb_strtolower($valor, 'UTF-8');
-    $valor = strtr($valor, [
-        'á' => 'a',
-        'é' => 'e',
-        'í' => 'i',
-        'ó' => 'o',
-        'ú' => 'u',
-        'ñ' => 'n',
-        'Á' => 'a',
-        'É' => 'e',
-        'Í' => 'i',
-        'Ó' => 'o',
-        'Ú' => 'u',
-        'Ñ' => 'n',
-    ]);
-
-    return preg_replace('/\s+/', '', $valor);
+    if (empty($_SESSION['cengi_csrf'])) {
+        $_SESSION['cengi_csrf'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['cengi_csrf'];
 }
+
+function cengi_csrf_inyectar($html)
+{
+    foreach (headers_list() as $cabecera) {
+        if (stripos($cabecera, 'content-type:') === 0 && stripos($cabecera, 'text/html') === false) {
+            return $html;
+        }
+    }
+    if (stripos($html, '<form') === false && stripos($html, '<head') === false) {
+        return $html;
+    }
+    $token = htmlspecialchars(cengi_csrf_token(), ENT_QUOTES, 'UTF-8');
+    $html = preg_replace(
+        '~<form\b[^>]*\bmethod\s*=\s*(["\']?)post\1[^>]*>~i',
+        '$0<input type="hidden" name="_csrf" value="' . $token . '">',
+        $html
+    );
+    $script = '<meta name="csrf-token" content="' . $token . '"><script>(function(){if(window.__cengiCsrf)return;window.__cengiCsrf=1;'
+        . 'var t=document.querySelector(\'meta[name="csrf-token"]\').content;'
+        . 'function mismo(u){try{return new URL(u,location.href).origin===location.origin}catch(e){return true}}'
+        . 'function lectura(m){m=String(m||"GET").toUpperCase();return m==="GET"||m==="HEAD"||m==="OPTIONS"}'
+        . 'function campo(f){if(f&&String(f.method).toLowerCase()==="post"&&!f.querySelector(\'input[name="_csrf"]\')){var i=document.createElement("input");i.type="hidden";i.name="_csrf";i.value=t;f.appendChild(i)}}'
+        . 'if(window.fetch){var of=window.fetch;window.fetch=function(r,o){o=o||{};var u=typeof r==="string"?r:(r&&r.url),m=o.method||(r&&r.method);'
+        . 'if(!lectura(m)&&mismo(u)){var h=new Headers(o.headers||(r instanceof Request?r.headers:undefined));h.set("X-CSRF-Token",t);o.headers=h}return of.call(this,r,o)}}'
+        . 'var op=XMLHttpRequest.prototype.open,sd=XMLHttpRequest.prototype.send;'
+        . 'XMLHttpRequest.prototype.open=function(m,u){this.__m=m;this.__u=u;return op.apply(this,arguments)};'
+        . 'XMLHttpRequest.prototype.send=function(){if(!lectura(this.__m)&&mismo(this.__u)){try{this.setRequestHeader("X-CSRF-Token",t)}catch(e){}}return sd.apply(this,arguments)};'
+        . 'document.addEventListener("submit",function(e){campo(e.target)},true);'
+        . 'var os=HTMLFormElement.prototype.submit;HTMLFormElement.prototype.submit=function(){campo(this);return os.apply(this,arguments)};'
+        . '})();</script>';
+    // Al inicio de <head> (antes que los scripts de la pagina); sin <head>, al inicio de <body>.
+    $conScript = preg_replace('~<head\b[^>]*>~i', '$0' . $script, $html, 1, $cambios);
+    if (!$cambios) {
+        $conScript = preg_replace('~<body\b[^>]*>~i', '$0' . $script, $html, 1, $cambios);
+    }
+    return $cambios ? $conScript : $html;
+}
+
+function cengi_csrf_proteger()
+{
+    if (PHP_SAPI === 'cli' || defined('CENGI_CSRF_ACTIVO')) {
+        return;
+    }
+    define('CENGI_CSRF_ACTIVO', true);
+
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !empty($_SESSION['id_usuario'])) {
+        $enviado = $_POST['_csrf'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+        if (!is_string($enviado) || !hash_equals(cengi_csrf_token(), $enviado)) {
+            $mensaje = 'La sesión del formulario expiró o la solicitud no es válida. Recarga la página e inténtalo de nuevo.';
+            http_response_code(403);
+            $esperaJson = stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'json') !== false
+                || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])
+                || stripos($_SERVER['SCRIPT_NAME'] ?? '', '_api') !== false;
+            if ($esperaJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'error' => $mensaje], JSON_UNESCAPED_UNICODE);
+            } else {
+                echo '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Solicitud no válida</title></head><body>'
+                    . '<p>' . htmlspecialchars($mensaje) . '</p><p><a href="javascript:history.back()">Volver</a></p></body></html>';
+            }
+            exit;
+        }
+    }
+
+    cengi_csrf_token();
+    ob_start('cengi_csrf_inyectar');
+}
+
+cengi_csrf_proteger();
 
 /**
  * Equivalente en SQL (MySQL) de cengi_texto_normalizado(), para comparar
@@ -71,42 +136,43 @@ function cengi_cargar_usuario_actual()
         return $usuario;
     }
 
+    // La sesion es compartida con los demas modulos: hasta cargar el rol de Cursos no debe
+    // quedar el rol ni los permisos del ultimo modulo visitado.
+    $_SESSION['rol'] = $_SESSION['nombre_rol'] = '';
+    $_SESSION['rol_id'] = 0;
+    $_SESSION['user_permissions'] = [];
+
     try {
-        $conn = conectar_usuarios_menu();
-        $stmt = $conn->prepare("
-            SELECT
-                u.id,
-                u.nombre,
-                u.correo,
-                u.rol_id,
-                u.ingenio_id,
-                u.es_superadmin,
-                r.nombre_rol,
-                i.nombre_ingenio
+        $menu = conectar_usuarios_menu_pdo();
+        $stmt = $menu->prepare("
+            SELECT u.id, u.nombre, u.correo, u.ingenio_id, u.es_superadmin, i.nombre_ingenio
             FROM usuarios u
-            INNER JOIN roles r ON r.id = u.rol_id
             LEFT JOIN ingenios i ON i.id = u.ingenio_id
             WHERE u.id = ?
             LIMIT 1
         ");
-
-        $idUsuario = (int) $_SESSION['id_usuario'];
-        $stmt->bind_param('i', $idUsuario);
-        $stmt->execute();
-        $usuario = $stmt->get_result()->fetch_assoc();
+        $stmt->execute([(int) $_SESSION['id_usuario']]);
+        $usuario = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
         if ($usuario) {
+            // Rol y permisos del usuario EN CURSOS (login/config/roles_modulo.php): su rol en
+            // Laboratorio, Comites, etc. no aplica aqui.
+            $rolCursos = cengi_rm_activar_modulo($menu, 'cursos');
+            $usuario['rol_id'] = $rolCursos['rol_id'] ?? 0;
+            $usuario['nombre_rol'] = $rolCursos['nombre_rol'] ?? '';
             $_SESSION['usuario'] = $usuario['nombre'];
             $_SESSION['correo'] = $usuario['correo'];
-            $_SESSION['rol'] = $usuario['nombre_rol'];
-            $_SESSION['rol_id'] = $usuario['rol_id'];
             $_SESSION['ingenio_id'] = $usuario['ingenio_id'];
             $_SESSION['ingenio_nombre'] = $usuario['nombre_ingenio'];
             $_SESSION['es_superadmin'] = $usuario['es_superadmin'];
         }
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         error_log('Error cargando usuario de cengicursos: ' . $e->getMessage());
         $usuario = null;
+        // Si la activacion fallo a medias, no se usa ningun rol ni permiso.
+        $_SESSION['rol'] = $_SESSION['nombre_rol'] = '';
+        $_SESSION['rol_id'] = 0;
+        $_SESSION['user_permissions'] = [];
     }
 
     return $usuario;
@@ -136,7 +202,13 @@ function cengi_es_superadmin()
 function cengi_es_admin()
 {
     $rol = cengi_rol_actual();
-    return cengi_es_superadmin() || in_array($rol, ['admin', 'administrador', 'superadmin'], true);
+    if (cengi_es_superadmin()) return true;
+    // El gestor conserva siempre su alcance institucional, incluso con permisos heredados.
+    if (strpos($rol, 'gestor') !== false && strpos($rol, 'ingenio') !== false) return false;
+    if (in_array($rol, ['coordinadordecapacitacion', 'jefedetransferenciadetecnologia'], true)) return true;
+    // El Coordinador de capacitación administra todo Cursos por su permiso (no por el nombre del rol).
+    return cengi_es_superadmin() || in_array($rol, ['admin', 'administrador', 'superadmin'], true)
+        || cengi_tiene_permiso('administrar_cursos_cengi');
 }
 
 function cengi_es_instructor()
@@ -158,6 +230,11 @@ function cengi_es_formador()
 function cengi_es_gestor()
 {
     return strpos(cengi_rol_actual(), 'gestor') !== false;
+}
+
+function cengi_es_gestor_ingenio()
+{
+    return cengi_es_gestor() && cengi_es_ingenio() && !cengi_es_superadmin();
 }
 
 function cengi_es_estudiante()
@@ -189,6 +266,7 @@ function cengi_es_administrador_ingenio()
 
 function cengi_puede_gestionar()
 {
+    if (cengi_es_gestor_ingenio()) return false;
     return cengi_es_admin() || cengi_tiene_permiso('gestionar_cursos_cengi');
 }
 
@@ -403,9 +481,24 @@ function cengi_puede_gestionar_diplomas()
  * permisos_roles.php porque el acceso depende del rol/ingenio de la sesion,
  * igual que el resto del scoping por ingenio del modulo (cengi_scope_sql()).
  */
+/**
+ * Seguimiento por ingenio (dashboard_ingenio.php, que reemplazo a seguimiento_ingenio.php):
+ * el administrador elige cualquier ingenio; el usuario de ingenio y quien gestiona cursos
+ * sin ser administrador ven solo su propio ingenio.
+ */
 function cengi_puede_ver_dashboard_ingenio()
 {
-    return cengi_es_admin() || (cengi_es_ingenio() && cengi_ingenio_id_actual() > 0);
+    return cengi_es_admin()
+        || ((cengi_es_ingenio() || cengi_puede_gestionar()) && cengi_ingenio_id_actual() > 0);
+}
+
+/**
+ * Reportes para la Dirección e instituciones de interés (Informe de gestión): el
+ * administrador y quien tenga ver_reportes_cengi (matriz "Reportes" en roles.php).
+ */
+function cengi_puede_ver_reportes()
+{
+    return cengi_es_admin() || cengi_tiene_permiso('ver_reportes_cengi');
 }
 
 function cengi_puede_ver_roles()
@@ -417,6 +510,7 @@ function cengi_puede_ver_roles()
 
 function cengi_puede_gestionar_roles()
 {
+    if (cengi_es_gestor_ingenio()) return false;
     return cengi_es_admin() || cengi_tiene_permiso('roles_gestionar_cengi');
 }
 
@@ -439,11 +533,6 @@ function cengi_clasificar_rol_nivel($nombreRol)
     }
 
     return 1; // Administrador general (admin / superadmin / cualquier otro rol administrativo)
-}
-
-function cengi_usuario_actual_id()
-{
-    return isset($_SESSION['id_usuario']) ? (int) $_SESSION['id_usuario'] : 0;
 }
 
 function cengi_ingenio_id_actual()
@@ -690,6 +779,14 @@ function cengi_require_gestionar_diplomas($redirect = 'diplomas.php')
 function cengi_require_dashboard_ingenio($redirect = 'index.php')
 {
     if (!cengi_puede_ver_dashboard_ingenio()) {
+        header("Location: {$redirect}");
+        exit();
+    }
+}
+
+function cengi_require_ver_reportes($redirect = 'index.php')
+{
+    if (!cengi_puede_ver_reportes()) {
         header("Location: {$redirect}");
         exit();
     }

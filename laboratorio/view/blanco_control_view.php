@@ -34,7 +34,7 @@ function activoTexto($value) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blancos y Controles</title>
-    <link rel="stylesheet" href="../styles/blanco_control.css">
+    <link rel="stylesheet" href="../styles/blanco_control.css?v=20261006">
 </head>
 <body>
 <main class="bc-shell">

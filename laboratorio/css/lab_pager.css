@@ -1,0 +1,10 @@
+/* Paginador compartido de listas (Informes, Reportes y Actividad reciente del Dashboard). */
+.lab-pager { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:12px; padding-top:10px; border-top:1px solid var(--cengi-border, #E3F1D3); font-size:13px; color:var(--cengi-muted, #636A6F); }
+.lab-pager[hidden] { display:none; }
+.lab-pager-nav { display:flex; align-items:center; gap:8px; }
+.lab-pager-nav b { color:var(--cengi-ink, #1F2326); font-weight:600; }
+.lab-pager-btn { display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:32px; padding:0 8px; border:1px solid var(--cengi-border, #E3F1D3); border-radius:8px; background:#fff; color:var(--cengi-ink, #1F2326); font:inherit; text-decoration:none; cursor:pointer; }
+.lab-pager-btn:hover { border-color:var(--cengi-primary, #73bc25); }
+.lab-pager-btn[aria-disabled="true"], .lab-pager-btn:disabled { opacity:.4; pointer-events:none; cursor:default; }
+.lab-pager-btn .material-symbols-outlined { font-size:18px; }
+@media (max-width:600px) { .lab-pager { justify-content:center; } }

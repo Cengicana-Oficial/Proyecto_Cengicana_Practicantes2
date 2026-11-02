@@ -11,6 +11,8 @@ services:
       - "127.0.0.1:8085:80"
     environment:
       TZ: America/Guatemala
+      HOSTS_PERMITIDOS: modulos.cengicana.org,localhost,127.0.0.1
+      COMITES_CORREO_POR_WORKER: "1"
     volumes:
       - ./dockerfiles/modulos-app/no-sendfile.conf:/etc/apache2/conf-enabled/no-sendfile.conf:ro
       - ./login/roles/roles.php:/var/www/html/login/roles/roles.php:ro
@@ -37,6 +39,7 @@ services:
       - ./deploy/env/cengicursos.env:/var/www/html/cengicursos/.env:ro
       - ./deploy/env/laboratorio.env:/var/www/html/laboratorio/.env:ro
       - ./deploy/env/visitas.env:/var/www/html/Pruebas/.env:ro
+      - ./dockerfiles/modulos-app/timezone.ini:/usr/local/etc/php/conf.d/zz-timezone.ini:ro
       - ./deploy/env/cengisalas.env:/var/www/html/visitas/.env:ro
       - ./visitas:/var/www/html/visitas
       - visitas-vendor:/var/www/html/visitas/vendor
@@ -74,13 +77,51 @@ services:
       mysql:
         condition: service_healthy
 
+  recibos-worker:
+    build:
+      context: .
+      dockerfile: dockerfiles/modulos-app/Dockerfile
+    container_name: cengicana-ui-new-recibos-worker
+    restart: unless-stopped
+    command: ["php", "/var/www/html/cengicursos/cron_recibos_contables.php", "--loop"]
+    environment:
+      TZ: America/Guatemala
+      CENGICURSOS_ENV_FILE: /run/cengicursos.env
+      LOGIN_ENV_FILE: /run/login.env
+    volumes:
+      - ./cengicursos:/var/www/html/cengicursos:ro
+      - ./login:/var/www/html/login:ro
+      - ./deploy/env/login.env:/run/login.env:ro
+      - ./dockerfiles/modulos-app/timezone.ini:/usr/local/etc/php/conf.d/zz-timezone.ini:ro
+      - ./deploy/env/cengicursos.env:/run/cengicursos.env:ro
+      - ./uploads:/var/www/html/uploads
+    depends_on:
+      - app
+      - mysql
+
+  comites-correos-worker:
+    build:
+      context: .
+      dockerfile: dockerfiles/modulos-app/Dockerfile
+    container_name: cengicana-ui-new-comites-correos-worker
+    restart: unless-stopped
+    command: ["php", "/var/www/html/comites/cron/correos.php", "--loop"]
+    environment:
+      TZ: America/Guatemala
+    volumes:
+      - ./deploy/env/login.env:/var/www/html/login/.env:ro
+      - ./dockerfiles/modulos-app/timezone.ini:/usr/local/etc/php/conf.d/zz-timezone.ini:ro
+    depends_on:
+      - app
+      - mysql
+
   mysql:
     image: mysql:8.0
     container_name: cengicana-ui-new-mysql
     restart: unless-stopped
     env_file:
       - ./deploy/env/mysql.env
-    command: --default-authentication-plugin=mysql_native_password
+    command: --default-authentication-plugin=mysql_native_password --default-time-zone=-06:00
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql --protocol=TCP -h 127.0.0.1 -u\"$$MYSQL_USER\" -D\"$$MYSQL_DATABASE\" -e 'SELECT 1' >/dev/null 2>&1"]
       interval: 10s

@@ -469,6 +469,35 @@ function obtenerIndicadoresControlCalidad(): array
         }
     }
 
+    // Flujo actual (Validación técnica): muestras devueltas a reanálisis que siguen abiertas y
+    // categorías de rechazo/reanálisis de los últimos 30 días ("[Categoría] detalle" en el historial).
+    require_once __DIR__ . '/kanban_model.php';
+    $abiertos = [];
+    foreach (lab_planificacion_tareas($connConsolidacion) as $tarea) {
+        if (in_array($tarea['estado']['key'], ['rechazado', 'repetido'], true)) {
+            $abiertos[$tarea['id_muestra'] . ':' . $tarea['id_tipo_analisis']] = true;
+        }
+    }
+    $resumen['reanalisis_abiertos'] += count($abiertos);
+
+    $stmt = $connConsolidacion->query("
+        SELECT comentario FROM historial_formulario
+         WHERE fecha >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+           AND accion IN ('validacion_tecnica', 'reanalisis')
+           AND LOWER(COALESCE(estado_nuevo, '')) LIKE '%rechaz%'
+    ");
+    $porMotivo = array_column($resumen['motivos_rechazo'], 'total', 'motivo');
+    foreach ($stmt ? $stmt->fetchAll(PDO::FETCH_COLUMN) : [] as $comentario) {
+        $motivo = preg_match('/^\[([^\]]+)\]/u', (string) $comentario, $m) ? $m[1] : 'Sin clasificar';
+        $porMotivo[$motivo] = ($porMotivo[$motivo] ?? 0) + 1;
+    }
+    arsort($porMotivo);
+    $maximo = $porMotivo ? max($porMotivo) : 0;
+    $resumen['motivos_rechazo'] = [];
+    foreach ($porMotivo as $motivo => $total) {
+        $resumen['motivos_rechazo'][] = ['motivo' => (string) $motivo, 'total' => (int) $total, 'porcentaje' => $maximo > 0 ? (int) round($total / $maximo * 100) : 0];
+    }
+
     foreach (['equipo', 'equipos'] as $tablaEquipo) {
         if (!$tablaExiste($tablaEquipo)) {
             continue;
@@ -514,7 +543,7 @@ function obtenerAnalisisBaseConsolidacion($idTipo)
             'Brix',
             'Pol',
             'Pureza',
-            'Fibra bruta',
+            '% Fibra',
             'Humedad del bagazo',
             'Jugo extraído',
         ],

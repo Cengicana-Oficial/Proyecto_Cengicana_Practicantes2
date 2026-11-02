@@ -7,15 +7,18 @@ function labFormularioPdo(): PDO
     return Conexion::conectar();
 }
 
-function labFormularioEnsureSchema(): void
+function labFormularioEnsureSchema(?PDO $pdo = null): void
 {
+    if (!defined('ESQUEMA_MIGRANDO')) {
+        return; // DDL solo al desplegar (deploy/mysql/migrar-esquema.php, AUD-2026-001/I-2).
+    }
     static $schemaEnsured = false;
 
     if ($schemaEnsured) {
         return;
     }
 
-    $pdo = labFormularioPdo();
+    $pdo = $pdo ?? labFormularioPdo();
 
     try {
         $pdo->exec("
@@ -232,6 +235,7 @@ function labFormularioColumnas(string $tabla): array
 
 function labFormularioColumnasEditables(array $tabla): array
 {
+    if (($tabla['tabla'] ?? '') === 'lab_hoja_formulario') return [];
     $pk = $tabla['primary_key'] ?? null;
     $excluidas = ['id_formulario', 'id_solicitud', 'id_lote', 'created_at', 'updated_at', 'fecha_creacion'];
     $editables = [];
