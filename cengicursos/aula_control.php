@@ -38,22 +38,35 @@ function aula_instructor_surveys(PDO $db,$courseId,$assignmentId=null) {
     }unset($g);
     return array_values($groups);
 }
-function aula_survey_participant(PDO $db, $courseId) {
+// evaluacion.php es publica: revisar_permisos.php redirige al login sin sesion y al menu sin el
+// modulo Cursos, asi que solo se incluye cuando el usuario puede entrar a Cursos.
+function aula_survey_session() {
+    require_once __DIR__.'/../login/config/session.php';
+    require_once __DIR__.'/cengi_texto.php';
+    if(session_status()===PHP_SESSION_NONE)cengi_session_start();
+    if(empty($_SESSION['id_usuario']))return false;
+    // Mismo criterio que usuario_tiene_modulo_cursos() de revisar_permisos.php.
+    $cursos=isset($_SESSION['es_superadmin'])&&(int)$_SESSION['es_superadmin']===1;
+    foreach($_SESSION['modulos']??[] as $modulo)$cursos=$cursos||in_array(cengi_texto_normalizado($modulo['nombre']??''),['cursos','cengicursos'],true);
+    if(!$cursos)return false;
     require_once __DIR__.'/revisar_permisos.php';
-    if (!cengi_usuario_actual_id() || cengi_es_superadmin()) return [];
+    return true;
+}
+function aula_survey_participant(PDO $db, $courseId) {
+    if (!aula_survey_session() || cengi_es_superadmin()) return [];
     $assignment = aula_assignment($db, $courseId);
     if (!$assignment) return [];
     return aula_rows($db, 'SELECT ingenio_id, puesto_participantes, area_participantes FROM participantes WHERE id=?', [$assignment['participantes_id']])[0] ?? [];
 }
 function aula_survey_context(PDO $db,array $link) {
-    require_once __DIR__.'/revisar_permisos.php';
+    // Sin sesion, el enlace compartido sigue siendo el formulario publico.
+    if(!aula_survey_session())return null;
     if(cengi_es_superadmin())return ['prueba'=>true,'disponible'=>true,'curso_id'=>$link['curso_id'],'instructor_id'=>$link['instructor_id']];
     if(!aula_control_ready($db))return null;
     $cfg=aula_rows($db,'SELECT * FROM aula_instructor_config WHERE curso_id=? AND instructor_id=?',[$link['curso_id'],$link['instructor_id']])[0]??null;
     if(!$cfg)return null; // Encuestas historicas externas sin aula conservan su flujo.
-    // Sin sesion o sin asignacion al curso, el enlace compartido sigue siendo el formulario publico;
-    // el control de un envio y la ventana de apertura solo aplican al estudiante desde su aula.
-    if(!cengi_usuario_actual_id())return null;
+    // Sin asignacion al curso tambien es el formulario publico; el control de un envio
+    // y la ventana de apertura solo aplican al estudiante desde su aula.
     $assignment=aula_assignment($db,$link['curso_id']);
     if(!$assignment)return null;
     foreach(aula_instructor_surveys($db,$link['curso_id'],$assignment['id']) as $survey) {
