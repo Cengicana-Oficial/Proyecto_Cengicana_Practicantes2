@@ -26,8 +26,11 @@ function usuarios_mostrar_aviso($titulo, $mensaje, $volverA = 'usuarios.php')
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="../assets/ingenios.css?v=<?= @filemtime(__DIR__ . '/../assets/ingenios.css') ?: '1' ?>">
+        <link rel="stylesheet" href="../assets/menu-cengitech.css?v=<?= @filemtime(__DIR__ . '/../assets/menu-cengitech.css') ?: '1' ?>">
+        <link rel="stylesheet" href="../assets/admin-cengitech.css?v=<?= @filemtime(__DIR__ . '/../assets/admin-cengitech.css') ?: '1' ?>">
     </head>
-    <body>
+    <body class="cx-admin">
+    <?php require_once __DIR__ . '/../config/admin_layout.php'; cengi_admin_header('usuarios'); ?>
     <div class="ingenios-shell">
         <a href="<?= htmlspecialchars($volverA) ?>" class="btn-back">
             <span class="material-symbols-outlined">arrow_back</span>
@@ -43,6 +46,7 @@ function usuarios_mostrar_aviso($titulo, $mensaje, $volverA = 'usuarios.php')
             <a href="<?= htmlspecialchars($volverA) ?>" class="btn-primary">Volver al listado</a>
         </div>
     </div>
+    <?php cengi_admin_footer(); ?>
     </body>
     </html>
     <?php
@@ -256,8 +260,11 @@ $ingenios = $stmtIngenios->fetchAll(PDO::FETCH_ASSOC);
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/ingenios.css?v=<?= @filemtime(__DIR__ . '/../assets/ingenios.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/menu-cengitech.css?v=<?= @filemtime(__DIR__ . '/../assets/menu-cengitech.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/admin-cengitech.css?v=<?= @filemtime(__DIR__ . '/../assets/admin-cengitech.css') ?: '1' ?>">
 </head>
-<body>
+<body class="cx-admin">
+<?php require_once __DIR__ . '/../config/admin_layout.php'; cengi_admin_header('usuarios'); ?>
 <div class="ingenios-shell">
     <a href="<?= htmlspecialchars($destinoRegreso) ?>" class="btn-back">
         <span class="material-symbols-outlined">arrow_back</span>
@@ -346,5 +353,6 @@ document.getElementById("rolSelect").addEventListener("change", function () {
 });
 </script>
 <?php endif; ?>
+<?php cengi_admin_footer(); ?>
 </body>
 </html>

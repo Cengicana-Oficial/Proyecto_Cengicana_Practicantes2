@@ -12,10 +12,10 @@
         var query = normalize(search.value);
         var visible = 0;
         cards.forEach(function (card) {
-            card.hidden = !normalize(card.querySelector('strong').textContent).includes(query);
+            card.hidden = !normalize(card.getAttribute('data-buscar') || card.querySelector('strong').textContent).includes(query);
             if (!card.hidden) visible++;
         });
-        document.getElementById('systemResults').textContent = visible + ' de ' + cards.length + ' sistemas';
+        document.getElementById('systemResults').textContent = visible + ' de ' + cards.length + ' módulos';
         document.getElementById('systemsEmpty').hidden = visible !== 0;
     }
     if (search && cards.length) {

@@ -69,6 +69,8 @@ $payload = [
     'correo' => $_SESSION['correo'],
     'nombre' => $_SESSION['usuario'],
     'rol_id' => (int) ($_SESSION['rol_id'] ?? 0),
+    // Nombre del rol en Experimentos: SIGEC lo traduce a su rol (config/sso.php roles_portal).
+    'rol' => (string) ($_SESSION['nombre_rol'] ?? ''),
     'es_superadmin' => $esSuperadmin,
     'ingenio_id' => $_SESSION['ingenio_id'] ?? null,
     'exp' => time() + 60,

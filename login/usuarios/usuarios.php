@@ -68,6 +68,40 @@ if (!$esSuperadmin && !$scopeConfig) {
     $params[] = $idUsuario;
 }
 
+/*
+ * Estudiante = cuenta que solo existe para tomar cursos: no es superadmin, su rol de plataforma
+ * es de estudiante y no tiene, en ningun modulo, un rol distinto de estudiante. Cualquiera con
+ * un rol de trabajo en algun modulo (instructor, analista, etc.) cuenta como Personal.
+ * Se separan en SQL para no cargar cientos de estudiantes en la pestaña Personal.
+ */
+$rolesEstudiante = "'estudiante', 'alumno', 'participante'";
+$sqlEsEstudiante = "(
+    u.es_superadmin = 0
+    AND LOWER(r.nombre_rol) IN ($rolesEstudiante)
+    AND NOT EXISTS (
+        SELECT 1
+        FROM usuario_modulo ue
+        INNER JOIN roles re ON re.id = ue.rol_id
+        WHERE ue.usuario_id = u.id
+          AND LOWER(re.nombre_rol) NOT IN ($rolesEstudiante)
+    )
+)";
+
+$vista = ($_GET['vista'] ?? '') === 'estudiantes' ? 'estudiantes' : 'personal';
+
+// Conteo de ambas pestañas con el mismo alcance (sin traer filas).
+$sqlConteo = "SELECT $sqlEsEstudiante AS es_est, COUNT(*) AS total FROM usuarios u INNER JOIN roles r ON r.id = u.rol_id"
+    . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
+    . ' GROUP BY es_est';
+$stmtConteo = $conn->prepare($sqlConteo);
+$stmtConteo->execute($params);
+$conteoVista = ['personal' => 0, 'estudiantes' => 0];
+foreach ($stmtConteo->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+    $conteoVista[(int) $fila['es_est'] === 1 ? 'estudiantes' : 'personal'] = (int) $fila['total'];
+}
+
+$where[] = ($vista === 'estudiantes' ? '' : 'NOT ') . $sqlEsEstudiante;
+
 $sql = "
     SELECT
         u.id,
@@ -85,9 +119,7 @@ $sql = "
     LEFT JOIN roles rm ON rm.id = um.rol_id -- rol del usuario en cada modulo
 ";
 
-if ($where) {
-    $sql .= " WHERE " . implode(' AND ', $where);
-}
+$sql .= " WHERE " . implode(' AND ', $where);
 
 $sql .= "
     GROUP BY u.id, u.nombre, u.correo, u.es_superadmin, r.nombre_rol, i.nombre_ingenio
@@ -167,6 +199,14 @@ function usr_tono_modulo($nombre)
 $titulo = $scopeConfig['title'] ?? 'Usuarios del sistema';
 $volverA = $scopeConfig['return_url'] ?? '../Menu.php';
 $qsScope = $scope ? '&scope=' . urlencode($scope) : '';
+$csrf = usr_csrf_token();
+$urlVista = static function ($v) use ($scope) {
+    $q = ['vista' => $v];
+    if ($scope) {
+        $q['scope'] = $scope;
+    }
+    return 'usuarios.php?' . http_build_query($q);
+};
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -179,6 +219,8 @@ $qsScope = $scope ? '&scope=' . urlencode($scope) : '';
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/ingenios.css?v=<?= @filemtime(__DIR__ . '/../assets/ingenios.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/menu-cengitech.css?v=<?= @filemtime(__DIR__ . '/../assets/menu-cengitech.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/admin-cengitech.css?v=<?= @filemtime(__DIR__ . '/../assets/admin-cengitech.css') ?: '1' ?>">
     <style>
         .ingenios-shell { width: min(1280px, calc(100% - 48px)); }
 
@@ -265,8 +307,38 @@ $qsScope = $scope ? '&scope=' . urlencode($scope) : '';
         .usr-legend span { display: inline-flex; align-items: center; gap: 6px; }
         .usr-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
+        /* Pestañas Personal / Estudiantes */
+        .usr-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .usr-tab { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 16px; background: #fff; color: var(--text); text-decoration: none; transition: border-color .2s, box-shadow .2s, transform .2s; }
+        .usr-tab:hover { border-color: #aed58d; transform: translateY(-2px); }
+        .usr-tab > .material-symbols-outlined { width: 42px; height: 42px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--surface-soft); color: var(--primary-deep); }
+        .usr-tab b { display: block; font-size: 15px; }
+        .usr-tab small { display: block; font-size: 12px; color: var(--muted); }
+        .usr-tab em { margin-left: auto; min-width: 38px; padding: 4px 10px; border-radius: 99px; background: #eef3ea; color: #3f5245; font-style: normal; font-weight: 800; text-align: center; }
+        .usr-tab.is-on { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(115, 188, 37, .18); }
+        .usr-tab.is-on > .material-symbols-outlined { background: linear-gradient(140deg, #0b4a1f, #13652a); color: #dcfa51; }
+        .usr-tab.is-on em { background: linear-gradient(135deg, #A3D300, #73BC25); color: #073c18; }
+        .usr-aviso { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; padding: 14px 16px; border: 1px solid #cfe7b3; border-radius: 14px; background: #f4fbea; font-size: 13.5px; line-height: 1.55; color: #2f4733; }
+        .usr-aviso > .material-symbols-outlined { color: var(--primary-deep); }
+        .usr-aviso a { color: var(--primary-deep); font-weight: 700; }
+        button.action-btn { font: inherit; padding: 0; }
+
+        /* Modal de recuperación */
+        .rec-estado { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 12px; padding: 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; text-align: left; }
+        .rec-estado.is-ok { background: #eef8e3; color: #2b5f12; }
+        .rec-estado.is-warn { background: #fff7e0; color: #7a5c00; }
+        .rec-estado.is-error { background: #fdecea; color: #8f231c; }
+        .rec-enlace { display: flex; gap: 6px; margin-bottom: 12px; }
+        .rec-enlace input { flex: 1; min-width: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; font: inherit; font-size: 12px; color: var(--text); background: #fbfdf8; }
+        .rec-enlace button { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--primary-deep); color: #fff; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+        #recModal .modal-content { width: min(460px, calc(100% - 40px)); }
+        #recModal .confirm-icon { background: #eef8e3; color: var(--primary-deep); }
+
         @media (max-width: 980px) {
             .usr-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 600px) {
+            .usr-tabs { grid-template-columns: 1fr; }
         }
         /* En pantallas angostas cada usuario se ve como tarjeta */
         @media (max-width: 760px) {
@@ -288,7 +360,8 @@ $qsScope = $scope ? '&scope=' . urlencode($scope) : '';
         }
     </style>
 </head>
-<body>
+<body class="cx-admin">
+<?php require_once __DIR__ . '/../config/admin_layout.php'; cengi_admin_header('usuarios'); ?>
 <div class="ingenios-shell">
     <a href="<?= htmlspecialchars($volverA) ?>" class="btn-back">
         <span class="material-symbols-outlined">arrow_back</span>
@@ -308,10 +381,37 @@ $qsScope = $scope ? '&scope=' . urlencode($scope) : '';
         </a>
     </div>
 
+    <nav class="usr-tabs" aria-label="Tipo de usuario">
+        <a href="<?= htmlspecialchars($urlVista('personal')) ?>" class="usr-tab<?= $vista === 'personal' ? ' is-on' : '' ?>"<?= $vista === 'personal' ? ' aria-current="page"' : '' ?>>
+            <span class="material-symbols-outlined">badge</span>
+            <span><b>Personal</b><small>Quienes trabajan en los módulos</small></span>
+            <em><?= $conteoVista['personal'] ?></em>
+        </a>
+        <a href="<?= htmlspecialchars($urlVista('estudiantes')) ?>" class="usr-tab<?= $vista === 'estudiantes' ? ' is-on' : '' ?>"<?= $vista === 'estudiantes' ? ' aria-current="page"' : '' ?>>
+            <span class="material-symbols-outlined">school</span>
+            <span><b>Estudiantes</b><small>Cuentas solo para tomar cursos</small></span>
+            <em><?= $conteoVista['estudiantes'] ?></em>
+        </a>
+    </nav>
+
+    <?php if ($vista === 'estudiantes'): ?>
+        <div class="usr-aviso">
+            <span class="material-symbols-outlined">info</span>
+            <div>
+                <b>No hace falta crear estudiantes a mano.</b>
+                Al aprobar o asignar una inscripción en CengiCursos se crea la cuenta (el usuario es su correo),
+                se le da acceso a Cursos como Estudiante y recibe un enlace para crear su contraseña.
+                Su acceso a cada curso, su seguimiento y su contraseña se gestionan en
+                <a href="../../cengicursos/ver_usuarios.php?tab=estudiantes">CengiCursos → Usuarios → Estudiantes</a>.
+                Aquí puedes enviarle un enlace de recuperación con el botón <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px">key</span>.
+            </div>
+        </div>
+    <?php endif; ?>
+
     <div class="usr-kpis">
         <div class="usr-kpi">
-            <span class="usr-kpi-ico"><span class="material-symbols-outlined">group</span></span>
-            <div><strong><?= count($usuarios) ?></strong><span class="lbl">Usuarios registrados</span></div>
+            <span class="usr-kpi-ico"><span class="material-symbols-outlined"><?= $vista === 'estudiantes' ? 'school' : 'group' ?></span></span>
+            <div><strong><?= count($usuarios) ?></strong><span class="lbl"><?= $vista === 'estudiantes' ? 'Estudiantes registrados' : 'Personal registrado' ?></span></div>
         </div>
         <button type="button" class="usr-kpi" data-quick="super" title="Mostrar solo superadministradores">
             <span class="usr-kpi-ico is-gold"><span class="material-symbols-outlined">shield_person</span></span>
@@ -330,9 +430,14 @@ $qsScope = $scope ? '&scope=' . urlencode($scope) : '';
     <div class="ingenios-card">
         <?php if (count($usuarios) === 0): ?>
             <div class="empty-state">
-                <span class="material-symbols-outlined">group</span>
-                <strong>Aún no hay usuarios registrados</strong>
-                <span>Crea el primero con el botón "Crear usuario".</span>
+                <span class="material-symbols-outlined"><?= $vista === 'estudiantes' ? 'school' : 'group' ?></span>
+                <?php if ($vista === 'estudiantes'): ?>
+                    <strong>Aún no hay cuentas de estudiante</strong>
+                    <span>Se crean solas al aprobar inscripciones en CengiCursos.</span>
+                <?php else: ?>
+                    <strong>Aún no hay personal registrado</strong>
+                    <span>Crea el primero con el botón "Crear usuario".</span>
+                <?php endif; ?>
             </div>
         <?php else: ?>
             <div class="usr-toolbar">
@@ -436,6 +541,13 @@ $qsScope = $scope ? '&scope=' . urlencode($scope) : '';
                                 <a class="action-btn" href="editar_usuario.php?id=<?= (int) $usuario['id'] ?><?= $qsScope ?>" title="Editar usuario y roles">
                                     <span class="material-symbols-outlined">edit</span>
                                 </a>
+                                <button type="button" class="action-btn btn-recuperar"
+                                        data-id="<?= (int) $usuario['id'] ?>"
+                                        data-nombre="<?= htmlspecialchars($usuario['nombre']) ?>"
+                                        data-correo="<?= htmlspecialchars($usuario['correo']) ?>"
+                                        title="Enviar enlace para restablecer la contraseña" aria-label="Enviar enlace para restablecer la contraseña de <?= htmlspecialchars($usuario['nombre']) ?>">
+                                    <span class="material-symbols-outlined">key</span>
+                                </button>
                                 <?php if (!$usuario['es_super']): ?>
                                     <a class="action-btn is-danger btn-delete" href="#"
                                        data-url="eliminar_usuario.php?id=<?= (int) $usuario['id'] ?><?= $qsScope ?>"
@@ -481,6 +593,25 @@ $qsScope = $scope ? '&scope=' . urlencode($scope) : '';
             <span><span class="material-symbols-outlined" style="font-size:16px">info</span>El rol de cada módulo solo da permisos dentro de ese módulo.</span>
         </div>
     <?php endif; ?>
+</div>
+
+<div id="recModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="recTitulo">
+    <div class="modal-content">
+        <div class="confirm-icon">
+            <span class="material-symbols-outlined">key</span>
+        </div>
+        <h3 id="recTitulo">Restablecer contraseña</h3>
+        <p id="recTexto"></p>
+        <div id="recEstado" class="rec-estado" hidden></div>
+        <div id="recEnlaceBox" class="rec-enlace" hidden>
+            <input id="recEnlace" type="text" readonly aria-label="Enlace para restablecer la contraseña">
+            <button type="button" id="recCopiar"><span class="material-symbols-outlined" style="font-size:16px">content_copy</span>Copiar</button>
+        </div>
+        <div class="modal-buttons">
+            <button id="recCerrar" type="button">Cancelar</button>
+            <a id="recEnviar" href="#">Enviar enlace</a>
+        </div>
+    </div>
 </div>
 
 <div id="deleteModal" class="modal">
@@ -595,7 +726,77 @@ $qsScope = $scope ? '&scope=' . urlencode($scope) : '';
     document.getElementById("cancelBtn").onclick = () => modal.classList.remove("active");
     window.addEventListener("click", (e) => { if (e.target === modal) modal.classList.remove("active"); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") modal.classList.remove("active"); });
+
+    // Enviar enlace de recuperación de contraseña (mismo mecanismo que "Olvidé mi contraseña").
+    const rec = {
+        modal: document.getElementById("recModal"),
+        texto: document.getElementById("recTexto"),
+        estado: document.getElementById("recEstado"),
+        box: document.getElementById("recEnlaceBox"),
+        enlace: document.getElementById("recEnlace"),
+        enviar: document.getElementById("recEnviar"),
+        cerrar: document.getElementById("recCerrar"),
+        id: 0,
+    };
+    const recEstado = (tipo, html) => {
+        rec.estado.className = "rec-estado is-" + tipo;
+        rec.estado.innerHTML = html;
+        rec.estado.hidden = false;
+    };
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    document.querySelectorAll(".btn-recuperar").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            rec.id = btn.dataset.id;
+            rec.texto.innerHTML = "Se enviará a <b>" + esc(btn.dataset.correo) + "</b> un enlace para que <b>" + esc(btn.dataset.nombre) + "</b> cree una nueva contraseña. Es de un solo uso, vence en 60 minutos y anula los enlaces anteriores.";
+            rec.estado.hidden = true;
+            rec.box.hidden = true;
+            rec.enviar.hidden = false;
+            rec.enviar.textContent = "Enviar enlace";
+            rec.cerrar.textContent = "Cancelar";
+            rec.modal.classList.add("active");
+        });
+    });
+    rec.enviar.addEventListener("click", async (e) => {
+        e.preventDefault();
+        if (rec.enviar.dataset.ocupado) return;
+        rec.enviar.dataset.ocupado = "1";
+        rec.enviar.textContent = "Enviando…";
+        const datos = new FormData();
+        datos.append("id", rec.id);
+        datos.append("csrf", <?= json_encode($csrf) ?>);
+        datos.append("scope", <?= json_encode((string) $scope) ?>);
+        try {
+            const r = await fetch("enviar_recuperacion.php", { method: "POST", body: datos, credentials: "same-origin" });
+            const j = await r.json().catch(() => ({ ok: false, error: "Respuesta inesperada del servidor." }));
+            if (!j.ok) {
+                recEstado("error", esc(j.error || "No se pudo generar el enlace."));
+            } else {
+                rec.enlace.value = j.enlace;
+                rec.box.hidden = false;
+                rec.enviar.hidden = true;
+                rec.cerrar.textContent = "Cerrar";
+                recEstado(j.enviado ? "ok" : "warn", j.enviado
+                    ? "Correo enviado a <b>" + esc(j.correo) + "</b>. Si no lo ve, que revise la carpeta de spam. Si hace falta, también puedes compartirle este enlace:"
+                    : "<b>El correo no se pudo enviar</b> (revisa la configuración SMTP en login/.env). El enlace sí es válido: cópialo y compártelo con la persona por un medio seguro.");
+            }
+        } catch (err) {
+            recEstado("error", "No hay conexión con el servidor. Inténtalo de nuevo.");
+        } finally {
+            delete rec.enviar.dataset.ocupado;
+            if (!rec.enviar.hidden) rec.enviar.textContent = "Enviar enlace";
+        }
+    });
+    document.getElementById("recCopiar").addEventListener("click", async () => {
+        rec.enlace.select();
+        try { await navigator.clipboard.writeText(rec.enlace.value); } catch (e) { document.execCommand("copy"); }
+        document.getElementById("recCopiar").lastChild.textContent = "Copiado";
+        setTimeout(() => { document.getElementById("recCopiar").lastChild.textContent = "Copiar"; }, 1800);
+    });
+    rec.cerrar.addEventListener("click", () => rec.modal.classList.remove("active"));
+    window.addEventListener("click", (e) => { if (e.target === rec.modal) rec.modal.classList.remove("active"); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") rec.modal.classList.remove("active"); });
 })();
 </script>
+<?php cengi_admin_footer(); ?>
 </body>
 </html>
