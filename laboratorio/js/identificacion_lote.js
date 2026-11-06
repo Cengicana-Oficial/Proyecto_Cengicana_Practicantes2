@@ -1,6 +1,8 @@
 (function (root) {
   "use strict";
   const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[c]));
+  // "Lote <código>" sin repetir la palabra cuando el código ya la trae ("Lote-001").
+  const etiquetaLote = c => { const s = String(c ?? "").trim(); return /^lote\b/i.test(s) ? s : "Lote " + s; };
   const norm = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es").trim();
   const state = e => e?.info?.trim() ? (e.contenido === "solo_id" ? "solo_id" : "ok") :
     Object.entries(e?.campos || {}).some(([k,v]) => k !== "obs" && String(v).trim()) ? "ok" : "pendiente";
@@ -255,7 +257,10 @@ function code128Svg(texto, alto){
     if (raw.length > 20000) return msg("La lectura supera los 20 000 caracteres.");
     $("lectura").value = "";
     const fallo = text => { beep(false); msg(text); $("lectura").focus(); };
+    // QR de la boleta: el anterior (texto SIGELAB|…) y el nuevo de verificación (enlace a validar.php?c=LAB-R-…).
     if (raw.startsWith("SIGELAB|")) return fallo("Este QR identifica una boleta de recepción. Escanee la etiqueta del solicitante para completar la muestra.");
+    if (/\/validar\.php\?c=LAB-R-/i.test(raw)) return fallo("Este QR es la verificación de una boleta de recepción. Escanee la etiqueta del solicitante para completar la muestra.");
+    if (/\/validar\.php\?c=LAB-I-/i.test(raw)) return fallo("Este QR es la verificación de un informe de resultados. Escanee la etiqueta del solicitante para completar la muestra.");
     // Código de laboratorio (etiqueta impresa por el laboratorio): selecciona esa muestra.
     const foundLot = lotes.find(l=>l.muestras.some(m=>norm(m.codigo_lab)===norm(raw)));
     if (foundLot) {
@@ -281,6 +286,21 @@ function code128Svg(texto, alto){
     const quedan = rows().filter(x=>state(x.etiqueta)==="pendiente").length;
     msg(m.codigo_lab + ": " + (onlyId(raw) ? "solo ID del solicitante" : "información leída") + (quedan ? " · faltan " + quedan : " · todas leídas — presione Guardar identificación") + ".");
     $("lectura").focus();
+    // ID de Experimentos: COS-26-01-E01-AG025, o el formato anterior SIGEC-COS-26-01-E01-SU-003-26.
+    const idExp = (raw.match(/SIGEC-[A-Z0-9-]+-\d{2}|\b[A-Z][A-Z0-9]{1,3}-\d{2}-\d{2,}-E\d{2,}-[A-Z]{2,3}\d{3,}\b/i) || [])[0];
+    if (idExp) consultarExperimentos(m.codigo_lab, idExp.toUpperCase(), quedan);
+  }
+  /* Etiqueta de Experimentos: confirma de qué ensayo, parcela y tratamiento es la muestra.
+     Los datos se copian a la ficha al guardar el lote (lectura directa de la base de Experimentos). */
+  async function consultarExperimentos(codigoLab, idExp, quedan) {
+    try {
+      const r = await fetch("../controllers/experimentos_muestras.php",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({ids:[idExp],csrf_token:csrf})});
+      const j = await r.json();
+      if (!r.ok || !j.disponible) return;
+      const datos = j.muestras[idExp];
+      if (!datos) { beep(false); return msg(codigoLab + ": " + idExp + " no existe en Experimentos. Revise la etiqueta; la ficha no se llenará sola."); }
+      msg(codigoLab + " ← Experimentos: " + datos.resumen + (quedan ? " · faltan " + quedan : " · todas leídas — presione Guardar identificación") + ".");
+    } catch (e) { /* sin conexión con Experimentos: la lectura queda asignada igual */ }
   }
   function deshacerLectura() {
     if (!ultimaLectura || !editable()) return;
@@ -355,7 +375,7 @@ function code128Svg(texto, alto){
     const sel=$("base-lote"), previo=sel.value, tipo=$("base-tipo").value;
     const lista=lotes.filter(l=>!tipo||l.tipo_clave===tipo).slice().sort((a,b)=>String(a.codigo_lote).localeCompare(String(b.codigo_lote),"es",{numeric:true})||String(a.tipo).localeCompare(String(b.tipo),"es"));
     sel.innerHTML='<option value="">Todos los lotes ('+lista.length+')</option>'+lista.map(l=>{
-      return '<option value="'+l.id_solicitud+'">Lote '+esc(l.codigo_lote)+" · "+esc(tipoLabel(l.tipo))+" · "+esc(l.cliente||"Sin cliente")+" ("+l.muestras.length+" muestras)</option>";}).join("");
+      return '<option value="'+l.id_solicitud+'">'+esc(etiquetaLote(l.codigo_lote))+" · "+esc(tipoLabel(l.tipo))+" · "+esc(l.cliente||"Sin cliente")+" ("+l.muestras.length+" muestras)</option>";}).join("");
     sel.value=lista.some(l=>String(l.id_solicitud)===previo)?previo:"";
   }
   function renderBase() {

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/solicitud_formulario_helpers.php';
 require_once __DIR__ . '/recepcion_catalogo_helper.php';
+require_once __DIR__ . '/verificacion_documentos_helper.php';
 
 /** Obtiene datos guardados; el controlador valida el permiso antes de exponerlos. */
 function labRecepcionObtenerBoleta(PDO $conexion, int $id): ?array
@@ -21,7 +22,23 @@ function labRecepcionObtenerBoleta(PDO $conexion, int $id): ?array
     $muestras = $conexion->prepare("SELECT codigo_lab FROM muestra WHERE id_solicitud = ? AND codigo_lab IS NOT NULL AND codigo_lab <> '' ORDER BY numero_muestra, id_muestra");
     $muestras->execute([$id]);
     $codigos = $muestras->fetchAll(PDO::FETCH_COLUMN);
+    // Código y enlace de verificación pública de la boleta (su QR); solo datos ya impresos en ella.
+    $verificacion = null;
+    try {
+        $verificacion = lab_verif_boleta($conexion, $id, [
+            'documento' => 'Boleta de recepción', 'id_lote' => (int) ($s['id_lote'] ?? 0) ?: null,
+            'lote' => $s['codigo_lote'], 'tipo_muestra' => labCatalogoAnalisisEtiquetaModuloPlural($tipo),
+            'cliente' => (string) ($s['institucion'] ?? ''), 'fecha_ingreso' => $s['fecha_ingreso'],
+            'muestras' => (int) $s['numero_muestras'],
+            'rango' => $codigos ? (reset($codigos) . (count($codigos) > 1 ? ' a ' . end($codigos) : '')) : '',
+            'analisis' => array_values(array_unique(array_column($lista, 'nombre'))),
+            'recibido_por' => (string) ($s['recibido_por'] ?? ''),
+        ], (string) ($s['recibido_por'] ?? ''));
+    } catch (Throwable $e) {
+        error_log('[laboratorio][verificacion] boleta ' . $id . ': ' . $e->getMessage()); // la boleta se muestra igual, sin QR de verificación
+    }
     return [
+        'verificacion' => $verificacion,
         'idSolicitud' => $id, 'tipo' => labCatalogoAnalisisEtiquetaModuloPlural($tipo),
         'institucion' => $s['institucion'], 'responsableEnvio' => $s['responsable_envio'],
         'lote' => $s['codigo_lote'], 'codigoMuestreo' => $s['codigo_muestreo'],

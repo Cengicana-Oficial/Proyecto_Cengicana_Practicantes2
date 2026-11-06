@@ -3,6 +3,8 @@
 const app=document.getElementById('wf-app');if(!app)return;
 const $=id=>document.getElementById('wf-'+id), data=JSON.parse($('data').textContent), defs=window.LabHojas;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// "Lote <código>" sin repetir la palabra cuando el código ya la trae ("Lote-001" → "Lote-001", "25" → "Lote 25").
+const etiquetaLote=c=>{const s=String(c??'').trim();return /^lote\b/i.test(s)?s:'Lote '+s;};
 const localDate=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const labels={pendiente:'Pendiente',proceso:'En análisis',validacion:'En validación',validado:'Aprobado',rechazado:'Reanálisis',repetido:'Reanálisis'};
@@ -53,21 +55,24 @@ function renderPlan(filtered){
  // Un bloque por tipo de muestra; dentro, las columnas de análisis son las mismas para todos sus lotes.
  const bloques=group(lots,([,ts])=>tipoGrupo(ts[0].tipo_muestra));
  $('list').innerHTML=Object.entries(bloques).sort((a,b)=>tipoRank(a[0])-tipoRank(b[0])||a[0].localeCompare(b[0],'es')).map(([tipo,ls])=>{
-  const analisis=Object.values(group(ls.flatMap(([,ts])=>ts),t=>norm(t.analisis_nombre).trim())).map(a=>({id:norm(a[0].analisis_nombre).trim(),nombre:a[0].analisis_nombre})).sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+  // Columnas por hoja de trabajo (análisis que se capturan juntos): menos columnas y sin barra horizontal.
+  const hojas=hojasDelLote(ls.flatMap(([,ts])=>ts)),nAn=hojas.reduce((n,h)=>n+h.an.length,0);
   const nMuestras=ls.reduce((n,[,ts])=>n+new Set(ts.map(x=>x.id_muestra)).size,0);
   const filas=ls.map(([id,ts])=>{const t=ts[0],muestras=samplesSorted(ts),approved=ts.filter(x=>x.estado.key==='validado').length,e=etapas(id,ts);
    const rango=muestras.length?muestras[0]+(muestras.length>1?' → '+muestras[muestras.length-1]:''):'—';
    const vence=t.fecha_estimada?String(t.fecha_estimada).slice(0,10):'',atrasado=vence&&vence<today;
-   return '<tr><th class="wf-plan-lote"><b>'+esc(t.codigo_lote)+'</b>'+prio(t)+'</th><td>'+esc(t.cliente||'Sin cliente')+'</td><td class="wf-plan-rango">'+esc(rango)+'</td><td class="wf-plan-num">'+muestras.length+'</td>'
-    +analisis.map(a=>{const at=ts.filter(x=>norm(x.analisis_nombre).trim()===a.id);if(!at.length)return '<td class="wf-plan-ns" title="No solicitado">—</td>';
-     const ok=at.filter(x=>x.estado.key==='validado').length,resumen=Object.entries(group(at,x=>x.estado.key)).map(([k,v])=>labels[k]+': '+v.length).join(' · ');
-     return '<td class="wf-plan-an '+lotState(at)+'" title="'+esc(a.nombre+' — '+resumen)+'"><span>'+ok+'/'+at.length+'</span>'+progress(at)+'</td>';}).join('')
-    +'<td class="wf-plan-total"><b>'+Math.round(approved/ts.length*100)+'%</b>'+progress(ts)+'</td>'
+   return '<tr class="wf-plan-row" data-open-lote="'+id+'" tabindex="0" title="Abrir lote '+esc(t.codigo_lote)+'"><th class="wf-plan-lote wf-plan-sticky"><b>'+esc(t.codigo_lote)+'</b>'+prio(t)+'<small class="wf-plan-sub">'+esc(t.cliente||'Sin cliente')+'</small></th>'
+    +'<td class="wf-plan-rango"><span>'+esc(rango)+'</span><small class="wf-plan-sub">'+muestras.length+' muestra'+(muestras.length===1?'':'s')+'</small></td>'
+    +'<td class="wf-plan-total"><b>'+Math.round(approved/ts.length*100)+'%</b>'+progress(ts)+'<small class="wf-plan-sub">'+approved+'/'+ts.length+' análisis</small></td>'
     +'<td class="wf-plan-seg">'+stepper(e)+'<small class="wf-plan-sub wf-plan-etapa">'+esc(e.etiqueta)+'</small><small class="wf-plan-sub'+(atrasado?' wf-late':'')+'">'+(vence?(atrasado?'Atrasado · entrega ':'Entrega ')+esc(fdate(vence)):'Sin fecha estimada')+'</small></td>'
-    +'<td class="wf-plan-acc"><button type="button" data-toggle="'+id+'">Ver muestras</button><button type="button" data-seguimiento="'+id+'">Seguimiento</button></td></tr>';}).join('');
-  return '<section class="wf-plan-block">'+planHead(tipo,ls.length+' lote'+(ls.length===1?'':'s')+' · '+nMuestras+' muestras · '+analisis.length+' análisis')
-   +'<div class="wf-table-wrap wf-plan-wrap"><table class="wf-plan-table"><thead><tr><th>Lote</th><th>Cliente</th><th>Números de laboratorio</th><th>Muestras</th>'
-   +analisis.map(a=>'<th class="wf-plan-anh" title="'+esc(a.nombre)+'"><span>'+esc(a.nombre)+'</span></th>').join('')+'<th>Avance del lote</th><th>Seguimiento</th><th>Acciones</th></tr></thead><tbody>'+filas+'</tbody></table></div></section>';
+    +'<td class="wf-plan-acc"><button type="button" data-toggle="'+id+'" title="Muestras y asignación de analistas">Muestras</button><button type="button" data-seguimiento="'+id+'" title="Bitácora del lote">Bitácora</button></td>'
+    +hojas.map((h,i)=>{const at=ts.filter(x=>(x.hoja||('analisis:'+x.id_tipo_analisis))===h.key);if(!at.length)return '<td class="wf-plan-ns'+(i?'':' wf-plan-ini')+'" title="No solicitado">—</td>';
+     const ok=at.filter(x=>x.estado.key==='validado').length,resumen=Object.entries(group(at,x=>x.estado.key)).map(([k,v])=>labels[k]+': '+v.length).join(' · ');
+     const nombres=[...new Set(at.slice().sort((a,b)=>ordenAn(defs.hojas[h.key],a)-ordenAn(defs.hojas[h.key],b)).map(x=>x.analisis_nombre))].join(', ');
+     return '<td class="wf-plan-an '+lotState(at)+(i?'':' wf-plan-ini')+'" title="'+esc(h.titulo+'\n'+nombres+'\n'+resumen)+'"><span>'+ok+'/'+at.length+'</span>'+progress(at)+'</td>';}).join('')+'</tr>';}).join('');
+  return '<section class="wf-plan-block">'+planHead(tipo,ls.length+' lote'+(ls.length===1?'':'s')+' · '+nMuestras+' muestras · '+nAn+' análisis en '+hojas.length+' hoja'+(hojas.length===1?'':'s')+' de trabajo')
+   +'<div class="wf-table-wrap wf-plan-wrap"><table class="wf-plan-table"><thead><tr><th class="wf-plan-sticky">Lote · cliente</th><th>Números de laboratorio</th><th>Avance</th><th>Seguimiento</th><th>Acciones</th>'
+   +hojas.map((h,i)=>'<th class="wf-plan-anh'+(i?'':' wf-plan-ini')+'" title="'+esc(h.titulo+': '+h.an.map(a=>a[0].analisis_nombre).join(', '))+'"><span>'+esc(h.corto)+'</span>'+(h.an.length>1?'<small class="wf-plan-sub">'+h.an.length+' análisis</small>':'')+'</th>').join('')+'</tr></thead><tbody>'+filas+'</tbody></table></div></section>';
  }).join('')||'<p class="wf-empty">No hay lotes en curso con estos filtros.</p>';
  if(modalLot)renderModal();
 }
@@ -111,7 +116,7 @@ function renderFinalizados(ids,all){
     +'<td><b>'+esc(inf.codigo||'—')+'</b>'+(inf.version>1?' <span class="wf-priority media">v'+inf.version+'</span>':'')+'<small class="wf-plan-sub">Firmado '+esc(fdt(inf.fecha_firma))+(inf.firmado_por?' · '+esc(inf.firmado_por):'')+'</small></td>'
     +'<td>'+(dur===null?'—':dur+' día'+(dur===1?'':'s'))+'</td>'
     +'<td>'+(s.enviado?'<span class="wf-state validado">✓ Enviado</span><small class="wf-plan-sub">'+esc(fdt(s.enviado))+'</small>':'<span class="wf-state proceso">Pendiente de envío</span>')+'</td>'
-    +'<td class="wf-plan-acc"><button type="button" data-seguimiento="'+id+'">Seguimiento</button><a href="documentos_view.php" title="Ver, descargar o enviar el informe">Reportes</a></td></tr>';}).join('')+'</tbody></table></div></section>'
+    +'<td class="wf-plan-acc"><button type="button" data-seguimiento="'+id+'">Seguimiento</button><a href="documentos_view.php" title="Ver, descargar o enviar el informe firmado">Informe emitido</a></td></tr>';}).join('')+'</tbody></table></div></section>'
   :'<p class="wf-empty">No hay lotes finalizados con estos filtros.</p>';
 }/* Tipos de muestra en el orden del laboratorio */
 const TIPO_ORDEN=[['agua','Agua','Agua'],['cana','Caña','Caña'],['foliar','Foliares','Foliar'],['suelo','Suelos','Suelo'],['miel','Mieles','Miel']];
@@ -132,7 +137,7 @@ function renderModal(){
  const ts=tasks.filter(t=>String(t.id_lote)===String(modalLot));
  if(!ts.length){closeModal();return;}
  const t=ts[0],faltan=ts.filter(x=>x.estado.key!=='validado').length;
- $('modal-title').textContent='Lote '+t.codigo_lote+' · '+(t.cliente||'Sin cliente');
+ $('modal-title').textContent=etiquetaLote(t.codigo_lote)+' · '+(t.cliente||'Sin cliente');
  $('modal-sub').textContent=tipoGrupo(t.tipo_muestra)+' · '+new Set(ts.map(x=>x.id_muestra)).size+' muestras · '+(faltan?faltan+' análisis por aprobar':'todos los análisis aprobados');
  app.querySelectorAll('[data-modal-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.modalTab===modalTab)));
  if(modalTab!=='seguimiento'){$('modal-body').innerHTML=lotDetail(String(modalLot),ts);return;}
@@ -148,8 +153,51 @@ function closeModal(){modalLot=null;$('modal').hidden=true;document.body.style.o
 /* Identificación del lote (prototipo): estado en la barra del lote y etiqueta bajo cada código */
 function identChip(idSolicitud){const i=(data.identificacion||{})[idSolicitud];if(!i)return '';const txt=!i.version?'Por identificar':i.pendientes?'Guardada v'+i.version+' · '+i.pendientes+' sin identificar':'Guardada v'+i.version;return '<span class="wf-ident '+(!i.version?'pendiente':i.pendientes?'parcial':'ok')+'" title="Estado de la identificación de muestras">Identificación: '+esc(txt)+'</span>';}
 const identLabel=t=>String(((data.identificacion||{})[t.id_solicitud]?.etiquetas||{})[t.id_muestra]||'');
-function lotDetail(id,ts){const t=ts[0], analyses=group(ts,x=>x.id_tipo_analisis), samples=group(ts,x=>x.id_muestra),dis=data.manager?'':' disabled';
- return '<div class="wf-lot-detail"><div class="wf-toolbar"><label>Prioridad del lote<select data-priority="'+id+'"'+dis+'>'+['alta','media','baja'].map(p=>'<option value="'+p+'"'+(p===t.prioridad.key?' selected':'')+'>'+p[0].toUpperCase()+p.slice(1)+'</option>').join('')+'</select></label>'+identChip(t.id_solicitud)+'<a href="listar_lotes.php?id_solicitud='+t.id_solicitud+'">Identificación</a><a href="solicitud_formulario.php?id_solicitud='+t.id_solicitud+'" target="_blank" rel="noopener">Recepción / boleta</a><label class="wf-check"><input type="checkbox" data-solo-pend'+(soloPend?' checked':'')+'> Solo muestras con análisis por aprobar</label></div><p class="wf-legend">○ Pendiente · ◐ En análisis · ● En validación · ✓ Aprobado · ↻ Reanálisis · NS No solicitado</p><div class="wf-table-wrap"><table><thead><tr><th>Código de laboratorio</th>'+Object.values(analyses).map(a=>'<th>'+esc(a[0].analisis_nombre)+'<small class="wf-plan-sub">'+a.filter(x=>x.estado.key==='validado').length+'/'+a.length+' aprobadas</small></th>').join('')+'<th>Aprob.</th></tr></thead><tbody>'+(Object.values(samples).filter(ms=>!soloPend||ms.some(x=>x.estado.key!=='validado')).sort((a,b)=>String(a[0].codigo_muestra).localeCompare(String(b[0].codigo_muestra),undefined,{numeric:true})).map(ms=>{const et=identLabel(ms[0]),ap=ms.filter(x=>x.estado.key==='validado').length;return '<tr><th><a href="listar_lotes.php?muestra='+encodeURIComponent(ms[0].codigo_muestra)+'" title="Ficha de identificación">'+esc(ms[0].codigo_muestra)+'</a>'+(et?'<small class="wf-ident-label" title="'+esc(et)+'">'+esc(et.length>34?et.slice(0,34)+'…':et)+'</small>':'')+'</th>'+Object.keys(analyses).map(a=>{const x=ms.find(m=>String(m.id_tipo_analisis)===a);return '<td>'+(x?badge(x):'NS')+'</td>';}).join('')+'<td><b>'+ap+'</b>/'+ms.length+'</td></tr>';}).join('')||'<tr><td colspan="'+(Object.keys(analyses).length+2)+'" class="wf-empty">Todas las muestras de este lote tienen sus análisis aprobados.</td></tr>')+'</tbody></table></div><div class="wf-toolbar"><h3>Asignación por análisis</h3>'+ (data.manager?'<label>Asignar todo lo pendiente a '+users('','data-assign="'+id+'"')+'</label>':'')+'</div><div class="wf-assignment-grid">'+Object.entries(analyses).map(([a,at])=>{const pend=at.filter(pending), ids=[...new Set(pend.map(x=>x.usuario_id))];return '<div class="wf-card"><b>'+esc(at[0].analisis_nombre)+'</b><p>'+pend.length+' pendientes · '+(at.length-pend.length)+' en revisión/aprobados</p>'+progress(at)+(pend.length&&data.manager?users(ids.length===1?ids[0]:'','data-assign="'+id+'" data-analysis="'+a+'" aria-label="Analista para '+esc(at[0].analisis_nombre)+'"'):'<small>'+esc([...new Set(at.map(x=>x.analista||'Sin asignar'))].join(', '))+'</small>')+'</div>';}).join('')+'</div></div>';
+/* Análisis agrupados por hoja de trabajo: lo que se captura y envía junto también se asigna junto. */
+// Orden de los análisis dentro de una hoja: el de su definición (p. ej. Caña: Brix, Pol, Rendimiento).
+function ordenAn(def,t){const i=(def?.analisis||[]).indexOf(t.analisis_hoja);return i<0?99:i;}
+function hojasDelLote(ts){
+ const g={};ts.forEach(x=>{const k=x.hoja||('analisis:'+x.id_tipo_analisis);(g[k]??={key:k,tasks:[],analisis:{}});g[k].tasks.push(x);(g[k].analisis[x.id_tipo_analisis]??=[]).push(x);});
+ const orden=k=>{const i=Object.keys(defs.hojas||{}).indexOf(k);return i<0?9999:i;};
+ return Object.values(g).map(h=>{const def=(defs.hojas||{})[h.key],an=Object.values(h.analisis).sort((a,b)=>ordenAn(def,a[0])-ordenAn(def,b[0])),corto=h.key.includes('|')?h.key.split('|').slice(1).join('|'):an[0][0].analisis_nombre;
+  return Object.assign(h,{an,titulo:def?.titulo||an[0][0].analisis_nombre,corto:an.length===1?an[0][0].analisis_nombre:corto});})
+  .sort((a,b)=>orden(a.key)-orden(b.key)||a.titulo.localeCompare(b.titulo));
+}
+const miniBadge=t=>'<span class="wf-state wf-mini '+t.estado.key+'" title="'+esc(t.analisis_nombre+' · '+labels[t.estado.key]+' · '+(t.analista||'Sin asignar'))+'">'+icon[t.estado.key]+'</span>';
+function analistaActual(pend){
+ const n=[...new Set(pend.map(x=>x.analista||''))];
+ if(!pend.length)return '<span class="wf-muted">—</span>';
+ if(n.length===1&&!n[0])return '<span class="wf-sin-asignar">Sin asignar</span>';
+ return n.map(x=>x?'<span class="wf-analista" title="'+esc(x)+'"><i>'+esc(initials(x.split('@')[0].replace(/[._-]+/g,' ')))+'</i>'+esc(x)+'</span>':'<span class="wf-sin-asignar">Sin asignar</span>').join('');
+}
+function lotDetail(id,ts){const t=ts[0],hojas=hojasDelLote(ts),samples=group(ts,x=>x.id_muestra),dis=data.manager?'':' disabled';
+ const cols=hojas.flatMap(h=>h.an.map((a,i)=>({h,a,ini:i===0})));
+ const agrupar=hojas.some(h=>h.an.length>1);
+ const head=agrupar
+  ?'<tr><th rowspan="2" class="wf-sticky">Código de laboratorio</th>'+hojas.map(h=>'<th colspan="'+h.an.length+'" class="wf-grp wf-ini" title="'+esc(h.titulo)+'">'+esc(h.corto)+'</th>').join('')+'<th rowspan="2">Aprob.</th></tr><tr>'
+  :'<tr><th class="wf-sticky">Código de laboratorio</th>';
+ const thAn=cols.map(c=>'<th class="wf-an'+(c.ini?' wf-ini':'')+'" title="'+esc(c.a[0].analisis_nombre)+'">'+esc(c.a[0].analisis_nombre)+'<small class="wf-plan-sub">'+c.a.filter(x=>x.estado.key==='validado').length+'/'+c.a.length+'</small></th>').join('');
+ const filas=Object.values(samples).filter(ms=>!soloPend||ms.some(x=>x.estado.key!=='validado')).sort((a,b)=>String(a[0].codigo_muestra).localeCompare(String(b[0].codigo_muestra),undefined,{numeric:true})).map(ms=>{
+  const et=identLabel(ms[0]),ap=ms.filter(x=>x.estado.key==='validado').length;
+  return '<tr><th class="wf-sticky"><a href="listar_lotes.php?muestra='+encodeURIComponent(ms[0].codigo_muestra)+'" title="Ficha de identificación">'+esc(ms[0].codigo_muestra)+'</a>'+(et?'<small class="wf-ident-label" title="'+esc(et)+'">'+esc(et.length>34?et.slice(0,34)+'…':et)+'</small>':'')+'</th>'
+   +cols.map(c=>{const x=ms.find(m=>String(m.id_tipo_analisis)===String(c.a[0].id_tipo_analisis));return '<td class="wf-cell'+(c.ini?' wf-ini':'')+'">'+(x?miniBadge(x):'<span class="wf-ns" title="No solicitado">NS</span>')+'</td>';}).join('')
+   +'<td><b>'+ap+'</b>/'+ms.length+'</td></tr>';}).join('')||'<tr><td colspan="'+(cols.length+2)+'" class="wf-empty">Todas las muestras de este lote tienen sus análisis aprobados.</td></tr>';
+ const pendLote=ts.filter(pending);
+ const asignacion='<div class="wf-assign-head"><h3>Asignación por hoja de trabajo</h3><p class="wf-note">Cada hoja agrupa los análisis que se capturan y envían juntos; al elegir un analista se le asignan todos sus análisis pendientes.</p>'
+  +(data.manager&&pendLote.length?'<label>Asignar todo lo pendiente del lote a '+users('','data-assign="'+id+'"')+'</label>':'')+'</div>'
+  +'<div class="wf-table-wrap"><table class="wf-assign-table"><thead><tr><th>Hoja de trabajo</th><th>Análisis</th><th>Avance</th><th>Analista asignado</th>'+(data.manager?'<th>Asignar a</th>':'')+'</tr></thead><tbody>'
+  +hojas.map(h=>{const pend=h.tasks.filter(pending),uids=[...new Set(pend.map(x=>x.usuario_id))],ap=h.tasks.filter(x=>x.estado.key==='validado').length,rev=h.tasks.length-pend.length-ap;
+   const idsAn=h.an.filter(a=>a.some(pending)).map(a=>a[0].id_tipo_analisis).join(',');
+   return '<tr class="'+(pend.length&&pend.every(x=>!x.usuario_id&&!x.analista)?'wf-row-sin':'')+'"><th><b>'+esc(h.an.length===1?h.an[0][0].analisis_nombre:h.corto)+'</b>'+(h.an.length>1?'<small class="wf-plan-sub" title="'+esc(h.titulo)+'">'+h.an.length+' análisis</small>':'')+'</th>'
+    +'<td><div class="wf-an-chips">'+h.an.map(a=>{const p=a.filter(pending).length;return '<span class="wf-an-chip'+(p?'':' done')+'" title="'+esc(a[0].analisis_nombre+': '+p+' pendientes de '+a.length)+'">'+esc(a[0].analisis_nombre)+'</span>';}).join('')+'</div></td>'
+    +'<td class="wf-avance">'+progress(h.tasks)+'<small>'+ap+' aprobados'+(rev?' · '+rev+' en validación':'')+(pend.length?' · <b>'+pend.length+' por capturar</b>':'')+'</small></td>'
+    +'<td>'+analistaActual(pend)+(!pend.length?'<small class="wf-muted">'+esc([...new Set(h.tasks.map(x=>x.analista||''))].filter(Boolean).join(', ')||'')+'</small>':'')+'</td>'
+    +(data.manager?'<td>'+(pend.length?users(uids.length===1?uids[0]:'','data-assign="'+id+'" data-analyses="'+idsAn+'" aria-label="Analista para '+esc(h.titulo)+'"'):'<span class="wf-muted">Nada pendiente</span>')+'</td>':'')+'</tr>';}).join('')
+  +'</tbody></table></div>';
+ return '<div class="wf-lot-detail"><div class="wf-toolbar"><label>Prioridad del lote<select data-priority="'+id+'"'+dis+'>'+['alta','media','baja'].map(p=>'<option value="'+p+'"'+(p===t.prioridad.key?' selected':'')+'>'+p[0].toUpperCase()+p.slice(1)+'</option>').join('')+'</select></label>'+identChip(t.id_solicitud)+'<a href="listar_lotes.php?id_solicitud='+t.id_solicitud+'">Identificación</a><a href="solicitud_formulario.php?id_solicitud='+t.id_solicitud+'" target="_blank" rel="noopener">Recepción / boleta</a><label class="wf-check"><input type="checkbox" data-solo-pend'+(soloPend?' checked':'')+'> Solo muestras con análisis por aprobar</label></div>'
+  +asignacion
+  +'<div class="wf-assign-head"><h3>Estado por muestra</h3><p class="wf-legend">○ Pendiente · ◐ En análisis · ● En validación · ✓ Aprobado · ↻ Reanálisis · NS No solicitado <span class="wf-muted">(pasa el cursor sobre un ícono para ver el analista)</span></p></div>'
+  +'<div class="wf-table-wrap wf-matrix"><table><thead>'+head+thAn+(agrupar?'':'<th>Aprob.</th>')+'</tr></thead><tbody>'+filas+'</tbody></table></div></div>';
 }
 /* ---------- Bandeja: cola de captura agrupada por tipo de muestra (formato del prototipo) ---------- */
 const TIPOS={Suelo:['#B34B00','<path d="M2 20h20M4 20V10l4-3 4 3 4-3 4 3v10"/>'],Foliar:['#73BC25','<path d="M11 20A7 7 0 0 1 4 13V7a1 1 0 0 1 1-1h1a7 7 0 0 1 7 7v7z"/><path d="M4 12h4M14 20a7 7 0 0 0 7-7V8"/>'],Agua:['#636A6F','<path d="M12 2s7 8 7 13a7 7 0 0 1-14 0c0-5 7-13 7-13z"/>'],'Caña':['#8A6E00','<path d="M12 22V6M12 6l5-4M12 10L7 6M12 14l5-4M12 18l-5-4"/>'],Miel:['#B34B00','<path d="M7 3h10l-1 4H8z"/><path d="M8 7c-2 2-3 4-3 7a7 7 0 0 0 14 0c0-3-1-5-3-7"/>'],Fertilizantes:['#858C91','<rect x="4" y="7" width="16" height="14" rx="2"/><path d="M8 7V5a4 4 0 0 1 8 0v2"/>']};
@@ -158,7 +206,7 @@ const initials=n=>String(n||'?').split(/\s+/).filter(Boolean).map(w=>w[0]).slice
 const prioChip=key=>'<span class="vt-chip pr-'+key+'">'+esc(key[0].toUpperCase()+key.slice(1))+'</span>';
 const isRea=t=>['rechazado','repetido'].includes(t.estado.key);
 /* fila completa: todos los campos obligatorios que aplican a la muestra tienen dato */
-const filled=(h,filas,id,ts)=>h.cols.filter(c=>!c.auto&&!c.opc&&(!c.analisis||ts.some(t=>Number(t.id_muestra)===Number(id)&&t.analisis_hoja===c.analisis))).every(c=>String(filas?.[id]?.[c.k]??'').trim());
+const filled=(h,filas,id,ts)=>h.cols.filter(c=>!c.auto&&!c.opc&&(!c.analisis||ts.some(t=>Number(t.id_muestra)===Number(id)&&[].concat(c.analisis).includes(t.analisis_hoja)))).every(c=>String(filas?.[id]?.[c.k]??'').trim());
 function renderTray(filtered){
  const a=$('analyst').value;
  const pendingTasks=filtered.filter(t=>pending(t)&&(!a||(a==='sin'?!t.usuario_id&&!t.analista:String(t.usuario_id)===a||(!t.usuario_id&&t.analista===data.usuarios.find(u=>String(u.id)===a)?.nombre))));
@@ -183,12 +231,15 @@ function renderTray(filtered){
    return '<tr><td><b>'+esc(h?.titulo||ts[0].analisis_nombre)+'</b>'+(rea?' <span class="vt-chip is-rea" title="Devueltas por el técnico revisor">↻ '+new Set(ts.filter(isRea).map(t=>t.id_muestra)).size+' reanálisis</span>':'')+'<div class="cell-sub">'+esc(sub)+'</div></td>'
     +'<td>'+chips+'</td><td>'+analistas.map(n=>'<span class="bd-ini" title="'+esc(n)+'">'+esc(n==='Sin asignar'?'—':initials(n))+'</span>').join('')+'</td><td>'+prioChip(prioKey)+'</td>'
     +'<td class="small muted" style="white-space:nowrap">'+samples.length+' muestra'+(samples.length===1?'':'s')+' pendiente'+(samples.length===1?'':'s')+'<div class="cell-sub">'+enHoja.length+' en hoja abierta · '+listas+' completas</div><div class="bd-pbar"><span style="width:'+Math.round(listas/samples.length*100)+'%"></span></div></td>'
-    +'<td style="text-align:right"><button type="button" class="cengi-btn cengi-btn-sm '+(h&&allowed?'cengi-btn-primary':'cengi-btn-ghost')+'" data-sheet="'+esc(key)+'"'+(!h||!allowed?' disabled':'')+'>'+(!h?'Formato no disponible':!allowed?'Asignado a otro analista':enHoja.length?'Continuar →':'Abrir hoja →')+'</button></td></tr>';
+    +'<td style="text-align:right"><button type="button" class="cengi-btn cengi-btn-sm '+(h&&allowed?'cengi-btn-primary':'cengi-btn-ghost')+'" data-sheet="'+esc(key)+'"'+(!h||!allowed?' disabled':'')+'>'+(!h?'Formato no disponible':!allowed?'Asignado a otro analista':enHoja.length?'Continuar →':'Capturar resultados →')+'</button></td></tr>';
   }).join('');
   return '<div class="cube-block">'+cubeHead(tipo,bs.length+' hoja'+(bs.length===1?'':'s')+' de trabajo pendiente'+(bs.length===1?'':'s'))+'<div class="cengi-table-wrap"><table class="bd-queue"><thead><tr><th>Hoja de trabajo</th><th>Lotes pendientes</th><th>Analista(s)</th><th>Prioridad</th><th>Avance</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
  }).join('')||'<div class="cengi-empty vt-empty-ok"><span class="material-symbols-outlined">task_alt</span>Sin hojas de trabajo pendientes con los filtros actuales.</div>';
 }
-$('list').addEventListener('click',e=>{const t=e.target.closest('[data-toggle]'),s=e.target.closest('[data-sheet]');const sg=e.target.closest('[data-seguimiento]');if(t)openModal(t.dataset.toggle);if(sg)openModal(sg.dataset.seguimiento,'seguimiento');if(s)openSheet(s.dataset.sheet);});
+$('list').addEventListener('click',e=>{const t=e.target.closest('[data-toggle]'),s=e.target.closest('[data-sheet]');const sg=e.target.closest('[data-seguimiento]');if(t)openModal(t.dataset.toggle);if(sg)openModal(sg.dataset.seguimiento,'seguimiento');if(s)openSheet(s.dataset.sheet);
+ // Clic en cualquier parte de la fila del lote (fuera de botones y enlaces) abre su detalle.
+ const fila=!t&&!sg&&!s&&!e.target.closest("a,button,select,input")&&e.target.closest("[data-open-lote]");if(fila)openModal(fila.dataset.openLote);});
+$('list').addEventListener('keydown',e=>{const fila=e.target.matches&&e.target.matches("[data-open-lote]")?e.target:null;if(fila&&(e.key==="Enter"||e.key===" ")){e.preventDefault();openModal(fila.dataset.openLote);}});
 app.querySelectorAll('[data-plan-tab]').forEach(b=>b.addEventListener('click',()=>{planTab=b.dataset.planTab;renderList();}));
 app.querySelectorAll('[data-modal-tab]').forEach(b=>b.addEventListener('click',()=>{modalTab=b.dataset.modalTab;renderModal();}));
 if($('modal')){
@@ -197,7 +248,7 @@ if($('modal')){
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('modal').hidden)closeModal();});
  $('modal-body').addEventListener('change',e=>{if(e.target.matches('[data-solo-pend]')){soloPend=e.target.checked;renderModal();return;}planChange(e);});
 }
-async function planChange(e){const el=e.target;if(busy||(!el.dataset.priority&&!el.dataset.assign)||!el.value)return;const id=Number(el.dataset.priority||el.dataset.assign),t=tasks.find(t=>Number(t.id_lote)===id);busy=true;el.disabled=true;try{await api({id_lote:id,version:t.plan_version,...(el.dataset.priority?{prioridad:el.value}:{usuario_id:Number(el.value),id_tipo_analisis:Number(el.dataset.analysis||0)})},'?modo=plan');await refresh();message('Planificación guardada. La bandeja refleja la nueva asignación y prioridad.');}catch(error){message(error.message);renderList();}finally{busy=false;}}
+async function planChange(e){const el=e.target;if(busy||(!el.dataset.priority&&!el.dataset.assign)||!el.value)return;const id=Number(el.dataset.priority||el.dataset.assign),t=tasks.find(t=>Number(t.id_lote)===id);busy=true;el.disabled=true;try{await api({id_lote:id,version:t.plan_version,...(el.dataset.priority?{prioridad:el.value}:{usuario_id:Number(el.value),...(el.dataset.analyses?{ids_tipo_analisis:el.dataset.analyses.split(",").map(Number)}:{id_tipo_analisis:Number(el.dataset.analysis||0)})})},'?modo=plan');await refresh();message('Planificación guardada. La bandeja refleja la nueva asignación y prioridad.');}catch(error){message(error.message);renderList();}finally{busy=false;}}
 $('list').addEventListener('change',planChange);function newCap(key){const h=defs.hojas[key];return {hoja:key,encabezado:Object.fromEntries((h.encabezado?.campos||[]).map(c=>[c.k,c.def||''])),controles:Object.fromEntries(h.controles.map(c=>[c.id,{...(c.def||{})}])),ctrlExtra:[],filas:{},seleccion:[],curva:(h.curva?.def||[]).map(c=>({c:String(c),a:''})),fecha:localDate(),analista:data.user.nombre||data.user.correo||'',equipo:(data.equiposHoja||{})[key]||defs.catalogo.find(c=>c.tipoMuestra===key.split('|')[0]&&h.analisis.includes(c.analisis))?.equipoDefault||'',obs:''};}
 /* Campo "Equipo": lista de equipos activos del Catálogo de análisis (pestaña Equipos) con su estado
    de calibración. Si el catálogo no está disponible, queda el campo de texto con sugerencias. */
@@ -215,7 +266,28 @@ async function openSheet(key){if(busy)return;if(dirty&&!confirm('Hay cambios sin
 const hdef=()=>defs.hojas[hk];
 const sample=id=>pool.filter(t=>Number(t.id_muestra)===Number(id));
 const ctrls=()=>[...hdef().controles,...cap.ctrlExtra];
-const applicable=(c,id)=>!c.analisis||sample(id).some(t=>t.analisis_hoja===c.analisis);
+/* Filas de control adicionales en la secuencia de la hoja, como en papel: "+ Fila de control" la deja debajo de la
+   última muestra que hay en la hoja (despues = id_muestra). Los controles de la hoja (blanco, control base) y los
+   adicionales sin posición (avances guardados antes de este cambio) van al inicio. */
+const ctrlInicio=()=>[...hdef().controles,...cap.ctrlExtra.filter(c=>c.despues==null||!cap.seleccion.some(id=>String(id)===String(c.despues)))];
+const ctrlTras=id=>cap.ctrlExtra.filter(c=>c.despues!=null&&String(c.despues)===String(id));
+/* Quita muestras de la hoja; los controles que estaban debajo de ellas pasan a la muestra anterior que queda. */
+function quitarDeSeleccion(ids){
+ const q=new Set([...ids].map(String));
+ cap.ctrlExtra.forEach(c=>{if(c.despues==null||!q.has(String(c.despues)))return;
+  const i=cap.seleccion.findIndex(id=>String(id)===String(c.despues));let anterior=null;
+  for(let j=i-1;j>=0;j--)if(!q.has(String(cap.seleccion[j]))){anterior=cap.seleccion[j];break;}
+  c.despues=anterior;});
+ cap.seleccion=cap.seleccion.filter(id=>!q.has(String(id)));
+}
+/* El servidor numera los controles adicionales CONTROL_EXTRA_1..n según su orden: al quitar uno se renumeran. */
+function renumerarControlesExtra(){
+ const valores=cap.ctrlExtra.map(c=>cap.controles[c.id]||{});
+ cap.ctrlExtra.forEach(c=>{delete cap.controles[c.id];});
+ cap.ctrlExtra=cap.ctrlExtra.map((c,i)=>{const id='CONTROL_EXTRA_'+(i+1);cap.controles[id]=valores[i];return Object.assign({},c,{id,label:'Control adicional '+(i+1)});});
+}
+// c.analisis puede ser un nombre o una lista (p. ej. la lectura T sirve a Alcalinidad total y Bicarbonatos).
+const applicable=(c,id)=>!c.analisis||sample(id).some(t=>[].concat(c.analisis).includes(t.analisis_hoja));
 /* ---------- Hoja de trabajo (formato del prototipo) ---------- */
 let emptyRows=[],rowSeq=0,expandedLots=new Set(),pendQuery='';
 const CHIPS_VISIBLES=12;
@@ -229,7 +301,7 @@ function applyPendFilter(){
   const mas=card.querySelector('[data-expand-lot]');if(mas)mas.hidden=!!q;
  });
 }
-function input(c,section,id,v,disabled=false){const attrs=' data-section="'+section+'" data-id="'+esc(id)+'" data-field="'+c.k+'" aria-label="'+esc(c.label)+'"';if(disabled)return '<input class="ws-in" disabled placeholder="—" aria-label="'+esc(c.label)+' (no aplica)">';if(c.auto)return '<span class="ws-auto" title="Calculado automáticamente" data-auto="'+section+':'+esc(id)+':'+c.k+'">'+esc(defs.fx(c.auto((section==='controles'?cap.controles:cap.filas)[id]||{}),2))+'</span>';if(c.tipo==='sel')return '<select class="ws-in"'+attrs+'>'+c.opts.map(o=>'<option'+(String(v??'')===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>';return '<input type="text" class="ws-in'+(c.tipo==='txt'?' ws-txt':'')+'"'+attrs+' inputmode="'+(c.tipo==='txt'?'text':'decimal')+'" maxlength="250" value="'+esc(v||'')+'"'+(section==='encabezado'&&c.unidad?' placeholder="'+esc(c.unidad)+'"':'')+'>';}
+function input(c,section,id,v,disabled=false){if(c.vinculo==='Humedad residual')return '<span class="ws-auto" title="Complete y guarde primero Humedad residual">'+esc(v==null||v===''?'Pendiente de humedad residual':defs.fx(defs.num(v),2))+'</span>';const attrs=' data-section="'+section+'" data-id="'+esc(id)+'" data-field="'+c.k+'" aria-label="'+esc(c.label)+'"';if(disabled)return '<input class="ws-in" disabled placeholder="—" aria-label="'+esc(c.label)+' (no aplica)">';if(c.auto)return '<span class="ws-auto" title="Calculado automáticamente" data-auto="'+section+':'+esc(id)+':'+c.k+'">'+esc(defs.fx(c.auto((section==='controles'?cap.controles:cap.filas)[id]||{}),2))+'</span>';if(c.tipo==='sel')return '<select class="ws-in"'+attrs+'>'+c.opts.map(o=>'<option'+(String(v??'')===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>';return '<input type="text" class="ws-in'+(c.tipo==='txt'?' ws-txt':'')+'"'+attrs+' inputmode="'+(c.tipo==='txt'?'text':'decimal')+'" maxlength="250" value="'+esc(v||'')+'"'+(section==='encabezado'&&c.unidad?' placeholder="'+esc(c.unidad)+'"':'')+'>';}
 const thLabel=c=>esc(c.label)+(c.opc&&c.opcTxt!==false?' <span class="muted">(opcional)</span>':'')+(c.vinculo?'<span class="bd-hint">↪ se toma de '+esc(typeof c.vinculo==='object'?c.vinculo.nombre:c.vinculo)+'</span>':'');
 function theadHoja(cols,prefijo,sufijo){
  if(!cols.some(c=>c.g))return '<tr>'+prefijo.map(p=>'<th>'+p+'</th>').join('')+cols.map(c=>'<th>'+thLabel(c)+'</th>').join('')+sufijo.map(p=>'<th>'+p+'</th>').join('')+'</tr>';
@@ -242,7 +314,7 @@ const reaChip=id=>sample(id).some(isRea)?'<span class="vt-chip is-rea" title="Re
 /* opciones de número de laboratorio agrupadas por lote; excluye las ya colocadas en otra fila */
 function labOptions(current,lote){
  return lotsOfPool().filter(lt=>!lote||String(lt[0].id_lote)===String(lote)).map(lt=>{const ops=samplesOf(lt).filter(s=>{const id=Number(s[0].id_muestra);return id===Number(current)||!cap.seleccion.includes(id);});
-  return ops.length?'<optgroup label="Lote '+esc(lt[0].codigo_lote)+'">'+ops.map(s=>'<option value="'+s[0].id_muestra+'"'+(Number(s[0].id_muestra)===Number(current)?' selected':'')+'>'+esc(s[0].codigo_muestra)+(s.some(isRea)?' (reanálisis)':'')+'</option>').join('')+'</optgroup>':'';}).join('');
+  return ops.length?'<optgroup label="'+esc(etiquetaLote(lt[0].codigo_lote))+'">'+ops.map(s=>'<option value="'+s[0].id_muestra+'"'+(Number(s[0].id_muestra)===Number(current)?' selected':'')+'>'+esc(s[0].codigo_muestra)+(s.some(isRea)?' (reanálisis)':'')+'</option>').join('')+'</optgroup>':'';}).join('');
 }
 function renderHead(){
  const nPend=new Set(pool.map(t=>t.id_muestra)).size,nLots=new Set(pool.map(t=>t.id_lote)).size,sel=cap.seleccion.length;
@@ -251,10 +323,13 @@ function renderHead(){
  $('grid-mode').className=tablet?'':'active';$('tablet-mode').className=tablet?'active':'';
 }
 function renderSheet(){
+ if(hk==='Suelo|Textura'){cap.seleccion.forEach(applyLinks);applyControlLinks();}
  const h=hdef();let html='';
- if(h.encabezado||h.referencia){
+ // Campos soloVal (parámetros del método): no se capturan aquí; toman su valor por defecto y el técnico los ajusta en Validación técnica.
+ const camposEnc=(h.encabezado?.campos||[]).filter(c=>!c.soloVal);
+ if(camposEnc.length||h.referencia){
   html+='<div class="ws-card"><div class="ws-card-body ws-top">';
-  if(h.encabezado)html+='<div class="ws-top-main"><div class="ws-sec-title">'+esc(h.encabezado.titulo)+'</div><div class="ws-enc">'+h.encabezado.campos.map(c=>'<div><label>'+esc(c.label)+'</label>'+input(c,'encabezado','',cap.encabezado[c.k])+'</div>').join('')+'</div></div>';
+  if(camposEnc.length)html+='<div class="ws-top-main"><div class="ws-sec-title">'+esc(h.encabezado.titulo)+'</div><div class="ws-enc">'+camposEnc.map(c=>'<div><label>'+esc(c.label)+'</label>'+input(c,'encabezado','',cap.encabezado[c.k])+'</div>').join('')+'</div></div>';
   if(h.referencia)html+='<div class="ws-ref"><div class="ws-sec-title">'+esc(h.referencia.titulo)+'</div><table>'+h.referencia.filas.map((r,i)=>'<tr>'+r.map(v=>i?'<td>'+esc(v)+'</td>':'<th>'+esc(v)+'</th>').join('')+'</tr>').join('')+'</table></div>';
   html+='</div></div>';
  }
@@ -269,26 +344,30 @@ function renderSheet(){
   const chips=libres.map((s,i)=>{const rea=s.some(isRea),extra=i>=CHIPS_VISIBLES;return '<button type="button" class="ws-chip" data-add="'+s[0].id_muestra+'" data-code="'+esc(norm(s[0].codigo_muestra))+'"'+(extra?' data-extra="1"'+(abierto?'':' hidden'):'')+' title="Agregar a la hoja'+(rea?' — reanálisis':'')+'">+ '+esc(s[0].codigo_muestra)+(rea?' ↻':'')+'</button>';}).join('');
   const opciones=libres.map(s=>'<option value="'+s[0].id_muestra+'">'+esc(s[0].codigo_muestra)+'</option>').join('');
   const resumen=libres.length+' por agregar'+(enHoja?' · '+enHoja+' en la hoja':'')+(hechas?' · '+hechas+' ya analizada'+(hechas===1?'':'s'):'');
-  return '<div class="ws-pend-lote'+(libres.length?'':' is-done')+'" data-pend-lot="'+lot+'"><div class="ws-pend-head"><div><b class="vt-mono">Lote '+esc(lt[0].codigo_lote)+'</b> <span class="small muted">'+esc(lt[0].cliente||'')+'</span> '+prioChip(lt[0].prioridad.key)+'<div class="small muted">'+resumen+'</div></div>'
+  return '<div class="ws-pend-lote'+(libres.length?'':' is-done')+'" data-pend-lot="'+lot+'"><div class="ws-pend-head"><div><b class="vt-mono">'+esc(etiquetaLote(lt[0].codigo_lote))+'</b> <span class="small muted">'+esc(lt[0].cliente||'')+'</span> '+prioChip(lt[0].prioridad.key)+'<div class="small muted">'+resumen+'</div></div>'
    +(libres.length?'<div class="ws-chips"><button type="button" class="cengi-btn cengi-btn-ghost cengi-btn-sm" data-add-lot="'+lot+'">+ Agregar lote</button></div>':'<span class="vt-chip is-approved">✓ Todo en la hoja</span>')+'</div>'
    +(libres.length>1?'<div class="ws-range"><span class="small muted">Rango</span><select class="ws-in ws-sel" id="wf-rng-a-'+lot+'" aria-label="Desde">'+opciones+'</select><span class="small muted">a</span><select class="ws-in ws-sel" id="wf-rng-b-'+lot+'" aria-label="Hasta">'+opciones.replace(/(<option value="[^"]*")(>[^<]*<\/option>)$/,'$1 selected$2')+'</select><button type="button" class="cengi-btn cengi-btn-ghost cengi-btn-sm" data-add-range="'+lot+'">+ Agregar rango</button></div>':'')
    +(libres.length?'<div class="ws-chips ws-pend-chips">'+chips+'</div>'+(libres.length>CHIPS_VISIBLES?'<button type="button" class="bd-more" data-expand-lot="'+lot+'">'+(abierto?'Ver menos':'Ver '+(libres.length-CHIPS_VISIBLES)+' más')+'</button>':''):'')+'</div>';
  }).join('');
  html+='<div class="ws-card"><div class="ws-card-head"><div><div class="ws-sec-title">Muestras pendientes de este análisis</div><div class="small muted" style="margin-top:2px">Agrega un lote completo, un rango de números o toca una muestra. Las muestras ya analizadas no aparecen.</div></div><div class="ws-chips">'+(totalLibres>CHIPS_VISIBLES?'<input type="search" id="wf-pend-search" class="bd-row-search" value="'+esc(pendQuery)+'" placeholder="Buscar número de laboratorio" aria-label="Buscar muestra pendiente">':'')+(totalLibres?'<button type="button" class="cengi-btn cengi-btn-ghost cengi-btn-sm" data-action="all">Agregar todas ('+totalLibres+')</button>':'')+(tablet?botonQuitar():'')+'</div></div><div class="ws-card-body ws-pend">'+(panel||'<p class="small muted">No hay muestras pendientes asignadas a usted en esta hoja.</p>')+'</div></div>';
  if(tablet)html+=renderTablet();else{
-  const filasCtrl=ctrls().map(c=>'<tr class="ws-ctrl"><td class="muted small">·</td><td class="muted small">—</td><td class="ws-lbl">'+esc(c.label)+'</td>'+h.cols.map(col=>'<td>'+input(col,'controles',c.id,cap.controles[c.id]?.[col.k],c.sin?.includes(col.k))+'</td>').join('')+'<td></td></tr>').join('');
+  // Los controles adicionales se pueden quitar (×); los de la hoja (blanco, control base) no.
+  const filaCtrl=c=>'<tr class="ws-ctrl"'+(c.despues!=null?' data-ctrl-tras="'+esc(c.despues)+'"':'')+'><td class="muted small">·</td><td class="muted small">—</td><td class="ws-lbl">'+esc(c.label)+'</td>'+h.cols.map(col=>'<td>'+input(col,'controles',c.id,cap.controles[c.id]?.[col.k],c.sin?.includes(col.k))+'</td>').join('')
+   +'<td>'+(String(c.id).startsWith('CONTROL_EXTRA_')?'<button type="button" class="rm-row" data-remove-ctrl="'+esc(c.id)+'" aria-label="Quitar fila de control" title="Quitar fila de control">×</button>':'')+'</td></tr>';
+  const filasCtrl=ctrlInicio().map(filaCtrl).join('');
   const filasM=cap.seleccion.map((id,i)=>{const t=sample(id)[0],match=!sampleQuery||norm((t?.codigo_muestra||id)+' '+(t?.codigo_lote||'')).includes(norm(sampleQuery));
    return '<tr data-sample-row="'+id+'"'+(t&&complete(id)?' class="ws-ok"':'')+(!match?' hidden':'')+'><td class="muted small">'+(i+1)+'</td><td class="vt-mono small">'+esc(t?.codigo_lote||'—')+'</td>'
     +'<td><div class="ws-chips" style="flex-wrap:nowrap">'+(t?'<select class="ws-in ws-sel ws-sel-lab" data-row="'+i+'" aria-label="Número de laboratorio">'+labOptions(id,'')+'</select>':'<span class="vt-flag">Muestra no disponible #'+esc(id)+'</span>')+reaChip(id)+'</div></td>'
     +h.cols.map(c=>'<td>'+(!t?'<input class="ws-in" disabled placeholder="—">':applicable(c,id)?input(c,'filas',id,cap.filas[id]?.[c.k]):'<div class="ws-ns" title="Análisis no solicitado para esta muestra">n/s</div>')+'</td>').join('')
-    +'<td><button type="button" class="rm-row" data-remove="'+id+'" aria-label="Quitar fila" title="Quitar fila">×</button></td></tr>';}).join('');
+    +'<td><button type="button" class="rm-row" data-remove="'+id+'" aria-label="Quitar fila" title="Quitar fila">×</button></td></tr>'
+    +ctrlTras(id).map(filaCtrl).join('');}).join('');
   const vacias=emptyRows.length||cap.seleccion.length?emptyRows:[{rid:0,lote:''}];
   const filasV=vacias.map((r,i)=>'<tr><td class="muted small">'+(cap.seleccion.length+i+1)+'</td><td><select class="ws-in ws-sel" data-empty-lote="'+r.rid+'" aria-label="Lote" title="Filtra los números de laboratorio por lote"><option value="">Todos</option>'+lotsOfPool().map(lt=>'<option value="'+lt[0].id_lote+'"'+(String(r.lote)===String(lt[0].id_lote)?' selected':'')+'>'+esc(lt[0].codigo_lote)+'</option>').join('')+'</select></td>'
    +'<td><select class="ws-in ws-sel ws-sel-lab vacio" data-empty="'+r.rid+'" aria-label="Número de laboratorio"><option value="">Seleccionar número…</option>'+labOptions(null,r.lote)+'</select></td>'+h.cols.map(()=>'<td><input class="ws-in" disabled placeholder="—"></td>').join('')
    +'<td>'+(r.rid?'<button type="button" class="rm-row" data-remove-empty="'+r.rid+'" aria-label="Quitar fila" title="Quitar fila">×</button>':'')+'</td></tr>').join('');
   html+='<div class="ws-card"><div class="ws-card-head"><div class="ws-sec-title">Datos de análisis por muestra</div><div class="ws-chips"><input type="search" id="wf-row-search" class="bd-row-search" value="'+esc(sampleQuery)+'" placeholder="Buscar muestra o lote en la hoja" aria-label="Buscar muestra en la hoja"><button type="button" class="cengi-btn cengi-btn-ghost cengi-btn-sm" data-action="row">+ Agregar fila</button>'+botonQuitar()+''+(h.controles.length?'<button type="button" class="cengi-btn cengi-btn-ghost cengi-btn-sm" data-action="control">+ Fila de control</button>':'')+'</div></div>'
    +'<div class="ws-scroll"><table class="ws"><thead>'+theadHoja(h.cols,['#','Lote','Número de laboratorio'],[''])+'</thead><tbody>'+filasCtrl+filasM+filasV+'</tbody></table></div>'
-   +'<div class="ws-foot-note">Selecciona el número de laboratorio y el lote se completa solo; el filtro de lote de las filas vacías es opcional.'+(h.controles.length?' Las filas de control ('+esc(h.controles.map(c=>c.label.toLowerCase()).join(', '))+') van al inicio.':'')+' Puedes pegar un bloque desde Excel en las celdas de muestras; Enter avanza en la misma columna.</div></div>';
+   +'<div class="ws-foot-note">Selecciona el número de laboratorio y el lote se completa solo; el filtro de lote de las filas vacías es opcional.'+(h.controles.length?' Las filas de control de la hoja ('+esc(h.controles.map(c=>c.label.toLowerCase()).join(', '))+') van al inicio; "+ Fila de control" agrega otra debajo de la última muestra de la hoja.':'')+' Puedes pegar un bloque desde Excel en las celdas de muestras; Enter avanza en la misma columna.</div></div>';
  }
  if(h.curva)html+='<div class="ws-card"><div class="ws-card-head"><div class="ws-sec-title">Curva de calibración</div><button type="button" class="cengi-btn cengi-btn-ghost cengi-btn-sm" data-action="point">+ Agregar punto</button></div><div class="ws-card-body"><table class="ws ws-curva-tbl"><thead><tr><th>Punto curva ('+esc(h.curva.unidadX)+')</th><th>Absorbancia</th></tr></thead><tbody>'+cap.curva.map((p,i)=>'<tr><td>'+input({k:'c',label:'Concentración'},'curva',i,p.c)+'</td><td>'+input({k:'a',label:'Absorbancia'},'curva',i,p.a)+'</td></tr>').join('')+'</tbody></table><div class="ws-foot-note" style="padding:8px 0 0;border:0">El gráfico y la ecuación de la curva los revisa el técnico en Validación técnica.</div></div></div>';
  html+='<div class="ws-card"><div class="ws-card-body"><div class="ws-enc" style="margin:0"><div><label>Fecha de análisis *</label><input class="ws-in" type="date" data-meta="fecha" value="'+esc(cap.fecha)+'"></div><div><label>Analista *</label><input class="ws-in ws-txt" value="'+esc(cap.analista)+'" readonly title="Se toma de la sesión iniciada"></div><div><label>Equipo</label>'+campoEquipo()+'</div><div class="ws-wide"><label>Observaciones</label><textarea class="ws-in" data-meta="obs" maxlength="2000" placeholder="Opcional…">'+esc(cap.obs)+'</textarea></div></div></div></div>';
@@ -303,10 +382,12 @@ function botonQuitar(){const n=muestrasAQuitar().length;if(!n)return '';
 function quitarMuestras(){const ids=muestrasAQuitar();if(!ids.length)return;
  const conDatos=ids.filter(id=>Object.values(cap.filas[id]||{}).some(v=>String(v??'').trim())).length;
  if(!confirm('Se quitarán '+ids.length+' muestra(s) de la hoja.'+(conDatos?' '+conDatos+' ya tienen datos escritos, que se perderán al guardar.':'')+' Las muestras vuelven a "Muestras pendientes" para agregarlas de nuevo. ¿Continuar?'))return;
- const quitar=new Set(ids.map(String));cap.seleccion=cap.seleccion.filter(id=>!quitar.has(String(id)));sampleQuery='';step=0;changed();renderSheet();
+ quitarDeSeleccion(ids);sampleQuery='';step=0;changed();renderSheet();
  message(ids.length+' muestra(s) quitadas de la hoja. Agrega desde "Muestras pendientes" las que vas a analizar.');}
 function renderTablet(){
- const steps=[...ctrls().map(c=>({section:'controles',id:c.id,label:c.label,ctrl:c})),...cap.seleccion.filter(id=>sample(id).length).map(id=>({section:'filas',id,label:sample(id)[0].codigo_muestra,lote:sample(id)[0].codigo_lote}))];
+ // Mismo orden que la grilla: controles iniciales, luego cada muestra seguida de sus controles adicionales.
+ const pasoCtrl=c=>({section:'controles',id:c.id,label:c.label,ctrl:c});
+ const steps=[...ctrlInicio().map(pasoCtrl),...cap.seleccion.filter(id=>sample(id).length).flatMap(id=>[{section:'filas',id,label:sample(id)[0].codigo_muestra,lote:sample(id)[0].codigo_lote},...ctrlTras(id).map(pasoCtrl)])];
  step=Math.max(0,Math.min(step,steps.length-1));const p=steps[step];if(!p)return '<div class="cengi-empty">Agrega muestras desde el panel de arriba para comenzar.</div>';
  const nCtrl=ctrls().length,last=step===steps.length-1;
  const campos=hdef().cols.filter(c=>p.ctrl?!p.ctrl.sin?.includes(c.k):applicable(c,p.id)).map(c=>'<div class="field-lg"><label>'+esc(c.label)+(c.g?' · '+esc(c.g):'')+'</label>'+input(c,p.section,p.id,cap[p.section][p.id]?.[c.k])+'</div>').join('');
@@ -314,37 +395,51 @@ function renderTablet(){
   +'<div class="capture-body"><div class="capture-muestra-tag"><span>'+esc(p.label)+'</span><span class="vt-chip">'+(p.ctrl?'Fila de control':esc(p.lote))+'</span>'+(p.ctrl?'':reaChip(p.id))+'</div><div class="capture-grid">'+campos+'</div></div>'
   +'<div class="capture-foot"><button type="button" class="cengi-btn cengi-btn-ghost" data-step="-1"'+(!step?' disabled':'')+'>Anterior</button><span class="small muted">Registro '+(step+1)+' de '+steps.length+'</span>'+(last?'<button type="button" class="cengi-btn cengi-btn-primary" data-action="grid">Revisar en grilla</button>':'<button type="button" class="cengi-btn cengi-btn-primary" data-step="1">Siguiente</button>')+'</div></div>';
 }
-function complete(id){return hdef().cols.filter(c=>!c.auto&&!c.opc&&applicable(c,id)).every(c=>String(cap.filas[id]?.[c.k]??'').trim());}
-function updateComplete(){const missing=cap.seleccion.filter(id=>!sample(id).length||!complete(id)).length;const blank=hdef().controles.find(c=>c.id==='BLANCO');const blankMissing=blank&&hdef().cols.some(c=>!c.auto&&!c.opc&&!blank.sin?.includes(c.k)&&(!c.analisis||cap.seleccion.some(id=>applicable(c,id)))&&!String(cap.controles.BLANCO?.[c.k]??'').trim());const curveMissing=hdef().curva&&!defs.regresion(cap.curva)&&!defs.num(cap.encabezado.pend);const n=cap.seleccion.length;const reason=!n?'Selecciona al menos un número de laboratorio':missing?'Faltan datos en '+missing+' muestra'+(missing===1?'':'s'):blankMissing?'Falta la fila del blanco':curveMissing?'Faltan puntos de la curva':!cap.fecha?'Falta la fecha de análisis':'';$('send').disabled=busy||!!reason;$('send').textContent=reason||'Enviar '+n+' muestra'+(n===1?'':'s')+' a validación técnica';renderHead();
+function complete(id){return hdef().cols.filter(c=>!c.auto&&!c.opc&&applicable(c,id)).every(c=>String(cap.filas[id]?.[c.k]??'').trim())&&!(hdef().validar?.(cap.filas[id]||{},{enc:cap.encabezado})||[]).length;}
+function updateComplete(){const missing=cap.seleccion.filter(id=>!sample(id).length||!complete(id)).length;const procedureError=ctrls().flatMap(c=>hdef().validar?.(cap.controles[c.id]||{},{enc:cap.encabezado})||[])[0];const blank=hdef().controles.find(c=>c.id==='BLANCO');const blankMissing=blank&&hdef().cols.some(c=>!c.auto&&!c.opc&&!blank.sin?.includes(c.k)&&(!c.analisis||cap.seleccion.some(id=>applicable(c,id)))&&!String(cap.controles.BLANCO?.[c.k]??'').trim());const curveMissing=hdef().curva&&!(hdef().regresion||defs.regresion)(cap.curva)&&!((hdef().encabezado?.campos||[]).some(c=>c.k==='pend')&&defs.num(cap.encabezado.pend));const n=cap.seleccion.length;const reason=!n?'Selecciona al menos un número de laboratorio':procedureError?procedureError:missing?'Faltan datos válidos en '+missing+' muestra'+(missing===1?'':'s'):blankMissing?'Falta la fila del blanco':curveMissing?'Faltan puntos de la curva':!cap.fecha?'Falta la fecha de análisis':'';$('send').disabled=busy||!!reason;$('send').textContent=reason||'Enviar '+n+' muestra'+(n===1?'':'s')+' a validación técnica';renderHead();
  if(!tablet)app.querySelectorAll('[data-sample-row]').forEach(tr=>{tr.className=sample(tr.dataset.sampleRow).length&&complete(tr.dataset.sampleRow)?'ws-ok':'';});}
 function changed(){dirty=true;updateComplete();}
 function applyLinks(id){
  const row=cap.filas[id];
  hdef().cols.filter(c=>c.vinculo).forEach(c=>{
-   if(String(row[c.k]??'').trim())return;
+   if(c.vinculo!=='Humedad residual'&&String(row[c.k]??'').trim())return;
+   if(c.vinculo==='Humedad residual')delete row[c.k];
    const key=typeof c.vinculo==='object'?c.vinculo.hoja:'Suelo|Humedad residual',ref=links[key]?.[id];if(!ref)return;
    let v;
    if(typeof c.vinculo==='object')v=ref.campos[c.vinculo.campo];
-   else v=defs.hojas[key].calc(ref.campos,{enc:ref.encabezado,ctrl:ref.controles,blk:ref.controles.BLANCO||{},reg:defs.regresion(ref.curva),regL:defs.regLineal(ref.curva)},'M').pct;
+   else v=defs.hojas[key].calc(ref.campos,{enc:ref.encabezado,ctrl:ref.controles,blk:ref.controles.BLANCO||{},reg:(defs.hojas[key].regresion||defs.regresion)(ref.curva),regL:defs.regLineal(ref.curva)},'M').pct;
    if(v!==undefined&&v!==null&&String(v).trim()!=='')row[c.k]=String(v);
+ });
+}
+function applyControlLinks(){
+ if(hk!=='Suelo|Textura')return;
+ ctrls().forEach(c=>{
+  const ref=links['Suelo|Humedad residual']?.[c.despues??cap.seleccion[0]],f=ref?.controles?.[c.id];
+  cap.controles[c.id]??={};delete cap.controles[c.id].hr;
+  if(f){const v=defs.hojas['Suelo|Humedad residual'].calc(f).pct;if(v!=null)cap.controles[c.id].hr=String(v);}
  });
 }
 function addSamples(ids){ids.forEach(id=>{id=Number(id);if(!cap.seleccion.includes(id)){cap.seleccion.push(id);cap.filas[id]??={};applyLinks(id);emptyRows.shift();}});changed();renderSheet();}
 $('sheet-body').addEventListener('change',e=>{if(busy)return;const d=e.target.dataset||{};
- if(d.row!==undefined&&e.target.value){const id=Number(e.target.value);cap.seleccion[Number(d.row)]=id;cap.filas[id]??={};applyLinks(id);changed();renderSheet();}
+ // Al cambiar el número de laboratorio de una fila, sus controles adicionales siguen debajo de ella.
+ if(d.row!==undefined&&e.target.value){const id=Number(e.target.value),anterior=cap.seleccion[Number(d.row)];cap.ctrlExtra.forEach(c=>{if(c.despues!=null&&String(c.despues)===String(anterior))c.despues=id;});cap.seleccion[Number(d.row)]=id;cap.filas[id]??={};applyLinks(id);changed();renderSheet();}
  if(d.emptyLote!==undefined){const r=emptyRows.find(x=>String(x.rid)===d.emptyLote);if(r)r.lote=e.target.value;else emptyRows.push({rid:++rowSeq,lote:e.target.value});renderSheet();}
  if(d.empty!==undefined&&e.target.value){emptyRows=emptyRows.filter(x=>String(x.rid)!==d.empty);const id=Number(e.target.value);if(!cap.seleccion.includes(id)){cap.seleccion.push(id);cap.filas[id]??={};applyLinks(id);}changed();renderSheet();}
 });
 $('sheet-body').addEventListener('click',e=>{if(busy)return;const b=e.target.closest('button');if(!b)return;const a=b.dataset.action;
  if(a==='all')addSamples(pool.map(t=>t.id_muestra));
  if(a==='clear')quitarMuestras();
- if(a==='control'){const id='CONTROL_EXTRA_'+(cap.ctrlExtra.length+1);cap.ctrlExtra.push({id,label:'Control adicional '+(cap.ctrlExtra.length+1)});cap.controles[id]={};changed();renderSheet();}
+ // Debajo de la última muestra que hay en la hoja (si aún no hay muestras, al inicio).
+ if(a==='control'){const id='CONTROL_EXTRA_'+(cap.ctrlExtra.length+1),ultima=cap.seleccion.length?cap.seleccion[cap.seleccion.length-1]:null;
+  cap.ctrlExtra.push({id,label:'Control adicional '+(cap.ctrlExtra.length+1),despues:ultima});cap.controles[id]={};changed();renderSheet();
+  if(ultima!=null){const t=sample(ultima)[0];message('Fila de control agregada debajo de '+(t?t.codigo_muestra:'la última muestra')+'.');}}
  if(a==='point'){cap.curva.push({c:'',a:''});changed();renderSheet();}
  if(a==='row'){emptyRows.push({rid:++rowSeq,lote:''});renderSheet();}
  if(a==='grid'){tablet=false;renderSheet();}
  if(b.dataset.add)addSamples([b.dataset.add]);
  if(b.dataset.addLot)addSamples(pool.filter(t=>String(t.id_lote)===b.dataset.addLot).map(t=>t.id_muestra));
- if(b.dataset.remove){cap.seleccion=cap.seleccion.filter(id=>String(id)!==b.dataset.remove);changed();renderSheet();}
+ if(b.dataset.remove){quitarDeSeleccion([b.dataset.remove]);changed();renderSheet();}
+ if(b.dataset.removeCtrl){cap.ctrlExtra=cap.ctrlExtra.filter(c=>c.id!==b.dataset.removeCtrl);delete cap.controles[b.dataset.removeCtrl];renumerarControlesExtra();changed();renderSheet();}
  if(b.dataset.expandLot){const l=b.dataset.expandLot;expandedLots.has(l)?expandedLots.delete(l):expandedLots.add(l);renderSheet();}
  if(b.dataset.addRange){
   const l=b.dataset.addRange,libres=samplesOf(pool.filter(t=>String(t.id_lote)===l)).map(s=>Number(s[0].id_muestra)).filter(id=>!cap.seleccion.includes(id));
@@ -367,12 +462,14 @@ $('sheet-body').addEventListener('input',e=>{
  if(section==='encabezado')cap.encabezado[field]=el.value;else{cap[section][id]??={};cap[section][id][field]=el.value;}
  if(['filas','controles'].includes(section))hdef().cols.filter(c=>c.auto).forEach(c=>{const output=[...app.querySelectorAll('[data-auto]')].find(n=>n.dataset.auto===section+':'+id+':'+c.k);if(output)output.textContent=defs.fx(c.auto(cap[section][id]),2);});changed();
 });
-async function saveSheet(send){if(busy)return;if(send&&!confirm('¿Enviar las '+cap.seleccion.length+' muestras seleccionadas a validación técnica?'))return;busy=true;app.querySelectorAll('input,select,textarea,button').forEach(n=>n.disabled=true);try{const result=await api({accion:send?'enviar':'guardar',hoja:hk,version,datos:cap});version=result.version;dirty=false;if(send){cap=newCap(hk);emptyRows=[];$('sheet-view').hidden=true;$('list-view').hidden=false;await refresh();message('Muestras enviadas a validación técnica. Las no seleccionadas siguen en la bandeja.');}else{message('Avance guardado en el sistema. Puede continuar después.');renderSheet();}}catch(e){message(e.message);}finally{busy=false;app.querySelectorAll('input,select,textarea,button').forEach(n=>n.disabled=false);if(!$('sheet-view').hidden){renderSheet();}else renderList();}}
+// Campos con verificarAlEnviar (p. ej. normalidad del HCl): el analista confirma su valor antes de enviar.
+const porVerificar=()=>(hdef().encabezado?.campos||[]).filter(c=>c.verificarAlEnviar&&!c.soloVal);
+async function saveSheet(send){if(busy)return;if(send){const v=porVerificar().map(c=>'• '+c.label+': '+(String(cap.encabezado[c.k]??'').trim()||'(vacío)')+(c.unidad?' '+c.unidad:'')).join(String.fromCharCode(10));if(v&&porVerificar().some(c=>!String(cap.encabezado[c.k]??'').trim())){message('Complete: '+porVerificar().map(c=>c.label).join(', ')+' antes de enviar.');return;}if(!confirm((v?'Verifique los parámetros de la corrida antes de enviar:'+String.fromCharCode(10)+v+String.fromCharCode(10,10)+'Si el valor no es correcto, cancele y edítelo en Parámetros de la corrida.'+String.fromCharCode(10,10):'')+'¿Enviar las '+cap.seleccion.length+' muestras seleccionadas a validación técnica?'))return;}busy=true;app.querySelectorAll('input,select,textarea,button').forEach(n=>n.disabled=true);try{const result=await api({accion:send?'enviar':'guardar',hoja:hk,version,datos:cap});version=result.version;dirty=false;if(send){cap=newCap(hk);emptyRows=[];$('sheet-view').hidden=true;$('list-view').hidden=false;await refresh();message('Muestras enviadas a validación técnica. Las no seleccionadas siguen en la bandeja.');}else{message('Avance guardado en el sistema. Puede continuar después.');renderSheet();}}catch(e){message(e.message);}finally{busy=false;app.querySelectorAll('input,select,textarea,button').forEach(n=>n.disabled=false);if(!$('sheet-view').hidden){renderSheet();}else renderList();}}
 $('save').addEventListener('click',()=>saveSheet(false));$('send').addEventListener('click',()=>saveSheet(true));
 function visibleSamples(){return cap.seleccion.filter(id=>{const t=sample(id)[0];return !sampleQuery||norm((t?.codigo_muestra||id)+' '+(t?.codigo_lote||'')).includes(norm(sampleQuery));});}
 $('sheet-body').addEventListener('keydown',e=>{if(e.key!=='Enter'||e.target.dataset.section!=='filas')return;e.preventDefault();const ids=visibleSamples(),i=ids.indexOf(Number(e.target.dataset.id)),next=ids[i+(e.shiftKey?-1:1)];if(next!==undefined)app.querySelector('[data-section="filas"][data-id="'+next+'"][data-field="'+e.target.dataset.field+'"]')?.focus();});
 function parseTSV(text){const rows=[];let row=[],cell='',quoted=false;for(const c of text.replace(/\r\n?/g,'\n')){if(c==='"'){quoted=!quoted;}else if(!quoted&&(c==='\t'||c==='\n')){row.push(cell);cell='';if(c==='\n'){rows.push(row);row=[];}}else cell+=c;}if(quoted)throw Error('Comillas sin cerrar en el bloque.');if(cell||row.length){row.push(cell);rows.push(row);}return rows;}
-$('sheet-body').addEventListener('paste',e=>{if(busy||e.target.dataset.section!=='filas')return;const text=e.clipboardData.getData('text/plain');if(!/[\t\n]/.test(text))return;e.preventDefault();try{const vals=parseTSV(text),ids=visibleSamples(),start=ids.indexOf(Number(e.target.dataset.id)),cols=hdef().cols,ci=cols.findIndex(c=>c.k===e.target.dataset.field);if(start<0||start+vals.length>ids.length||vals.some(r=>ci+r.length>cols.length))throw Error('El bloque excede las filas visibles o columnas disponibles.');const changes=[];vals.forEach((r,ri)=>r.forEach((v,j)=>{const c=cols[ci+j],id=ids[start+ri];if(c.auto||!applicable(c,id)){if(v.trim())throw Error('El bloque incluye campos calculados o no solicitados.');return;}if(v.length>250)throw Error('Una celda excede 250 caracteres.');changes.push([id,c.k,v.trim()]);}));changes.forEach(([id,k,v])=>{cap.filas[id]??={};cap.filas[id][k]=v;});changed();renderSheet();message(vals.length+' filas pegadas. Guarde el avance.');}catch(error){message(error.message);}});
+$('sheet-body').addEventListener('paste',e=>{if(busy||e.target.dataset.section!=='filas')return;const text=e.clipboardData.getData('text/plain');if(!/[\t\n]/.test(text))return;e.preventDefault();try{const vals=parseTSV(text),ids=visibleSamples(),start=ids.indexOf(Number(e.target.dataset.id)),cols=hdef().cols,ci=cols.findIndex(c=>c.k===e.target.dataset.field);if(start<0||start+vals.length>ids.length||vals.some(r=>ci+r.length>cols.length))throw Error('El bloque excede las filas visibles o columnas disponibles.');const changes=[];vals.forEach((r,ri)=>r.forEach((v,j)=>{const c=cols[ci+j],id=ids[start+ri];if(c.auto||c.vinculo==='Humedad residual'||!applicable(c,id)){if(v.trim())throw Error('El bloque incluye campos calculados o no solicitados.');return;}if(v.length>250)throw Error('Una celda excede 250 caracteres.');changes.push([id,c.k,v.trim()]);}));changes.forEach(([id,k,v])=>{cap.filas[id]??={};cap.filas[id][k]=v;});changed();renderSheet();message(vals.length+' filas pegadas. Guarde el avance.');}catch(error){message(error.message);}});
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 init();
 })();

@@ -36,9 +36,9 @@ try {
     $pdo = Conexion::conectar();
     lab_informes_esquema($pdo);
     $accion = (string) ($datos['accion'] ?? '');
-    if (in_array($accion, ['firmar', 'devolver'], true) && !lab_can('laboratorio.firma.gestionar')) {
+    if (in_array($accion, ['firmar', 'devolver', 'compartir', 'retirar'], true) && !lab_can('laboratorio.firma.gestionar')) {
         http_response_code(403);
-        echo json_encode(['ok' => false, 'error' => 'Solo el jefe de laboratorio puede aprobar, firmar o devolver informes.']);
+        echo json_encode(['ok' => false, 'error' => 'Solo el jefe de laboratorio puede aprobar, firmar, devolver o compartir informes.']);
         exit;
     }
     if ($accion === 'vista') {
@@ -57,6 +57,9 @@ try {
         $resultado = lab_informe_firmar($pdo, $idLote, (string) ($datos['observaciones'] ?? ''), (string) ($datos['firma_png'] ?? ''), is_array($datos['resultados'] ?? null) ? $datos['resultados'] : [], $usuario);
     } elseif ($accion === 'devolver') {
         $resultado = lab_informe_devolver($pdo, $idLote, (string) ($datos['motivo'] ?? ''), $usuario);
+    } elseif ($accion === 'compartir' || $accion === 'retirar') {
+        // Experimentos solo toma los resultados de los lotes compartidos (lee lab_experimentos_compartido).
+        $resultado = labExpCompartir($pdo, $idLote, $accion === 'compartir', (string) ($usuario['nombre'] ?? 'Laboratorio'));
     } else {
         throw new InvalidArgumentException('Acción no válida.');
     }

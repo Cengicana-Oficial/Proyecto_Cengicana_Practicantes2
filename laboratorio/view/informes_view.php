@@ -1,8 +1,9 @@
 <?php
 /**
- * Informes — formato de Prototipos/laboratorio-workflow-v3.html: un informe por lote; el jefe
- * de laboratorio lo revisa, lo aprueba y lo firma aquí mismo (antes era la sección "Firma
- * electrónica") o lo devuelve al técnico. El PDF firmado queda en Reportes.
+ * Aprobación de informes — formato de Prototipos/laboratorio-workflow-v3.html: un informe por
+ * lote; el jefe de laboratorio lo revisa, lo aprueba y lo firma aquí mismo (antes era la sección
+ * "Firma electrónica") o lo devuelve al técnico. El informe firmado pasa a "Informes emitidos"
+ * (documentos_view.php), donde se descarga y se envía al cliente.
  */
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../conexion.php';
@@ -23,6 +24,9 @@ $idLote = (int) ($_GET['lote'] ?? 0);
 $detalle = $idLote > 0 ? lab_informe_detalle($pdo, $idLote) : null;
 $lotes = $detalle ? [] : lab_informes_lotes($pdo);
 $estructuraInforme = $detalle ? lab_informe_estructura($detalle) : null;
+// Muestras de Experimentos del lote y si sus resultados ya se compartieron.
+$expEstado = $detalle ? labExpEstadoLote($pdo, $idLote) : null;
+$expCompartidos = $detalle ? [] : labExpLotesCompartidos($pdo);
 $formatoInforme = $estructuraInforme['formato'] ?? null;
 
 $cuenta = ['PREP' => 0, 'LISTO' => 0, 'DEVUELTO' => 0, 'FIRMADO' => 0];
@@ -40,7 +44,9 @@ function inf_fecha($f, bool $hora = false): string
 }
 $chipEstado = ['PREP' => '', 'LISTO' => 'is-review', 'DEVUELTO' => 'is-rea', 'FIRMADO' => 'is-approved'];
 
-lab_shell_head('Informes', $detalle ? 'Informe del lote ' . $detalle['lote']['codigo_lote'] : 'Un informe por lote · aprobación y firma del jefe de laboratorio', [
+// Filtro inicial: lo que requiere acción (por aprobar, luego devueltos, luego en preparación); si no hay, todos.
+$filtroInicial = $cuenta['LISTO'] ? 'LISTO' : ($cuenta['DEVUELTO'] ? 'DEVUELTO' : ($cuenta['PREP'] ? 'PREP' : 'TODOS'));
+lab_shell_head('Aprobación de informes', $detalle ? 'Informe del lote ' . $detalle['lote']['codigo_lote'] : 'Un informe por lote · revisión y firma del jefe de laboratorio', [
     '../css/lab_shell.css?v=20261006',
     '../styles/validacion_tecnica.css?v=' . filemtime(__DIR__ . '/../styles/validacion_tecnica.css'),
     '../styles/informes_v3.css?v=' . filemtime(__DIR__ . '/../styles/informes_v3.css'),
@@ -51,18 +57,14 @@ lab_shell_open('informes_view.php');
 <section class="vt-wrap inf-page">
 <?php if (!$detalle): ?>
     <?php if ($idLote > 0): ?><div class="cengi-empty">El lote solicitado no tiene análisis registrados.</div><?php endif; ?>
-    <div class="cengi-kpi-grid inf-kpis">
-        <article class="cengi-kpi"><div class="cengi-kpi-val" style="color:#636A6F"><?= $cuenta['LISTO'] ?></div><div class="cengi-kpi-label">Listos para aprobación</div></article>
-        <article class="cengi-kpi"><div class="cengi-kpi-val"><?= $cuenta['PREP'] ?></div><div class="cengi-kpi-label">En preparación</div></article>
-        <article class="cengi-kpi"><div class="cengi-kpi-val" style="color:#B34B00"><?= $cuenta['DEVUELTO'] ?></div><div class="cengi-kpi-label">Devueltos al técnico</div></article>
-        <article class="cengi-kpi"><div class="cengi-kpi-val" style="color:var(--cengi-primary-deep)"><?= $cuenta['FIRMADO'] ?></div><div class="cengi-kpi-label">Aprobados y firmados</div></article>
-    </div>
-    <p class="vt-intro">Un informe por lote. Cuando el técnico valida todos los análisis del lote, su informe queda <b>listo para aprobación</b>:
-        el jefe lo revisa en el formato del laboratorio y lo <b>aprueba y firma</b>. El PDF firmado se guarda en <b>Reportes</b>.</p>
+    <?php /* Sin tarjetas de conteo: los filtros ya muestran cuántos informes hay en cada estado. */ ?>
+    <p class="vt-intro">Un informe por lote. Cuando el técnico valida todos los análisis del lote, su informe queda <b>por aprobar</b>:
+        el jefe lo revisa en el formato del laboratorio y lo <b>aprueba y firma</b> (o lo devuelve al técnico). Los firmados pasan a
+        <a href="documentos_view.php"><b>Informes emitidos</b></a> para descargarlos y enviarlos al cliente.</p>
     <div class="vt-toolbar">
         <div class="inf-chips" role="tablist" aria-label="Filtrar informes">
-            <?php foreach (['LISTO' => 'Por aprobar', 'PREP' => 'En preparación', 'DEVUELTO' => 'Devueltos', 'FIRMADO' => 'Firmados', 'TODOS' => 'Todos'] as $f => $txt): ?>
-                <button type="button" data-filtro="<?= $f ?>" class="<?= $f === 'LISTO' ? 'on' : '' ?>"><?= $txt ?> <span><?= $f === 'TODOS' ? count($lotes) : $cuenta[$f] ?></span></button>
+            <?php foreach (['LISTO' => 'Por aprobar', 'DEVUELTO' => 'Devueltos al técnico', 'PREP' => 'En preparación', 'FIRMADO' => 'Firmados', 'TODOS' => 'Todos'] as $f => $txt): ?>
+                <button type="button" data-filtro="<?= $f ?>" class="<?= $f === $filtroInicial ? 'on' : '' ?><?= $f === 'LISTO' && $cuenta['LISTO'] ? ' is-alert' : '' ?>"><?= $txt ?> <span><?= $f === 'TODOS' ? count($lotes) : $cuenta[$f] ?></span></button>
             <?php endforeach; ?>
         </div>
         <input type="search" id="inf-buscar" class="inf-buscar" placeholder="Buscar informe, lote o cliente…" aria-label="Buscar informe">
@@ -75,12 +77,16 @@ lab_shell_open('informes_view.php');
                 <td class="vt-mono"><b><?= inf_e($inf['codigo'] ?? '—') ?></b><?php if ($inf && (int) $inf['version'] > 1): ?> <span class="vt-chip">v<?= (int) $inf['version'] ?></span><?php endif; ?></td>
                 <td><b class="vt-mono"><?= inf_e($l['codigo_lote']) ?></b><div class="small muted"><?= inf_e($l['tipo_muestra']) ?> · <span class="vt-chip pr-<?= inf_e($l['prioridad']) ?>"><?= inf_e(ucfirst($l['prioridad'])) ?></span></div></td>
                 <td><?= inf_e($l['cliente']) ?><div class="small muted"><?= (int) $l['numero_muestras'] ?> muestra(s) · <?= (int) $l['total'] ?> análisis</div></td>
-                <td style="min-width:170px"><div class="inf-bar"><span style="width:<?= (int) $l['porcentaje'] ?>%"></span></div><div class="small muted"><?= (int) $l['validados'] ?>/<?= (int) $l['total'] ?> validados (<?= (int) $l['porcentaje'] ?>%)</div></td>
+                <td class="inf-col-validacion"><div class="inf-bar"><span style="width:<?= (int) $l['porcentaje'] ?>%"></span></div><div class="small muted"><?= (int) $l['validados'] ?>/<?= (int) $l['total'] ?> validados (<?= (int) $l['porcentaje'] ?>%)</div></td>
                 <td><span class="vt-chip <?= $chipEstado[$l['estado']] ?>"><?= inf_e($l['estado_texto']) ?></span>
-                    <?php if ($l['estado'] === 'FIRMADO'): ?><div class="small muted"><?= inf_e($inf['firmado_por']) ?> · <?= inf_e(inf_fecha($inf['fecha_firma'])) ?></div><?php endif; ?></td>
+                    <?php if ($l['estado'] === 'FIRMADO'): ?><div class="small muted"><?= inf_e($inf['firmado_por']) ?> · <?= inf_e(inf_fecha($inf['fecha_firma'])) ?></div><?php endif; ?>
+                    <?php if (isset($expCompartidos[(int) $l['id_lote']])): ?><div><span class="vt-chip is-approved" title="Experimentos ya puede leer estos resultados">Enviado a Experimentos</span></div><?php endif; ?></td>
                 <td style="text-align:right;white-space:nowrap">
                     <a class="cengi-btn cengi-btn-sm <?= $l['estado'] === 'LISTO' && $puedeFirmar ? 'cengi-btn-primary' : 'cengi-btn-ghost' ?>" href="?lote=<?= (int) $l['id_lote'] ?>">
                         <?= $l['estado'] === 'LISTO' ? ($puedeFirmar ? 'Revisar y firmar' : 'Revisar') : ($l['estado'] === 'FIRMADO' ? 'Ver informe' : 'Ver borrador') ?></a>
+                    <?php if ($l['estado'] === 'FIRMADO' && lab_can('laboratorio.documentos.ver')): ?>
+                        <a class="cengi-btn cengi-btn-sm cengi-btn-ghost" href="documentos_view.php?buscar=<?= rawurlencode((string) $l['codigo_lote']) ?>" title="Descargar o enviar al cliente">Emitido ↗</a>
+                    <?php endif; ?>
                 </td>
             </tr>
         <?php endforeach; ?>
@@ -96,7 +102,7 @@ lab_shell_open('informes_view.php');
         </div>
     </nav>
 <?php else: $l = $detalle['lote']; $inf = $l['informe']; ?>
-    <a class="vt-backlink" href="informes_view.php"><span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span>Volver a informes</a>
+    <a class="vt-backlink" href="informes_view.php"><span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span>Volver a Aprobación de informes</a>
     <div class="inf-layout">
         <div class="ws-card">
             <div class="ws-card-head"><div>
@@ -122,8 +128,34 @@ lab_shell_open('informes_view.php');
                 <div class="vt-actions">
                     <a class="cengi-btn cengi-btn-primary cengi-btn-sm" href="../controllers/documento_pdf.php?id_documento=<?= (int) $inf['id_documento'] ?>" target="_blank" rel="noopener">Ver PDF firmado</a>
                     <a class="cengi-btn cengi-btn-ghost cengi-btn-sm" href="../controllers/documento_pdf.php?id_documento=<?= (int) $inf['id_documento'] ?>&download=1">Descargar PDF</a>
-                    <a class="cengi-btn cengi-btn-ghost cengi-btn-sm" href="documentos_view.php">Ver en Reportes</a>
+                    <a class="cengi-btn cengi-btn-ghost cengi-btn-sm" href="documentos_view.php?buscar=<?= rawurlencode((string) $l['codigo_lote']) ?>">Ver en Informes emitidos</a>
                 </div>
+                <?php if ($expEstado && $expEstado['es_experimentos']): ?>
+                    <div class="inf-exp <?= $expEstado['compartido'] ? 'is-on' : '' ?>">
+                        <b><?= $expEstado['compartido'] ? '✓ Enviado a Experimentos' : 'Este informe es de Experimentos' ?></b>
+                        <span>
+                            <?php if ($expEstado['ensayos']): ?>Ensayo <b><?= inf_e(implode(', ', $expEstado['ensayos'])) ?></b> elegido en la recepción. <?php endif; ?>
+                            <?= (int) $expEstado['muestras'] ?> de <?= (int) $expEstado['total_muestras'] ?> muestra(s) con etiqueta QR de Experimentos<?= $expEstado['muestras'] < $expEstado['total_muestras'] ? ' (las demás se vinculan en Experimentos, en Muestras y resultados)' : '' ?>.
+                            <?php if ($expEstado['compartido']): ?>
+                                Experimentos ya puede ver sus resultados<?= $expEstado['por'] ? ' · ' . inf_e($expEstado['por']) . ' · ' . inf_e(inf_fecha($expEstado['en'], true)) : '' ?>.
+                            <?php else: ?>
+                                Sus resultados no se envian solos: al compartir, Experimentos los toma de este informe firmado.
+                                <?php if ($expEstado['por']): ?><br>Retirado por <?= inf_e($expEstado['por']) ?> · <?= inf_e(inf_fecha($expEstado['en'], true)) ?>.<?php endif; ?>
+                            <?php endif; ?>
+                        </span>
+                        <?php if (!$expEstado['disponible']): ?>
+                            <span class="vt-flag small">Falta preparar la base: ejecute la migracion del esquema del Laboratorio.</span>
+                        <?php elseif ($puedeFirmar): ?>
+                            <?php if ($expEstado['compartido']): ?>
+                                <button type="button" class="cengi-btn cengi-btn-ghost cengi-btn-sm" id="inf-exp-retirar">Retirar de Experimentos</button>
+                            <?php else: ?>
+                                <button type="button" class="cengi-btn cengi-btn-primary cengi-btn-sm" id="inf-exp-compartir">Enviar resultados a Experimentos</button>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <span class="small muted">Solo el jefe de laboratorio puede compartirlos.</span>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
             <?php elseif ($l['estado'] === 'LISTO' && $puedeFirmar): ?>
                 <div class="inf-paso"><b>1. Revise el informe</b><span>Todos los análisis del lote fueron validados por el técnico. Revise los valores en el formato del laboratorio.</span></div>
                 <div class="vt-field"><label for="inf-obs">2. Observaciones del informe</label><textarea id="inf-obs" maxlength="2000" placeholder="Aparecen en el informe (opcional)"><?= inf_e($inf['observaciones'] ?? '') ?></textarea></div>

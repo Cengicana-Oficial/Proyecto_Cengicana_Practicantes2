@@ -27,7 +27,7 @@ if (!lab_is_authenticated()) {
     reporte_correo_responder(401, false, 'La sesión venció. Inicie sesión nuevamente.');
 }
 if (!lab_can('laboratorio.documentos.ver')) {
-    reporte_correo_responder(403, false, 'Su usuario no tiene acceso a Reportes.');
+    reporte_correo_responder(403, false, 'Su usuario no tiene acceso a Informes emitidos.');
 }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     reporte_correo_responder(405, false, 'Método no permitido.');

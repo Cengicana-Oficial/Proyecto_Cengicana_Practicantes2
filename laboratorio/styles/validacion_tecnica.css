@@ -108,3 +108,25 @@ table.ws-curva-tbl{max-width:300px;}
 .vt-menu-list>button.is-bad:hover,.vt-menu-list>button.is-bad:focus-visible{background:#FFF0E6 !important;color:#B34B00 !important;}
 .vt-menu-list>button:disabled{opacity:.5;cursor:default;}
 .vt-menu-list .material-symbols-outlined{font-size:18px;}
+/* Hoja con varios análisis: una sección por análisis en el detalle y chips de análisis en la lista */
+.vt-sub{display:block;font-weight:400;margin-top:2px;}
+.vt-analisis-list{display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+.vt-resumen-analisis{display:flex;flex-wrap:wrap;gap:8px;padding:12px 18px 4px;}
+.vt-resumen-item{display:flex;flex-direction:column;gap:2px;padding:6px 10px;border:1px solid var(--cengi-border);border-radius:8px;background:#FAFBFA;font-size:12px;min-width:140px;}
+.vt-resumen-item b{color:var(--cengi-primary-deep);}
+table.ws .vt-sec-ini{border-left:2px solid #B9D99A;}
+table.ws td.vt-na{color:var(--cengi-muted);background:#F6F7F7;text-align:center;}
+.vt-marcas{display:flex;flex-direction:column;gap:3px;}
+.vt-kv-edit{display:flex;flex-direction:column;gap:3px;}
+.vt-input-enc{width:120px;padding:4px 8px;border:1px solid var(--cengi-border);border-radius:6px;font:inherit;font-weight:700;}
+.vt-kv-edit.is-changed .vt-input-enc{border-color:#E0A800;background:#FFF8E1;}
+.vt-param-head{margin:0 0 6px;font-size:12.5px;color:var(--cengi-muted);}.vt-param-head b{color:var(--cengi-primary-deep);}
+.ws-info.vt-params{margin-bottom:12px;padding:10px 12px;border:1px dashed #C7E4A8;border-radius:8px;background:#FAFCF7;}
+/* Edición de la clase en su propia celda de resultados. */
+.vt-textura-celda { min-width: 170px; white-space: normal !important; text-align: left !important; }
+.vt-textura-editor { margin-top: 4px; font-weight: normal; }
+.vt-textura-editor summary { color: var(--cengi-primary, #3a6312); cursor: pointer; font-size: 12px; width: fit-content; }
+.vt-textura-campos { display: grid; gap: 8px; min-width: 210px; max-width: 280px; padding-top: 8px; }
+.vt-textura-campos label { display: grid; gap: 4px; font-size: 12px; }
+.vt-textura-campos textarea { box-sizing: border-box; width: 100%; min-height: 64px; padding: 7px; border: 1px solid #cbd5c0; border-radius: 6px; font: inherit; resize: vertical; }
+.vt-textura-nota { max-width: 280px; margin-top: 6px; font-size: 12px; font-weight: normal; overflow-wrap: anywhere; }

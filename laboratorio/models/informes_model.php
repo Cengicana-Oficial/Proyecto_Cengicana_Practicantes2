@@ -21,6 +21,7 @@ require_once __DIR__ . '/trazabilidad_model.php';
 require_once __DIR__ . '/validacion_tecnica_model.php';
 require_once __DIR__ . '/../includes/workflow_trabajo_helper.php';
 require_once __DIR__ . '/informe_formato_model.php';
+require_once __DIR__ . '/../includes/experimentos_helper.php';
 
 const LAB_INFORME_ESTADOS = [
     'PREP' => 'En preparación',
@@ -54,6 +55,8 @@ if (!function_exists('lab_informes_esquema')) {
             detalle TEXT DEFAULT NULL, usuario VARCHAR(255) DEFAULT NULL, fecha TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             KEY idx_lab_informe_hist_lote (id_lote)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+        // Lotes cuyos resultados firmados el Laboratorio comparte con Experimentos.
+        labExpEsquema($pdo);
     }
 }
 
@@ -327,9 +330,18 @@ if (!function_exists('lab_informe_firmar')) {
             // Hora de la base de datos: la misma de fecha_firma e historial (PHP no tiene zona horaria fija).
             $fecha = (string) $pdo->query("SELECT DATE_FORMAT(NOW(), '%d/%m/%Y, %H:%i')")->fetchColumn();
             $inf = $detalle['lote']['informe'];
+            // Código y QR de verificación pública del informe firmado (laboratorio/validar.php).
+            require_once __DIR__ . '/../includes/verificacion_documentos_helper.php';
+            $verificacion = null;
+            if (lab_verif_tabla_existe($pdo)) {
+                $codigoVerif = lab_verif_nuevo_codigo($pdo, 'informe');
+                $urlVerif = lab_verif_url($codigoVerif);
+                $verificacion = ['codigo' => $codigoVerif, 'url' => $urlVerif, 'qr' => lab_verif_qr_png($urlVerif)];
+            }
             $html = lab_informe_reporte_html($est, $detalle, $limpios, [
                 'codigo' => $inf['codigo'], 'observaciones' => $observaciones, 'revisores' => $detalle['revisores'],
                 'firmante' => $firmante, 'firma_png' => $firmaPng, 'fecha_firma' => date('Y-m-d'), 'fecha_firma_txt' => $fecha, 'preview' => false,
+                'verificacion' => $verificacion,
             ]);
             $titulo = 'Informe ' . $inf['codigo'] . ' · Lote ' . $detalle['lote']['codigo_lote'];
             $idSolicitud = (int) ($detalle['solicitudes'][0]['id_solicitud'] ?? 0) ?: null;
@@ -348,6 +360,20 @@ if (!function_exists('lab_informe_firmar')) {
                 $pdo->prepare("INSERT INTO lab_documento (tipo_documento, id_lote, id_solicitud, version, titulo, contenido_html, generado_por) VALUES ('informe', ?, ?, 1, ?, ?, ?)")
                     ->execute([$idLote, $idSolicitud, $titulo, $html, $firmante]);
                 $idDocumento = (int) $pdo->lastInsertId();
+                $version = 1;
+            }
+            if ($verificacion) {
+                // Solo los datos ya impresos en el informe; la huella SHA-256 identifica su contenido exacto.
+                $codigosMuestra = array_values(array_filter(array_map(static fn($m) => (string) ($m['codigo'] ?? ''), $detalle['muestras'])));
+                lab_verif_informe_registrar($pdo, $verificacion['codigo'], $idLote, $idSolicitud, $idDocumento, $version, $html, [
+                    'documento' => 'Informe de resultados', 'informe' => $inf['codigo'], 'version' => $version,
+                    'lote' => $detalle['lote']['codigo_lote'], 'tipo_muestra' => $detalle['lote']['tipo_muestra'],
+                    'cliente' => $detalle['solicitudes'][0]['institucion'] ?? $detalle['lote']['cliente'] ?? '',
+                    'muestras' => count($detalle['muestras']),
+                    'rango' => $codigosMuestra ? ($codigosMuestra[0] . (count($codigosMuestra) > 1 ? ' a ' . end($codigosMuestra) : '')) : '',
+                    'analisis' => array_values(array_unique(array_map(static fn($a) => (string) $a['nombre'], $detalle['analisis']))),
+                    'firmado_por' => $firmante, 'fecha_firma' => $fecha,
+                ], $firmante);
             }
             $pdo->prepare('INSERT INTO lab_firma_documento (id_documento, rol_firma, firmante_id, firmante_nombre, firmante_correo, firma_png) VALUES (?, ?, ?, ?, ?, ?)')
                 ->execute([$idDocumento, 'jefe_laboratorio', !empty($usuario['id']) ? (int) $usuario['id'] : null, $firmante, trim((string) ($usuario['correo'] ?? '')) ?: null, $firmaPng]);
@@ -362,7 +388,7 @@ if (!function_exists('lab_informe_firmar')) {
 
         lab_trazabilidad_registrar_evento($pdo, [
             'id_lote' => $idLote, 'tipo_evento' => 'aprobado',
-            'descripcion' => 'Informe ' . $inf['codigo'] . ' aprobado y firmado por el jefe de laboratorio. PDF guardado en Reportes.',
+            'descripcion' => 'Informe ' . $inf['codigo'] . ' aprobado y firmado por el jefe de laboratorio. PDF disponible en Informes emitidos.',
             'usuario_id' => $usuario['id'] ?? null, 'usuario_nombre' => $firmante,
         ]);
 

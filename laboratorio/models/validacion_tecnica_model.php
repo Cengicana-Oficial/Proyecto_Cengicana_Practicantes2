@@ -21,10 +21,87 @@
 
 require_once __DIR__ . '/trazabilidad_model.php';
 require_once __DIR__ . '/../includes/catalogo_analisis_helper.php';
+require_once __DIR__ . '/../includes/suelos_fisicos_helper.php';
+require_once __DIR__ . '/../includes/textura_revision_helper.php';
+require_once __DIR__ . '/../includes/parametros_validacion_helper.php';
+
+function lab_validacion_corregir_texturas(PDO $pdo,array $ids,array $cambios,string $usuario): void {
+    $leer=$pdo->prepare('SELECT datos FROM lab_hoja_formulario WHERE id_formulario=? FOR UPDATE');
+    $guardar=$pdo->prepare('UPDATE lab_hoja_formulario SET datos=? WHERE id_formulario=?');
+    $hist=$pdo->prepare("INSERT INTO historial_formulario(id_formulario,accion,estado_anterior,estado_nuevo,usuario,fecha,comentario) VALUES(?,'correccion_textura','Revisar','Revisar',?,NOW(),?)");
+    foreach($cambios as $fid=>$filas){
+        if(!ctype_digit((string)$fid)||!in_array((int)$fid,$ids,true)||!is_array($filas))throw new InvalidArgumentException('El formulario de la corrección no pertenece a la hoja.');
+        $leer->execute([(int)$fid]);$raw=$leer->fetchColumn();
+        if(!$raw)throw new InvalidArgumentException('No se encontró la captura de Textura.');
+        $cap=json_decode($raw,true,512,JSON_THROW_ON_ERROR);
+        $revision=labTexturaAplicarRevision($cap,$filas,$usuario,date('Y-m-d H:i:s'));
+        $guardar->execute([json_encode($revision['datos'],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),(int)$fid]);
+        foreach($revision['historial'] as $nota)$hist->execute([(int)$fid,$usuario,$nota]);
+    }
+}
 
 /* Categorías de rechazo/reanálisis (prototipo, "Motivos de rechazo"); Control de calidad las agrupa.
    Se guardan al inicio del comentario del historial: "[Fuera de rango] detalle…". */
 const LAB_MOTIVOS_RECHAZO = ['Fuera de rango', 'Error de digitación', 'Duplicado inconsistente', 'Falla de equipo', 'Control fuera de lo esperado', 'Otro'];
+
+/* Los parámetros editables y sus reglas se definen en hojas_trabajo_v3.json. */
+if (!function_exists('lab_validacion_corregir_encabezado')) {
+    /**
+     * Guarda en la hoja de cada formulario los parámetros corregidos por el
+     * técnico (solo los permitidos y numéricos > 0) y deja constancia en el
+     * historial. Se llama dentro de la transacción de la validación.
+     */
+    function lab_validacion_corregir_encabezado(PDO $pdo, array $ids, array $encabezado, string $usuario): void
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $stmt = $pdo->prepare('SELECT id_formulario, hoja, datos FROM lab_hoja_formulario WHERE id_formulario IN (' . implode(',', array_fill(0, count($ids), '?')) . ') FOR UPDATE');
+        $stmt->execute($ids);
+        $hojas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($hojas) !== count($ids)) {
+            throw new InvalidArgumentException('Solo se pueden corregir parámetros de hojas capturadas con el formato de hoja de trabajo.');
+        }
+
+        $valores = [];
+        foreach ($encabezado as $campo => $valor) {
+            $campo = (string) $campo;
+            if (!is_scalar($valor)&&$valor!==null) {
+                throw new InvalidArgumentException('Ingrese un número válido en los parámetros de la corrida.');
+            }
+            $valor = str_replace(',', '.', trim((string) $valor));
+            $valores[$campo] = $valor;
+        }
+
+        $guardar = $pdo->prepare('UPDATE lab_hoja_formulario SET datos = ? WHERE id_formulario = ?');
+        $hist = $pdo->prepare("
+            INSERT INTO historial_formulario (id_formulario, accion, estado_anterior, estado_nuevo, usuario, fecha, comentario)
+            VALUES (?, 'correccion_parametro', 'Revisar', 'Revisar', ?, NOW(), ?)
+        ");
+        foreach ($hojas as $fila) {
+            $campos=labParametrosValidacion($fila['hoja']);
+            $permitidos = array_column($campos,'label','k');
+            $datos = json_decode((string) $fila['datos'], true);
+            if (!is_array($datos)) {
+                throw new RuntimeException('La hoja del formulario #' . (int) $fila['id_formulario'] . ' está dañada.');
+            }
+            $cambios = [];
+            foreach ($valores as $campo => $valor) {
+                if (!isset($permitidos[$campo])) {
+                    throw new InvalidArgumentException('El parámetro "' . $campo . '" no se puede editar en validación técnica.');
+                }
+                $valor=labParametroValidar($valor,$campos[$campo]);
+                $anterior = (string) ($datos['encabezado'][$campo] ?? '');
+                if ($anterior !== $valor) {
+                    $datos['encabezado'][$campo] = $valor;
+                    $cambios[] = $permitidos[$campo] . ': ' . ($anterior !== '' ? $anterior : '—') . ' → ' . $valor;
+                }
+            }
+            if ($cambios) {
+                $guardar->execute([json_encode($datos, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), (int) $fila['id_formulario']]);
+                $hist->execute([(int) $fila['id_formulario'], $usuario !== '' ? $usuario : null, 'Corregido en validación técnica · ' . implode(' · ', $cambios)]);
+            }
+        }
+    }
+}
 
 if (!function_exists('lab_validacion_estado_es_revision')) {
     function lab_validacion_estado_es_revision(?string $nombreEstado): bool
@@ -245,6 +322,10 @@ if (!function_exists('lab_validacion_resolver')) {
             }
         }
 
+        if($accion==='aprobar'){
+            $captura=$snapshot??(lab_validacion_snapshots($pdo,[$idFormulario])[$idFormulario]??null);
+            if($captura)labSueloValidarCaptura($captura,$reanalizar);
+        }
         $nuevoEstadoNombre = $accion === 'aprobar' ? 'Aprobado' : 'Rechazado';
         $comentarioHistorial = $comentario !== ''
             ? $comentario
@@ -252,7 +333,11 @@ if (!function_exists('lab_validacion_resolver')) {
         $motivoReanalisis = $comentario !== '' ? $comentario : 'Reanalisis solicitado en validacion tecnica.';
         $formulariosReanalisis = [];
 
-        $pdo->beginTransaction();
+        // Dentro de lab_validacion_resolver_grupo() ya hay una transacción abierta que cubre toda la hoja.
+        $own = !$pdo->inTransaction();
+        if ($own) {
+            $pdo->beginTransaction();
+        }
         try {
             $idNuevoEstado = lab_validacion_id_estado($pdo, $nuevoEstadoNombre);
 
@@ -323,9 +408,13 @@ if (!function_exists('lab_validacion_resolver')) {
                     ->execute([json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), $idFormulario]);
             }
 
-            $pdo->commit();
+            if ($own) {
+                $pdo->commit();
+            }
         } catch (Throwable $e) {
-            $pdo->rollBack();
+            if ($own && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             throw $e;
         }
 
@@ -351,5 +440,148 @@ if (!function_exists('lab_validacion_resolver')) {
             'estado_nuevo' => $nuevoEstadoNombre,
             'reanalisis' => $formulariosReanalisis,
         ];
+    }
+}
+
+if (!function_exists('lab_validacion_clave_grupo')) {
+    /**
+     * Clave que agrupa los formularios nacidos de un mismo envío de hoja de
+     * trabajo (una hoja con varios análisis, p. ej. pH + CE, genera un
+     * formulario por análisis y solicitud). Envíos nuevos traen `envio` en la
+     * hoja; los anteriores se agrupan por hoja + analista + fecha + lote.
+     */
+    function lab_validacion_clave_grupo(array $linea, ?array $snapshot): string
+    {
+        if (!$snapshot) {
+            return 'f:' . (int) $linea['id_formulario'];
+        }
+        if (!empty($snapshot['envio'])) {
+            return 'e:' . $snapshot['envio'];
+        }
+
+        return 'h:' . implode('|', [
+            (string) ($snapshot['hoja'] ?? ''),
+            mb_strtolower(trim((string) ($snapshot['analista'] ?? $linea['analista'] ?? ''))),
+            substr((string) ($snapshot['fecha'] ?? $linea['fecha'] ?? ''), 0, 10),
+            (int) $linea['id_lote'],
+        ]);
+    }
+}
+
+if (!function_exists('lab_validacion_agrupar')) {
+    /** Agrupa las líneas por envío de hoja, conservando el orden de aparición. */
+    function lab_validacion_agrupar(array $lineas, array $snapshots): array
+    {
+        $grupos = [];
+        foreach ($lineas as $linea) {
+            $id = (int) $linea['id_formulario'];
+            $clave = lab_validacion_clave_grupo($linea, $snapshots[$id] ?? null);
+            $grupos[$clave] ??= ['clave' => $clave, 'lineas' => [], 'ids' => []];
+            $grupos[$clave]['lineas'][] = $linea;
+            $grupos[$clave]['ids'][] = $id;
+        }
+
+        // Dentro de la hoja, los análisis en el orden de su definición (p. ej. Caña: Brix, Pol, Rendimiento).
+        static $hojas = null;
+        if ($hojas === null) {
+            $cfg = json_decode((string) @file_get_contents(__DIR__ . '/../config/hojas_trabajo_v3.json'), true);
+            $hojas = is_array($cfg['hojas'] ?? null) ? $cfg['hojas'] : [];
+        }
+        foreach ($grupos as &$g) {
+            $orden = static function (array $l) use ($snapshots, $hojas): int {
+                $snap = $snapshots[(int) $l['id_formulario']] ?? [];
+                $pos = array_search($snap['analisis'] ?? null, $hojas[$snap['hoja'] ?? '']['analisis'] ?? [], true);
+                return $pos === false ? 99 : (int) $pos;
+            };
+            usort($g['lineas'], static fn($a, $b) => $orden($a) <=> $orden($b) ?: (int) $a['id_formulario'] <=> (int) $b['id_formulario']);
+            $g['ids'] = array_map(static fn($l) => (int) $l['id_formulario'], $g['lineas']);
+        }
+        unset($g);
+
+        return array_values($grupos);
+    }
+}
+
+if (!function_exists('lab_validacion_resolver_grupo')) {
+    /**
+     * Valida o rechaza en conjunto todos los formularios de una hoja enviada,
+     * en una sola transacción (o se resuelven todos o ninguno).
+     * $reanalizar: [id_formulario => [id_muestra, ...]] muestras devueltas a
+     * reanálisis por análisis; si se marcan todas las muestras de un
+     * formulario, ese análisis se rechaza completo y el resto se aprueba.
+     */
+    function lab_validacion_resolver_grupo(PDO $pdo, array $ids, string $accion, string $usuario, ?int $usuarioId = null, string $comentario = '', array $reanalizar = [], string $categoria = '', array $encabezado = [], array $texturas = []): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn($id) => $id > 0)));
+        if (!$ids || count($ids) > 200) {
+            throw new InvalidArgumentException('Seleccione los formularios de la hoja a validar.');
+        }
+        if (!in_array($accion, ['aprobar', 'rechazar'], true)) {
+            throw new InvalidArgumentException('Accion no valida.');
+        }
+
+        $marcas = [];
+        if ($accion === 'aprobar') {
+            foreach ($reanalizar as $idForm => $muestras) {
+                $idForm = (int) $idForm;
+                if (!in_array($idForm, $ids, true)) {
+                    throw new InvalidArgumentException('Hay muestras marcadas de un formulario que no pertenece a la hoja.');
+                }
+                $muestras = array_values(array_unique(array_map('intval', (array) $muestras)));
+                if ($muestras) {
+                    $marcas[$idForm] = $muestras;
+                }
+            }
+            if ($marcas && !in_array($categoria, LAB_MOTIVOS_RECHAZO, true)) {
+                throw new InvalidArgumentException('Seleccione la categoría del motivo (rechazo o reanálisis).');
+            }
+        }
+
+        // Análisis cuyas muestras se marcaron todas: se rechazan completos.
+        $completos = [];
+        if ($marcas) {
+            $snapshots = lab_validacion_snapshots($pdo, array_keys($marcas));
+            foreach ($marcas as $idForm => $muestras) {
+                $seleccion = array_map('intval', $snapshots[$idForm]['seleccion'] ?? []);
+                if ($seleccion && !array_diff($seleccion, $muestras) && !array_diff($muestras, $seleccion)) {
+                    $completos[$idForm] = true;
+                }
+            }
+            if (count($completos) === count($ids)) {
+                throw new InvalidArgumentException('Marcaste todas las muestras: usa "Rechazar hoja completa".');
+            }
+        }
+
+        $resultados = [];
+        $own = !$pdo->inTransaction();
+        if ($own) {
+            $pdo->beginTransaction();
+        }
+        try {
+            if($texturas&&$accion==='aprobar')lab_validacion_corregir_texturas($pdo,$ids,$texturas,$usuario);
+            if ($encabezado && $accion === 'aprobar') {
+                lab_validacion_corregir_encabezado($pdo, $ids, $encabezado, $usuario);
+            }
+            foreach ($ids as $id) {
+                if ($accion === 'rechazar') {
+                    $resultados[] = lab_validacion_resolver($pdo, $id, 'rechazar', $usuario, $usuarioId, $comentario, [], $categoria);
+                } elseif (isset($completos[$id])) {
+                    $motivo = trim($comentario) !== '' ? $comentario : 'Reanálisis de todas las muestras de este análisis solicitado en validación técnica.';
+                    $resultados[] = lab_validacion_resolver($pdo, $id, 'rechazar', $usuario, $usuarioId, $motivo, [], $categoria);
+                } else {
+                    $resultados[] = lab_validacion_resolver($pdo, $id, 'aprobar', $usuario, $usuarioId, $comentario, $marcas[$id] ?? [], isset($marcas[$id]) ? $categoria : '');
+                }
+            }
+            if ($own) {
+                $pdo->commit();
+            }
+        } catch (Throwable $e) {
+            if ($own && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        return ['formularios' => $resultados];
     }
 }

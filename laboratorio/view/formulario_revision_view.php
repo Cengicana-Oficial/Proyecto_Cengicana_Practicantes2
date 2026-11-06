@@ -205,7 +205,8 @@ $puedeGuardarErrores = (bool) ($puedeGuardarErrores ?? false);
 $puedeVerObservacion = $puedeAprobarRevision || $puedeGuardarErrores;
 
 $codigoLoteRevision = (string) ($resumenRango['codigo_lote'] ?? '-');
-$subtituloRevision = 'Lote ' . $codigoLoteRevision
+require_once __DIR__ . '/../includes/lote_etiqueta_helper.php';
+$subtituloRevision = lab_etiqueta_lote($codigoLoteRevision)
     . ' · Rango ' . ($resumenRango['inicio'] ?? '-')
     . ' - ' . ($resumenRango['fin'] ?? '-');
 

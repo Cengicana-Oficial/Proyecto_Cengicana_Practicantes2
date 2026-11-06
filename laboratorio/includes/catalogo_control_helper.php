@@ -329,6 +329,9 @@ function labCatalogoFormato(string $tipoMuestra, string $analisis): ?array
 function labCatalogoAuditoria(PDO $pdo, int $limite = 400): array
 {
     $ev = [];
+    require_once __DIR__ . '/lote_etiqueta_helper.php';
+    $loteSql = lab_etiqueta_lote_sql('l.codigo_lote');
+    $loteRef = lab_etiqueta_lote_sql('COALESCE(l.codigo_lote, a.referencia)');
     $leer = static function (string $sql) use ($pdo, &$ev, $limite) {
         try {
             foreach ($pdo->query($sql . ' LIMIT ' . $limite) as $r) {
@@ -341,24 +344,24 @@ function labCatalogoAuditoria(PDO $pdo, int $limite = 400): array
     };
     $leer("SELECT fecha, usuario, accion, referencia, detalle, 'Catálogo' AS modulo FROM lab_catalogo_auditoria ORDER BY fecha DESC");
     $leer("SELECT h.fecha_cambio AS fecha, h.usuario_nombre AS usuario, 'Edición de recepción' AS accion,
-        CONCAT('Lote ', COALESCE(l.codigo_lote, '—'), ' · solicitud #', h.id_solicitud) AS referencia,
+        CONCAT({$loteSql}, ' · solicitud #', h.id_solicitud) AS referencia,
         CONCAT(h.resumen, IF(h.motivo IS NULL OR h.motivo = '', '', CONCAT(' · Motivo: ', h.motivo))) AS detalle, 'Recepción' AS modulo
         FROM solicitud_historial_cambios h LEFT JOIN solicitud s ON s.id_solicitud = h.id_solicitud LEFT JOIN lote l ON l.id_lote = s.id_lote ORDER BY h.fecha_cambio DESC");
     $leer("SELECT h.creado_en AS fecha, h.usuario, CONCAT('Identificación v', h.version) AS accion,
-        CONCAT('Lote ', COALESCE(l.codigo_lote, '—')) AS referencia, CONCAT(h.cambios, ' muestra(s) · ', h.motivo) AS detalle, 'Identificación' AS modulo
+        {$loteSql} AS referencia, CONCAT(h.cambios, ' muestra(s) · ', h.motivo) AS detalle, 'Identificación' AS modulo
         FROM lab_identificacion_historial h LEFT JOIN solicitud s ON s.id_solicitud = h.id_solicitud LEFT JOIN lote l ON l.id_lote = s.id_lote ORDER BY h.creado_en DESC");
-    $leer("SELECT a.fecha, a.usuario, a.accion, IF(a.accion = 'Planificación', CONCAT('Lote ', COALESCE(l.codigo_lote, a.referencia)), a.referencia) AS referencia,
+    $leer("SELECT a.fecha, a.usuario, a.accion, IF(a.accion = 'Planificación', {$loteRef}, a.referencia) AS referencia,
         '' AS detalle, IF(a.accion = 'Planificación', 'Planificación', 'Bandeja del analista') AS modulo
         FROM lab_workflow_auditoria a LEFT JOIN lote l ON a.accion = 'Planificación' AND l.id_lote = a.referencia ORDER BY a.fecha DESC");
     $leer("SELECT hf.fecha, hf.usuario, COALESCE(hf.accion, 'Actualización') AS accion,
-        CONCAT('Lote ', COALESCE(l.codigo_lote, '—'), ' · ', COALESCE(ta.nombre, 'Análisis'), ' · muestras ', lr.inicio, '–', lr.fin) AS referencia,
+        CONCAT({$loteSql}, ' · ', COALESCE(ta.nombre, 'Análisis'), ' · muestras ', lr.inicio, '–', lr.fin) AS referencia,
         CONCAT_WS(' · ', IF(hf.estado_nuevo IS NULL, NULL, CONCAT('Estado: ', hf.estado_nuevo)), NULLIF(hf.comentario, '')) AS detalle, 'Validación' AS modulo
         FROM historial_formulario hf JOIN formulario f ON f.id_formulario = hf.id_formulario LEFT JOIN lote_rango lr ON lr.id_rango = f.id_rango
         LEFT JOIN lote l ON l.id_lote = lr.id_lote LEFT JOIN tipo_analisis ta ON ta.id_tipo = f.id_tipo_analisis ORDER BY hf.fecha DESC");
-    $leer("SELECT h.fecha, h.usuario, CONCAT('Informe · ', h.accion) AS accion, CONCAT('Lote ', COALESCE(l.codigo_lote, '—')) AS referencia, h.detalle, 'Informes' AS modulo
+    $leer("SELECT h.fecha, h.usuario, CONCAT('Informe · ', h.accion) AS accion, {$loteSql} AS referencia, h.detalle, 'Informes' AS modulo
         FROM lab_informe_historial h LEFT JOIN lote l ON l.id_lote = h.id_lote ORDER BY h.fecha DESC");
     $leer("SELECT h.fecha, h.usuario, IF(h.cambios LIKE 'Enviado por correo%', 'Envío por correo', CONCAT('Nueva versión de ', d.tipo_documento)) AS accion,
-        CONCAT('Lote ', COALESCE(l.codigo_lote, '—'), ' · ', d.tipo_documento, ' v', h.version) AS referencia, h.cambios AS detalle, 'Reportes' AS modulo
+        CONCAT({$loteSql}, ' · ', d.tipo_documento, ' v', h.version) AS referencia, h.cambios AS detalle, 'Informes emitidos' AS modulo
         FROM lab_documento_historial h JOIN lab_documento d ON d.id_documento = h.id_documento LEFT JOIN lote l ON l.id_lote = d.id_lote ORDER BY h.fecha DESC");
     usort($ev, static fn($a, $b) => strcmp($b['fecha'], $a['fecha']));
     return array_slice($ev, 0, $limite);

@@ -5,12 +5,16 @@ require_once __DIR__.'/../includes/shell_sidebar.php';
 require_once __DIR__.'/../models/validacion_tecnica_model.php';
 lab_require_permission('laboratorio.validacion_tecnica.ver');
 
-$id=(int)($_GET['id_formulario']??0);
+// ?ids=1,2,3 → todos los formularios (uno por análisis) de una hoja enviada, para validarlos en conjunto.
+// ?id_formulario=N → un solo formulario (enlaces desde trazabilidad y consolidación).
+$ids=isset($_GET['ids'])?array_map('intval',explode(',',(string)$_GET['ids'])):[(int)($_GET['id_formulario']??0)];
+$ids=array_values(array_unique(array_filter($ids,static fn($i)=>$i>0)));
+if(!$ids||count($ids)>200){http_response_code(400);exit('Formulario no indicado.');}
 labCatalogoAnalisisAsegurarEsquema($conexion);
 $q=$conexion->prepare("
-    SELECT h.datos, f.id_formulario, f.fecha, f.analista, ef.nombre AS estado,
+    SELECT h.hoja, h.datos, f.id_formulario, f.fecha, f.analista, ef.nombre AS estado,
            l.codigo_lote, lr.inicio, lr.fin, COALESCE(tm.nombre,'Sin tipo') AS tipo_muestra,
-           ta.unidad, ta.limite_min, ta.limite_max
+           ta.nombre AS analisis_nombre, ta.unidad, ta.limite_min, ta.limite_max
     FROM lab_hoja_formulario h
     JOIN formulario f ON f.id_formulario=h.id_formulario
     JOIN lote_rango lr ON lr.id_rango=f.id_rango
@@ -18,43 +22,56 @@ $q=$conexion->prepare("
     LEFT JOIN estado_formulario ef ON ef.id_estado=f.id_estado
     LEFT JOIN tipo_analisis ta ON ta.id_tipo=f.id_tipo_analisis
     LEFT JOIN tipo_muestra tm ON tm.id_tipo=ta.id_tipo_muestra
-    WHERE h.id_formulario=?");
-$q->execute([$id]);
-$row=$q->fetch(PDO::FETCH_ASSOC);
-if(!$row){http_response_code(404);exit('Hoja no encontrada.');}
-$snapshot=json_decode($row['datos'],true,512,JSON_THROW_ON_ERROR);
+    WHERE h.id_formulario IN (".implode(',',array_fill(0,count($ids),'?')).")
+    ORDER BY f.id_formulario");
+$q->execute($ids);
+$rows=$q->fetchAll(PDO::FETCH_ASSOC);
+if(count($rows)!==count($ids)){http_response_code(404);exit('Hoja no encontrada.');}
+if(count(array_unique(array_column($rows,'hoja')))>1){http_response_code(400);exit('Los formularios indicados no pertenecen a la misma hoja de trabajo.');}
 
-$esRevision=lab_validacion_estado_es_revision($row['estado']??'');
-$estado=mb_strtolower((string)$row['estado']);
-$codigos=array_values(array_filter(array_map(static fn($m)=>(string)($m['codigo_muestra']??''),$snapshot['muestras']??[])));
-$rango=$codigos?($codigos[0]===end($codigos)?$codigos[0]:$codigos[0].' – '.end($codigos)):($row['inicio']===$row['fin']?$row['inicio']:$row['inicio'].' – '.$row['fin']);
-
-$notas=[];
-$h=$conexion->prepare("SELECT accion, estado_nuevo, usuario, fecha, comentario FROM historial_formulario WHERE id_formulario=? AND TRIM(COALESCE(comentario,''))<>'' ORDER BY fecha, id_historial");
-$h->execute([$id]);
-foreach($h->fetchAll(PDO::FETCH_ASSOC) as $n){
-    $ts=strtotime((string)$n['fecha']);
-    $notas[]=['quien'=>$n['usuario']?:'Sistema','fh'=>$ts?date('d/m/Y H:i',$ts):(string)$n['fecha'],'texto'=>$n['comentario'],
-        'tipo'=>preg_match('/rechaz/i',(string)$n['estado_nuevo'])||in_array($n['accion'],['reanalisis','devuelto_informe'],true)?'alerta':'info'];
-}
-
-$payload=[
-    'modo'=>$esRevision&&lab_can('laboratorio.validacion_tecnica.aprobar')?'revisor':'lectura',
-    'endpoint'=>'../controllers/validacion_tecnica_controller.php',
-    'motivos'=>LAB_MOTIVOS_RECHAZO,
-    'volver'=>'validacion_tecnica_view.php',
-    'cap'=>$snapshot,
-    'notas'=>$notas,
-    'formulario'=>[
-        'id'=>$id,'estado'=>$row['estado']?:'Sin estado',
+$puedeAprobar=lab_can('laboratorio.validacion_tecnica.aprobar');
+$todosRevision=true;
+$formularios=[];
+foreach($rows as $row){
+    $snapshot=json_decode($row['datos'],true,512,JSON_THROW_ON_ERROR);
+    $esRevision=lab_validacion_estado_es_revision($row['estado']??'');
+    $todosRevision=$todosRevision&&$esRevision;
+    $estado=mb_strtolower((string)$row['estado']);
+    $codigos=array_values(array_filter(array_map(static fn($m)=>(string)($m['codigo_muestra']??''),$snapshot['muestras']??[])));
+    $rango=$codigos?($codigos[0]===end($codigos)?$codigos[0]:$codigos[0].' – '.end($codigos)):($row['inicio']===$row['fin']?$row['inicio']:$row['inicio'].' – '.$row['fin']);
+    $formularios[]=[
+        'id'=>(int)$row['id_formulario'],'cap'=>$snapshot,'estado'=>$row['estado']?:'Sin estado',
         'estado_clase'=>strpos($estado,'aprob')!==false?'is-approved':($esRevision?'is-review':''),
         'lote'=>$row['codigo_lote'],'rango'=>$rango,'tipo'=>$row['tipo_muestra'],
+        'analisis_nombre'=>$row['analisis_nombre'],
         'analista'=>$row['analista'],'fecha'=>$row['fecha'],'unidad'=>$row['unidad'],
         'limite_min'=>$row['limite_min']!==null?(float)$row['limite_min']:null,
         'limite_max'=>$row['limite_max']!==null?(float)$row['limite_max']:null,
-    ],
+    ];
+}
+
+$notas=[];$vistas=[];
+$h=$conexion->prepare("SELECT accion, estado_nuevo, usuario, fecha, comentario FROM historial_formulario WHERE id_formulario IN (".implode(',',array_fill(0,count($ids),'?')).") AND TRIM(COALESCE(comentario,''))<>'' ORDER BY fecha, id_historial");
+$h->execute($ids);
+foreach($h->fetchAll(PDO::FETCH_ASSOC) as $n){
+    $ts=strtotime((string)$n['fecha']);
+    $nota=['quien'=>$n['usuario']?:'Sistema','fh'=>$ts?date('d/m/Y H:i',$ts):(string)$n['fecha'],'texto'=>$n['comentario'],
+        'tipo'=>preg_match('/rechaz/i',(string)$n['estado_nuevo'])||in_array($n['accion'],['reanalisis','devuelto_informe'],true)?'alerta':'info'];
+    // La misma nota se registra en cada formulario de la hoja: se muestra una sola vez.
+    $clave=$nota['quien'].'|'.$nota['fh'].'|'.$nota['texto'];
+    if(!isset($vistas[$clave])){$vistas[$clave]=true;$notas[]=$nota;}
+}
+
+$payload=[
+    'modo'=>$todosRevision&&$puedeAprobar?'revisor':'lectura',
+    'endpoint'=>'../controllers/validacion_tecnica_controller.php',
+    'motivos'=>LAB_MOTIVOS_RECHAZO,
+    'volver'=>'validacion_tecnica_view.php',
+    'notas'=>$notas,
+    'formularios'=>$formularios,
 ];
-lab_shell_head('Validación técnica','Formulario #'.$id.' · datos capturados, cálculos y curva',['../css/lab_shell.css?v=20261006','../styles/validacion_tecnica.css?v='.filemtime(__DIR__.'/../styles/validacion_tecnica.css')]);
+$subtitulo=count($ids)===1?'Formulario #'.$ids[0]:'Hoja con '.count($ids).' formularios (#'.implode(', #',$ids).')';
+lab_shell_head('Validación técnica',$subtitulo.' · datos capturados, cálculos y curva',['../css/lab_shell.css?v=20261006','../styles/validacion_tecnica.css?v='.filemtime(__DIR__.'/../styles/validacion_tecnica.css')]);
 lab_shell_open('validacion_tecnica_view.php');
 ?>
 <section class="vt-wrap">

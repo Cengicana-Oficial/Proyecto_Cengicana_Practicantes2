@@ -15,7 +15,7 @@ try{
         if($key!==''){
             if(!isset(wfConfig()['hojas'][$key]))throw new InvalidArgumentException('Hoja inválida.');
             $tasks=array_values(array_filter($tasks,fn($t)=>$t['hoja']===$key&&wfPendiente($t)&&wfPuedeCapturar($t,$user,$manager)));
-            echo json_encode(['tareas'=>$tasks,'borrador'=>wfBorrador($conexion,$key,$user),'vinculos'=>wfVinculos($conexion,$tasks)],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
+            echo json_encode(['tareas'=>$tasks,'borrador'=>wfBorrador($conexion,$key,$user,$tasks),'vinculos'=>wfVinculos($conexion,$tasks)],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
         }else echo json_encode(['tareas'=>$tasks,'usuarios'=>wfUsuarios()]+($isPlan?['identificacion'=>(object)wfIdentificacionResumen($conexion),'seguimiento'=>(object)wfSeguimientoLotes($conexion)]:wfResumenBandeja($conexion,$user)),JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
     }elseif($_SERVER['REQUEST_METHOD']==='POST'){
         $raw=file_get_contents('php://input',false,null,0,5000001);if(strlen($raw)>5000000)throw new InvalidArgumentException('La hoja es demasiado grande.');

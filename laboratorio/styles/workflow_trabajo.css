@@ -86,3 +86,23 @@
 @media(max-width:800px){#wf-app .wf-steps.big{flex-wrap:wrap}#wf-app .wf-steps.big li{flex:1 1 140px}}
 #wf-app .wf-final-table .wf-plan-sub,#wf-app .wf-final-table .wf-plan-rango{white-space:normal}#wf-app .wf-final-table .wf-plan-rango{min-width:110px}#wf-app .wf-final-table td:nth-child(7){min-width:170px}#wf-app .wf-final-table td:nth-child(5){min-width:0}
 #wf-app .wf-final-table thead th{white-space:normal}#wf-app .wf-final-table .wf-plan-acc button,#wf-app .wf-final-table .wf-plan-acc a{padding:6px 8px}#wf-app .wf-final-table tbody th{min-width:60px}
+/* Modal del lote: asignación por hoja de trabajo y matriz compacta agrupada por hoja */
+#wf-app .wf-assign-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:6px 16px;margin:18px 0 8px}
+#wf-app .wf-assign-head h3{margin:0;font-size:16px}#wf-app .wf-assign-head .wf-note,#wf-app .wf-assign-head .wf-legend{margin:0;flex:1 1 320px}
+#wf-app .wf-assign-head label{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700}#wf-app .wf-assign-head label select{min-width:240px}
+#wf-app .wf-assign-table{width:100%;border-collapse:collapse;background:#fff}#wf-app .wf-assign-table th,#wf-app .wf-assign-table td{padding:9px 12px;border-bottom:1px solid #E3F1D3;text-align:left;vertical-align:middle;font-size:12.5px}
+#wf-app .wf-assign-table thead th{background:#E3F1D3;font-size:11.5px;text-transform:none;white-space:nowrap}#wf-app .wf-assign-table tbody th{min-width:150px}
+#wf-app .wf-assign-table select{width:100%;min-width:200px}#wf-app .wf-assign-table tr.wf-row-sin{background:#FFFBEA}
+#wf-app .wf-an-chips{display:flex;flex-wrap:wrap;gap:4px}#wf-app .wf-an-chip{padding:2px 8px;border-radius:999px;background:#EEF0F1;color:#30353A;font-size:11px;font-weight:600;white-space:nowrap}#wf-app .wf-an-chip.done{background:#E3F1D3;color:#4E8418}
+#wf-app .wf-avance{min-width:170px}#wf-app .wf-avance .wf-progress{height:7px;margin-bottom:4px}#wf-app .wf-avance small{color:#636A6F;font-size:11px}
+#wf-app .wf-analista{display:inline-flex;align-items:center;gap:6px;margin:1px 6px 1px 0;font-size:12px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#wf-app .wf-analista i{flex:none;display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#4E8418;color:#fff;font-style:normal;font-size:10px;font-weight:800}
+#wf-app .wf-sin-asignar{display:inline-block;padding:2px 8px;border-radius:999px;background:#FFF3CD;color:#8A5A00;font-size:11px;font-weight:700}#wf-app .wf-muted{color:#858C91;font-size:11px}
+#wf-app .wf-matrix table th.wf-sticky{position:sticky;left:0;z-index:2;background:#fff;box-shadow:1px 0 0 #E3F1D3}#wf-app .wf-matrix thead th.wf-sticky{background:#E3F1D3;z-index:3}
+#wf-app .wf-matrix th.wf-grp{text-align:center;font-size:12px;border-bottom:1px solid #C7E4A8}#wf-app .wf-matrix th.wf-an{font-size:11px;font-weight:700;max-width:110px;white-space:normal;line-height:1.25;text-align:center}
+#wf-app .wf-matrix .wf-ini{border-left:2px solid #C7E4A8}#wf-app .wf-matrix td.wf-cell{text-align:center;padding:6px 4px}
+#wf-app .wf-state.wf-mini{display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0;border-radius:50%;font-size:12px;cursor:help}#wf-app .wf-ns{color:#B0B5B8;font-size:10.5px;font-weight:700}
+/* Planificación: columnas clave primero, análisis agrupados por hoja y fila clicable */
+#wf-app .wf-plan-table th.wf-plan-sticky{position:sticky;left:0;z-index:2;background:#fff;box-shadow:1px 0 0 #E3F1D3;min-width:130px}#wf-app .wf-plan-table thead th.wf-plan-sticky{background:#E3F1D3;z-index:3}
+#wf-app .wf-plan-table tr.wf-plan-row{cursor:pointer}#wf-app .wf-plan-table tr.wf-plan-row:hover td,#wf-app .wf-plan-table tr.wf-plan-row:hover th{background:#F4FAEE}#wf-app .wf-plan-table tr.wf-plan-row:focus-visible{outline:2px solid #4E8418;outline-offset:-2px}
+#wf-app .wf-plan-table .wf-plan-ini{border-left:2px solid #C7E4A8}#wf-app .wf-plan-table .wf-plan-rango span{display:block}
+#wf-app .wf-plan-acc{white-space:nowrap}#wf-app .wf-plan-acc button{padding:5px 9px;font-size:11.5px}

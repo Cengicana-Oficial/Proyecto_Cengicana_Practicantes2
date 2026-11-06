@@ -16,13 +16,23 @@
       '</span><small>' + esc(correo || "—") + '</small></div>';
   }
 
+  /* Un solo QR: el enlace de verificación pública (laboratorio/validar.php). Sirve al cliente o a un
+     tercero para comprobar la autenticidad y al laboratorio para identificar la recepción.
+     Si el ambiente aún no tiene la tabla de verificación, se usa el texto de identificación anterior. */
+  function contenidoQrBoleta(datos) {
+    if (datos.verificacion && datos.verificacion.url) return datos.verificacion.url;
+    return ["SIGELAB", datos.lote, datos.numeroLaboratorioInicio, datos.numeroLaboratorioFin, datos.idSolicitud].join("|");
+  }
   function qrBoleta(datos) {
     if (!datos.idSolicitud || typeof root.qrcode !== "function") return "";
     const qr = root.qrcode(0, "M");
-    qr.addData(["SIGELAB", datos.lote, datos.numeroLaboratorioInicio, datos.numeroLaboratorioFin, datos.idSolicitud].join("|"));
+    qr.addData(contenidoQrBoleta(datos));
     qr.make();
-    return '<div class="bol-qr" aria-label="QR de identificación de la recepción">' + qr.createSvgTag({ cellSize: 2, margin: 4, scalable: true }) + "</div>";
+    const codigo = datos.verificacion && datos.verificacion.codigo
+      ? '<small class="bol-qr-codigo" title="Código de verificación">' + esc(datos.verificacion.codigo) + "</small>" : "";
+    return '<div class="bol-qr" aria-label="QR de verificación de la boleta">' + qr.createSvgTag({ cellSize: 2, margin: 2, scalable: true }) + codigo + "</div>";
   }
+  root.LabQrBoleta = contenidoQrBoleta;
 
   function htmlBoleta(datos, preview = false) {
     const d = datos;

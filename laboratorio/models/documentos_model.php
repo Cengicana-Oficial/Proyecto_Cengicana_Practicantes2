@@ -163,13 +163,34 @@ if (!function_exists('lab_documentos_panel')) {
             }
         }
 
+        // Último envío por correo al cliente de cada documento (queda en su historial).
+        $enviosPorDocumento = [];
+        if ($tablaHistorialDisponible) {
+            try {
+                $stmt = $pdo->query("SELECT id_documento, MAX(fecha) AS enviado FROM lab_documento_historial WHERE cambios LIKE 'Enviado por correo%' GROUP BY id_documento");
+                foreach ($stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [] as $fila) {
+                    $enviosPorDocumento[(int) $fila['id_documento']] = (string) $fila['enviado'];
+                }
+            } catch (Throwable $e) {
+                $enviosPorDocumento = [];
+            }
+        }
+
         $lotes = [];
         $corregidos = 0;
+        $pendientesEnvio = 0;
         foreach ($documentos as &$documento) {
             $idDocumento = (int) ($documento['id_documento'] ?? 0);
             $idLote = (int) ($documento['id_lote'] ?? 0);
             $totalCambios = $historialPorDocumento[$idDocumento] ?? 0;
             $documento['total_cambios'] = $totalCambios;
+            // Enviado solo si el último envío es posterior a la versión vigente (una nueva firma vuelve a dejarlo pendiente).
+            $enviado = $enviosPorDocumento[$idDocumento] ?? '';
+            $generado = (string) ($documento['generado_en'] ?? '');
+            $documento['enviado_en'] = ($enviado !== '' && ($generado === '' || strtotime($enviado) >= strtotime($generado))) ? $enviado : '';
+            if ($documento['enviado_en'] === '') {
+                $pendientesEnvio++;
+            }
             if ((int) ($documento['version'] ?? 1) > 1) {
                 $corregidos++;
             }
@@ -186,6 +207,7 @@ if (!function_exists('lab_documentos_panel')) {
             'total' => count($documentos),
             'corregidos' => $corregidos,
             'lotes' => count($lotes),
+            'pendientes_envio' => $pendientesEnvio,
         ];
     }
 }

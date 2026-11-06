@@ -34,6 +34,19 @@ $conexion->beginTransaction();try{
  $_GET['id_formulario']=$sent['formularios'][0];$_SERVER['REQUEST_METHOD']='GET';
  ob_start();require __DIR__.'/../view/hoja_revision.php';$html=ob_get_clean();
  checkW(str_contains($html,'wf-review-data')&&!preg_match('/Warning:|Fatal error:|Notice:/',$html),'No se renderizó la hoja enviada para revisión');
+ // Validación en conjunto: los formularios (uno por análisis) de un mismo envío forman un solo grupo.
+ require_once __DIR__.'/../models/validacion_tecnica_model.php';
+ $forms=$sent['formularios'];
+ $lineas=array_values(array_filter(lab_validacion_lineas($conexion,'revision'),fn($l)=>in_array((int)$l['id_formulario'],$forms,true)));
+ $grupos=lab_validacion_agrupar($lineas,lab_validacion_snapshots($conexion,$forms));
+ checkW(count($grupos)===1&&count($grupos[0]['ids'])===count($forms),'Los formularios del envío no se agrupan en una sola hoja');
+ $_GET=['ids'=>implode(',',$forms)];
+ ob_start();require __DIR__.'/../view/hoja_revision.php';$html=ob_get_clean();
+ checkW(str_contains($html,'wf-review-data')&&!preg_match('/Warning:|Fatal error:|Notice:/',$html),'No se renderizó la hoja agrupada');
+ rejectW(fn()=>lab_validacion_resolver_grupo($conexion,$forms,'aprobar','Prueba workflow',null,'',[$forms[0]=>[$id]],''),'Se aceptó reanálisis sin categoría');
+ $res=lab_validacion_resolver_grupo($conexion,$forms,'aprobar','Prueba workflow',null,'Validación en conjunto');
+ checkW(count($res['formularios'])===count($forms)&&!array_filter($res['formularios'],fn($r)=>$r['estado_nuevo']!=='Aprobado'),'No se aprobaron todos los formularios de la hoja');
+ rejectW(fn()=>lab_validacion_resolver_grupo($conexion,$forms,'aprobar','Prueba workflow',null,''),'Se validó dos veces la misma hoja');
 }finally{$conexion->rollBack();}
 checkW(json_encode(wfTareas($conexion))===json_encode($before),'La prueba dejó cambios');
 echo "OK: asignación, prioridad, versiones, avance, envío parcial, snapshot, validación, duplicados e integridad. Transacción revertida.\n";

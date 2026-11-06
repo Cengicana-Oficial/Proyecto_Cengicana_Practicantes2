@@ -11,6 +11,30 @@
  * partir de los resultados VALIDADOS en Validación técnica; aquí solo se reciben como texto.
  */
 
+require_once __DIR__ . '/../includes/lote_etiqueta_helper.php';
+
+if (!function_exists('lab_informe_bloque_verificacion')) {
+    /**
+     * QR y código de verificación pública del informe firmado (como los diplomas): al escanearlo se
+     * abre laboratorio/validar.php y se confirma que el documento es auténtico y vigente.
+     * En la vista previa (sin firma) solo se indica que el QR se genera al firmar.
+     */
+    function lab_informe_bloque_verificacion(array $meta, callable $e): string
+    {
+        $v = $meta['verificacion'] ?? null;
+        if (!$v) {
+            return !empty($meta['preview'])
+                ? '<div style="font-size:8px;color:#636A6F;border:1px dashed #C9CDD0;padding:6px 8px;display:inline-block">QR de verificación: se genera al aprobar y firmar el informe.</div>'
+                : '';
+        }
+        $img = !empty($v['qr']) ? '<img src="' . $e($v['qr']) . '" alt="QR de verificación" style="width:74px;height:74px;vertical-align:middle;margin-right:8px">' : '';
+        return '<table style="border-collapse:collapse"><tr><td style="padding:0;border:none;vertical-align:middle;width:80px">' . $img . '</td>'
+            . '<td style="padding:0 0 0 4px;border:none;vertical-align:middle;width:auto;font-size:8px;line-height:1.35;text-align:left">'
+            . '<b style="font-size:8.5px">Verificación de autenticidad</b><br>Escanee el código QR o ingrese en<br>' . $e(strtok((string) $v['url'], '?')) . '<br>'
+            . 'Código: <b style="font-family:monospace;font-size:9px">' . $e($v['codigo']) . '</b></td></tr></table>';
+    }
+}
+
 if (!function_exists('lab_informe_formato_config')) {
     function lab_informe_formato_config(): array
     {
@@ -268,7 +292,7 @@ if (!function_exists('lab_informe_reporte_html')) {
         $aviso = !empty($meta['preview'])
             ? '<div class="aviso">Borrador — ' . $validados . ' de ' . $total . ' resultados validados por el técnico. "Pend." = aún sin validar. Sin firma del jefe de laboratorio.</div>' : '';
         $codigoCaja = !empty($F['lote_arriba'])
-            ? '<tr><td>' . $e($F['codigo']) . '</td></tr><tr><td>Lote ' . $e($lote['codigo_lote']) . '</td></tr>'
+            ? '<tr><td>' . $e($F['codigo']) . '</td></tr><tr><td>' . $e(lab_etiqueta_lote($lote['codigo_lote'])) . '</td></tr>'
             : '<tr><td>' . $e($F['codigo']) . '</td></tr><tr><td>' . $e($F['version'] ?? '') . '</td></tr><tr><td>' . $e($F['fecha'] ?? '') . '</td></tr>';
         $firmado = !empty($meta['firma_png']);
         $firmante = trim((string) ($meta['firmante'] ?? ''));
@@ -311,7 +335,7 @@ table{border-collapse:collapse}
 ' . (array_filter(array_column($cols, 'extra')) ? '<div class="nota">' . $e($cfg['nota_extra']) . '</div>' : '') . '
 ' . $metodos . '
 <div class="obs"><b>Observaciones:</b> ' . nl2br($e($meta['observaciones'] ?? '')) . '</div>
-<table class="firmas"><tr><td style="width:44%"></td>
+<table class="firmas"><tr><td style="width:44%;text-align:left;vertical-align:bottom">' . lab_informe_bloque_verificacion($meta, $e) . '</td>
 <td><div class="flbl">Revisado por:</div><div class="farea"><span class="fval">Validado electrónicamente</span></div><div class="flinea"><b>' . $e(implode(', ', $meta['revisores'] ?? []) ?: '—') . '</b></div><div class="fsmall">' . $e($F['revisado_cargo']) . '</div></td>
 <td><div class="flbl">Aprobado por:</div><div class="farea">' . ($firmado ? '<img src="' . $e($meta['firma_png']) . '" alt="Firma">' : '<span class="fpend">Pendiente de firma</span>') . '</div><div class="flinea"><b>' . $e(($firmante !== '' ? $firmante . ', ' : '') . $cfg['firmante_cargo']) . '</b></div><div class="fsmall">' . ($firmado ? 'Firmado electrónicamente el ' . $e($meta['fecha_firma_txt'] ?? '') : 'Pendiente de aprobación y firma') . '</div></td>
 </tr></table>
@@ -355,7 +379,7 @@ if (!function_exists('lab_informe_xlsx')) {
         // Encabezado del documento.
         $poner(1, $fila, 'CENGICAÑA');
         $poner(2, $fila, $F['servicio'] . ' · ' . $F['encabezado']);
-        $poner($nTotal, $fila, trim($F['codigo'] . ' ' . (!empty($F['lote_arriba']) ? 'Lote ' . $detalle['lote']['codigo_lote'] : (($F['version'] ?? '') . ' ' . ($F['fecha'] ?? '')))));
+        $poner($nTotal, $fila, trim($F['codigo'] . ' ' . (!empty($F['lote_arriba']) ? lab_etiqueta_lote($detalle['lote']['codigo_lote']) : (($F['version'] ?? '') . ' ' . ($F['fecha'] ?? '')))));
         if ($nTotal > 3) $hoja->mergeCells($L(2) . $fila . ':' . $L($nTotal - 1) . $fila);
         $hoja->getStyle('A1:' . $ultima . '1')->getFont()->setBold(true);
         $fila += 2;

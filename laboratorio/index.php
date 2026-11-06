@@ -66,8 +66,8 @@ $etapas = array_values(array_filter([
     ['ok' => lab_can('laboratorio.kanban.ver'), 'href' => 'view/kanban_view.php', 'icono' => 'view_kanban', 'titulo' => 'Planificación', 'texto' => 'Asignación de analistas y prioridad', 'n' => $sinAsignar, 'nl' => 'sin asignar'],
     ['ok' => $canCaptura, 'href' => 'view/solicitudes_pendientes_tecnico.php', 'icono' => 'checklist', 'titulo' => 'Bandeja del analista', 'texto' => 'Captura en hojas de trabajo', 'n' => $porCapturar, 'nl' => 'por capturar'],
     ['ok' => lab_can('laboratorio.validacion_tecnica.ver'), 'href' => 'view/validacion_tecnica_view.php', 'icono' => 'fact_check', 'titulo' => 'Validación técnica', 'texto' => 'Revisión de cálculos y controles', 'n' => $conteo['validacion'], 'nl' => 'por validar'],
-    ['ok' => lab_can('laboratorio.informes.ver'), 'href' => 'view/informes_view.php', 'icono' => 'summarize', 'titulo' => 'Informes', 'texto' => 'Aprobación y firma del jefe', 'n' => $listosFirma, 'nl' => 'por firmar'],
-    ['ok' => lab_can('laboratorio.documentos.ver'), 'href' => 'view/documentos_view.php', 'icono' => 'description', 'titulo' => 'Reportes', 'texto' => 'Entrega de informes firmados', 'n' => null, 'nl' => ''],
+    ['ok' => lab_can('laboratorio.informes.ver'), 'href' => 'view/informes_view.php', 'icono' => 'summarize', 'titulo' => 'Aprobación de informes', 'texto' => 'Revisión y firma del jefe de laboratorio', 'n' => $listosFirma, 'nl' => 'por firmar'],
+    ['ok' => lab_can('laboratorio.documentos.ver'), 'href' => 'view/documentos_view.php', 'icono' => 'description', 'titulo' => 'Informes emitidos', 'texto' => 'PDF, Excel y envío al cliente', 'n' => null, 'nl' => ''],
 ], static fn($e) => $e['ok']));
 
 // ---- Tipos de muestra activos (catálogo) para registrar una recepción.
@@ -124,6 +124,11 @@ lab_shell_open('index.php');
             <p><?= $totalPendientes > 0
                 ? 'Tiene <b>' . (int) $totalPendientes . '</b> pendiente(s) por atender hoy.'
                 : 'Está al día: no tiene pendientes asignados en este momento.' ?></p>
+            <div class="cgl-hero-brand">
+                <img src="img/logo-cengilabs.svg" alt="" aria-hidden="true">
+                <strong>Cengi<b>Labs</b></strong>
+                <span>· parte del ecosistema Cengitech</span>
+            </div>
         </div>
         <div class="ini-hero-actions">
             <?php if ($canRecepcion): ?>

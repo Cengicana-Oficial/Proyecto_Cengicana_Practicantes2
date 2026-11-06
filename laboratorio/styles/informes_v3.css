@@ -48,6 +48,12 @@
 .inf-dev summary{cursor:pointer;font-weight:700;color:#B34B00;}
 .inf-dev textarea{width:100%;min-height:60px;margin:8px 0;padding:8px;border:1.5px solid var(--cengi-border);border-radius:8px;font:inherit;font-size:12px;box-sizing:border-box;}
 .inf-ok{display:flex;flex-direction:column;gap:3px;background:#E3F1D3;color:#4E8418;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;}
+/* Compartir con Experimentos (informe firmado) */
+.inf-exp{display:flex;flex-direction:column;gap:6px;margin:12px 0 10px;padding:10px 12px;border:1px dashed #CED2D5;border-radius:8px;background:#FAFBFA;font-size:12px;}
+.inf-exp b{color:#1f5632;}
+.inf-exp span{color:var(--cengi-muted);}
+.inf-exp.is-on{border:1px solid #A3D300;background:#F4FAE8;}
+.inf-exp .cengi-btn{align-self:flex-start;}
 .inf-faltan{font-size:12px;border:1px solid #E3F1D3;border-radius:8px;padding:9px 11px;}
 .inf-faltan div{display:flex;justify-content:space-between;padding:3px 0;border-top:1px dashed #E3F1D3;margin-top:4px;}
 .inf-hist{margin-top:12px;font-size:11.5px;}
@@ -57,3 +63,9 @@
 /* Vista previa del informe: el mismo documento del PDF (carta horizontal) */
 .inf-marco{overflow:auto;background:#EEF0F1;border:1px solid #E3F1D3;border-radius:8px;padding:10px;}
 .inf-marco iframe{display:block;border:0;background:#fff;width:1010px;max-width:none;height:640px;margin:0 auto;padding:0 6px;box-sizing:content-box;box-shadow:0 1px 6px rgba(0,0,0,.08);}
+/* "Por aprobar" resalta cuando hay informes esperando la firma del jefe */
+.inf-chips button.is-alert:not(.on){border-color:#E0A800;color:#7A5600}.inf-chips button.is-alert span{background:#FFE08A}
+.inf-page .cengi-table-wrap{overflow-x:auto}.inf-table td:last-child{padding-right:16px;white-space:nowrap}.inf-table td:last-child .cengi-btn+.cengi-btn{margin-left:6px}
+.inf-table td.inf-col-validacion{min-width:120px;width:18%}
+/* La tabla de informes cabe en el contenido a 1366 px: no hereda el min-width de 1080 px de .vt-table */
+.vt-table.inf-table{min-width:0;width:100%}

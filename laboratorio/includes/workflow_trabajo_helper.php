@@ -2,6 +2,7 @@
 require_once __DIR__.'/../models/kanban_model.php';
 require_once __DIR__.'/catalogo_muestras_helper.php';
 require_once __DIR__.'/captura_variables_registry.php';
+require_once __DIR__.'/suelos_fisicos_helper.php';
 
 function wfSchema(PDO $pdo): void {
     if (!defined('ESQUEMA_MIGRANDO')) {
@@ -65,17 +66,40 @@ function wfPlanGuardar(PDO $pdo,array $data,array $user):array {
         $priority=$data['prioridad']??$tasks[0]['prioridad']['key'];if(!in_array($priority,['alta','media','baja'],true))throw new InvalidArgumentException('Prioridad inválida.');
         if(isset($data['usuario_id'])){
             $users=array_column(wfUsuarios(),null,'id');$uid=(int)$data['usuario_id'];if(!isset($users[$uid]))throw new InvalidArgumentException('Seleccione un usuario del laboratorio.');
-            $analysis=(int)($data['id_tipo_analisis']??0);$count=0;
+            // Un análisis (id_tipo_analisis), todos los de una hoja de trabajo (ids_tipo_analisis) o, sin ninguno, todo lo pendiente del lote.
+            $analyses=is_array($data['ids_tipo_analisis']??null)?array_values(array_filter(array_map('intval',$data['ids_tipo_analisis']))):[];
+            if(!$analyses&&!empty($data['id_tipo_analisis']))$analyses=[(int)$data['id_tipo_analisis']];
+            $count=0;
             $update=$pdo->prepare('INSERT INTO lab_plan_asignacion VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE usuario_id=VALUES(usuario_id),analista=VALUES(analista)');
-            foreach($tasks as $t)if(wfPendiente($t)&&(!$analysis||$analysis===(int)$t['id_tipo_analisis'])){$update->execute([$t['id_muestra'],$t['id_tipo_analisis'],$uid,$users[$uid]['nombre']]);$count++;}
+            foreach($tasks as $t)if(wfPendiente($t)&&(!$analyses||in_array((int)$t['id_tipo_analisis'],$analyses,true))){$update->execute([$t['id_muestra'],$t['id_tipo_analisis'],$uid,$users[$uid]['nombre']]);$count++;}
             if(!$count)throw new InvalidArgumentException('No hay tareas pendientes para esta asignación.');
         }
         $pdo->prepare('INSERT INTO lab_plan_lote VALUES(?,?,?) ON DUPLICATE KEY UPDATE prioridad=VALUES(prioridad),version=VALUES(version)')->execute([$id,$priority,$version+1]);
         wfAudit($pdo,$user,'Planificación',(string)$id,$data);if($own)$pdo->commit();return ['version'=>$version+1];
     }catch(Throwable $e){if($own&&$pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
-function wfBorrador(PDO $pdo,string $hoja,array $user):array {
+function wfSepararBorradorFisico(array $cap,string $hoja,?array $tareas=null):array {
+    $h=wfConfig()['hojas'][$hoja];$campos=array_flip(array_column($h['cols'],'k'));
+    // Olla pertenecía a PMP en el formato combinado; CC comienza sin selección.
+    if($hoja==='Suelo|Capacidad de campo (CC)')unset($campos['olla']);
+    $permitidas=$tareas===null?null:array_fill_keys(array_map('intval',array_column($tareas,'id_muestra')),true);
+    $cap['hoja']=$hoja;$cap['seleccion']=array_values(array_filter($cap['seleccion']??[],fn($id)=>$permitidas===null||isset($permitidas[(int)$id])));
+    $cap['encabezado']=array_intersect_key($cap['encabezado']??[],array_flip(array_column($h['encabezado']['campos']??[],'k')));
+    $filas=[];foreach($cap['seleccion'] as $id)$filas[$id]=array_intersect_key($cap['filas'][$id]??[],$campos);$cap['filas']=$filas;
+    foreach($cap['controles']??[] as $id=>$f)$cap['controles'][$id]=array_intersect_key($f,$campos);
+    $cap['ctrlExtra']=$cap['ctrlExtra']??[];
+    foreach($cap['ctrlExtra'] as &$ctrl)if(isset($ctrl['despues'])&&!in_array($ctrl['despues'],$cap['seleccion']))unset($ctrl['despues']);unset($ctrl);
+    return $cap;
+}
+function wfBorrador(PDO $pdo,string $hoja,array $user,?array $tareas=null):array {
     $q=$pdo->prepare('SELECT version,datos FROM lab_hoja_borrador WHERE usuario_key=? AND hoja=?');$q->execute([wfUsuarioKey($user),$hoja]);$r=$q->fetch(PDO::FETCH_ASSOC);
+    $origen=['Suelo|Capacidad de campo (CC)'=>'Suelo|CC y PMP','Suelo|Punto de marchitez permanente (PMP)'=>'Suelo|CC y PMP',
+        'Suelo|Macronutrientes (Ca, Mg, K, Na)'=>'Suelo|Macronutrientes','Suelo|Capacidad de intercambio catiónico (CIC)'=>'Suelo|Macronutrientes'];
+    if(!$r&&isset($origen[$hoja])){
+        $q->execute([wfUsuarioKey($user),$origen[$hoja]]);$anterior=$q->fetch(PDO::FETCH_ASSOC);
+        $cap=$anterior?json_decode($anterior['datos'],true):null;
+        if(is_array($cap))return ['version'=>0,'datos'=>wfSepararBorradorFisico($cap,$hoja,$tareas)];
+    }
     return ['version'=>(int)($r['version']??0),'datos'=>$r?json_decode($r['datos'],true,512,JSON_THROW_ON_ERROR):null];
 }
 function wfTexto($value,int $max=1000):string {if(!is_scalar($value)&&$value!==null)throw new InvalidArgumentException('Valor de campo inválido.');$v=trim((string)$value);if(mb_strlen($v)>$max)throw new InvalidArgumentException('Un campo excede su longitud máxima.');return $v;}
@@ -90,18 +114,24 @@ function wfNormalizar(array $raw,array $h,array $pool,bool $send):array {
     $cap=['encabezado'=>[],'controles'=>[],'ctrlExtra'=>[],'filas'=>[],'seleccion'=>[],'curva'=>[]];
     foreach(['fecha','analista','equipo','obs'] as $k)$cap[$k]=wfTexto($raw[$k]??'', $k==='obs'?2000:255);
     if($send&&(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$cap['fecha'])||date('Y-m-d',strtotime($cap['fecha']))!==$cap['fecha']||$cap['analista']===''))throw new InvalidArgumentException('Complete fecha de análisis y analista.');
-    foreach($h['encabezado']['campos']??[] as $c)$cap['encabezado'][$c['k']]=wfCelda($raw['encabezado'][$c['k']]??'', $c);
+    foreach($h['encabezado']['campos']??[] as $c){$v=wfCelda($raw['encabezado'][$c['k']]??'', $c);
+        // Parámetros del método (soloVal): el analista no los captura; se usa el valor por defecto y se ajustan en validación técnica.
+        if($v===''&&!empty($c['soloVal']))$v=(string)($c['def']??'');
+        if($send&&$v===''&&!empty($c['verificarAlEnviar']))throw new InvalidArgumentException('Complete '.$c['label'].' antes de enviar.');
+        $cap['encabezado'][$c['k']]=$v;}
     $ctrls=$h['controles'];
     if(count($raw['ctrlExtra']??[])>20)throw new InvalidArgumentException('Demasiados controles.');
-    foreach($raw['ctrlExtra']??[] as $i=>$extra){$id='CONTROL_EXTRA_'.($i+1);$c=['id'=>$id,'label'=>'Control adicional '.($i+1)];$ctrls[]=$c;$cap['ctrlExtra'][]=$c;}
+    $selRaw=array_map('intval',is_array($raw['seleccion']??null)?$raw['seleccion']:[]);
+    // despues = muestra debajo de la cual el analista agregó el control (posición en la hoja); solo si está en la hoja.
+    foreach($raw['ctrlExtra']??[] as $i=>$extra){$id='CONTROL_EXTRA_'.($i+1);$c=['id'=>$id,'label'=>'Control adicional '.($i+1)];if(is_array($extra)&&isset($extra['despues'])&&is_numeric($extra['despues'])&&in_array((int)$extra['despues'],$selRaw,true))$c['despues']=(int)$extra['despues'];$ctrls[]=$c;$cap['ctrlExtra'][]=$c;}
     $pedidos=[];foreach((array)($raw['seleccion']??[]) as $id)foreach($pool[(int)$id]??[] as $t)$pedidos[$t['analisis_hoja']]=true;
     foreach($ctrls as $ctrl){$cap['controles'][$ctrl['id']]=[];foreach($h['cols'] as $c){if(!empty($c['auto'])||in_array($c['k'],$ctrl['sin']??[],true))continue;
-        $v=wfCelda($raw['controles'][$ctrl['id']][$c['k']]??'',$c);if($send&&$ctrl['id']==='BLANCO'&&empty($c['opc'])&&(empty($c['analisis'])||isset($pedidos[$c['analisis']]))&&$v==='')throw new InvalidArgumentException('Complete el blanco: '.$c['label']);$cap['controles'][$ctrl['id']][$c['k']]=$v;
+        $v=wfCelda($raw['controles'][$ctrl['id']][$c['k']]??'',$c);if($send&&$ctrl['id']==='BLANCO'&&empty($c['opc'])&&(empty($c['analisis'])||array_intersect((array)$c['analisis'],array_keys($pedidos)))&&$v==='')throw new InvalidArgumentException('Complete el blanco: '.$c['label']);$cap['controles'][$ctrl['id']][$c['k']]=$v;
     }}
     if(!is_array($raw['seleccion']??null)||count($raw['seleccion'])>2000)throw new InvalidArgumentException('Selección inválida.');
     foreach($raw['seleccion'] as $id){$id=(int)$id;if(!isset($pool[$id])||isset($cap['filas'][$id]))throw new InvalidArgumentException('Hay muestras repetidas, ya enviadas o ajenas a esta hoja.');
         $cap['seleccion'][]=$id;$cap['filas'][$id]=[];
-        foreach($h['cols'] as $c){if(!empty($c['auto']))continue;$applies=empty($c['analisis'])||in_array($c['analisis'],array_column($pool[$id],'analisis_hoja'),true);if(!$applies)continue;
+        foreach($h['cols'] as $c){if(!empty($c['auto']))continue;$applies=empty($c['analisis'])||array_intersect((array)$c['analisis'],array_column($pool[$id],'analisis_hoja'));if(!$applies)continue;
             $v=wfCelda($raw['filas'][$id][$c['k']]??'',$c);if($send&&empty($c['opc'])&&$v==='')throw new InvalidArgumentException('Complete '.$pool[$id][0]['codigo_muestra'].': '.$c['label']);$cap['filas'][$id][$c['k']]=$v;
         }
     }
@@ -122,15 +152,59 @@ function wfGuardarHoja(PDO $pdo,array $data,array $user,bool $manager):array {
         // Mismo orden de bloqueos que la planificación; serializa asignaciones y envíos por lote.
         $ids=array_map('intval',$raw['seleccion']??[]);sort($ids);
         if($ids){$q=$pdo->prepare('SELECT l.id_lote FROM lote l WHERE l.id_lote IN (SELECT s.id_lote FROM solicitud s JOIN muestra m ON m.id_solicitud=s.id_solicitud WHERE m.id_muestra IN ('.implode(',',array_fill(0,count($ids),'?')).')) ORDER BY l.id_lote FOR UPDATE');$q->execute($ids);$q->fetchAll();}
+        $encabezadoPrevio=wfBorrador($pdo,$key,$user)['datos']['encabezado']??[];
         $pdo->prepare('INSERT IGNORE INTO lab_hoja_borrador(usuario_key,hoja,version,datos) VALUES(?,?,0,\'null\')')->execute([wfUsuarioKey($user),$key]);
         $lock=$pdo->prepare('SELECT version FROM lab_hoja_borrador WHERE usuario_key=? AND hoja=? FOR UPDATE');$lock->execute([wfUsuarioKey($user),$key]);$version=(int)$lock->fetchColumn();
         if((int)($data['version']??-1)!==$version)throw new RuntimeException('La hoja cambió en otra pestaña. Recargue antes de guardar.',409);
         $pool=[];foreach(wfTareas($pdo) as $t)if($t['hoja']===$key&&wfPendiente($t)&&wfPuedeCapturar($t,$user,$manager))$pool[(int)$t['id_muestra']][]=$t;
+        // Los parámetros trasladados a validación no se modifican desde captura.
+        $camposVal=array_filter($h['encabezado']['campos']??[],fn($c)=>!empty($c['gestionVal']));
+        if($camposVal){
+            foreach($camposVal as $c)$raw['encabezado'][$c['k']]=$encabezadoPrevio[$c['k']]??$c['def']??'';
+        }
+        if($key==='Suelo|Textura'){
+            $links=wfVinculos($pdo,array_merge(...array_values($pool ?: [[]])));
+            $residual=function($fields):string {
+                $hr=labSueloHumedadResidual($fields);
+                return $hr===null?'':json_encode($hr,JSON_PRESERVE_ZERO_FRACTION|JSON_THROW_ON_ERROR);
+            };
+            foreach($raw['seleccion']??[] as $id){
+                $raw['filas'][$id]['hr']=$residual($links['Suelo|Humedad residual'][$id]['campos']??[]);
+                if($send&&$raw['filas'][$id]['hr']==='')throw new InvalidArgumentException('Complete y guarde primero Humedad residual para la muestra seleccionada.');
+            }
+            if($send){
+                $controlOrigen=null;
+                foreach($raw['seleccion']??[] as $id){
+                    $fields=$links['Suelo|Humedad residual'][$id]['controles']['CONTROL']??[];
+                    $valores=array_map(fn($k)=>labSueloNumero($fields[$k]??null),['caja','m','cajaS']);
+                    if(in_array(null,$valores,true))throw new InvalidArgumentException('Falta el control de Humedad residual de una muestra seleccionada.');
+                    if($controlOrigen!==null&&$valores!==$controlOrigen)throw new InvalidArgumentException('Las muestras tienen distintos controles de Humedad residual. Capture cada corrida en una hoja separada.');
+                    $controlOrigen=$valores;
+                }
+            }
+            foreach(array_merge($h['controles'],$raw['ctrlExtra']??[]) as $i=>$ctrl){
+                $cid=$i<count($h['controles'])?$ctrl['id']:'CONTROL_EXTRA_'.($i-count($h['controles'])+1);
+                $id=$ctrl['despues']??($raw['seleccion'][0]??0);
+                $raw['controles'][$cid]['hr']=$residual($links['Suelo|Humedad residual'][$id]['controles'][$cid]??[]);
+                if($send&&$raw['controles'][$cid]['hr']==='')throw new InvalidArgumentException('Complete y guarde primero Humedad residual del control correspondiente.');
+            }
+        }
         $cap=wfNormalizar($raw,$h,$pool,$send);
         // La identidad del analista proviene de la sesión, nunca del contenido enviado.
         $cap['analista']=(string)($user['nombre']??$user['correo']??'Usuario');$cap['hoja']=$key;
+        if($key==='Suelo|Textura'){
+            // Congela los pesos de origen con Textura para auditar la HR sin depender de cambios posteriores.
+            foreach($cap['seleccion'] as $id)$cap['filas'][$id]['hrFuente']=array_intersect_key($links['Suelo|Humedad residual'][$id]['campos']??[],array_flip(['caja','m','cajaS']));
+            foreach(array_merge($h['controles'],$cap['ctrlExtra']) as $ctrl){
+                $id=$ctrl['despues']??($cap['seleccion'][0]??0);
+                $cap['controles'][$ctrl['id']]['hrFuente']=array_intersect_key($links['Suelo|Humedad residual'][$id]['controles'][$ctrl['id']]??[],array_flip(['caja','m','cajaS']));
+            }
+        }
+        if($send)labSueloValidarCaptura($cap);
         $forms=[];
         if($send){
+            // Todos los formularios de un mismo envío comparten este id: Validación técnica los agrupa y valida juntos.
+            $cap['envio']=bin2hex(random_bytes(8));
             $groups=[];foreach($cap['seleccion'] as $id)foreach($pool[$id] as $t)$groups[$t['id_solicitud'].':'.$t['id_tipo_analisis']][]=$t;
             $state=$pdo->query("SELECT id_estado FROM estado_formulario WHERE LOWER(nombre) IN ('revisar','en revision') ORDER BY id_estado LIMIT 1")->fetchColumn();if(!$state){$pdo->prepare('INSERT INTO estado_formulario(nombre) VALUES(?)')->execute(['Revisar']);$state=(int)$pdo->lastInsertId();}
             foreach($groups as $tasks){

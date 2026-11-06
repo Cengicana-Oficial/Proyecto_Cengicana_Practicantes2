@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../conexion.php';
 require_once __DIR__ . '/../models/labc_bandeja_model.php';
+require_once __DIR__ . '/../includes/lote_etiqueta_helper.php';
 
 $conexion = Conexion::conectar();
 
@@ -420,7 +421,7 @@ $tray = $activeSampleTypeId > 0
                                     <div class="analysis-lots">
                                         <?php foreach (($analysis['lotes_pendientes'] ?? []) as $chip): ?>
                                             <span class="analysis-lot-chip">
-                                                <strong><?= labc_e('Lote ' . ($chip['codigo_lote'] ?: 'Sin código')) ?></strong>
+                                                <strong><?= labc_e(lab_etiqueta_lote($chip['codigo_lote'] ?? '')) ?></strong>
                                                 <small><?= labc_e(labcBandejaEtiquetaRango($chip['rango_inicio'] ?? null, $chip['rango_fin'] ?? null)) ?></small>
                                             </span>
                                         <?php endforeach; ?>

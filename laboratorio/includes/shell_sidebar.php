@@ -57,7 +57,7 @@ if (!function_exists('lab_shell_nav_items')) {
      *     Planificacion del trabajo, Bandeja del analista,
      *     Validacion tecnica, Historial de versiones.
      *   Calidad y entrega:
-     *     Control de calidad, Informes, Firma electronica, Reportes.
+     *     Control de calidad, Aprobación de informes, Firma electronica, Informes emitidos.
      *   Sistema:
      *     Catalogo de analisis, Administracion.
      *
@@ -129,10 +129,10 @@ if (!function_exists('lab_shell_nav_items')) {
             $calidad[] = ['href' => 'controllers/consolidacion_controller.php', 'icon' => 'verified', 'label' => 'Control de calidad', 'match' => ['consolidacion_controller.php']];
         }
         if ($canInformes && is_file(__DIR__ . '/../view/informes_view.php')) {
-            $calidad[] = ['href' => 'view/informes_view.php', 'icon' => 'summarize', 'label' => 'Informes', 'match' => ['informes_view.php', 'firma_electronica_view.php']];
+            $calidad[] = ['href' => 'view/informes_view.php', 'icon' => 'summarize', 'label' => 'Aprobación de informes', 'match' => ['informes_view.php', 'firma_electronica_view.php']];
         }
         if ($canDocumentos && is_file(__DIR__ . '/../view/documentos_view.php')) {
-            $calidad[] = ['href' => 'view/documentos_view.php', 'icon' => 'description', 'label' => 'Reportes', 'match' => ['documentos_view.php']];
+            $calidad[] = ['href' => 'view/documentos_view.php', 'icon' => 'description', 'label' => 'Informes emitidos', 'match' => ['documentos_view.php']];
         }
         if ($calidad) {
             $groups['Calidad y entrega'] = $calidad;
@@ -180,7 +180,8 @@ if (!function_exists('lab_shell_head')) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= htmlspecialchars($titulo !== '' ? $titulo . ' · Laboratorio' : 'Laboratorio', ENT_QUOTES, 'UTF-8') ?></title>
+<title><?= htmlspecialchars($titulo !== '' ? $titulo . ' · CengiLabs' : 'CengiLabs', ENT_QUOTES, 'UTF-8') ?></title>
+<link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars($base, ENT_QUOTES, 'UTF-8') ?>img/logo-cengilabs.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
@@ -224,12 +225,14 @@ if (!function_exists('lab_shell_open')) {
         $groups = lab_shell_nav_items();
         $currentScript = basename($currentScript);
         ?>
+<?php /* Identidad CengiLabs: se carga aquí para que aplique también a las vistas con <head> propio. */ ?>
+<link rel="stylesheet" href="<?= htmlspecialchars($base, ENT_QUOTES, 'UTF-8') ?>css/cengilabs.css?v=<?= (int) @filemtime(__DIR__ . '/../css/cengilabs.css') ?>">
 <div class="cengi-sidebar-wrap">
 <aside class="cengi-sidebar" id="cengiLabSidebar">
     <a class="cengi-brand" href="<?= htmlspecialchars($base, ENT_QUOTES, 'UTF-8') ?>index.php">
-        <div class="cengi-brand-mark"><span class="material-symbols-outlined">experiment</span></div>
+        <img class="cgl-logo" src="<?= htmlspecialchars($base, ENT_QUOTES, 'UTF-8') ?>img/logo-cengilabs.svg" alt="" aria-hidden="true">
         <div class="cengi-brand-copy">
-            <strong>CENGILABS</strong>
+            <strong>Cengi<b>Labs</b></strong>
             <small>Lab. Agroindustrial</small>
         </div>
     </a>
@@ -263,7 +266,7 @@ if (!function_exists('lab_shell_open')) {
             <span class="material-symbols-outlined">logout</span>
             <span>Cerrar sesion</span>
         </a>
-        <div class="cengi-sidebar-version">Laboratorio &middot; Zafra 2025&ndash;2026</div>
+        <div class="cengi-sidebar-version">CengiLabs &middot; Zafra 2025&ndash;2026</div>
     </div>
 </aside>
 

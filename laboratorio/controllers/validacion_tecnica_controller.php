@@ -30,7 +30,12 @@ $comentario = trim((string) ($payload['comentario'] ?? ''));
 $reanalizar = is_array($payload['reanalizar'] ?? null) ? $payload['reanalizar'] : [];
 $categoria = trim((string) ($payload['categoria'] ?? ''));
 
-if ($idFormulario <= 0 || !in_array($accion, ['aprobar', 'rechazar'], true)) {
+// Hoja completa: todos los formularios (uno por análisis) de un mismo envío.
+$idsFormulario = is_array($payload['ids_formulario'] ?? null)
+    ? array_values(array_filter(array_map('intval', $payload['ids_formulario']), static fn($id) => $id > 0))
+    : [];
+
+if (($idFormulario <= 0 && !$idsFormulario) || !in_array($accion, ['aprobar', 'rechazar'], true)) {
     http_response_code(422);
     echo json_encode(['ok' => false, 'error' => 'Datos incompletos.']);
     exit;
@@ -40,7 +45,19 @@ $usuario = lab_current_user();
 
 try {
     $pdo = Conexion::conectar();
-    $resultado = lab_validacion_resolver(
+    $resultado = $idsFormulario ? lab_validacion_resolver_grupo(
+        $pdo,
+        $idsFormulario,
+        $accion,
+        (string) ($usuario['nombre'] ?? ''),
+        !empty($usuario['id']) ? (int) $usuario['id'] : null,
+        $comentario,
+        $reanalizar,
+        $categoria,
+        // Parámetros de la corrida corregidos por el técnico (p. ej. factor de temperatura CE).
+        is_array($payload['encabezado'] ?? null) ? $payload['encabezado'] : [],
+        is_array($payload['texturas'] ?? null) ? $payload['texturas'] : []
+    ) : lab_validacion_resolver(
         $pdo,
         $idFormulario,
         $accion,

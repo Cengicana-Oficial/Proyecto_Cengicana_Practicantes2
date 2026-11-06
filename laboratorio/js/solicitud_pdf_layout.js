@@ -108,9 +108,12 @@
     let qr = null;
     if (datos.idSolicitud && typeof globalThis.qrcode === "function") {
       qr = globalThis.qrcode(0, "M");
-      qr.addData(["SIGELAB", datos.lote, datos.numeroLaboratorioInicio, datos.numeroLaboratorioFin, datos.idSolicitud].join("|"));
+      // Mismo contenido que la vista de la boleta: el enlace de verificación pública (un solo QR).
+      qr.addData(typeof globalThis.LabQrBoleta === "function" ? globalThis.LabQrBoleta(datos)
+        : ((datos.verificacion && datos.verificacion.url) || ["SIGELAB", datos.lote, datos.numeroLaboratorioInicio, datos.numeroLaboratorioFin, datos.idSolicitud].join("|")));
       qr.make();
     }
+    const codigoVerificacion = datos.verificacion && datos.verificacion.codigo ? String(datos.verificacion.codigo) : "";
     let page;
     let y;
 
@@ -143,15 +146,20 @@
         page.drawText(textoOGuion(value), { x: metaX + 47, y: top, size: 7.5, font: boldFont, color: colors.ink });
       });
       if (qr) {
-        const cell = 46 / (qr.getModuleCount() + 8);
+        // 54 pt con 2 módulos de margen: el enlace de verificación tiene más módulos que el texto anterior
+        // y con 46 pt / 4 de margen quedaba demasiado pequeño para leerlo con el celular.
+        const lado = 54, cell = lado / (qr.getModuleCount() + 4);
         for (let row = 0; row < qr.getModuleCount(); row++) {
           for (let col = 0; col < qr.getModuleCount(); col++) {
             if (qr.isDark(row, col)) page.drawRectangle({
-              x: width - margin - 46 + (col + 4) * cell,
-              y: height - 24 - (row + 5) * cell,
+              x: width - margin - lado + (col + 2) * cell,
+              y: height - 20 - (row + 3) * cell,
               width: cell, height: cell, color: rgb(0, 0, 0),
             });
           }
+        }
+        if (codigoVerificacion) {
+          page.drawText("Verificacion: " + codigoVerificacion, { x: metaX, y: height - 71, size: 6.5, font: regularFont, color: colors.muted });
         }
       }
       page.drawLine({ start: { x: margin, y: height - 78 }, end: { x: width - margin, y: height - 78 }, thickness: 1, color: colors.brand });

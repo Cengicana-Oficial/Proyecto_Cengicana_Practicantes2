@@ -35,7 +35,10 @@ lab_shell_open($wfModo==='plan'?'kanban_view.php':'solicitudes_pendientes_tecnic
 ?>
 <?php if($wfModo==='plan'): ?>
 <section id="wf-app">
-<p class="wf-intro">Resumen por tipo de muestra: cada fila es un lote y cada columna un análisis solicitado, con su avance (muestras aprobadas / solicitadas). Use <b>Ver muestras</b> para revisar qué muestras faltan, asignar analistas y definir la prioridad del lote.</p>
+<p class="wf-intro">Resumen por tipo de muestra: cada fila es un lote con su avance y seguimiento; las columnas de la derecha agrupan los análisis por hoja de trabajo (aprobados / solicitados). Haga clic en un lote (o en <b>Muestras</b>) para ver qué muestras faltan, asignar analistas y definir la prioridad; <b>Bitácora</b> muestra su historial.
+<?php $wfTablero=(string)(getenv('LAB_TABLERO_TOKEN')?:''); if($wfManager&&strlen($wfTablero)>=16): ?>
+<br><a href="tablero_laboratorio.php?k=<?= htmlspecialchars(rawurlencode($wfTablero),ENT_QUOTES,'UTF-8') ?>" target="_blank" rel="noopener noreferrer"><b>Abrir tablero para pantalla ↗</b></a> <span class="wf-plan-sub" style="display:inline">(enlace de solo lectura para una TV; no lo comparta fuera del laboratorio)</span>
+<?php endif; ?></p>
 <p id="wf-status" role="status" aria-live="polite"></p>
 <div id="wf-list-view">
 <div id="wf-kpis" class="wf-kpis"></div>
