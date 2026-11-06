@@ -4,12 +4,35 @@
       <div class="modal-content det">
         <div class="modal-header det-header">
           <div class="det-title" v-if="e">
-            <div class="det-avatar"><i class="fas fa-seedling"></i></div>
-            <div>
-              <h5 class="modal-title mb-0">Ensayo {{ e.codigo }}<span v-if="e.nombre" class="det-nombre"> · {{ e.nombre }}</span></h5>
-              <small>{{ e.proyecto ? e.proyecto.codigo + ' — ' + e.proyecto.nombre : 'Sin proyecto' }}</small>
+            <div class="det-avatar"><icono-cana :tamano="38"></icono-cana></div>
+            <div class="det-titulo-txt">
+              <h5 class="modal-title mb-0">{{ esPrueba ? 'Prueba técnica' : 'Ensayo' }} {{ e.codigo }}<span v-if="e.nombre" class="det-nombre"> · {{ e.nombre }}</span></h5>
+              <nav v-if="e.proyecto" class="det-migas" aria-label="Ubicacion">
+                <a v-if="e.proyecto.programa" :href="proyectosUrl ? `${proyectosUrl}?programa=${e.proyecto.programa_id}` : null" :title="`Programa ${e.proyecto.programa.nombre}`">
+                  <i class="fas fa-layer-group"></i> {{ e.proyecto.programa.sigla }} · {{ e.proyecto.programa.nombre }}
+                </a>
+                <i class="fas fa-chevron-right"></i>
+                <a :href="proyectosUrl ? `${proyectosUrl}?programa=${e.proyecto.programa_id}&proyecto=${e.proyecto.id}` : null" :title="'Ver el proyecto ' + e.proyecto.codigo">
+                  {{ e.proyecto.codigo }} — {{ e.proyecto.nombre }}
+                </a>
+                <i class="fas fa-chevron-right"></i>
+                <span>{{ e.codigo }}</span>
+              </nav>
+              <small v-else>Sin proyecto</small>
+              <!-- Ficha rapida: visible en todas las pestañas -->
+              <div class="det-ficha-rapida">
+                <span v-if="esPrueba" class="det-tipo-prueba" title="Prueba técnica: sin diseño experimental ni cosecha"><i class="fas fa-vial"></i> {{ e.subtipo || 'Prueba técnica' }}</span>
+                <span v-if="esPrueba && e.lugar" title="Lugar"><i class="fas fa-flask"></i> {{ e.lugar }}</span>
+                <span v-if="esPrueba && e.fecha_inicio" title="Periodo de la prueba"><i class="fas fa-calendar-alt"></i> {{ fmtFecha(e.fecha_inicio) }}{{ e.fecha_fin ? ' → ' + fmtFecha(e.fecha_fin) : '' }}</span>
+                <span v-if="e.variedad" title="Variedad"><icono-cana :tamano="15"></icono-cana> {{ e.variedad }}</span>
+                <span v-if="e.diseno" title="Diseño experimental"><i class="fas fa-th"></i> {{ e.diseno }}</span>
+                <span v-if="e.ciclo || edadMeses !== null" title="Ciclo y edad del cultivo"><i class="fas fa-hourglass-half"></i> {{ [e.ciclo, edadMeses].filter(Boolean).join(' · ') }}</span>
+                <span v-if="ciclos.length > 1" class="det-multiciclo" :title="`En evaluación desde ${fmtFecha(ciclos[0].fecha_inicio)}`"><i class="fas fa-redo-alt"></i> Ciclo {{ ciclos.length }} de {{ ciclos.length }} · {{ tiempoEvaluacion }} en evaluación</span>
+                <span v-if="e.finca || e.lote" title="Finca / lote"><i class="fas fa-map-marker-alt"></i> {{ [e.finca, e.lote].filter(Boolean).join(' / ') }}</span>
+                <span v-if="(e.responsables || []).length" :title="'Responsables: ' + e.responsables.map((u) => u.name).join(', ')"><i class="fas fa-user-tie"></i> {{ e.responsables[0].name }}<template v-if="e.responsables.length > 1"> +{{ e.responsables.length - 1 }}</template></span>
+              </div>
             </div>
-            <span class="det-estado" :class="claseEstado(e.estado)">{{ e.estado }}</span>
+            <span class="det-estado" :class="claseEstado(e.estado)">{{ esPrueba && e.estado === 'En campo' ? 'En curso' : e.estado }}</span>
           </div>
           <div class="det-title" v-else><h5 class="modal-title mb-0">Cargando ensayo...</h5></div>
           <div class="det-header-actions">
@@ -57,11 +80,29 @@
               </div>
 
               <aside class="det-info-side">
+                <!-- Periodo de la prueba tecnica -->
+                <div v-if="esPrueba" class="det-card">
+                  <h6><i class="fas fa-vial"></i> Periodo de la prueba</h6>
+                  <template v-if="e.fecha_inicio">
+                    <div class="det-ciclo-edad"><b>{{ duracionPrueba }}</b></div>
+                    <div class="det-ciclo-fechas">
+                      <span>Inicio<br><b>{{ fmtFecha(e.fecha_inicio) }}</b></span>
+                      <span class="text-right">Fin<br><b>{{ fmtFecha(e.fecha_fin) || '—' }}</b></span>
+                    </div>
+                  </template>
+                  <p v-else class="det-vacio-txt">Registre las fechas de inicio y fin de la prueba. <a v-if="permisos.editar" href="#" @click.prevent="editar">Completar</a></p>
+                  <button type="button" class="btn btn-sm btn-outline-success btn-block mt-2" @click="cambiarTab('datos')"><i class="fas fa-table"></i> Ver datos y gráfica</button>
+                </div>
+
                 <!-- Ciclo del cultivo -->
-                <div class="det-card">
-                  <h6><i class="fas fa-seedling"></i> Ciclo del cultivo</h6>
+                <div v-else class="det-card">
+                  <h6><i class="fas fa-seedling"></i> {{ ciclos.length > 1 ? 'Ciclos del cultivo' : 'Ciclo del cultivo' }}</h6>
                   <template v-if="e.fecha_siembra">
-                    <div class="det-ciclo-edad"><b>{{ edadMeses }}</b> <span>{{ e.ciclo || '' }}</span></div>
+                    <div v-if="ciclos.length > 1" class="det-ciclos-total">
+                      <b>{{ tiempoEvaluacion }}</b> en evaluación · {{ ciclos.length }} ciclos
+                      <small>desde {{ fmtFecha(ciclos[0].fecha_inicio) }} en las mismas parcelas</small>
+                    </div>
+                    <div class="det-ciclo-edad"><b>{{ edadMeses }}</b> <span>{{ e.ciclo || '' }}<template v-if="ciclos.length > 1"> · ciclo actual</template></span></div>
                     <div class="det-ciclo-linea">
                       <div class="det-ciclo-barra"><i :style="{ width: (avanceCiclo === null ? 100 : avanceCiclo) + '%' }" :class="{ 'is-abierta': avanceCiclo === null }"></i></div>
                       <div class="det-ciclo-fechas">
@@ -70,6 +111,24 @@
                       </div>
                     </div>
                     <small v-if="textoCosecha" :class="{ 'is-alerta': alertaCosecha }">{{ textoCosecha }}</small>
+
+                    <!-- Historial de ciclos en las mismas parcelas (plantia, soca 1...) -->
+                    <ol v-if="ciclos.length > 1" class="det-ciclos">
+                      <li v-for="c in ciclosDetalle" :key="c.id" :class="{ 'is-actual': c.actual }">
+                        <div class="det-ciclos-cab">
+                          <b>{{ c.ciclo || 'Ciclo ' + c.orden }}</b>
+                          <em v-if="c.actual">actual</em>
+                          <small>{{ c.duracion }}</small>
+                          <button v-if="permisos.editar" type="button" class="det-ciclos-edit" :title="`Corregir fechas de ${c.ciclo || 'este ciclo'}`" @click="editarCiclo(c)"><i class="fas fa-pen"></i></button>
+                        </div>
+                        <small>{{ fmtFecha(c.fecha_inicio) }} → {{ c.fecha_cosecha ? fmtFecha(c.fecha_cosecha) : (c.fecha_cosecha_prevista ? fmtFecha(c.fecha_cosecha_prevista) + ' (prevista)' : 'en curso') }}</small>
+                        <small>{{ c.fechas }} fecha(s) de evaluación · {{ c.valores }} valores · {{ c.muestras }} muestra(s)</small>
+                      </li>
+                    </ol>
+                    <button v-if="permisos.editar" type="button" class="btn btn-sm btn-outline-success btn-block mt-2" :disabled="ocupado" @click="iniciarCiclo">
+                      <i class="fas fa-cut"></i> Registrar cosecha e iniciar {{ siguienteCiclo }}
+                    </button>
+                    <a v-if="permisos.editar && ciclos.length > 1" href="#" class="det-ciclos-deshacer" @click.prevent="deshacerCiclo">Deshacer el último ciclo</a>
                   </template>
                   <p v-else class="det-vacio-txt">
                     Registre la fecha de siembra o corte para calcular la edad y los dias despues de siembra de cada evaluacion.
@@ -77,10 +136,29 @@
                   </p>
                 </div>
 
+                <!-- Proximas actividades del plan -->
+                <div class="det-card">
+                  <h6><i class="fas fa-calendar-alt"></i> Próximas actividades</h6>
+                  <button v-for="a in proximasActividades" :key="a.id" type="button" class="det-avance" @click="cambiarTab('plan')">
+                    <i class="fas" :class="a.fecha < hoy ? 'fa-calendar-times det-plan-atrasada' : 'fa-calendar-check'"></i>
+                    <span><b>{{ a.tipo }}</b> {{ a.descripcion || '' }}<small>{{ fmtFecha(a.fecha) }} · {{ textoPlazo(a) }}{{ a.responsable ? ' · ' + a.responsable.name : '' }}</small></span>
+                    <i class="fas fa-chevron-right"></i>
+                  </button>
+                  <p v-if="!proximasActividades.length" class="det-vacio-txt">
+                    Sin actividades pendientes.
+                    <a v-if="permisos.plan" href="#" @click.prevent="cambiarTab('plan')">Programar muestreos y actividades</a>
+                  </p>
+                </div>
+
                 <!-- Avance -->
                 <div class="det-card">
                   <h6><i class="fas fa-tasks"></i> Avance del ensayo</h6>
-                  <component :is="evaluacionesUrl ? 'a' : 'div'" :href="evaluacionesUrl ? `${evaluacionesUrl}?ensayo=${e.id}` : null" class="det-avance">
+                  <button v-if="esPrueba" type="button" class="det-avance" @click="cambiarTab('datos')">
+                    <i class="fas fa-table"></i>
+                    <span><b>{{ d.datos && d.datos.filas ? d.datos.filas.length : 0 }}</b> filas de datos<small>{{ d.datos && d.datos.columnas ? d.datos.columnas.map((c) => c.nombre).slice(0, 4).join(', ') : 'Importe o pegue los datos de la prueba' }}</small></span>
+                    <i class="fas fa-chevron-right"></i>
+                  </button>
+                  <component v-else :is="evaluacionesUrl ? 'a' : 'div'" :href="evaluacionesUrl ? `${evaluacionesUrl}?ensayo=${e.id}` : null" class="det-avance">
                     <i class="fas fa-clipboard-check"></i>
                     <span><b>{{ e.evaluaciones_count || 0 }}</b> valores evaluados<small>{{ e.ultima_evaluacion ? 'Ultima: ' + fmtFecha(e.ultima_evaluacion) + ' · ' + fechasEvaluacion + ' fecha(s)' : 'Sin evaluaciones' }}</small></span>
                     <i v-if="evaluacionesUrl" class="fas fa-chevron-right"></i>
@@ -107,6 +185,18 @@
                   </button>
                 </div>
 
+                <!-- Otros ensayos en la misma localidad -->
+                <div v-if="(d.misma_ubicacion || []).length" class="det-card">
+                  <h6><i class="fas fa-map-pin"></i> Otros ensayos en esta ubicación</h6>
+                  <button v-for="o in d.misma_ubicacion" :key="o.id" type="button" class="det-avance" @click="abrir(o.id)">
+                    <i class="fas fa-flask"></i>
+                    <span><b>{{ o.codigo }}</b> {{ o.nombre || o.variedad || '' }}
+                      <small>{{ o.motivo }} · {{ o.estado }}{{ o.ciclo ? ' · ' + o.ciclo : '' }}{{ o.ciclos > 1 ? ' · ' + o.ciclos + ' ciclos' : '' }}{{ o.desde ? ' · desde ' + fmtFecha(o.desde) : '' }}</small>
+                    </span>
+                    <i class="fas fa-chevron-right"></i>
+                  </button>
+                </div>
+
                 <button type="button" class="det-gps" :class="{ 'is-off': !tieneGps }" @click="tieneGps ? cambiarTab('mapa') : (permisos.editar && editar())">
                   <i :class="tieneGps ? 'fas fa-map-marker-alt' : 'fas fa-location-arrow'"></i>
                   <template v-if="tieneGps">{{ Number(e.lat).toFixed(5) }}, {{ Number(e.lng).toFixed(5) }} · ver mapa</template>
@@ -117,6 +207,15 @@
 
             <!-- ============ ESTRUCTURA ============ -->
             <section v-show="tab === 'estructura'">
+              <!-- Resumen del diseño -->
+              <div class="det-estr-resumen">
+                <div><b>{{ d.tratamientos.length }}</b><span>tratamientos</span></div>
+                <div><b>{{ repeticiones.length || e.num_repeticiones || '—' }}</b><span>repeticiones</span></div>
+                <div><b>{{ d.parcelas.length }}</b><span>parcelas</span></div>
+                <div v-if="areaParcelas"><b>{{ areaParcelas }}</b><span>m² en parcelas</span></div>
+                <div class="is-diseno"><b>{{ e.diseno || 'Sin diseño' }}</b><span>diseño experimental</span></div>
+              </div>
+
               <div class="det-sec-head">
                 <h6><i class="fas fa-flask"></i> Tratamientos</h6>
                 <div v-if="permisos.editar" class="det-sec-actions">
@@ -163,8 +262,12 @@
                   <tbody>
                     <tr v-for="t in d.tratamientos" :key="t.id">
                       <td>
-                        <input v-if="permisos.editar" class="form-control form-control-sm det-inline" maxlength="20" v-model="t.codigo" @change="guardarTratamiento(t)">
-                        <span v-else class="det-tag">{{ t.codigo }}</span>
+                        <!-- Mismo color del tratamiento que en parcelas, croquis y graficos -->
+                        <div v-if="permisos.editar" class="det-trat-cod" :style="{ '--c': colorTrat(t.codigo) }">
+                          <i class="det-trat-dot"></i>
+                          <input class="form-control form-control-sm det-inline" maxlength="20" v-model="t.codigo" @change="guardarTratamiento(t)">
+                        </div>
+                        <span v-else class="det-tag" :style="{ '--c': colorTrat(t.codigo) }">{{ t.codigo }}</span>
                       </td>
                       <td>
                         <input v-if="permisos.editar" :ref="'desc-' + t.id" class="form-control form-control-sm det-inline" maxlength="255" v-model="t.descripcion" placeholder="Descripcion del tratamiento" @change="guardarTratamiento(t)">
@@ -443,6 +546,155 @@
               </div>
             </section>
 
+            <!-- ============ FOTOS ============ -->
+            <!-- v-if: carga las fotos solo al abrir la pestaña -->
+            <section v-if="tab === 'fotos'">
+              <fotos-ensayo
+                :key="e.id"
+                :ensayo-id="e.id"
+                :parcelas="d.parcelas"
+                :tratamientos="d.tratamientos"
+                :bitacora="d.bitacora"
+                :color-trat="colorTrat"
+                @conteo="(n) => $set(d, 'fotos_count', n)"
+              ></fotos-ensayo>
+            </section>
+
+            <!-- ============ DATOS (pruebas tecnicas) ============ -->
+            <section v-if="esPrueba" v-show="tab === 'datos'">
+              <datos-prueba :ensayo-id="e.id" :datos="d.datos" :puede-editar="!!permisos.ndvi" @guardado="(datos) => { d.datos = datos; }"></datos-prueba>
+            </section>
+
+            <!-- ============ PLAN DE ACTIVIDADES ============ -->
+            <section v-show="tab === 'plan'" class="det-plan">
+              <!-- Barra: programar, Excel y tipo de vista -->
+              <div class="det-plan-barra">
+                <button v-if="permisos.plan" type="button" class="btn btn-success btn-sm" @click="planFormVisible = !planFormVisible">
+                  <i class="fas" :class="planFormVisible ? 'fa-times' : 'fa-calendar-plus'"></i> {{ planFormVisible ? 'Cerrar' : 'Programar actividad' }}
+                </button>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Excel">
+                  <button v-if="permisos.plan" type="button" class="btn btn-outline-secondary" :disabled="ocupado" @click="$refs.planArchivo.click()"><i class="fas fa-file-import"></i> Importar Excel</button>
+                  <a class="btn btn-outline-secondary" :href="urlPlanExcel(false)"><i class="fas fa-file-download"></i> Plantilla</a>
+                  <a v-if="(d.plan || []).length" class="btn btn-outline-secondary" :href="urlPlanExcel(true)"><i class="fas fa-file-excel"></i> Exportar plan</a>
+                </div>
+                <input ref="planArchivo" type="file" accept=".xlsx,.xls,.csv" hidden @change="importarPlan">
+                <div class="det-plan-vista" role="group" aria-label="Tipo de vista">
+                  <button type="button" :class="{ 'is-active': planVista === 'lista' }" @click="planVista = 'lista'"><i class="fas fa-list"></i> Lista</button>
+                  <button type="button" :class="{ 'is-active': planVista === 'calendario' }" @click="planVista = 'calendario'"><i class="fas fa-calendar-alt"></i> Calendario</button>
+                </div>
+              </div>
+
+              <form v-if="permisos.plan && planFormVisible" class="det-plan-form" @submit.prevent="guardarActividad">
+                <select class="form-control form-control-sm" v-model="planForm.tipo" aria-label="Tipo de actividad">
+                  <option v-for="t in tiposBitacora" :key="t" :value="t">{{ t }}</option>
+                </select>
+                <input class="form-control form-control-sm det-plan-desc" maxlength="500" v-model="planForm.descripcion" placeholder="Detalle (p. ej. muestreo foliar, 3a. evaluación de población)" aria-label="Detalle">
+                <input type="date" class="form-control form-control-sm" v-model="planForm.fecha" aria-label="Fecha programada" required>
+                <select class="form-control form-control-sm" v-model="planForm.responsable_id" aria-label="Responsable">
+                  <option :value="null">Sin responsable</option>
+                  <option v-for="u in usuarios" :key="u.id" :value="u.id">{{ u.name }}</option>
+                </select>
+                <label class="det-plan-mini">Avisar <input type="number" min="0" max="60" class="form-control form-control-sm" v-model.number="planForm.aviso_dias"> días antes</label>
+                <template v-if="!planForm.id">
+                  <label class="det-plan-mini"><input type="checkbox" v-model="planForm.repetir"> Repetir</label>
+                  <template v-if="planForm.repetir">
+                    <label class="det-plan-mini">cada <input type="number" min="1" max="365" class="form-control form-control-sm" v-model.number="planForm.repetir_cada"> días,</label>
+                    <label class="det-plan-mini"><input type="number" min="2" max="52" class="form-control form-control-sm" v-model.number="planForm.repeticiones"> veces</label>
+                  </template>
+                </template>
+                <button v-if="planForm.id" type="button" class="btn btn-secondary btn-sm" @click="resetPlan">Cancelar</button>
+                <button type="submit" class="btn btn-success btn-sm" :disabled="ocupado || !planForm.fecha">
+                  <i class="fas fa-save"></i> {{ planForm.id ? 'Guardar' : (planForm.repetir ? `Programar ${planForm.repeticiones || 2}` : 'Programar') }}
+                </button>
+              </form>
+
+              <div v-if="!(d.plan || []).length" class="det-empty-box det-plan-vacio">
+                <i class="fas fa-calendar-alt"></i>
+                <b>Aún no hay actividades programadas.</b>
+                <small>Programe muestreos, evaluaciones, fertilizaciones y la cosecha, o cárguelos desde Excel con la plantilla. La campanita avisará al responsable antes de cada fecha.</small>
+              </div>
+
+              <template v-else>
+                <!-- Indicadores -->
+                <div class="det-plan-kpis">
+                  <button type="button" :class="{ 'is-alerta': planResumen.atrasadas, 'is-sel': planFiltro.periodo === 'atrasadas' }" @click="filtrarPeriodo('atrasadas')"><b>{{ planResumen.atrasadas }}</b><span>Atrasadas</span></button>
+                  <button type="button" :class="{ 'is-sel': planFiltro.periodo === 'semana' }" @click="filtrarPeriodo('semana')"><b>{{ planResumen.semana }}</b><span>Próximos 7 días</span></button>
+                  <button type="button" :class="{ 'is-sel': planFiltro.periodo === 'mes' }" @click="filtrarPeriodo('mes')"><b>{{ planResumen.mes }}</b><span>Próximos 30 días</span></button>
+                  <div><b>{{ planResumen.realizadas }}</b><span>Realizadas<template v-if="planResumen.aTiempo !== null"> · {{ planResumen.aTiempo }} % a tiempo</template></span></div>
+                </div>
+
+                <!-- Filtros -->
+                <div class="det-plan-filtros">
+                  <select class="form-control form-control-sm" v-model="planFiltro.tipo" aria-label="Filtrar por tipo">
+                    <option value="">Todos los tipos</option>
+                    <option v-for="t in tiposEnPlan" :key="t" :value="t">{{ t }}</option>
+                  </select>
+                  <select class="form-control form-control-sm" v-model="planFiltro.responsable" aria-label="Filtrar por responsable">
+                    <option value="">Todos los responsables</option>
+                    <option value="ninguno">Sin responsable</option>
+                    <option v-for="u in responsablesEnPlan" :key="u.id" :value="u.id">{{ u.name }}</option>
+                  </select>
+                  <label class="det-plan-mini"><input type="checkbox" v-model="planFiltro.historial"> Mostrar realizadas y canceladas</label>
+                  <a v-if="planFiltro.tipo || planFiltro.responsable || planFiltro.periodo" href="#" class="small" @click.prevent="limpiarFiltroPlan">Quitar filtros</a>
+                </div>
+
+                <!-- Lista -->
+                <template v-if="planVista === 'lista'">
+                  <p v-if="!planGrupos.length" class="det-vacio-txt">No hay actividades con estos filtros.</p>
+                  <div v-for="g in planGrupos" :key="g.id" class="det-plan-grupo">
+                    <h6 :class="'is-' + g.id">{{ g.titulo }} <small>{{ g.items.length }}</small></h6>
+                    <div v-for="a in g.items" :key="a.id" class="det-plan-item" :class="'is-' + g.id">
+                      <div class="det-plan-fecha" :style="{ '--c': colorTipo(a.tipo) }">
+                        <small>{{ diaSemana(a.estado === 'Realizada' ? a.fecha_realizada : a.fecha) }}</small>
+                        <b>{{ fmtFecha(a.estado === 'Realizada' ? a.fecha_realizada : a.fecha).slice(0, 2) }}</b>
+                        <small>{{ mesCorto(a.estado === 'Realizada' ? a.fecha_realizada : a.fecha) }}</small>
+                      </div>
+                      <div class="det-plan-txt">
+                        <span class="det-entry-tipo" :style="{ '--c': colorTipo(a.tipo) }">{{ a.tipo }}</span>
+                        <span v-if="a.descripcion" class="det-plan-desc-txt">{{ a.descripcion }}</span>
+                        <small>
+                          <i class="fas fa-user"></i> {{ a.responsable ? a.responsable.name : 'Sin responsable' }}
+                          · <span :class="{ 'det-plan-atrasada': g.id === 'atrasada' }">{{ textoPlazo(a) }}</span>
+                        </small>
+                      </div>
+                      <div class="det-plan-acc">
+                        <button v-if="a.estado === 'Pendiente' && puedeRealizar(a)" type="button" class="btn btn-sm btn-outline-success" @click="realizarActividad(a)"><i class="fas fa-check"></i> Realizada</button>
+                        <button v-if="permisos.plan && a.estado === 'Pendiente'" type="button" class="det-icon" title="Editar" @click="editarActividad(a)"><i class="fas fa-pen"></i></button>
+                        <button v-if="permisos.plan && a.estado !== 'Pendiente'" type="button" class="det-icon" title="Volver a pendiente" @click="reabrirActividad(a)"><i class="fas fa-undo"></i></button>
+                        <button v-if="permisos.plan && a.estado === 'Pendiente'" type="button" class="det-icon" title="Cancelar actividad" @click="cancelarActividad(a)"><i class="fas fa-ban"></i></button>
+                        <button v-if="permisos.plan" type="button" class="det-icon det-icon-danger" title="Eliminar" @click="eliminarActividad(a)"><i class="fas fa-trash"></i></button>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- Calendario mensual -->
+                <div v-else class="det-cal">
+                  <div class="det-cal-head">
+                    <button type="button" class="det-icon" title="Mes anterior" @click="moverMes(-1)"><i class="fas fa-chevron-left"></i></button>
+                    <b>{{ tituloMes }}</b>
+                    <button type="button" class="det-icon" title="Mes siguiente" @click="moverMes(1)"><i class="fas fa-chevron-right"></i></button>
+                    <button type="button" class="btn btn-link btn-sm" @click="calMes = hoy.slice(0, 7)">Hoy</button>
+                  </div>
+                  <div class="det-cal-grid">
+                    <span v-for="n in ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']" :key="n" class="det-cal-dsem">{{ n }}</span>
+                    <div v-for="c in celdasMes" :key="c.fecha" class="det-cal-dia" :class="{ 'is-fuera': !c.delMes, 'is-hoy': c.fecha === hoy }">
+                      <span class="det-cal-num">{{ Number(c.fecha.slice(8)) }}</span>
+                      <button
+                        v-for="a in c.items.slice(0, 3)" :key="a.id" type="button" class="det-cal-act"
+                        :class="{ 'is-atrasada': a.estado === 'Pendiente' && a.fecha < hoy, 'is-hecha': a.estado !== 'Pendiente' }"
+                        :style="{ '--c': colorTipo(a.tipo) }"
+                        :title="`${a.tipo}${a.descripcion ? ': ' + a.descripcion : ''} · ${a.responsable ? a.responsable.name : 'sin responsable'} · ${textoPlazo(a)}`"
+                        @click="accionCalendario(a)"
+                      ><i v-if="a.estado === 'Realizada'" class="fas fa-check"></i> {{ a.tipo }}</button>
+                      <small v-if="c.items.length > 3" class="det-cal-mas">+{{ c.items.length - 3 }} más</small>
+                    </div>
+                  </div>
+                  <p class="det-vacio-txt mb-0">Clic en una actividad pendiente para marcarla como realizada; las realizadas aparecen en gris con ✓.</p>
+                </div>
+              </template>
+            </section>
+
             <!-- ============ BITACORA ============ -->
             <section v-show="tab === 'bitacora'">
               <div class="det-barra-form is-bitacora" v-if="permisos.bitacora">
@@ -487,7 +739,9 @@ import EnsayoClima from './clima.vue';
 import CroquisMapa from './croquis-mapa.vue';
 import MapaGps from './mapa-gps.vue';
 import NdviImagenes from './ndvi-imagenes.vue';
+import FotosEnsayo from './fotos-ensayo.vue';
 import EnsayosCiclo from './ciclo.vue';
+import DatosPrueba from './datos-prueba.vue';
 import { navegacion, distanciaM } from './geo-util';
 
 const COLORES_TRAT = ['#73BC25', '#FF6B00', '#FFCC00', '#A3D300', '#5b6267', '#3f7a12', '#b84d00', '#8a6a00'];
@@ -499,7 +753,7 @@ function hoyISO() {
 
 export default {
   name: 'EnsayoDetalle',
-  components: { EnsayoClima, CroquisMapa, MapaGps, NdviImagenes, EnsayosCiclo },
+  components: { EnsayoClima, CroquisMapa, MapaGps, NdviImagenes, EnsayosCiclo, FotosEnsayo, DatosPrueba },
   props: {
     fuentesNdvi: { type: Array, default: () => [] },
     carpetas: { type: Array, default: () => [] },
@@ -508,6 +762,12 @@ export default {
     permisos: { type: Object, default: () => ({}) },
     evaluacionesUrl: { type: String, default: null },
     muestrasUrl: { type: String, default: null },
+    proyectosUrl: { type: String, default: '' },
+    // Ciclos del cultivo de caña (Plantia, Soca 1...), del catalogo del controlador.
+    ciclosCatalogo: { type: Array, default: () => [] },
+    // Personas que pueden ser responsables de una actividad del plan.
+    usuarios: { type: Array, default: () => [] },
+    usuarioId: { type: Number, default: null },
   },
   data() {
     return {
@@ -528,6 +788,12 @@ export default {
       intercambio: null,
       ndviForm: { tratamiento_id: null, periodo: hoyISO().slice(0, 7), valor: '', fuente: this.fuentesNdvi[0] || null },
       bitForm: this.bitacoraVacia(),
+      planForm: this.planVacio(),
+      planFormVisible: false,
+      planVista: 'lista',
+      planFiltro: { tipo: '', responsable: '', periodo: '', historial: false },
+      calMes: hoyISO().slice(0, 7),
+      hoy: hoyISO(),
       archivoSel: null,
       carpetaSel: this.carpetas[0] || null,
       subiendo: null,
@@ -566,12 +832,26 @@ export default {
     tieneGps() { return !!(this.e && this.e.lat !== null && this.e.lng !== null && this.e.lat !== '' && this.e.lng !== ''); },
     tabs() {
       const d = this.d || { tratamientos: [], parcelas: [], ndvi: [], ndvi_imagenes: [], archivos: [], bitacora: [] };
+      if (this.esPrueba) {
+        // Prueba tecnica: sin estructura, NDVI ni clima de cultivo; con su tabla de datos.
+        return [
+          { id: 'info', label: 'Informacion', icon: 'fas fa-info-circle' },
+          { id: 'datos', label: 'Datos', icon: 'fas fa-table', count: (d.datos && d.datos.filas ? d.datos.filas.length : 0) || null },
+          { id: 'plan', label: 'Plan', icon: 'fas fa-calendar-alt', count: (d.plan || []).filter((a) => a.estado === 'Pendiente').length || null },
+          ...(this.tieneGps ? [{ id: 'mapa', label: 'Mapa GPS', icon: 'fas fa-map-marked-alt' }] : []),
+          { id: 'fotos', label: 'Fotos', icon: 'fas fa-camera', count: d.fotos_count || null },
+          { id: 'archivos', label: 'Archivos', icon: 'fas fa-paperclip', count: d.archivos.length || null },
+          { id: 'bitacora', label: 'Bitacora', icon: 'fas fa-book-open', count: d.bitacora.length || null },
+        ];
+      }
       return [
         { id: 'info', label: 'Informacion', icon: 'fas fa-info-circle' },
+        { id: 'plan', label: 'Plan', icon: 'fas fa-calendar-alt', count: (d.plan || []).filter((a) => a.estado === 'Pendiente').length || null },
         { id: 'estructura', label: 'Estructura', icon: 'fas fa-border-all', count: d.parcelas.length || null },
         { id: 'mapa', label: 'Mapa GPS', icon: 'fas fa-map-marked-alt' },
         { id: 'ndvi', label: 'NDVI', icon: 'fas fa-satellite', count: (d.ndvi.length + (d.ndvi_imagenes || []).length) || null },
         { id: 'clima', label: 'Clima', icon: 'fas fa-cloud-sun' },
+        { id: 'fotos', label: 'Fotos', icon: 'fas fa-camera', count: d.fotos_count || null },
         { id: 'archivos', label: 'Archivos', icon: 'fas fa-paperclip', count: d.archivos.length || null },
         { id: 'bitacora', label: 'Bitacora', icon: 'fas fa-book-open', count: d.bitacora.length || null },
       ];
@@ -584,7 +864,7 @@ export default {
         { label: 'Finca / Lote', valor: [e.finca, e.lote].filter(Boolean).join(' / ') },
         { label: 'Diseno experimental', valor: e.diseno },
         { label: 'Cultivo / Variedad', valor: [e.cultivo, e.variedad].filter(Boolean).join(' / ') },
-        { label: 'Responsable', valor: e.responsable ? e.responsable.name : null },
+        { label: (e.responsables || []).length > 1 ? 'Responsables' : 'Responsable', valor: (e.responsables || []).length ? e.responsables.map((u, i) => (i === 0 && e.responsables.length > 1 ? `${u.name} (principal)` : u.name)).join(', ') : (e.responsable ? e.responsable.name : null) },
         { label: 'Repeticiones', valor: e.num_repeticiones ? String(e.num_repeticiones) : null },
         { label: 'Area por parcela', valor: e.area_parcela ? `${Number(e.area_parcela)} m²` : null },
         { label: 'Ciclo', valor: e.ciclo },
@@ -621,6 +901,29 @@ export default {
     gruposInfo() {
       const e = this.e;
       const d = this.d || { tratamientos: [], parcelas: [] };
+      const responsables = { label: (e.responsables || []).length > 1 ? 'Responsables' : 'Responsable', valor: (e.responsables || []).length ? e.responsables.map((u, i) => (i === 0 && e.responsables.length > 1 ? `${u.name} (principal)` : u.name)).join(', ') : (e.responsable ? e.responsable.name : null) };
+      if (this.esPrueba) {
+        const filas = d.datos && d.datos.filas ? d.datos.filas.length : 0;
+        return [
+          { titulo: 'Prueba técnica', icono: 'fas fa-vial', campos: [
+            { label: 'Proyecto', valor: e.proyecto ? e.proyecto.nombre : null },
+            { label: 'Tipo de prueba', valor: e.subtipo },
+            { label: 'Lugar', valor: e.lugar },
+            responsables,
+          ] },
+          { titulo: 'Periodo', icono: 'fas fa-calendar-alt', campos: [
+            { label: 'Inicio', valor: this.fmtFecha(e.fecha_inicio) },
+            { label: 'Fin', valor: this.fmtFecha(e.fecha_fin) },
+            { label: 'Duración', valor: this.duracionPrueba },
+            { label: 'Datos', valor: filas ? `${filas} fila(s) en ${d.datos.columnas.length} columna(s)` : null },
+          ] },
+          { titulo: 'Ubicación y materiales', icono: 'fas fa-flask', campos: [
+            { label: 'Ingenio', valor: e.ingenio ? e.ingenio.nombre : null },
+            { label: 'Finca / Lote', valor: [e.finca, e.lote].filter(Boolean).join(' / ') },
+            { label: 'Equipos y materiales', valor: e.materiales },
+          ] },
+        ];
+      }
       return [
         { titulo: 'Ubicacion', icono: 'fas fa-map-marker-alt', campos: [
           { label: 'Proyecto', valor: e.proyecto ? e.proyecto.nombre : null },
@@ -636,7 +939,7 @@ export default {
           { label: 'Ciclo', valor: e.ciclo },
           { label: e.ciclo && e.ciclo !== 'Plantia' ? 'Corte anterior' : 'Siembra', valor: this.fmtFecha(e.fecha_siembra) },
           { label: 'Cosecha', valor: e.fecha_cosecha ? `${this.fmtFecha(e.fecha_cosecha)} (real)` : (e.fecha_cosecha_prevista ? `${this.fmtFecha(e.fecha_cosecha_prevista)} (prevista)` : null) },
-          { label: 'Responsable', valor: e.responsable ? e.responsable.name : null },
+          { label: (e.responsables || []).length > 1 ? 'Responsables' : 'Responsable', valor: (e.responsables || []).length ? e.responsables.map((u, i) => (i === 0 && e.responsables.length > 1 ? `${u.name} (principal)` : u.name)).join(', ') : (e.responsable ? e.responsable.name : null) },
         ] },
         { titulo: 'Diseño experimental', icono: 'fas fa-th', campos: [
           { label: 'Diseño', valor: e.diseno },
@@ -646,6 +949,16 @@ export default {
           { label: 'Area por parcela', valor: e.area_parcela ? `${Number(e.area_parcela)} m²` : null },
         ] },
       ];
+    },
+    esPrueba() { return !!(this.e && this.e.tipo_estudio === 'prueba'); },
+    /** Duracion de la prueba (inicio -> fin, o hasta hoy si sigue en curso). */
+    duracionPrueba() {
+      const e = this.e;
+      if (!e || !e.fecha_inicio) return null;
+      const fin = e.fecha_fin && (e.estado === 'Finalizado' || e.fecha_fin <= this.hoy) ? Date.parse(e.fecha_fin) : Date.parse(this.hoy);
+      const dias = Math.round((fin - Date.parse(e.fecha_inicio)) / 86400000);
+      if (dias < 0) return `inicia en ${-dias} día(s)`;
+      return `${dias} día(s)${e.fecha_fin && e.fecha_fin > this.hoy ? ` · faltan ${Math.round((Date.parse(e.fecha_fin) - Date.parse(this.hoy)) / 86400000)}` : ''}`;
     },
     edadMeses() {
       const e = this.e;
@@ -679,6 +992,110 @@ export default {
     },
     alertaCosecha() { return this.diasCosecha !== null && this.diasCosecha <= 30; },
     fechasEvaluacion() { return ((this.e && this.e.hitos && this.e.hitos.evaluaciones) || []).length; },
+    /** Plan con los filtros de tipo, responsable y periodo. */
+    planFiltrado() {
+      const f = this.planFiltro;
+      const en = (dias) => this.sumarDias(this.hoy, dias);
+      return ((this.d && this.d.plan) || []).filter((a) => (!f.tipo || a.tipo === f.tipo)
+        && (!f.responsable || (f.responsable === 'ninguno' ? !a.responsable_id : a.responsable_id === f.responsable))
+        && (!f.periodo || (a.estado === 'Pendiente' && (f.periodo === 'atrasadas' ? a.fecha < this.hoy
+          : a.fecha >= this.hoy && a.fecha <= en(f.periodo === 'semana' ? 7 : 30)))));
+    },
+    /** Plan agrupado: atrasadas, por semana/mes las proximas y el historial (si se pide). */
+    planGrupos() {
+      const plan = this.planFiltrado;
+      const pend = plan.filter((a) => a.estado === 'Pendiente');
+      const semana = this.sumarDias(this.hoy, 7);
+      const grupos = [
+        { id: 'atrasada', titulo: 'Atrasadas', items: pend.filter((a) => a.fecha < this.hoy) },
+        { id: 'pendiente', titulo: 'Esta semana', items: pend.filter((a) => a.fecha >= this.hoy && a.fecha <= semana) },
+        { id: 'pendiente-mas', titulo: 'Más adelante', items: pend.filter((a) => a.fecha > semana) },
+      ];
+      if (this.planFiltro.historial) grupos.push({ id: 'hecha', titulo: 'Realizadas y canceladas', items: plan.filter((a) => a.estado !== 'Pendiente').slice().reverse() });
+      return grupos.filter((g) => g.items.length);
+    },
+    planResumen() {
+      const plan = (this.d && this.d.plan) || [];
+      const pend = plan.filter((a) => a.estado === 'Pendiente');
+      const hechas = plan.filter((a) => a.estado === 'Realizada');
+      const aTiempo = hechas.filter((a) => a.fecha_realizada && a.fecha_realizada <= a.fecha).length;
+      return {
+        atrasadas: pend.filter((a) => a.fecha < this.hoy).length,
+        semana: pend.filter((a) => a.fecha >= this.hoy && a.fecha <= this.sumarDias(this.hoy, 7)).length,
+        mes: pend.filter((a) => a.fecha >= this.hoy && a.fecha <= this.sumarDias(this.hoy, 30)).length,
+        realizadas: hechas.length,
+        aTiempo: hechas.length ? Math.round((aTiempo / hechas.length) * 100) : null,
+      };
+    },
+    tiposEnPlan() { return [...new Set(((this.d && this.d.plan) || []).map((a) => a.tipo))].sort(); },
+    responsablesEnPlan() {
+      const m = {};
+      ((this.d && this.d.plan) || []).forEach((a) => { if (a.responsable) m[a.responsable.id] = a.responsable; });
+      return Object.values(m).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    },
+    tituloMes() {
+      const [y, m] = this.calMes.split('-').map(Number);
+      return `${['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][m - 1]} ${y}`;
+    },
+    /** Celdas del calendario (semanas de lunes a domingo) con las actividades de cada dia. */
+    celdasMes() {
+      const [y, m] = this.calMes.split('-').map(Number);
+      const primero = new Date(Date.UTC(y, m - 1, 1));
+      const inicio = new Date(primero);
+      inicio.setUTCDate(1 - ((primero.getUTCDay() + 6) % 7));
+      const porDia = {};
+      this.planFiltrado.forEach((a) => {
+        const f = String(a.estado === 'Realizada' && a.fecha_realizada ? a.fecha_realizada : a.fecha).slice(0, 10);
+        (porDia[f] = porDia[f] || []).push(a);
+      });
+      const celdas = [];
+      for (let i = 0; i < 42; i++) {
+        const d = new Date(inicio);
+        d.setUTCDate(inicio.getUTCDate() + i);
+        const iso = d.toISOString().slice(0, 10);
+        if (i >= 35 && d.getUTCMonth() !== m - 1) break;
+        celdas.push({ fecha: iso, delMes: d.getUTCMonth() === m - 1, items: porDia[iso] || [] });
+      }
+      return celdas;
+    },
+    proximasActividades() {
+      return ((this.d && this.d.plan) || []).filter((a) => a.estado === 'Pendiente').slice(0, 4);
+    },
+    /** Ciclos evaluados en las mismas parcelas, del primero al actual. */
+    ciclos() { return (this.e && this.e.ciclos) || []; },
+    /** Cada ciclo con su duracion y lo registrado en el (por fecha: desde su inicio hasta el inicio del siguiente). */
+    ciclosDetalle() {
+      const h = (this.e && this.e.hitos) || {};
+      const n = this.ciclos.length;
+      return this.ciclos.map((c, i) => {
+        const desde = String(c.fecha_inicio).slice(0, 10);
+        const hasta = i < n - 1 ? String(this.ciclos[i + 1].fecha_inicio).slice(0, 10) : '9999-12-31';
+        const dentro = (x) => x.fecha >= desde && x.fecha < hasta;
+        const ev = (h.evaluaciones || []).filter(dentro);
+        const fin = c.fecha_cosecha ? Date.parse(c.fecha_cosecha) : (i < n - 1 ? Date.parse(this.ciclos[i + 1].fecha_inicio) : Date.now());
+        const dias = Math.max(0, Math.round((fin - Date.parse(c.fecha_inicio)) / 86400000));
+        return {
+          ...c,
+          actual: i === n - 1,
+          duracion: `${(dias / 30.44).toFixed(1)} meses`,
+          fechas: ev.length,
+          valores: ev.reduce((s, x) => s + x.n, 0),
+          muestras: (h.muestreos || []).filter(dentro).reduce((s, x) => s + x.n, 0),
+        };
+      });
+    },
+    /** Tiempo total en evaluacion desde el inicio del primer ciclo. */
+    tiempoEvaluacion() {
+      if (!this.ciclos.length) return '';
+      const dias = Math.max(0, Math.round((Date.now() - Date.parse(this.ciclos[0].fecha_inicio)) / 86400000));
+      const anios = dias / 365.25;
+      return anios >= 1 ? `${anios.toFixed(1)} años` : `${(dias / 30.44).toFixed(1)} meses`;
+    },
+    siguienteCiclo() {
+      const cat = this.ciclosCatalogo;
+      const i = cat.indexOf(this.e && this.e.ciclo);
+      return cat.length ? cat[i < 0 ? 1 : Math.min(i + 1, cat.length - 1)] : 'siguiente ciclo';
+    },
     /** Edad desde la siembra o el corte anterior (hasta la cosecha si ya ocurrio). */
     edadCultivo() {
       const e = this.e;
@@ -691,6 +1108,11 @@ export default {
     },
     repeticiones() {
       return [...new Set(this.d.parcelas.map((p) => p.repeticion))].sort((a, b) => a - b);
+    },
+    /** Area total de las parcelas (m²), con separador de miles; null si no tienen area. */
+    areaParcelas() {
+      const total = this.d.parcelas.reduce((s, p) => s + (Number(p.area) || 0), 0);
+      return total ? total.toLocaleString('es-GT', { maximumFractionDigits: 0 }) : null;
     },
     // Rejilla fisica: fila = repeticion, columna = posicion en campo (los
     // tratamientos pueden ir aleatorizados dentro de cada bloque).
@@ -1143,6 +1565,205 @@ export default {
       const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
       return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
     },
+    /* ---------------- plan de actividades ---------------- */
+    planVacio() {
+      return { id: null, tipo: (this.tiposBitacora || []).includes('Muestreo') ? 'Muestreo' : (this.tiposBitacora || [])[0], descripcion: '', fecha: '',
+        responsable_id: this.usuarioId || null, aviso_dias: 3, repetir: false, repetir_cada: 30, repeticiones: 4 };
+    },
+    resetPlan() { this.planForm = this.planVacio(); },
+    textoPlazo(a) {
+      if (a.estado === 'Realizada') return `realizada el ${this.fmtFecha(a.fecha_realizada)}${a.fecha_realizada > a.fecha ? ' (con atraso)' : ''}`;
+      if (a.estado === 'Cancelada') return 'cancelada';
+      const dias = Math.round((Date.parse(a.fecha) - Date.parse(this.hoy)) / 86400000);
+      if (dias < 0) return `atrasada ${-dias} día(s)`;
+      if (dias === 0) return 'hoy';
+      return `en ${dias} día(s) · aviso ${a.aviso_dias} día(s) antes`;
+    },
+    puedeRealizar(a) { return this.permisos.realizar || (a.responsable_id && a.responsable_id === this.usuarioId); },
+    guardarActividad() {
+      const f = this.planForm;
+      const datos = { tipo: f.tipo, descripcion: f.descripcion || null, fecha: f.fecha, responsable_id: f.responsable_id, aviso_dias: f.aviso_dias };
+      const peticion = f.id
+        ? window.axios.put(`/investigacion/plan/${f.id}`, datos)
+        : window.axios.post(`/investigacion/ensayos/${this.ensayoId}/plan`, f.repetir ? { ...datos, repetir_cada: f.repetir_cada, repeticiones: f.repeticiones } : datos);
+      this.peticion(peticion, f.id ? 'Actividad actualizada' : (f.repetir ? `${f.repeticiones} actividades programadas` : 'Actividad programada'))
+        .then(() => this.resetPlan()).catch(() => {});
+    },
+    sumarDias(iso, dias) {
+      const d = new Date(`${iso}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + dias);
+      return d.toISOString().slice(0, 10);
+    },
+    diaSemana(iso) { return ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][new Date(`${String(iso).slice(0, 10)}T00:00:00Z`).getUTCDay()]; },
+    mesCorto(iso) { return ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][Number(String(iso).slice(5, 7)) - 1] + ' ' + String(iso).slice(2, 4); },
+    moverMes(n) {
+      const [y, m] = this.calMes.split('-').map(Number);
+      const d = new Date(Date.UTC(y, m - 1 + n, 1));
+      this.calMes = d.toISOString().slice(0, 7);
+    },
+    filtrarPeriodo(p) { this.planFiltro.periodo = this.planFiltro.periodo === p ? '' : p; this.planVista = 'lista'; },
+    limpiarFiltroPlan() { this.planFiltro = { tipo: '', responsable: '', periodo: '', historial: this.planFiltro.historial }; },
+    accionCalendario(a) {
+      if (a.estado === 'Pendiente' && this.puedeRealizar(a)) this.realizarActividad(a);
+      else if (this.permisos.plan && a.estado === 'Pendiente') { this.editarActividad(a); this.planVista = 'lista'; }
+    },
+    urlPlanExcel(conPlan) {
+      return `${window.axios.defaults.baseURL || ''}/investigacion/ensayos/${this.ensayoId}/plan/excel${conPlan ? '?plan=1' : ''}`;
+    },
+    /** Importa el plan desde Excel: primero una vista previa (errores por fila) y luego se confirma. */
+    importarPlan(ev) {
+      const archivo = ev.target.files[0];
+      ev.target.value = '';
+      if (!archivo) return;
+      const enviar = (confirmar) => {
+        const form = new FormData();
+        form.append('archivo', archivo);
+        if (confirmar) form.append('confirmar', '1');
+        return window.axios.post(`/investigacion/ensayos/${this.ensayoId}/plan/importar`, form);
+      };
+      this.ocupado = true;
+      enviar(false).then(({ data }) => {
+        this.ocupado = false;
+        const filas = data.actividades.slice(0, 40).map((a) => `<tr><td>${this.esc(a.ensayo)}</td><td>${this.esc(a.tipo)}</td><td>${this.esc(a.descripcion || '')}</td><td>${this.fmtFecha(a.fecha)}</td><td>${this.esc(a.responsable || '—')}</td><td>${this.esc(a.estado)}</td></tr>`).join('');
+        const errores = data.errores.slice(0, 30).map((e) => `<li>Fila ${e.fila}: ${this.esc(e.motivo)}</li>`).join('');
+        this.$swal.fire({
+          title: 'Vista previa de la importación',
+          width: 900,
+          html: `<div class="text-left small">
+              <p><b>${data.actividades.length}</b> actividad(es) para programar${data.omitidas ? ` · ${data.omitidas} ya existían y se omiten` : ''}${data.errores.length ? ` · <span class="text-danger">${data.errores.length} fila(s) con error</span>` : ''}.</p>
+              ${filas ? `<div style="max-height:280px;overflow:auto"><table class="table table-sm table-striped mb-2"><thead><tr><th>Ensayo</th><th>Tipo</th><th>Detalle</th><th>Fecha</th><th>Responsable</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table></div>` : ''}
+              ${data.actividades.length > 40 ? `<p class="text-muted">… y ${data.actividades.length - 40} más.</p>` : ''}
+              ${errores ? `<p class="text-danger mb-1"><b>Filas que no se importarán:</b></p><ul class="text-danger">${errores}</ul>` : ''}
+            </div>`,
+          showCancelButton: true,
+          showConfirmButton: data.actividades.length > 0,
+          confirmButtonText: `Importar ${data.actividades.length}`,
+          cancelButtonText: data.actividades.length ? 'Cancelar' : 'Cerrar',
+          confirmButtonColor: '#5a9e1a',
+        }).then((r) => {
+          if (!r.isConfirmed) return;
+          this.ocupado = true;
+          enviar(true).then(({ data: res }) => {
+            this.aplicar(res.detalle);
+            this.toast(`${res.guardadas} actividad(es) importadas`);
+          }).catch((err) => this.error(err, 'No se pudo importar')).finally(() => { this.ocupado = false; });
+        });
+      }).catch((err) => { this.ocupado = false; this.error(err, 'No se pudo leer el archivo'); });
+    },
+    editarActividad(a) {
+      this.planFormVisible = true;
+      this.planForm = { ...this.planVacio(), id: a.id, tipo: a.tipo, descripcion: a.descripcion || '', fecha: String(a.fecha).slice(0, 10), responsable_id: a.responsable_id, aviso_dias: a.aviso_dias };
+    },
+    cambiarEstadoActividad(a, estado, exito) {
+      return this.peticion(window.axios.put(`/investigacion/plan/${a.id}`, {
+        tipo: a.tipo, descripcion: a.descripcion, fecha: String(a.fecha).slice(0, 10), responsable_id: a.responsable_id, aviso_dias: a.aviso_dias, estado,
+      }), exito).catch(() => {});
+    },
+    reabrirActividad(a) { this.cambiarEstadoActividad(a, 'Pendiente', 'Actividad pendiente de nuevo'); },
+    cancelarActividad(a) {
+      this.confirmar('¿Cancelar la actividad?', 'Deja de avisar en la campanita y queda en el historial como cancelada.')
+        .then((ok) => ok && this.cambiarEstadoActividad(a, 'Cancelada', 'Actividad cancelada'));
+    },
+    eliminarActividad(a) {
+      this.confirmar('¿Eliminar la actividad del plan?', a.bitacora_id ? 'Su registro en la bitácora se conserva.' : 'Esta acción no se puede deshacer.')
+        .then((ok) => ok && this.peticion(window.axios.delete(`/investigacion/plan/${a.id}`), 'Actividad eliminada').catch(() => {}));
+    },
+    realizarActividad(a) {
+      const hoy = this.hoy;
+      this.$swal.fire({
+        title: `${this.esc(a.tipo)} realizada`,
+        html: `<div class="text-left small">
+            <p>${this.esc(a.descripcion || '')} <span class="text-muted">(programada para el ${this.fmtFecha(a.fecha)})</span></p>
+            <label class="d-block">Fecha en que se realizó<input id="pr-fecha" type="date" class="form-control" value="${hoy}" max="${hoy}"></label>
+            <label class="d-block mt-2">Nota (insumos, dosis, observaciones)<textarea id="pr-nota" class="form-control" rows="2" maxlength="1500"></textarea></label>
+            <label class="d-block mt-2"><input id="pr-bit" type="checkbox" checked> Registrar en la bitácora del ensayo</label>
+          </div>`,
+        showCancelButton: true, confirmButtonText: 'Marcar realizada', cancelButtonText: 'Cancelar', confirmButtonColor: '#5a9e1a', focusConfirm: false,
+        preConfirm: () => ({
+          fecha_realizada: document.getElementById('pr-fecha').value,
+          nota: document.getElementById('pr-nota').value || null,
+          bitacora: document.getElementById('pr-bit').checked,
+        }),
+      }).then((r) => {
+        if (!r.isConfirmed) return;
+        this.peticion(window.axios.post(`/investigacion/plan/${a.id}/realizada`, r.value), 'Actividad realizada').catch(() => {});
+      });
+    },
+
+    /* ---------------- ciclos del cultivo ---------------- */
+    opcionesCiclo(sel) {
+      return this.ciclosCatalogo.map((c) => `<option ${c === sel ? 'selected' : ''}>${this.esc(c)}</option>`).join('');
+    },
+    sumarMeses(iso, meses) {
+      const d = new Date(`${iso}T00:00:00`);
+      d.setMonth(d.getMonth() + meses);
+      return d.toISOString().slice(0, 10);
+    },
+    /** Registra la cosecha (corte) del ciclo actual e inicia el siguiente en las mismas parcelas. */
+    iniciarCiclo() {
+      const hoy = hoyISO();
+      const prevista = this.e.fecha_cosecha_prevista && String(this.e.fecha_cosecha_prevista).slice(0, 10) <= hoy ? String(this.e.fecha_cosecha_prevista).slice(0, 10) : hoy;
+      this.$swal.fire({
+        title: `Iniciar ${this.siguienteCiclo}`,
+        html: `<div class="text-left small">
+            <p>Se cierra <b>${this.esc(this.e.ciclo || 'el ciclo actual')}</b> con su cosecha y empieza un nuevo ciclo en las <b>mismas parcelas y tratamientos</b>. Las evaluaciones y muestras quedan en el ciclo según su fecha.</p>
+            <label class="d-block">Fecha de cosecha (corte)<input id="cc-cosecha" type="date" class="form-control" value="${prevista}" max="${hoy}"></label>
+            <label class="d-block mt-2">Nuevo ciclo<select id="cc-ciclo" class="form-control">${this.opcionesCiclo(this.siguienteCiclo)}</select></label>
+            <label class="d-block mt-2">Cosecha prevista del nuevo ciclo<input id="cc-prevista" type="date" class="form-control" value="${this.sumarMeses(prevista, 12)}"></label>
+            <label class="d-block mt-2">Observaciones de la cosecha (opcional)<textarea id="cc-obs" class="form-control" rows="2" maxlength="1000"></textarea></label>
+          </div>`,
+        showCancelButton: true, confirmButtonText: 'Iniciar ciclo', cancelButtonText: 'Cancelar', confirmButtonColor: '#5a9e1a', focusConfirm: false,
+        didOpen: () => {
+          const cos = document.getElementById('cc-cosecha');
+          cos.addEventListener('change', () => { document.getElementById('cc-prevista').value = this.sumarMeses(cos.value, 12); });
+        },
+        preConfirm: () => {
+          const v = {
+            fecha_cosecha: document.getElementById('cc-cosecha').value,
+            ciclo: document.getElementById('cc-ciclo').value,
+            fecha_cosecha_prevista: document.getElementById('cc-prevista').value || null,
+            obs: document.getElementById('cc-obs').value || null,
+          };
+          if (!v.fecha_cosecha) { this.$swal.showValidationMessage('Indique la fecha de cosecha.'); return false; }
+          return v;
+        },
+      }).then((r) => {
+        if (!r.isConfirmed) return;
+        this.peticion(window.axios.post(`/investigacion/ensayos/${this.ensayoId}/ciclos/siguiente`, r.value), `${r.value.ciclo} iniciado`).catch(() => {});
+      });
+    },
+    /** Corrige el nombre o las fechas de un ciclo ya registrado. */
+    editarCiclo(c) {
+      const f = (x) => (x ? String(x).slice(0, 10) : '');
+      this.$swal.fire({
+        title: `Corregir ${this.esc(c.ciclo || 'ciclo')}`,
+        html: `<div class="text-left small">
+            <label class="d-block">Ciclo<select id="ce-ciclo" class="form-control">${this.opcionesCiclo(c.ciclo)}</select></label>
+            <label class="d-block mt-2">${c.orden > 1 ? 'Corte (inicio del ciclo)' : 'Siembra o corte (inicio)'}<input id="ce-inicio" type="date" class="form-control" value="${f(c.fecha_inicio)}"></label>
+            <label class="d-block mt-2">Cosecha prevista<input id="ce-prevista" type="date" class="form-control" value="${f(c.fecha_cosecha_prevista)}"></label>
+            <label class="d-block mt-2">Cosecha real<input id="ce-cosecha" type="date" class="form-control" value="${f(c.fecha_cosecha)}"></label>
+            <label class="d-block mt-2">Observaciones<textarea id="ce-obs" class="form-control" rows="2" maxlength="1000">${this.esc(c.obs || '')}</textarea></label>
+            <p class="text-muted mt-2 mb-0">El corte que inicia un ciclo es la cosecha del anterior: al cambiar uno se ajusta el otro.</p>
+          </div>`,
+        showCancelButton: true, confirmButtonText: 'Guardar', cancelButtonText: 'Cancelar', confirmButtonColor: '#5a9e1a', focusConfirm: false,
+        preConfirm: () => ({
+          ciclo: document.getElementById('ce-ciclo').value,
+          fecha_inicio: document.getElementById('ce-inicio').value,
+          fecha_cosecha_prevista: document.getElementById('ce-prevista').value || null,
+          fecha_cosecha: document.getElementById('ce-cosecha').value || null,
+          obs: document.getElementById('ce-obs').value || null,
+        }),
+      }).then((r) => {
+        if (!r.isConfirmed) return;
+        this.peticion(window.axios.put(`/investigacion/ensayos/ciclos/${c.id}`, r.value), 'Ciclo actualizado').catch(() => {});
+      });
+    },
+    deshacerCiclo() {
+      const ultimo = this.ciclos[this.ciclos.length - 1];
+      this.confirmar(`¿Deshacer ${this.esc(ultimo.ciclo || 'el último ciclo')}?`,
+        'El ciclo anterior vuelve a ser el actual y se quita la cosecha que lo cerró. No se borran evaluaciones ni muestras: solo cambia el ciclo al que pertenecen por fecha.')
+        .then((ok) => ok && this.peticion(window.axios.delete(`/investigacion/ensayos/${this.ensayoId}/ciclos/ultimo`), 'Ciclo deshecho').catch(() => {}));
+    },
     confirmar(titulo, html) {
       return this.$swal.fire({
         title: titulo, html, icon: 'warning', showCancelButton: true,
@@ -1173,7 +1794,36 @@ export default {
 .det-header { align-items: center; gap: 12px; }
 .det-title { display: flex; align-items: center; gap: 12px; min-width: 0; flex-wrap: wrap; }
 .det-title small { display: block; color: var(--cengi-muted); font-size: 12px; }
-.det-avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; background: #eef8df; color: #73BC25; font-size: 17px; }
+.det-migas { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 2px; color: var(--cengi-muted); font-size: 12px; }
+.det-migas a { color: #3f7a12; font-weight: 600; }
+.det-migas a:hover { color: #1f5632; text-decoration: underline; }
+.det-migas > i { color: #CED2D5; font-size: 9px; }
+/* Mismo distintivo que el menu lateral: caña blanca sobre degradado verde */
+.det-avatar {
+  display: grid; flex: none; place-items: center; width: 44px; height: 44px; border-radius: 12px;
+  background: #fff; border: 1px solid #dcebc8; box-shadow: 0 3px 8px rgba(115, 188, 37, .18);
+}
+.det-titulo-txt { min-width: 0; }
+.det-ficha-rapida { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; color: #4d5a48; font-size: 11.5px; }
+.det-ficha-rapida > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.det-ficha-rapida i { color: #73BC25; font-size: 10.5px; }
+/* Resumen de la estructura */
+.det-estr-resumen { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.det-estr-resumen > div {
+  display: flex; flex-direction: column; min-width: 96px; padding: 8px 14px; border: 1px solid #e3e7e1;
+  border-left: 3px solid #73BC25; border-radius: 10px; background: #fff; line-height: 1.2;
+}
+.det-estr-resumen > div:nth-child(2) { border-left-color: #A3D300; }
+.det-estr-resumen > div:nth-child(3) { border-left-color: #FFCC00; }
+.det-estr-resumen > div:nth-child(4) { border-left-color: #FF6B00; }
+.det-estr-resumen > div.is-diseno { flex: 1 1 180px; border-left-color: #CED2D5; }
+.det-estr-resumen b { color: #1e2a1a; font-family: 'Space Grotesk', sans-serif; font-size: 18px; }
+.det-estr-resumen .is-diseno b { font-family: inherit; font-size: 14px; }
+.det-estr-resumen span { color: var(--cengi-muted); font-size: 11px; }
+/* Codigo de tratamiento con su color */
+.det-trat-cod { display: flex; align-items: center; gap: 6px; }
+.det-trat-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--c, #CED2D5); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c, #CED2D5) 25%, #fff); }
+.det-trat-cod .det-inline { font-weight: 700; color: color-mix(in srgb, var(--c, #33433a) 75%, #1e2a1a); }
 .det-header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .det-header-actions .close { margin: 0; padding: 0 4px; }
 .det-estado { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
@@ -1369,6 +2019,79 @@ export default {
 .det-ciclo-barra i.is-abierta { background: repeating-linear-gradient(90deg, #5a9e1a 0 8px, #a9d07c 8px 12px); }
 .det-ciclo-fechas { display: flex; justify-content: space-between; color: var(--cengi-muted); font-size: 11px; line-height: 1.3; }
 .det-ciclo-fechas b { color: var(--cengi-ink); font-size: 12px; }
+.det-tipo-prueba { color: #1f6fbf; font-weight: 600; }
+/* Plan de actividades */
+.det-plan-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.det-plan-vista { display: inline-flex; margin-left: auto; border: 1px solid #d9dfda; border-radius: 8px; overflow: hidden; }
+.det-plan-vista button { border: 0; background: #fff; padding: 5px 12px; font-size: 12.5px; color: #5f6b66; }
+.det-plan-vista button + button { border-left: 1px solid #d9dfda; }
+.det-plan-vista button.is-active { background: #f1f8e9; color: #2f5d0f; font-weight: 600; }
+.det-plan-vacio { flex-direction: column; gap: 4px; text-align: center; }
+.det-plan-vacio small { max-width: 520px; color: #5f6b66; }
+.det-plan-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+.det-plan-kpis > * { display: grid; padding: 10px 12px; border: 1px solid #e3e7e4; border-top: 3px solid #5a9e1a; border-radius: 10px; background: #fff; text-align: left; }
+.det-plan-kpis button { cursor: pointer; }
+.det-plan-kpis button:hover, .det-plan-kpis .is-sel { background: #f6faf1; }
+.det-plan-kpis .is-alerta { border-top-color: #FF6B00; }
+.det-plan-kpis .is-alerta b { color: #c24f00; }
+.det-plan-kpis b { font-size: 20px; line-height: 1.1; }
+.det-plan-kpis span { font-size: 11.5px; color: #5f6b66; }
+.det-plan-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.det-plan-filtros select { width: auto; }
+.det-plan-desc-txt { margin-left: 4px; font-weight: 600; }
+.det-plan-fecha small { display: block; text-transform: uppercase; letter-spacing: .03em; }
+.det-plan-fecha b { color: var(--c, #2f5d0f); font-size: 18px; }
+/* Calendario mensual */
+.det-cal { border: 1px solid #e3e7e4; border-radius: 12px; background: #fff; padding: 10px; }
+.det-cal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.det-cal-head b { min-width: 150px; text-align: center; font-size: 14px; }
+.det-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid #eef1ee; border-left: 1px solid #eef1ee; }
+.det-cal-dsem { padding: 4px; font-size: 11px; font-weight: 700; color: #5f6b66; text-align: center; border-right: 1px solid #eef1ee; border-bottom: 1px solid #eef1ee; background: #f8faf7; }
+.det-cal-dia { min-height: 84px; padding: 3px 4px; border-right: 1px solid #eef1ee; border-bottom: 1px solid #eef1ee; overflow: hidden; }
+.det-cal-dia.is-fuera { background: #fafbfa; }
+.det-cal-dia.is-fuera .det-cal-num { color: #b7bec0; }
+.det-cal-dia.is-hoy { background: #fff8f2; box-shadow: inset 0 0 0 2px #FF6B00; }
+.det-cal-num { display: block; font-size: 11px; font-weight: 700; color: #3f4a44; }
+.det-cal-act { display: block; width: 100%; margin-top: 2px; padding: 1px 5px; border: 0; border-left: 3px solid var(--c); border-radius: 4px; background: color-mix(in srgb, var(--c) 14%, #fff); color: #1f2a1a; font-size: 10.5px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.det-cal-act.is-atrasada { background: #fff0e6; border-left-color: #FF6B00; color: #8a3a00; font-weight: 600; }
+.det-cal-act.is-hecha { background: #f1f3f1; border-left-color: #CED2D5; color: #8a9396; }
+.det-cal-mas { display: block; font-size: 10px; color: #5f6b66; }
+@media (max-width: 640px) { .det-plan-kpis { grid-template-columns: repeat(2, 1fr); } .det-cal-dia { min-height: 60px; } .det-cal-act { font-size: 0; padding: 4px; } .det-cal-act i { font-size: 9px; } .det-plan-vista { margin-left: 0; } }
+.det-plan-form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; padding: 10px; border: 1px solid #e3e7e4; border-radius: 10px; background: #fff; }
+.det-plan-form > select, .det-plan-form > input[type=date] { width: auto; }
+.det-plan-desc { flex: 1 1 220px; }
+.det-plan-mini { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: 12px; color: #5f6b66; white-space: nowrap; }
+.det-plan-mini input[type=number] { width: 58px; }
+.det-plan-grupo h6 { margin: 12px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #5f6b66; }
+.det-plan-grupo h6.is-atrasada { color: #b84d00; }
+.det-plan-grupo h6 small { margin-left: 4px; padding: 0 6px; border-radius: 8px; background: #eef1ee; }
+.det-plan-item { display: grid; grid-template-columns: 54px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; margin-bottom: 6px; border: 1px solid #edf1ec; border-left: 4px solid #5a9e1a; border-radius: 10px; background: #fff; }
+.det-plan-item.is-atrasada { border-left-color: #FF6B00; background: #fffaf6; }
+.det-plan-item.is-hecha { border-left-color: #CED2D5; opacity: .8; }
+.det-plan-fecha { text-align: center; line-height: 1.1; }
+.det-plan-fecha b { display: block; font-size: 14px; }
+.det-plan-fecha small { color: #8a9396; font-size: 10.5px; }
+.det-plan-txt { min-width: 0; font-size: 12.5px; }
+.det-plan-txt small { display: block; margin-top: 3px; color: #5f6b66; font-size: 11.5px; }
+.det-plan-acc { display: flex; align-items: center; gap: 2px; }
+.det-plan-atrasada { color: #c24f00; }
+@media (max-width: 640px) { .det-plan-item { grid-template-columns: 46px 1fr; } .det-plan-acc { grid-column: 1 / -1; justify-content: flex-end; } }
+/* Varios ciclos en las mismas parcelas */
+.det-multiciclo { color: #3f7a12; font-weight: 600; }
+.det-ciclos-total { margin-bottom: 8px; padding: 8px 10px; border-radius: 8px; background: #f1f8e9; color: #2f5d0f; font-size: 12.5px; }
+.det-ciclos-total b { font-size: 16px; }
+.det-ciclos-total small { display: block; color: #5f6b66; }
+.det-ciclos { margin: 10px 0 0; padding: 0; list-style: none; border-left: 2px solid #d6e9c2; }
+.det-ciclos li { position: relative; padding: 4px 0 8px 12px; }
+.det-ciclos li::before { content: ''; position: absolute; left: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2px solid #a9d07c; }
+.det-ciclos li.is-actual::before { background: #5a9e1a; border-color: #5a9e1a; }
+.det-ciclos small { display: block; color: #5f6b66; font-size: 11px; line-height: 1.4; }
+.det-ciclos-cab { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.det-ciclos-cab em { padding: 0 6px; border-radius: 8px; background: #5a9e1a; color: #fff; font-size: 10px; font-style: normal; font-weight: 700; }
+.det-ciclos-cab small { margin-left: auto; }
+.det-ciclos-edit { border: 0; background: none; color: #8a9396; font-size: 11px; padding: 0 2px; cursor: pointer; }
+.det-ciclos-edit:hover { color: #3f7a12; }
+.det-ciclos-deshacer { display: block; margin-top: 6px; font-size: 11px; color: #8a9396; text-align: center; }
 .det-card > small { display: block; margin-top: 6px; color: var(--cengi-muted); font-size: 11.5px; }
 .det-card > small.is-alerta { color: #b84d00; font-weight: 700; }
 .det-vacio-txt { margin: 0; color: var(--cengi-muted); font-size: 12px; }

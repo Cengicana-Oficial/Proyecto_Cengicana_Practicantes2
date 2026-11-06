@@ -5,17 +5,23 @@ namespace App\Http\Controllers\Investigacion;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Soporte\BitacoraController;
 use App\Models\CroquisGeo;
+use App\Models\DisenoExperimental;
+use App\Models\ActividadPlan;
 use App\Models\Ensayo;
+use App\Models\EnsayoCiclo;
 use App\Models\Evaluacion;
 use App\Models\ImagenGeo;
 use App\Models\Ingenio;
 use App\Models\NdviImagen;
 use App\Models\NdviRegistro;
 use App\Models\Parcela;
+use App\Models\Programa;
 use App\Models\Proyecto;
 use App\Models\Tratamiento;
 use App\Models\User;
+use App\Services\CatalogosPortal;
 use App\Services\Codificacion;
+use App\Services\PlanExcel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -27,9 +33,6 @@ use RuntimeException;
 
 class EnsayosController extends Controller
 {
-    /** Disenos experimentales del prototipo SIGEC_v11 (openEnsayoModal). */
-    const DISENOS = ['Bloques al azar', 'Parcelas divididas', 'Cuadro latino', 'Completamente al azar'];
-
     /** Fuentes de imagen para NDVI (openNdviModal del prototipo). */
     const FUENTES_NDVI = ['Sentinel-2 (Copernicus)', 'Dron / UAV', 'Landsat-8', 'Google Earth Engine'];
 
@@ -45,6 +48,9 @@ class EnsayosController extends Controller
         'cultivo' => 'nullable|string|max:150',
         'variedad' => 'nullable|string|max:150',
         'responsable_id' => 'nullable|exists:users,id',
+        // Varios responsables; el primero queda como responsable principal (responsable_id).
+        'responsables' => 'nullable|array|max:10',
+        'responsables.*' => 'integer|distinct|exists:users,id',
         'estado' => 'required|in:Planificado,En campo,Finalizado',
         'lat' => 'nullable|numeric|between:-90,90',
         'lng' => 'nullable|numeric|between:-180,180',
@@ -61,17 +67,26 @@ class EnsayosController extends Controller
         'zona' => 'nullable|in:OESTE,CENTRO-OESTE,CENTRO,CENTRO-ESTE,ESTE,ESTE-ESTE',
         'area_total' => 'nullable|numeric|min:0|max:100000',
         'tipo_suelo' => 'nullable|string|max:100',
+        // Pruebas tecnicas (sin diseno experimental ni cosecha).
+        'tipo_estudio' => 'nullable|in:ensayo,prueba',
+        'subtipo' => 'nullable|string|max:60',
+        'fecha_inicio' => 'nullable|date',
+        'fecha_fin' => 'nullable|date|after_or_equal:fecha_inicio',
+        'lugar' => 'nullable|string|max:30',
+        'materiales' => 'nullable|string|max:2000',
     ];
 
     /** Ciclos del cultivo de caña. */
     const CICLOS = ['Plantia', 'Soca 1', 'Soca 2', 'Soca 3', 'Soca 4', 'Soca 5', 'Soca 6 o mas'];
 
-    public function index()
+    public function index(CatalogosPortal $portal)
     {
         $user = Auth::user();
+        // Ingenios y responsables vienen del portal (como maximo cada 10 minutos).
+        $portal->sincronizarSiCorresponde(10);
 
         $ensayos = $this->conHitos($this->conConteos(Ensayo::visiblesPara($user))
-            ->with(['proyecto.programa:id,nombre,sigla,color', 'ingenio', 'responsable'])
+            ->with(['proyecto.programa:id,nombre,sigla,color', 'ingenio', 'responsable', 'responsables:users.id,users.name', 'ciclos'])
             ->orderBy('codigo')
             ->get());
 
@@ -80,11 +95,17 @@ class EnsayosController extends Controller
             'component' => 'ensayos-index',
             'params' => [
                 'ensayos' => $ensayos,
-                'proyectos' => Proyecto::visiblesPara($user)->orderBy('codigo')->get(['id', 'codigo', 'nombre']),
+                'proyectos' => Proyecto::visiblesPara($user)->orderBy('codigo')->get(['id', 'codigo', 'nombre', 'programa_id']),
+                'programas' => Programa::visiblesPara($user)->orderBy('sigla')->get(['id', 'nombre', 'sigla', 'color']),
+                'proyectosUrl' => route('investigacion.proyectos.index'),
                 'ingenios' => Ingenio::orderBy('nombre')->get(['id', 'nombre']),
                 'responsables' => User::orderBy('name')->get(['id', 'name']),
-                'disenos' => self::DISENOS,
+                // Catalogo de Sistema > Catalogos (activos + los que ya usa algun ensayo).
+                'disenos' => DisenoExperimental::opciones(),
+                'catalogosUrl' => $user->can('admin_only') ? route('admin.catalogos.index') : null,
                 'ciclos' => self::CICLOS,
+                'subtiposPrueba' => Ensayo::SUBTIPOS_PRUEBA,
+                'lugaresPrueba' => Ensayo::LUGARES_PRUEBA,
                 'estratos' => ClimaController::ESTRATOS,
                 'zonas' => ClimaController::ZONAS,
                 'fuentesNdvi' => self::FUENTES_NDVI,
@@ -93,7 +114,7 @@ class EnsayosController extends Controller
                 'usuarioId' => $user->id,
                 'storageUrl' => url('storage'),
                 'evaluacionesUrl' => $user->can('menu_general') ? route('investigacion.evaluaciones.index') : null,
-                'muestrasUrl' => ($user->can('create_muestra') || $user->can('view_lab')) ? route('soporte.muestras-consulta.index') : null,
+                'muestrasUrl' => ($user->can('create_muestra') || $user->can('view_lab')) ? route('soporte.muestras.index') : null,
                 'permisos' => [
                     'crear' => $user->can('create_ensayo'),
                     'editar' => $user->can('edit_ensayo'),
@@ -101,6 +122,9 @@ class EnsayosController extends Controller
                     'ndvi' => $user->can('register_evaluacion'),
                     'archivos' => $user->can('upload_files'),
                     'bitacora' => $user->can('write_bitacora'),
+                    // Plan de actividades: programar (encargados) y marcar como realizada.
+                    'plan' => $user->can('edit_ensayo'),
+                    'realizar' => $user->can('write_bitacora'),
                 ],
             ],
         ]);
@@ -121,13 +145,15 @@ class EnsayosController extends Controller
         $data = $this->validar($request);
 
         $ensayo = DB::transaction(function () use ($data) {
-            // Codigo PROYECTO-ENN; el bloqueo evita que dos altas tomen el mismo numero.
-            $data['codigo'] = Codificacion::codigoEnsayo(Proyecto::lockForUpdate()->findOrFail($data['proyecto_id']));
+            // Codigo PROYECTO-Enn (ensayo) o PROYECTO-Pnn (prueba tecnica); el bloqueo evita que dos altas tomen el mismo numero.
+            $data['tipo_estudio'] = $data['tipo_estudio'] ?? 'ensayo';
+            $data['codigo'] = Codificacion::codigoEnsayo(Proyecto::lockForUpdate()->findOrFail($data['proyecto_id']), null, $data['tipo_estudio']);
             $ensayo = Ensayo::create($data);
+            $ensayo->asignarResponsables($data['responsables'] ?? [$data['responsable_id'] ?? null]);
 
-            // Configuracion inicial del diseno: T1..Tn, editables luego en "Estructura".
+            // Configuracion inicial del diseno: T1..Tn, editables luego en "Estructura" (las pruebas no tienen).
             $reps = (int) ($data['num_repeticiones'] ?? 0);
-            for ($i = 1; $i <= (int) ($data['num_tratamientos'] ?? 0); $i++) {
+            for ($i = 1; $data['tipo_estudio'] === 'ensayo' && $i <= (int) ($data['num_tratamientos'] ?? 0); $i++) {
                 $ensayo->tratamientos()->create(['codigo' => 'T'.$i, 'descripcion' => null, 'unidades' => $reps ?: null]);
             }
 
@@ -143,12 +169,20 @@ class EnsayosController extends Controller
         $this->autorizarVisible($ensayo);
 
         $data = $this->validar($request, $ensayo);
+        $data['tipo_estudio'] = $data['tipo_estudio'] ?? $ensayo->tipo_estudio;
+        // Un ensayo con parcelas no pasa a prueba tecnica (perderia de vista su estructura).
+        if ($data['tipo_estudio'] === 'prueba' && $ensayo->tipo_estudio !== 'prueba' && $ensayo->parcelas()->exists()) {
+            return response()->json(['message' => 'Este ensayo ya tiene parcelas: no se puede convertir en prueba técnica.'], 422);
+        }
 
-        // Al pasar a otro proyecto, el codigo y los IDs de sus muestras se ponen al dia.
+        // Al pasar a otro proyecto o cambiar de tipo, el codigo (Enn / Pnn) y los IDs de sus muestras se ponen al dia.
         try {
             $cambios = DB::transaction(function () use ($ensayo, $data) {
                 Proyecto::lockForUpdate()->findOrFail($data['proyecto_id']);
                 $ensayo->update($data);
+                if (array_key_exists('responsables', $data) || array_key_exists('responsable_id', $data)) {
+                    $ensayo->asignarResponsables($data['responsables'] ?? [$data['responsable_id'] ?? null]);
+                }
 
                 return Codificacion::recodificarEnsayo($ensayo->fresh('proyecto'));
             });
@@ -159,22 +193,303 @@ class EnsayosController extends Controller
         return response()->json(array_merge($this->fila($ensayo)->toArray(), ['recodificado' => (bool) $cambios]));
     }
 
+    /* ======================= Plan de actividades ======================= */
+
+    /**
+     * Programa una actividad (o una serie: repetir cada N dias, M veces; p. ej. un muestreo
+     * mensual hasta la cosecha). La campanita avisa al responsable antes de la fecha.
+     */
+    public function storeActividad(Request $request, Ensayo $ensayo)
+    {
+        Gate::authorize('edit_ensayo');
+        $this->autorizarVisible($ensayo);
+
+        $data = $request->validate($this->reglasActividad() + [
+            'repetir_cada' => 'nullable|integer|min:1|max:365',
+            'repeticiones' => 'nullable|integer|min:1|max:52',
+        ]);
+        $veces = ! empty($data['repetir_cada']) ? (int) ($data['repeticiones'] ?? 1) : 1;
+        $fecha = \Illuminate\Support\Carbon::parse($data['fecha']);
+        DB::transaction(function () use ($ensayo, $data, $veces, $fecha) {
+            for ($i = 0; $i < $veces; $i++) {
+                $ensayo->plan()->create([
+                    'tipo' => $data['tipo'], 'descripcion' => $data['descripcion'] ?? null,
+                    'fecha' => $fecha->copy()->addDays($i * (int) ($data['repetir_cada'] ?? 0)),
+                    'responsable_id' => $data['responsable_id'] ?? null, 'aviso_dias' => $data['aviso_dias'] ?? 3,
+                    'creado_por' => Auth::id(),
+                ]);
+            }
+        });
+
+        return response()->json($this->detalle($ensayo));
+    }
+
+    public function updateActividad(Request $request, ActividadPlan $actividad)
+    {
+        Gate::authorize('edit_ensayo');
+        $this->autorizarVisible($actividad->ensayo);
+
+        $data = $request->validate($this->reglasActividad() + ['estado' => 'nullable|in:Pendiente,Realizada,Cancelada']);
+        if (($data['estado'] ?? null) === 'Pendiente') {
+            $data['fecha_realizada'] = null;
+        }
+        $actividad->update($data);
+
+        return response()->json($this->detalle($actividad->ensayo));
+    }
+
+    /**
+     * Marca la actividad como realizada y, si se pide, la registra en la bitacora del ensayo.
+     * Puede hacerlo quien escribe en la bitacora o el responsable de la actividad.
+     */
+    public function realizarActividad(Request $request, ActividadPlan $actividad)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('write_bitacora') || (int) $actividad->responsable_id === $user->id, 403, 'No puede marcar esta actividad.');
+        $this->autorizarVisible($actividad->ensayo);
+
+        $data = $request->validate([
+            'fecha_realizada' => 'required|date|before_or_equal:today',
+            'nota' => 'nullable|string|max:1500',
+            'bitacora' => 'nullable|boolean',
+        ], ['fecha_realizada.before_or_equal' => 'La fecha en que se realizó no puede ser futura.']);
+
+        DB::transaction(function () use ($actividad, $data, $user) {
+            $bitacoraId = $actividad->bitacora_id;
+            if (($data['bitacora'] ?? true) && ! $bitacoraId && in_array($actividad->tipo, BitacoraController::TIPOS, true)) {
+                $nota = trim((string) ($data['nota'] ?? ''));
+                $bitacoraId = $actividad->ensayo->bitacora()->create([
+                    'fecha' => $data['fecha_realizada'], 'tipo' => $actividad->tipo, 'responsable_id' => $user->id,
+                    'descripcion' => ($actividad->descripcion ?: $actividad->tipo) . ($nota !== '' ? '. ' . $nota : '')
+                        . ' (programada para el ' . $actividad->fecha->format('d/m/Y') . ')',
+                ])->id;
+            }
+            $actividad->update(['estado' => 'Realizada', 'fecha_realizada' => $data['fecha_realizada'], 'bitacora_id' => $bitacoraId]);
+        });
+
+        return response()->json($this->detalle($actividad->ensayo));
+    }
+
+    public function destroyActividad(ActividadPlan $actividad)
+    {
+        Gate::authorize('edit_ensayo');
+        $this->autorizarVisible($actividad->ensayo);
+        $ensayo = $actividad->ensayo;
+        // La entrada de bitacora (si la hay) se conserva: lo realizado no se borra con el plan.
+        $actividad->delete();
+
+        return response()->json($this->detalle($ensayo));
+    }
+
+    /** Plantilla Excel del plan (vacia) o el plan actual del ensayo (?plan=1). */
+    public function planExcel(Request $request, Ensayo $ensayo, PlanExcel $excel)
+    {
+        $this->autorizarVisible($ensayo);
+        $conPlan = $request->boolean('plan');
+
+        return $excel->descargar($excel->libro($ensayo, $conPlan), ($conPlan ? 'plan_' : 'plantilla_plan_') . $ensayo->codigo . '.xlsx');
+    }
+
+    /** Importa el plan desde Excel: sin "confirmar" solo devuelve la vista previa. */
+    public function importarPlan(Request $request, Ensayo $ensayo, PlanExcel $excel)
+    {
+        Gate::authorize('edit_ensayo');
+        $this->autorizarVisible($ensayo);
+        $request->validate(['archivo' => 'required|file|mimes:xlsx,xls,csv,txt|max:5120']);
+
+        $guardar = $request->boolean('confirmar');
+        try {
+            $r = $excel->importar($request->file('archivo'), $ensayo, Auth::user(), $guardar);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'No se pudo leer el archivo. Use la plantilla del plan.'], 422);
+        }
+
+        return response()->json($r + ($guardar ? ['detalle' => $this->detalle($ensayo)] : []));
+    }
+
+    protected function reglasActividad(): array
+    {
+        return [
+            'tipo' => ['required', Rule::in(BitacoraController::TIPOS)],
+            'descripcion' => 'nullable|string|max:500',
+            'fecha' => 'required|date',
+            'responsable_id' => 'nullable|exists:users,id',
+            'aviso_dias' => 'nullable|integer|min:0|max:60',
+        ];
+    }
+
+    /* ======================= Ciclos del cultivo ======================= */
+
+    /**
+     * Cierra el ciclo actual con su cosecha (corte) e inicia el siguiente en las mismas
+     * parcelas: plantia -> soca 1 -> soca 2... El corte es el inicio del nuevo ciclo.
+     */
+    public function siguienteCiclo(Request $request, Ensayo $ensayo)
+    {
+        Gate::authorize('edit_ensayo');
+        $this->autorizarVisible($ensayo);
+
+        $actual = $ensayo->ciclos()->reorder('orden', 'desc')->first();
+        if (! $actual) {
+            return response()->json(['message' => 'Registre primero la fecha de siembra o corte del ensayo.'], 422);
+        }
+        $data = $request->validate([
+            'fecha_cosecha' => 'required|date|after_or_equal:' . $actual->fecha_inicio->format('Y-m-d'),
+            'ciclo' => ['nullable', Rule::in(self::CICLOS)],
+            'fecha_cosecha_prevista' => 'nullable|date|after:fecha_cosecha',
+            'obs' => 'nullable|string|max:1000',
+        ], [
+            'fecha_cosecha.after_or_equal' => 'La cosecha no puede ser anterior al inicio del ciclo actual (' . $actual->fecha_inicio->format('d/m/Y') . ').',
+            'fecha_cosecha_prevista.after' => 'La cosecha prevista del nuevo ciclo debe ser posterior al corte.',
+        ]);
+
+        $indice = array_search($actual->ciclo, self::CICLOS, true);
+        $siguiente = $data['ciclo'] ?? self::CICLOS[$indice === false ? 1 : min($indice + 1, count(self::CICLOS) - 1)];
+
+        DB::transaction(function () use ($ensayo, $actual, $data, $siguiente) {
+            $actual->update(['fecha_cosecha' => $data['fecha_cosecha'], 'obs' => $data['obs'] ?? $actual->obs]);
+            // Primero el ciclo nuevo: al guardar el ensayo, su ciclo actual (el ultimo) queda igual.
+            EnsayoCiclo::create([
+                'ensayo_id' => $ensayo->id, 'orden' => $actual->orden + 1, 'ciclo' => $siguiente,
+                'fecha_inicio' => $data['fecha_cosecha'], 'fecha_cosecha_prevista' => $data['fecha_cosecha_prevista'] ?? null,
+            ]);
+            $ensayo->update([
+                'ciclo' => $siguiente, 'fecha_siembra' => $data['fecha_cosecha'],
+                'fecha_cosecha_prevista' => $data['fecha_cosecha_prevista'] ?? null, 'fecha_cosecha' => null,
+                'estado' => $ensayo->estado === 'Finalizado' ? 'En campo' : $ensayo->estado,
+            ]);
+        });
+
+        return response()->json($this->detalle($ensayo->fresh()));
+    }
+
+    /** Corrige las fechas o el nombre de un ciclo ya registrado. */
+    public function actualizarCiclo(Request $request, EnsayoCiclo $ciclo)
+    {
+        Gate::authorize('edit_ensayo');
+        $ensayo = $ciclo->ensayo;
+        $this->autorizarVisible($ensayo);
+
+        $data = $request->validate([
+            'ciclo' => ['nullable', Rule::in(self::CICLOS)],
+            'fecha_inicio' => 'required|date',
+            'fecha_cosecha_prevista' => 'nullable|date|after:fecha_inicio',
+            'fecha_cosecha' => 'nullable|date|after_or_equal:fecha_inicio',
+            'obs' => 'nullable|string|max:1000',
+        ], [
+            'fecha_cosecha_prevista.after' => 'La cosecha prevista debe ser posterior al inicio del ciclo.',
+            'fecha_cosecha.after_or_equal' => 'La cosecha no puede ser anterior al inicio del ciclo.',
+        ]);
+        $previo = $ensayo->ciclos()->where('orden', $ciclo->orden - 1)->first();
+        $posterior = $ensayo->ciclos()->where('orden', $ciclo->orden + 1)->first();
+        if ($previo && $data['fecha_inicio'] < $previo->fecha_inicio->format('Y-m-d')) {
+            return response()->json(['message' => 'El ciclo no puede iniciar antes que el ciclo anterior.'], 422);
+        }
+        if ($posterior && ! empty($data['fecha_cosecha']) && $data['fecha_cosecha'] > $posterior->fecha_inicio->format('Y-m-d')) {
+            return response()->json(['message' => 'La cosecha no puede ser posterior al inicio del ciclo siguiente.'], 422);
+        }
+
+        DB::transaction(function () use ($ensayo, $ciclo, $data, $previo, $posterior) {
+            $ciclo->update($data);
+            // El corte que inicia un ciclo es la cosecha del anterior.
+            if ($previo && $previo->fecha_cosecha) {
+                $previo->update(['fecha_cosecha' => $data['fecha_inicio']]);
+            }
+            if ($posterior && ! empty($data['fecha_cosecha'])) {
+                $posterior->update(['fecha_inicio' => $data['fecha_cosecha']]);
+            }
+            $ultimo = $ensayo->ciclos()->reorder('orden', 'desc')->first();
+            $ensayo->update(['ciclo' => $ultimo->ciclo, 'fecha_siembra' => $ultimo->fecha_inicio,
+                'fecha_cosecha_prevista' => $ultimo->fecha_cosecha_prevista, 'fecha_cosecha' => $ultimo->fecha_cosecha]);
+        });
+
+        return response()->json($this->detalle($ensayo->fresh()));
+    }
+
+    /**
+     * Deshace el ultimo ciclo iniciado: el anterior vuelve a ser el actual y queda abierto
+     * (sin la cosecha que lo cerro). No borra evaluaciones ni muestras.
+     */
+    public function deshacerCiclo(Ensayo $ensayo)
+    {
+        Gate::authorize('edit_ensayo');
+        $this->autorizarVisible($ensayo);
+
+        $ciclos = $ensayo->ciclos()->reorder('orden', 'desc')->take(2)->get();
+        if ($ciclos->count() < 2) {
+            return response()->json(['message' => 'El ensayo solo tiene un ciclo.'], 422);
+        }
+        [$ultimo, $anterior] = [$ciclos[0], $ciclos[1]];
+
+        DB::transaction(function () use ($ensayo, $ultimo, $anterior) {
+            $ultimo->delete();
+            $ensayo->update(['ciclo' => $anterior->ciclo, 'fecha_siembra' => $anterior->fecha_inicio,
+                'fecha_cosecha_prevista' => $anterior->fecha_cosecha_prevista, 'fecha_cosecha' => null]);
+        });
+
+        return response()->json($this->detalle($ensayo->fresh()));
+    }
+
+    /**
+     * Otros ensayos en la misma ubicacion (misma finca y lote, o a menos de 300 m): el historial
+     * de ensayos de esa localidad, aunque sean de otro proyecto.
+     */
+    protected function mismaUbicacion(Ensayo $ensayo): array
+    {
+        $clave = fn ($t) => Str::lower(trim(Str::ascii((string) $t)));
+        $finca = $clave($ensayo->finca);
+        $lote = $clave($ensayo->lote);
+        $tieneGps = $ensayo->lat !== null && $ensayo->lng !== null;
+        if (($finca === '' || $lote === '') && ! $tieneGps) {
+            return [];
+        }
+
+        return Ensayo::visiblesPara(Auth::user())->whereKeyNot($ensayo->id)->with('ciclos')
+            ->get(['id', 'codigo', 'nombre', 'estado', 'finca', 'lote', 'lat', 'lng', 'variedad', 'ciclo', 'fecha_siembra'])
+            ->map(function ($e) use ($ensayo, $clave, $finca, $lote, $tieneGps) {
+                $metros = $tieneGps && $e->lat !== null && $e->lng !== null ? $this->distanciaMetros($ensayo->lat, $ensayo->lng, $e->lat, $e->lng) : null;
+                $mismoLote = $finca !== '' && $lote !== '' && $clave($e->finca) === $finca && $clave($e->lote) === $lote;
+                if (! $mismoLote && ($metros === null || $metros > 300)) {
+                    return null;
+                }
+                $primero = $e->ciclos->first();
+
+                return ['id' => $e->id, 'codigo' => $e->codigo, 'nombre' => $e->nombre, 'estado' => $e->estado, 'variedad' => $e->variedad,
+                    'ciclo' => $e->ciclo, 'ciclos' => $e->ciclos->count(), 'desde' => optional($primero ? $primero->fecha_inicio : $e->fecha_siembra)->format('Y-m-d'),
+                    'motivo' => $mismoLote ? 'Misma finca y lote' : 'A ' . round($metros) . ' m'];
+            })->filter()->sortByDesc('desde')->values()->all();
+    }
+
+    protected function distanciaMetros($lat1, $lng1, $lat2, $lng2): float
+    {
+        $r = 6371000;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+
+        return 2 * $r * asin(min(1, sqrt($a)));
+    }
+
     /** Vista previa del codigo que recibira el ensayo (formulario). */
     public function codigo(Request $request)
     {
         $data = $request->validate([
             'proyecto_id' => 'required|exists:proyectos,id',
             'ensayo_id' => 'nullable|exists:ensayos,id',
+            'tipo_estudio' => 'nullable|in:ensayo,prueba',
         ]);
         $proyecto = Proyecto::visiblesPara(Auth::user())->findOrFail($data['proyecto_id']);
         $ensayo = isset($data['ensayo_id']) ? Ensayo::find($data['ensayo_id']) : null;
+        $tipo = $data['tipo_estudio'] ?? ($ensayo ? $ensayo->tipo_estudio : 'ensayo');
 
-        if ($ensayo && $ensayo->proyecto_id == $proyecto->id) {
+        if ($ensayo && $ensayo->proyecto_id == $proyecto->id && $ensayo->tipo_estudio === $tipo) {
             return response()->json(['codigo' => $ensayo->codigo, 'cambia' => false]);
         }
 
         return response()->json([
-            'codigo' => Codificacion::codigoEnsayo($proyecto, $ensayo),
+            'codigo' => Codificacion::codigoEnsayo($proyecto, $ensayo, $tipo),
             'cambia' => (bool) $ensayo,
             'bloqueo' => $ensayo ? Codificacion::bloqueo([$ensayo->id]) : null,
         ]);
@@ -739,6 +1054,13 @@ class EnsayosController extends Controller
             'fecha_cosecha.after_or_equal' => 'La cosecha no puede ser anterior a la siembra.',
         ]);
 
+        // Columnas NOT NULL (default 0): vacio = 0, p. ej. en las pruebas tecnicas, que no tienen diseno.
+        foreach (['num_tratamientos', 'num_repeticiones'] as $campo) {
+            if (array_key_exists($campo, $data) && $data[$campo] === null) {
+                $data[$campo] = 0;
+            }
+        }
+
         $proyectoVisible = Proyecto::visiblesPara(Auth::user())->whereKey($data['proyecto_id'])->exists();
         abort_unless($proyectoVisible, 403, 'No tiene acceso a ese proyecto.');
 
@@ -849,7 +1171,7 @@ class EnsayosController extends Controller
     protected function fila(Ensayo $ensayo): Ensayo
     {
         return $this->conHitos($this->conConteos(Ensayo::whereKey($ensayo->id))
-            ->with(['proyecto.programa:id,nombre,sigla,color', 'ingenio', 'responsable'])
+            ->with(['proyecto.programa:id,nombre,sigla,color', 'ingenio', 'responsable', 'responsables:users.id,users.name', 'ciclos'])
             ->get())->first();
     }
 
@@ -868,7 +1190,11 @@ class EnsayosController extends Controller
             ->selectRaw('ensayo_id, fecha, tipo, COUNT(*) as n')
             ->orderBy('fecha')->get()->groupBy('ensayo_id');
 
+        $programadas = DB::table('actividades_plan')->whereIn('ensayo_id', $ids)->where('estado', 'Pendiente')
+            ->orderBy('fecha')->get(['ensayo_id', 'fecha', 'tipo', 'descripcion'])->groupBy('ensayo_id');
+
         return $ensayos->each(fn ($e) => $e->setAttribute('hitos', [
+            'programadas' => $programadas->get($e->id, collect())->map(fn ($r) => ['fecha' => substr($r->fecha, 0, 10), 'tipo' => $r->tipo, 'descripcion' => $r->descripcion])->values(),
             'evaluaciones' => $evaluaciones->get($e->id, collect())->map(fn ($r) => ['fecha' => substr($r->fecha, 0, 10), 'n' => (int) $r->n, 'variables' => (int) $r->variables])->values(),
             'muestreos' => $muestreos->get($e->id, collect())->map(fn ($r) => ['fecha' => substr($r->fecha, 0, 10), 'tipo' => $r->tipo, 'n' => (int) $r->n])->values(),
         ]));
@@ -892,6 +1218,10 @@ class EnsayosController extends Controller
             'archivos' => $ensayo->archivos()->with('subidoPor:id,name')->orderByDesc('fecha')->orderByDesc('id')->get(),
             'bitacora' => $ensayo->bitacora()->with('responsable:id,name')->orderByDesc('fecha')->orderByDesc('id')->get(),
             'croquis' => $ensayo->croquis,
+            'fotos_count' => \App\Models\FotoParcela::where('ensayo_id', $ensayo->id)->count(),
+            'misma_ubicacion' => $this->mismaUbicacion($ensayo),
+            'plan' => $ensayo->plan()->with('responsable:id,name')->get(),
+            'datos' => $ensayo->tipo_estudio === 'prueba' ? $ensayo->datosPrueba : null,
         ];
     }
 }

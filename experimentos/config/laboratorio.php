@@ -9,7 +9,7 @@
 
 return [
     // Tipo de muestra de SIGEC => formato del Laboratorio
-    'equivalencias' => ['Suelo' => 'Suelo', 'Agua' => 'Agua', 'Tejido vegetal' => 'Foliar', 'Jugos' => 'Caña'],
+    'equivalencias' => ['Suelo' => 'Suelo', 'Agua' => 'Agua', 'Foliares' => 'Foliar', 'Tejido vegetal' => 'Foliar', 'Jugos' => 'Caña'],
     'formatos' => array (
   'Suelo' => 
   array (

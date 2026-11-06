@@ -93,9 +93,9 @@
             <i class="fas fa-barcode"></i>
             <div>
               <small>Siguiente ID de esta sesion</small>
-              <code>{{ prefijo }}<mark>{{ pad(siguiente) }}</mark>-{{ anio }}</code>
+              <code>{{ prefijo }}<mark>{{ pad(siguiente) }}</mark></code>
             </div>
-            <span class="mg-preview-n">{{ siguiente > 1 ? `${siguiente - 1} muestra(s) previas de ${tipo} en 20${anio}` : `primera muestra de ${tipo} en 20${anio}` }}</span>
+            <span class="mg-preview-n">{{ siguiente > 1 ? `${siguiente - 1} muestra(s) previas de ${tipo} en este ensayo` : `primera muestra de ${tipo} en este ensayo` }}</span>
           </div>
           <div v-if="tipo" class="mg-campos-tipo">
             <span class="mg-ct-tit"><i class="fas fa-list-alt"></i> Datos que registra el muestreador ({{ tipo }}):</span>
@@ -157,7 +157,7 @@
                 <tbody>
                   <tr v-for="(f, i) in filas" :key="f.key" :class="{ 'is-dup': duplicada(f) }">
                     <td class="mg-num">{{ i + 1 }}</td>
-                    <td><code class="mg-id">{{ prefijo }}<b>{{ pad(siguiente + i) }}</b>-{{ anio }}</code></td>
+                    <td><code class="mg-id">{{ prefijo }}<b>{{ pad(siguiente + i) }}</b></code></td>
                     <td v-if="baseCfg.parcela.activo" :class="{ 'is-err': errBase(i, 'parcela') }" :title="errBase(i, 'parcela') || ''">
                       <select v-model="f.parcela_id" @change="alElegirParcela(f)">
                         <option :value="null">—</option>
@@ -193,7 +193,7 @@
         <!-- Generar -->
         <div class="mg-pie" :class="{ 'is-bloq': !listo || !filas.length }">
           <span>
-            <template v-if="filas.length && listo"><b>{{ filas.length }}</b> muestra(s): <code>{{ prefijo }}{{ pad(siguiente) }}-{{ anio }}</code><template v-if="filas.length > 1"> a <code>{{ prefijo }}{{ pad(siguiente + filas.length - 1) }}-{{ anio }}</code></template></template>
+            <template v-if="filas.length && listo"><b>{{ filas.length }}</b> muestra(s): <code>{{ prefijo }}{{ pad(siguiente) }}</code><template v-if="filas.length > 1"> a <code>{{ prefijo }}{{ pad(siguiente + filas.length - 1) }}</code></template></template>
             <template v-else>Imprima las etiquetas: el modulo Laboratorio las escanea al recibir las muestras y sus resultados regresan a SIGEC.</template>
           </span>
           <p v-if="errorGeneral" class="mg-error"><i class="fas fa-exclamation-circle"></i> {{ errorGeneral }}</p>
@@ -414,9 +414,9 @@ export default {
         .sort((a, b) => tr(a).localeCompare(tr(b), 'es', { numeric: true }) || (a.repeticion - b.repeticion) || a.codigo.localeCompare(b.codigo, 'es', { numeric: true }));
     },
     repeticiones() { return [...new Set(this.parcelasEnsayo.map((p) => p.repeticion))].filter(Boolean).sort((a, b) => a - b); },
-    prefijo() { return this.listo ? `SIGEC-${this.ensayoSel.codigo}-${this.tipoSel.codigo}-` : ''; },
-    anio() { return String(this.fecha || this.hoy()).slice(2, 4); },
-    siguiente() { return (this.usadas[`${this.prefijo}|${this.anio}`] || 0) + 1; },
+    // ID: {ensayo}-{tipo}{secuencia}, p. ej. COS-26-01-E01-AG025 (el año ya va en el codigo del ensayo).
+    prefijo() { return this.listo ? `${this.ensayoSel.codigo}-${this.tipoSel.codigo}` : ''; },
+    siguiente() { return (this.usadas[this.prefijo.toUpperCase()] || 0) + 1; },
     camposTipo() { return this.camposLista.filter((c) => c.tipo_muestra === this.tipo && !c.predefinido).sort((a, b) => a.orden - b.orden || a.id - b.id); },
     /** Ajustes de los datos base para el tipo actual (por defecto: visibles y opcionales). */
     baseCfg() {
@@ -448,7 +448,10 @@ export default {
     fmt(s) { if (!s) return ''; const [y, m, d] = String(s).slice(0, 10).split('-'); return `${d}/${m}/${y}`; },
     pad(n) { return String(n).padStart(3, '0'); },
     iconoTipo(t) {
-      return { Suelo: 'fas fa-mountain', 'Tejido vegetal': 'fas fa-leaf', Jugos: 'fas fa-tint', Mieles: 'fas fa-flask', Agua: 'fas fa-water', Fertilizantes: 'fas fa-seedling' }[t] || 'fas fa-vial';
+      // Icono del catalogo de tipos de muestra; si no tiene, uno por nombre.
+      const cat = this.tipos.find((x) => x.nombre === t);
+      if (cat && cat.icono) return cat.icono;
+      return { Suelo: 'fas fa-mountain', Foliares: 'fas fa-leaf', Jugos: 'fas fa-tint', Mieles: 'fas fa-flask', Agua: 'fas fa-water', Fertilizantes: 'fas fa-seedling' }[t] || 'fas fa-vial';
     },
     toast(title, text, icon = 'success') { this.$swal.fire({ toast: true, position: 'top-end', icon, title, text, timer: 2400, showConfirmButton: false }); },
 
@@ -477,11 +480,13 @@ export default {
      * activos del tipo (incluida la observacion). Los vacios salen con linea para
      * escribir a mano, salvo que se desactive.
      */
-    // SIGEC-COS-26-01-E01-SU-001-26 -> ["SIGEC-COS-26-01", "-E01-SU-001-26"]: en etiquetas
-    // pequeñas el ID se parte entre proyecto y ensayo, no en cualquier letra.
+    // En etiquetas pequeñas el ID se parte entre el ensayo y la muestra, no en cualquier letra:
+    // COS-26-01-E01-AG025 -> ["COS-26-01-E01", "-AG025"]; formato anterior:
+    // SIGEC-COS-26-01-E01-SU-001-26 -> ["SIGEC-COS-26-01", "-E01-SU-001-26"].
     tramosId(id) {
-      const i = String(id).search(/-E\d+-/);
-      return i > 0 ? [id.slice(0, i), id.slice(i)] : [id];
+      const s = String(id);
+      const i = /^SIGEC-/i.test(s) ? s.search(/-E\d+-/) : s.search(/-[A-Z]{2,3}\d+$/i);
+      return i > 0 ? [s.slice(0, i), s.slice(i)] : [s];
     },
     lineasEtiqueta(m) {
       const lineas = [{ valor: `${m.tipo} · ${this.fmt(m.fecha)}` }];
@@ -556,9 +561,11 @@ export default {
         filas: this.filas.map((f) => ({ parcela_id: f.parcela_id, tratamiento_id: f.tratamiento_id, repeticion: f.repeticion || null, obs: this.baseCfg.obs.activo ? f.obs || null : null, datos: f.datos })),
       })
         .then(({ data }) => {
+          // La pagina Muestras ofrece actualizar la pestaña Seguimiento con las muestras nuevas.
+          this.$emit('generadas', data.length);
           const ultimo = data[data.length - 1];
-          const m = ultimo && ultimo.id_muestra.match(/^(.*-)(\d+)-(\d{2})$/);
-          if (m) this.$set(this.usadas, `${m[1]}|${m[3]}`, Number(m[2]));
+          const m = ultimo && ultimo.id_muestra.match(/^(.+-[A-Z]{2,3})(\d+)$/i);
+          if (m) this.$set(this.usadas, m[1].toUpperCase(), Number(m[2]));
           this.lotes.unshift({
             ensayo: this.ensayoSel.codigo, tipo: this.tipo, fecha: this.fecha, creado: '', solicitante: data[0].solicitante,
             ids: data.map((x) => x.id), desde: data[0].id_muestra, hasta: ultimo.id_muestra, n: data.length, con_resultado: 0,
@@ -602,7 +609,7 @@ export default {
           repeticion: 'Ej. Indicar la repeticion cuando la muestra no tiene parcela',
           obs: porTipo({
             Suelo: 'Ej. Suelo humedo, presencia de piedras o raices',
-            'Tejido vegetal': 'Ej. Hojas con sintomas de deficiencia o daño',
+            Foliares: 'Ej. Hojas con sintomas de deficiencia o daño',
             Jugos: 'Ej. Tallos con daño de barrenador, caña volcada',
             Mieles: 'Ej. Condicion o lote de produccion',
             Agua: 'Ej. Agua turbia, nivel bajo del canal',
@@ -613,7 +620,7 @@ export default {
       if (que === 'etiqueta') {
         return porTipo({
           Suelo: 'Ej. Profundidad, Humedad del suelo',
-          'Tejido vegetal': 'Ej. Pante, Hoja muestreada, Edad del cultivo',
+          Foliares: 'Ej. Pante, Hoja muestreada, Edad del cultivo',
           Jugos: 'Ej. Numero de tallos, Edad de la caña',
           Mieles: 'Ej. Tanque, Lote de produccion',
           Agua: 'Ej. Descripcion, Punto de toma',
@@ -621,7 +628,7 @@ export default {
         }, 'Ej. Nombre del dato');
       }
       if (que === 'unidad') {
-        return f.tipo_dato === 'numero' ? porTipo({ Suelo: 'Ej. cm', 'Tejido vegetal': 'Ej. dias', Jugos: 'Ej. tallos', Agua: 'Ej. m', Mieles: 'Ej. L' }, 'Ej. cm, kg, dias') : 'Ej. cm (opcional)';
+        return f.tipo_dato === 'numero' ? porTipo({ Suelo: 'Ej. cm', Foliares: 'Ej. dias', Jugos: 'Ej. tallos', Agua: 'Ej. m', Mieles: 'Ej. L' }, 'Ej. cm, kg, dias') : 'Ej. cm (opcional)';
       }
       // Ayuda para el muestreador segun el tipo de dato del campo.
       if (f.tipo_dato === 'opciones') return 'Ej. Elegir la opcion segun lo observado en campo';
@@ -629,14 +636,14 @@ export default {
       if (f.tipo_dato === 'numero') {
         return porTipo({
           Suelo: 'Ej. Medir desde la superficie del suelo',
-          'Tejido vegetal': 'Ej. Dias despues del corte o siembra',
+          Foliares: 'Ej. Dias despues del corte o siembra',
           Jugos: 'Ej. Tallos molidos para la muestra',
           Agua: 'Ej. Profundidad de toma en metros',
         }, 'Ej. Como medir el valor');
       }
       return porTipo({
         Suelo: 'Ej. 0-20, 20-40',
-        'Tejido vegetal': 'Ej. Hoja TVD (+3), tercio medio',
+        Foliares: 'Ej. Hoja TVD (+3), tercio medio',
         Jugos: 'Ej. Tallos del surco central',
         Mieles: 'Ej. Tanque o punto de muestreo',
         Agua: 'Ej. Pozo, canal o rio',

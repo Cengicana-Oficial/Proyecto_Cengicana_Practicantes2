@@ -9,8 +9,12 @@
  * - colorear(): PNG con la rampa NDVI para superponer en el Mapa GPS.
  * - valoresPorParcela(): NDVI medio/min/max de los pixeles dentro de cada
  *   poligono de parcela.
+ * - leerKmz() / componerKmz() / ndviDesdeColores(): KMZ de drones (DJI Terra, Pix4D,
+ *   Agisoft...) con la imagen en mosaicos GroundOverlay: se unen en una sola imagen y, si
+ *   es un mapa NDVI coloreado rojo -> amarillo -> verde, se estima el NDVI por el tono.
  */
 import { fromArrayBuffer } from 'geotiff';
+import { inflateRaw } from 'pako';
 import { rgbNdvi } from './ndvi-color';
 
 /* ------------------------------ proyecciones ------------------------------ */
@@ -223,4 +227,182 @@ export function valoresPorParcela(datos, w, h, georef, parcelas) {
     if (n) out[parcela.id] = { media: +(suma / n).toFixed(4), min: +min.toFixed(4), max: +max.toFixed(4), n };
   });
   return out;
+}
+
+/* ------------------------------ KMZ de drones ------------------------------ */
+
+/** Entradas de un ZIP: Map nombre -> () => Uint8Array (se descomprime al pedirla). */
+function leerZip(buffer) {
+  const v = new DataView(buffer);
+  let fin = -1;
+  for (let i = buffer.byteLength - 22; i >= Math.max(0, buffer.byteLength - 65557); i--) {
+    if (v.getUint32(i, true) === 0x06054b50) { fin = i; break; }
+  }
+  if (fin < 0) throw new Error('El archivo no es un KMZ valido (no se encontro el indice del ZIP).');
+  const total = v.getUint16(fin + 10, true);
+  let p = v.getUint32(fin + 16, true);
+  const texto = new TextDecoder();
+  const entradas = new Map();
+  for (let k = 0; k < total; k++) {
+    if (v.getUint32(p, true) !== 0x02014b50) throw new Error('El indice del KMZ esta danado.');
+    const metodo = v.getUint16(p + 10, true);
+    const comprimido = v.getUint32(p + 20, true);
+    const largoNombre = v.getUint16(p + 28, true);
+    const largoExtra = v.getUint16(p + 30, true);
+    const largoComent = v.getUint16(p + 32, true);
+    const local = v.getUint32(p + 42, true);
+    const nombre = texto.decode(new Uint8Array(buffer, p + 46, largoNombre));
+    entradas.set(nombre, () => {
+      const inicio = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
+      const datos = new Uint8Array(buffer, inicio, comprimido);
+      if (metodo === 0) return datos;
+      if (metodo === 8) return inflateRaw(datos);
+      throw new Error(`Compresion no soportada en ${nombre}.`);
+    });
+    p += 46 + largoNombre + largoExtra + largoComent;
+  }
+  return entradas;
+}
+
+/**
+ * Abre un KMZ con imagenes GroundOverlay (una o en mosaicos, norte arriba).
+ * Devuelve los mosaicos, sus limites totales y el tamano del area en metros.
+ */
+export function leerKmz(buffer) {
+  const zip = leerZip(buffer);
+  const nombres = [...zip.keys()];
+  const kml = nombres.find((n) => /(^|\/)doc\.kml$/i.test(n)) || nombres.find((n) => /\.kml$/i.test(n));
+  if (!kml) throw new Error('El KMZ no contiene un archivo KML.');
+  const xml = new DOMParser().parseFromString(new TextDecoder().decode(zip.get(kml)()), 'text/xml');
+  const carpeta = kml.includes('/') ? kml.slice(0, kml.lastIndexOf('/') + 1) : '';
+  const num = (el, tag) => { const x = el.getElementsByTagName(tag)[0]; return x ? Number(x.textContent) : NaN; };
+
+  const overlays = [...xml.getElementsByTagName('GroundOverlay')];
+  if (overlays.some((g) => !g.getElementsByTagName('LatLonBox')[0])) {
+    throw new Error('El KMZ trae imagenes con esquinas libres (LatLonQuad); exportelo con limites norte/sur/este/oeste.');
+  }
+  const mosaicos = overlays.map((g) => {
+    const href = decodeURIComponent(((g.getElementsByTagName('href')[0] || {}).textContent || '').trim());
+    const caja = g.getElementsByTagName('LatLonBox')[0];
+    const archivo = zip.has(carpeta + href) ? carpeta + href : href;
+    return { archivo, n: num(caja, 'north'), s: num(caja, 'south'), e: num(caja, 'east'), o: num(caja, 'west'), rotacion: num(caja, 'rotation') || 0 };
+  }).filter((m) => zip.has(m.archivo) && [m.n, m.s, m.e, m.o].every(Number.isFinite));
+  if (!mosaicos.length) throw new Error('El KMZ no trae imagenes georreferenciadas (GroundOverlay).');
+  if (mosaicos.some((m) => Math.abs(m.rotacion) > 0.01)) throw new Error('El KMZ trae imagenes rotadas: exportelo con el norte hacia arriba (sin rotacion).');
+
+  const limites = {
+    n: Math.max(...mosaicos.map((m) => m.n)), s: Math.min(...mosaicos.map((m) => m.s)),
+    e: Math.max(...mosaicos.map((m) => m.e)), o: Math.min(...mosaicos.map((m) => m.o)),
+  };
+  const cosLat = Math.cos(rad((limites.n + limites.s) / 2));
+  return {
+    zip,
+    nombre: ((xml.getElementsByTagName('name')[0] || {}).textContent || '').trim(),
+    mosaicos,
+    limites,
+    anchoM: (limites.e - limites.o) * 111320 * cosLat,
+    altoM: (limites.n - limites.s) * 110574,
+    cosLat,
+  };
+}
+
+function mime(nombre) {
+  if (/\.jpe?g$/i.test(nombre)) return 'image/jpeg';
+  return /\.gif$/i.test(nombre) ? 'image/gif' : 'image/png';
+}
+
+/**
+ * Une los mosaicos del KMZ en un canvas de hasta maxLado px. Sin suavizado (vecino mas
+ * cercano): conserva los colores exactos de la paleta, que es de donde se lee el NDVI.
+ */
+export async function componerKmz(kmz, { maxLado = 1600, progreso = () => {} } = {}) {
+  const { n, s, e, o } = kmz.limites;
+  // Resolucion nativa a partir del primer mosaico.
+  const m0 = kmz.mosaicos[0];
+  const bmp0 = await createImageBitmap(new Blob([kmz.zip.get(m0.archivo)()], { type: mime(m0.archivo) }));
+  const resolNativa = ((m0.e - m0.o) * 111320 * kmz.cosLat) / bmp0.width;
+  bmp0.close();
+  const resol = Math.max(resolNativa, Math.max(kmz.anchoM, kmz.altoM) / maxLado);
+  const w = Math.max(1, Math.round(kmz.anchoM / resol));
+  const h = Math.max(1, Math.round(kmz.altoM / resol));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  for (let i = 0; i < kmz.mosaicos.length; i++) {
+    const m = kmz.mosaicos[i];
+    const bmp = await createImageBitmap(new Blob([kmz.zip.get(m.archivo)()], { type: mime(m.archivo) }));
+    const x = ((m.o - o) / (e - o)) * w;
+    const y = ((n - m.n) / (n - s)) * h;
+    // +1 px de traslape para que no queden costuras entre mosaicos al redondear.
+    ctx.drawImage(bmp, Math.floor(x), Math.floor(y), Math.ceil(((m.e - m.o) / (e - o)) * w) + 1, Math.ceil(((m.n - m.s) / (n - s)) * h) + 1);
+    bmp.close();
+    progreso(i + 1, kmz.mosaicos.length);
+    if (i % 10 === 9) await new Promise((ok) => setTimeout(ok)); // deja respirar a la pagina
+  }
+  return {
+    canvas,
+    ancho: w,
+    alto: h,
+    resolNativa,
+    resol,
+    georef: { epsg: 4326, x0: o, y0: n, dx: (e - o) / w, dy: -(n - s) / h },
+  };
+}
+
+/** Tono (0..360) de un color, o null si es gris/blanco. */
+function tono(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  if (d < 24) return null;
+  let t;
+  if (max === r) t = ((g - b) / d) % 6;
+  else if (max === g) t = (b - r) / d + 2;
+  else t = (r - g) / d + 4;
+  t *= 60;
+  return t < 0 ? t + 360 : t;
+}
+
+/**
+ * NDVI aproximado de un mapa coloreado con la rampa rojo (bajo) -> amarillo -> verde (alto),
+ * como los que exportan DJI Terra o Pix4D. Los extremos de la rampa (el tono mas rojo y el
+ * mas verde de la imagen) equivalen a los valores minimo y maximo de su leyenda.
+ * Devuelve la rejilla cuantizada igual que rasterNdvi().
+ */
+export function ndviDesdeColores(canvas, { min = 0, max = 1 } = {}) {
+  const w = canvas.width;
+  const h = canvas.height;
+  const px = canvas.getContext('2d').getImageData(0, 0, w, h).data;
+  const tonos = new Float32Array(w * h).fill(NaN);
+  let tMin = Infinity;
+  let tMax = -Infinity;
+  for (let i = 0; i < w * h; i++) {
+    if (px[i * 4 + 3] < 128) continue;
+    let t = tono(px[i * 4], px[i * 4 + 1], px[i * 4 + 2]);
+    if (t === null) continue;
+    if (t > 300) t -= 360; // rojos al otro lado del circulo
+    if (t > 150) continue; // azules/morados: fuera de la rampa
+    tonos[i] = t;
+    if (t < tMin) tMin = t;
+    if (t > tMax) tMax = t;
+  }
+  if (!(tMax - tMin > 20)) throw new Error('La imagen no tiene una escala de color rojo-amarillo-verde: guardela como "solo imagen".');
+  const datos = new Uint8Array(w * h).fill(255);
+  let suma = 0;
+  let n = 0;
+  let vMin = Infinity;
+  let vMax = -Infinity;
+  for (let i = 0; i < w * h; i++) {
+    if (Number.isNaN(tonos[i])) continue;
+    const v = Math.max(-1, Math.min(1, min + ((tonos[i] - tMin) / (tMax - tMin)) * (max - min)));
+    datos[i] = Math.round((v + 1) * 127);
+    suma += v;
+    n++;
+    if (v < vMin) vMin = v;
+    if (v > vMax) vMax = v;
+  }
+  return { datos, stats: { media: suma / n, min: vMin, max: vMax, n }, tonos: { min: tMin, max: tMax } };
 }

@@ -26,6 +26,10 @@ mix
     })
     // Worker de pdf.js para el visor de croquis GeoPDF (ver ensayos/geopdf.js).
     .copy('node_modules/pdfjs-dist/legacy/build/pdf.worker.min.js', 'public/dist/js/pdf.worker.min.js')
+    // jsPDF y svg2pdf de Highcharts para "Descargar PDF" sin salir a code.highcharts.com
+    // (ver exporting.libURL en app.js); offline-exporting los carga solo al pedir un PDF.
+    .copy('node_modules/highcharts/lib/jspdf.js', 'public/dist/js/highcharts-lib/jspdf.js')
+    .copy('node_modules/highcharts/lib/svg2pdf.js', 'public/dist/js/highcharts-lib/svg2pdf.js')
     .options({
         processCssUrls: true,
     })

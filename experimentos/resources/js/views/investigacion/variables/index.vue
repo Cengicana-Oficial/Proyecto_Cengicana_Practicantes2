@@ -2,22 +2,22 @@
   <div class="vr">
     <!-- ============ Indicadores ============ -->
     <div class="vr-kpis">
-      <button type="button" class="vr-kpi" :class="{ 'is-on': !filtroCat }" @click="filtroCat = ''">
+      <button type="button" class="vr-kpi" :class="{ 'is-on': !hayFiltros }" title="Ver todas" @click="limpiarFiltros">
         <i class="fas fa-list-ul"></i>
         <div><strong>{{ items.length }}</strong><span>Variables</span><small>{{ activas }} activas</small></div>
       </button>
-      <button type="button" class="vr-kpi is-des" :class="{ 'is-on': filtroCat === 'Desarrollo' }" @click="filtroCat = filtroCat === 'Desarrollo' ? '' : 'Desarrollo'">
+      <button type="button" class="vr-kpi is-des" :class="{ 'is-on': esSolo('catSel', 'Desarrollo') }" title="Filtrar desarrollo del cultivo" @click="soloEn('catSel', 'Desarrollo')">
         <i class="fas fa-seedling"></i>
         <div><strong>{{ porCategoria('Desarrollo') }}</strong><span>Desarrollo del cultivo</span><small>durante el ciclo</small></div>
       </button>
-      <button type="button" class="vr-kpi is-cos" :class="{ 'is-on': filtroCat === 'Cosecha' }" @click="filtroCat = filtroCat === 'Cosecha' ? '' : 'Cosecha'">
+      <button type="button" class="vr-kpi is-cos" :class="{ 'is-on': esSolo('catSel', 'Cosecha') }" title="Filtrar cosecha / fabrica" @click="soloEn('catSel', 'Cosecha')">
         <i class="fas fa-tractor"></i>
         <div><strong>{{ porCategoria('Cosecha') }}</strong><span>Cosecha / fabrica</span><small>al momento de cosecha</small></div>
       </button>
-      <div class="vr-kpi is-uso">
+      <button type="button" class="vr-kpi is-uso" :class="{ 'is-on': esSolo('usoSel', 'con') }" title="Filtrar las que tienen registros" @click="soloEn('usoSel', 'con')">
         <i class="fas fa-clipboard-check"></i>
         <div><strong>{{ enUso }}</strong><span>En uso</span><small>{{ n(totalRegistros) }} registros en evaluaciones</small></div>
-      </div>
+      </button>
     </div>
 
     <!-- ============ Barra ============ -->
@@ -27,27 +27,43 @@
         <input type="text" v-model="busqueda" placeholder="Buscar por nombre, unidad o descripcion...">
         <button v-if="busqueda" type="button" @click="busqueda = ''" title="Limpiar">×</button>
       </div>
-      <div class="vr-chips">
-        <button v-for="t in tipos" :key="t.id" type="button" :class="['vr-chip', 'is-' + t.id.toLowerCase(), { 'is-on': filtroTipo === t.id }]" @click="filtroTipo = filtroTipo === t.id ? '' : t.id">
-          <i :class="t.icon"></i> {{ t.label }} <small>{{ porTipo(t.id) }}</small>
-        </button>
-        <label class="vr-inact"><input type="checkbox" v-model="verInactivas"> Ver inactivas</label>
-      </div>
       <div class="vr-acc">
         <select class="form-control form-control-sm vr-orden" v-model="orden" title="Ordenar">
           <option value="nombre">Nombre A–Z</option>
-          <option value="uso">Mas usadas</option>
+          <option value="uso">Mas registros</option>
+          <option value="ensayos">Mas ensayos</option>
           <option value="reciente">Ultimo registro</option>
         </select>
         <div class="vr-vista">
           <button type="button" :class="{ 'is-on': vista === 'tarjetas' }" title="Tarjetas" @click="vista = 'tarjetas'"><i class="fas fa-th-large"></i></button>
           <button type="button" :class="{ 'is-on': vista === 'tabla' }" title="Tabla" @click="vista = 'tabla'"><i class="fas fa-list"></i></button>
         </div>
+        <button type="button" class="btn btn-sm vr-btn-sec" :disabled="!filtradas.length" title="Descargar las variables filtradas (se abre en Excel)" @click="exportarCsv"><i class="fas fa-file-excel"></i> Exportar</button>
         <template v-if="puedeEditar">
           <button type="button" class="btn btn-sm vr-btn-sec" @click="abrirSugeridas"><i class="fas fa-magic"></i> Variables comunes</button>
           <button type="button" class="btn btn-sm vr-btn" @click="abrirCrear"><i class="fas fa-plus"></i> Nueva variable</button>
         </template>
       </div>
+    </div>
+
+    <!-- ============ Filtros ============ -->
+    <div class="vr-filtros">
+      <section v-for="f in filtros" :key="f.clave" class="vr-fpanel" :style="{ '--acento': f.acento }">
+        <header>
+          <span class="vr-ft"><i :class="f.icon"></i> {{ f.titulo }}</span>
+          <span class="vr-cuenta">{{ marcadas(f).length }}/{{ f.opciones.length }}</span>
+          <button v-if="marcadas(f).length < f.opciones.length" type="button" class="vr-todas" @click="todas(f)">Todas</button>
+        </header>
+        <div class="vr-fchips">
+          <button v-for="o in f.opciones" :key="o.id" type="button" :class="{ 'is-on': marcadas(f).includes(o.id) }" :style="{ '--c': o.color }" :aria-pressed="marcadas(f).includes(o.id)" @click="alternar(f.clave, o.id)">
+            <span class="vr-dot"><i class="fas fa-check"></i></span>{{ o.label }}<small>{{ o.cuenta }}</small>
+          </button>
+        </div>
+      </section>
+    </div>
+    <div class="vr-res">
+      Mostrando <b>{{ filtradas.length }}</b> de {{ items.length }} variables
+      <a v-if="hayFiltros" href="#" @click.prevent="limpiarFiltros"><i class="fas fa-times"></i> Quitar filtros</a>
     </div>
 
     <!-- ============ Vacio ============ -->
@@ -101,7 +117,14 @@
     <div v-else class="vr-tabla-wrap">
       <table class="table vr-tabla">
         <thead>
-          <tr><th>Variable</th><th>Unidad</th><th>Tipo</th><th>Categoria</th><th>Rango / opciones</th><th class="text-right">Registros</th><th class="text-right">Ensayos</th><th>Ultimo</th><th v-if="puedeEditar"></th></tr>
+          <tr>
+            <th class="vr-ord" :class="{ 'is-on': orden === 'nombre' }" @click="orden = 'nombre'">Variable <i class="fas fa-sort-alpha-down"></i></th>
+            <th>Unidad</th><th>Tipo</th><th>Categoria</th><th>Rango / opciones</th>
+            <th class="text-right vr-ord" :class="{ 'is-on': orden === 'uso' }" title="Ordenar por registros" @click="orden = 'uso'">Registros <i class="fas fa-sort-amount-down"></i></th>
+            <th class="text-right vr-ord" :class="{ 'is-on': orden === 'ensayos' }" title="Ordenar por ensayos" @click="orden = 'ensayos'">Ensayos <i class="fas fa-sort-amount-down"></i></th>
+            <th class="vr-ord" :class="{ 'is-on': orden === 'reciente' }" title="Ordenar por ultimo registro" @click="orden = 'reciente'">Ultimo <i class="fas fa-sort-amount-down"></i></th>
+            <th v-if="puedeEditar"></th>
+          </tr>
         </thead>
         <tbody>
           <tr v-for="v in filtradas" :key="v.id" :class="{ 'is-off': !v.activa }" @click="abrirDetalle(v)">
@@ -164,6 +187,15 @@
                   <div><strong>{{ dec(det.estadisticas.sd) }}</strong><span>desv. estandar</span></div>
                   <div><strong>{{ det.estadisticas.cv !== null ? det.estadisticas.cv.toFixed(1) + ' %' : '—' }}</strong><span>coef. variacion</span></div>
                 </div>
+                <div v-if="barraRango" class="vr-rbar">
+                  <div class="vr-rbar-t"><span>Rango esperado vs. valores registrados</span><small><i class="vr-sw is-esp"></i> esperado <i class="vr-sw is-obs"></i> registrado <i class="vr-sw is-media"></i> promedio</small></div>
+                  <div class="vr-rbar-pista">
+                    <div v-if="barraRango.esp" class="vr-rbar-esp" :style="{ left: barraRango.esp[0] + '%', width: (barraRango.esp[1] - barraRango.esp[0]) + '%' }"></div>
+                    <div class="vr-rbar-obs" :class="{ 'is-fuera': det.fuera_rango }" :style="{ left: barraRango.obs[0] + '%', width: Math.max(barraRango.obs[1] - barraRango.obs[0], 0.8) + '%' }"></div>
+                    <div class="vr-rbar-media" :style="{ left: barraRango.media + '%' }" :title="'Promedio ' + dec(det.estadisticas.media)"></div>
+                  </div>
+                  <div class="vr-rbar-esc"><span>{{ dec(barraRango.lo) }}</span><span>{{ dec(barraRango.hi) }} {{ sel.unidad || '' }}</span></div>
+                </div>
                 <p v-if="det.fuera_rango" class="vr-alerta"><i class="fas fa-exclamation-triangle"></i> {{ det.fuera_rango }} registro(s) fuera del rango esperado ({{ rango(sel) }}).</p>
                 <div class="vr-chart"><highcharts :options="chartDetalle"></highcharts></div>
                 <h6 class="vr-sub">Ensayos donde se usa</h6>
@@ -190,6 +222,10 @@
           </div>
           <footer v-if="puedeEditar" class="vr-pf">
             <button type="button" class="btn btn-sm vr-btn-del" @click="eliminar(sel)"><i class="fas fa-trash"></i> Eliminar</button>
+            <button type="button" class="btn btn-sm vr-btn-sec" title="Crear una variable nueva a partir de esta" @click="duplicar(sel)"><i class="far fa-copy"></i> Duplicar</button>
+            <button type="button" class="btn btn-sm vr-btn-sec" :disabled="guardando" :title="sel.activa ? 'No se ofrecera al registrar evaluaciones' : 'Volver a ofrecerla al registrar evaluaciones'" @click="alternarActiva(sel)">
+              <i :class="sel.activa ? 'fas fa-toggle-off' : 'fas fa-toggle-on'"></i> {{ sel.activa ? 'Desactivar' : 'Activar' }}
+            </button>
             <button type="button" class="btn btn-sm vr-btn" @click="abrirEditar(sel)"><i class="fas fa-pen"></i> Editar</button>
           </footer>
         </template>
@@ -299,6 +335,21 @@
 </template>
 
 <script>
+import { EXPORTAR } from '../clima/clima-util';
+
+const CATEGORIAS = [
+  { id: 'Desarrollo', label: 'Desarrollo', color: '#73BC25' },
+  { id: 'Cosecha', label: 'Cosecha / fabrica', color: '#FF6B00' },
+];
+const ESTADOS = [
+  { id: 'activa', label: 'Activas', color: '#73BC25' },
+  { id: 'inactiva', label: 'Inactivas', color: '#9aa1a6' },
+];
+const USOS = [
+  { id: 'con', label: 'Con registros', color: '#1f5632' },
+  { id: 'sin', label: 'Sin registros', color: '#9aa1a6' },
+];
+const COLOR_TIPO = { Numerica: '#e0b400', Categorica: '#A3D300', Texto: '#9aa1a6' };
 const TIPOS = [
   { id: 'Numerica', label: 'Numerica', icon: 'fas fa-ruler-combined', ayuda: 'medicion con numero' },
   { id: 'Categorica', label: 'Categorica', icon: 'fas fa-tags', ayuda: 'escala u opciones' },
@@ -319,9 +370,11 @@ export default {
       tipos: TIPOS,
       unidades: UNIDADES,
       busqueda: '',
-      filtroCat: '',
-      filtroTipo: '',
-      verInactivas: true,
+      // Filtros multiples: una variable se muestra si su valor esta encendido en cada grupo.
+      catSel: CATEGORIAS.map((o) => o.id),
+      tipoSel: TIPOS.map((o) => o.id),
+      estadoSel: ESTADOS.map((o) => o.id),
+      usoSel: USOS.map((o) => o.id),
       orden: 'nombre',
       vista: this.leerVista(),
       panel: null,
@@ -342,14 +395,28 @@ export default {
     activas() { return this.items.filter((v) => v.activa).length; },
     enUso() { return this.items.filter((v) => v.registros > 0).length; },
     totalRegistros() { return this.items.reduce((a, v) => a + (v.registros || 0), 0); },
+    filtros() {
+      const cuenta = (fn) => this.items.filter(fn).length;
+      return [
+        { clave: 'catSel', titulo: 'Categoria', icon: 'fas fa-layer-group', acento: '#73BC25', opciones: CATEGORIAS.map((o) => ({ ...o, cuenta: cuenta((v) => v.categoria === o.id) })) },
+        { clave: 'tipoSel', titulo: 'Tipo de dato', icon: 'fas fa-ruler-combined', acento: '#A3D300', opciones: TIPOS.map((t) => ({ id: t.id, label: t.label, color: COLOR_TIPO[t.id], cuenta: cuenta((v) => v.tipo === t.id) })) },
+        { clave: 'estadoSel', titulo: 'Estado', icon: 'fas fa-toggle-on', acento: '#FFCC00', opciones: ESTADOS.map((o) => ({ ...o, cuenta: cuenta((v) => this.estadoDe(v) === o.id) })) },
+        { clave: 'usoSel', titulo: 'Uso en evaluaciones', icon: 'fas fa-clipboard-check', acento: '#FF6B00', opciones: USOS.map((o) => ({ ...o, cuenta: cuenta((v) => this.usoDe(v) === o.id) })) },
+      ];
+    },
+    hayFiltros() {
+      return !!this.busqueda.trim() || this.filtros.some((f) => this[f.clave].length < f.opciones.length);
+    },
     filtradas() {
       const q = this.sinTildes(this.busqueda.trim().toLowerCase());
-      const lista = this.items.filter((v) => (!this.filtroCat || v.categoria === this.filtroCat)
-        && (!this.filtroTipo || v.tipo === this.filtroTipo)
-        && (this.verInactivas || v.activa)
+      const lista = this.items.filter((v) => this.catSel.includes(v.categoria)
+        && this.tipoSel.includes(v.tipo)
+        && this.estadoSel.includes(this.estadoDe(v))
+        && this.usoSel.includes(this.usoDe(v))
         && (!q || this.sinTildes(`${v.nombre} ${v.unidad || ''} ${v.descripcion || ''}`.toLowerCase()).includes(q)));
       const porNombre = (a, b) => a.nombre.localeCompare(b.nombre, 'es');
       if (this.orden === 'uso') return lista.sort((a, b) => b.registros - a.registros || porNombre(a, b));
+      if (this.orden === 'ensayos') return lista.sort((a, b) => b.ensayos - a.ensayos || b.registros - a.registros || porNombre(a, b));
       if (this.orden === 'reciente') return lista.sort((a, b) => String(b.ultima || '').localeCompare(String(a.ultima || '')) || porNombre(a, b));
       return lista.sort(porNombre);
     },
@@ -361,7 +428,7 @@ export default {
       const base = {
         chart: { height: 230, backgroundColor: '#ffffff', style: { fontFamily: 'inherit' } },
         credits: { enabled: false }, legend: { enabled: false },
-        exporting: { enabled: true, filename: `variable_${this.sel.nombre}` },
+        exporting: { ...EXPORTAR, filename: `variable_${this.sel.nombre}` },
       };
       if (this.sel.tipo === 'Numerica') {
         const banda = this.sel.valor_min !== null || this.sel.valor_max !== null
@@ -384,6 +451,26 @@ export default {
         series: [{ type: 'column', name: 'Registros', color: '#A3D300', data: d.distribucion.map((x) => x.n) }],
       };
     },
+    /** Posiciones (%) de la barra rango esperado vs. registrado, sobre una escala comun. */
+    barraRango() {
+      const e = this.det && this.det.estadisticas;
+      if (!e || this.sel.tipo !== 'Numerica') return null;
+      const vmin = this.sel.valor_min;
+      const vmax = this.sel.valor_max;
+      let lo = Math.min(e.min, vmin ?? e.min);
+      let hi = Math.max(e.max, vmax ?? e.max);
+      const margen = (hi - lo) * 0.06 || Math.abs(hi) * 0.1 || 1;
+      lo -= margen;
+      hi += margen;
+      const pct = (x) => ((x - lo) / (hi - lo)) * 100;
+      const tieneEsp = vmin !== null || vmax !== null;
+      return {
+        lo, hi,
+        esp: tieneEsp ? [pct(vmin ?? lo), pct(vmax ?? hi)] : null,
+        obs: [pct(e.min), pct(e.max)],
+        media: pct(e.media),
+      };
+    },
   },
   watch: {
     vista(v) { try { localStorage.setItem('sigec.variables.vista', v); } catch (e) { /* sin almacenamiento */ } },
@@ -401,8 +488,69 @@ export default {
       return { nombre: '', descripcion: '', unidad: '', tipo: 'Numerica', categoria: 'Desarrollo', valor_min: '', valor_max: '', decimales: null, opciones: [], activa: true };
     },
     porCategoria(c) { return this.items.filter((v) => v.categoria === c).length; },
-    porTipo(t) { return this.items.filter((v) => v.tipo === t).length; },
-    limpiarFiltros() { this.busqueda = ''; this.filtroCat = ''; this.filtroTipo = ''; this.verInactivas = true; },
+    estadoDe(v) { return v.activa ? 'activa' : 'inactiva'; },
+    usoDe(v) { return v.registros > 0 ? 'con' : 'sin'; },
+    alternar(clave, id) {
+      const lista = this[clave];
+      const i = lista.indexOf(id);
+      if (i >= 0) lista.splice(i, 1); else lista.push(id);
+    },
+    marcadas(f) { return this[f.clave]; },
+    todas(f) { this[f.clave] = f.opciones.map((o) => o.id); },
+    esSolo(clave, id) { return this[clave].length === 1 && this[clave][0] === id; },
+    /** Indicadores: muestra solo ese valor; un segundo clic vuelve a todos. */
+    soloEn(clave, id) {
+      const f = this.filtros.find((x) => x.clave === clave);
+      this[clave] = this.esSolo(clave, id) ? f.opciones.map((o) => o.id) : [id];
+    },
+    limpiarFiltros() {
+      this.busqueda = '';
+      this.filtros.forEach((f) => this.todas(f));
+    },
+    exportarCsv() {
+      const celda = (x) => {
+        const s = x === null || x === undefined ? '' : String(x);
+        return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const num = (x) => (x === null || x === undefined ? '' : String(x).replace('.', ','));
+      const filas = [
+        ['Variable', 'Unidad', 'Tipo', 'Categoria', 'Minimo esperado', 'Maximo esperado', 'Decimales', 'Opciones', 'Activa', 'Registros', 'Ensayos', 'Ultimo registro', 'Descripcion'],
+        ...this.filtradas.map((v) => [
+          v.nombre, v.unidad, v.tipo, v.categoria, num(v.valor_min), num(v.valor_max), v.decimales,
+          (v.opciones || []).join(', '), v.activa ? 'Si' : 'No', v.registros, v.ensayos, v.ultima ? this.fmt(v.ultima) : '', v.descripcion,
+        ]),
+      ];
+      // BOM + ";" para que Excel en español abra tildes y columnas correctamente.
+      const csv = '﻿' + filas.map((f) => f.map(celda).join(';')).join('\r\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = `variables_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    },
+    duplicar(v) {
+      this.abrirEditar(v);
+      this.editando = null;
+      this.form.nombre = `${v.nombre} (copia)`;
+      this.$nextTick(() => { if (this.$refs.nombre) { this.$refs.nombre.focus(); this.$refs.nombre.select(); } });
+    },
+    alternarActiva(v) {
+      this.guardando = true;
+      const payload = {
+        nombre: v.nombre, descripcion: v.descripcion || null, unidad: v.unidad || null, tipo: v.tipo, categoria: v.categoria,
+        valor_min: v.valor_min, valor_max: v.valor_max, decimales: v.decimales, opciones: v.opciones || [], activa: !v.activa,
+      };
+      window.axios.put(`/investigacion/variables/${v.id}`, payload)
+        .then(({ data }) => {
+          const i = this.items.findIndex((x) => x.id === data.id);
+          if (i >= 0) this.$set(this.items, i, data);
+          if (this.sel && this.sel.id === data.id) this.sel = data;
+          this.toast(data.activa ? 'Variable activada' : 'Variable desactivada', data.nombre);
+        })
+        .catch((err) => this.$swal.fire({ icon: 'error', title: 'No se pudo cambiar el estado', text: (err.response && err.response.data && err.response.data.message) || 'Error inesperado.' }))
+        .finally(() => { this.guardando = false; });
+    },
     icono(t) { return (TIPOS.find((x) => x.id === t) || TIPOS[0]).icon; },
     nombreTipo(t) { return { Numerica: 'Numerica', Categorica: 'Categorica', Texto: 'Texto' }[t] || t; },
     descripcionTipo(v) {
@@ -435,8 +583,9 @@ export default {
     abrirCrear() {
       this.editando = null;
       this.form = this.formVacio();
-      if (this.filtroCat) this.form.categoria = this.filtroCat;
-      if (this.filtroTipo) this.form.tipo = this.filtroTipo;
+      // Si se filtra una sola categoria o tipo, la nueva variable parte de esa seleccion.
+      if (this.catSel.length === 1) this.form.categoria = this.catSel[0];
+      if (this.tipoSel.length === 1) this.form.tipo = this.tipoSel[0];
       this.errors = {};
       this.errorGeneral = null;
       this.panel = 'form';
@@ -560,16 +709,32 @@ button.vr-kpi:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(3
 .vr-buscar input { width: 100%; height: 36px; padding: 0 30px 0 34px; border: 1px solid var(--borde); border-radius: 999px; background: #f7f9f5; font-size: 13px; outline: none; transition: border-color .15s, background .15s; }
 .vr-buscar input:focus { border-color: var(--verde); background: #fff; }
 .vr-buscar button { position: absolute; right: 8px; border: 0; background: transparent; color: var(--suave); font-size: 18px; line-height: 1; }
-.vr-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.vr-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border: 1px solid var(--borde); border-radius: 999px; background: #fff; color: #44503f; font-size: 12px; font-weight: 600; transition: all .15s; }
-.vr-chip small { color: var(--suave); font-weight: 500; }
-.vr-chip.is-numerica i { color: #b38f00; }
-.vr-chip.is-categorica i { color: #6f8f00; }
-.vr-chip.is-texto i { color: #7d848a; }
-.vr-chip.is-on.is-numerica { border-color: var(--amarillo); background: color-mix(in srgb, var(--amarillo) 20%, #fff); }
-.vr-chip.is-on.is-categorica { border-color: var(--verde-2); background: color-mix(in srgb, var(--verde-2) 20%, #fff); }
-.vr-chip.is-on.is-texto { border-color: #9aa1a6; background: color-mix(in srgb, var(--gris) 45%, #fff); }
-.vr-inact { display: inline-flex; align-items: center; gap: 5px; margin: 0 0 0 4px; color: var(--suave); font-size: 12px; font-weight: 500; }
+/* Filtros en paneles (mismo estilo que Clima y estaciones) */
+.vr-filtros { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 8px; }
+.vr-fpanel { display: flex; flex-direction: column; gap: 9px; padding: 10px 12px 12px; border: 1px solid var(--borde); border-top: 3px solid var(--acento); border-radius: 12px; background: #fff; }
+.vr-fpanel > header { display: flex; align-items: center; gap: 8px; }
+.vr-ft { color: var(--verde-osc); font-size: 11.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.vr-ft i { margin-right: 3px; color: var(--verde); }
+.vr-cuenta { padding: 1px 7px; border-radius: 999px; background: #eef6e2; color: #3e6b14; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.vr-todas { margin-left: auto; padding: 1px 6px; border: 0; border-radius: 5px; background: transparent; color: #4f8a12; font-size: 11px; font-weight: 600; }
+.vr-todas:hover { background: #eef6e2; color: var(--verde-osc); }
+.vr-fchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.vr-fchips button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 6px; border: 1px solid var(--gris); border-radius: 999px;
+  background: #fff; color: var(--suave); font-size: 12px; font-weight: 600; line-height: 1.2; transition: background-color .12s, border-color .12s, color .12s;
+}
+.vr-fchips button:hover { border-color: var(--c); color: var(--tinta); }
+.vr-fchips button:focus-visible { outline: 2px solid rgba(115, 188, 37, .5); outline-offset: 1px; }
+.vr-fchips button small { padding: 0 5px; border-radius: 999px; background: #f0f2f0; color: #7c868d; font-size: 10.5px; font-weight: 700; }
+.vr-fchips button.is-on { border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, #fff); color: var(--tinta); }
+.vr-fchips button.is-on small { background: #fff; color: #33402a; }
+.vr-dot { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 15px; height: 15px; border: 2px solid var(--c); border-radius: 50%; background: #fff; }
+.vr-dot i { display: none; color: #fff; font-size: 8px; }
+.vr-fchips button.is-on .vr-dot { background: var(--c); }
+.vr-fchips button.is-on .vr-dot i { display: block; }
+.vr-res { display: flex; align-items: center; gap: 10px; margin: 0 2px 12px; color: var(--suave); font-size: 12.5px; }
+.vr-res b { color: var(--tinta); }
+.vr-res a { color: #b84d00; font-weight: 600; }
 .vr-acc { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
 .vr-orden { width: auto; height: 32px; border-radius: 9px; font-size: 12.5px; }
 .vr-vista { display: inline-flex; padding: 3px; border: 1px solid var(--borde); border-radius: 9px; background: #f3f5f1; }
@@ -634,6 +799,11 @@ button.vr-kpi:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(3
 .vr-tabla-wrap { overflow-x: auto; border: 1px solid var(--borde); border-radius: 14px; background: #fff; }
 .vr-tabla { margin: 0; font-size: 13px; }
 .vr-tabla th { background: #f7f9f5; color: var(--suave); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+.vr-tabla th.vr-ord { cursor: pointer; user-select: none; }
+.vr-tabla th.vr-ord i { margin-left: 3px; opacity: .3; }
+.vr-tabla th.vr-ord:hover { color: var(--verde-osc); }
+.vr-tabla th.vr-ord.is-on { color: var(--verde-osc); }
+.vr-tabla th.vr-ord.is-on i { color: var(--verde); opacity: 1; }
 .vr-tabla td { vertical-align: middle; }
 .vr-tabla tbody tr { cursor: pointer; transition: background .12s; }
 .vr-tabla tbody tr:hover { background: #f7fbf1; }
@@ -671,6 +841,20 @@ button.vr-kpi:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(3
 .vr-stats.is-num > div { border-color: color-mix(in srgb, var(--amarillo) 50%, #fff); background: color-mix(in srgb, var(--amarillo) 7%, #fff); }
 .vr-sin-uso { padding: 12px 14px; border-radius: 10px; background: #f6f8f3; color: #3d4838; font-size: 12.5px; }
 .vr-sin-uso i { margin-right: 4px; color: var(--verde); }
+.vr-rbar { margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; }
+.vr-rbar-t { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
+.vr-rbar-t span { color: var(--verde-osc); font-size: 12px; font-weight: 700; }
+.vr-rbar-t small { display: flex; align-items: center; gap: 4px; color: var(--suave); font-size: 11px; }
+.vr-sw { display: inline-block; width: 12px; height: 8px; margin-left: 6px; border-radius: 2px; }
+.vr-sw.is-esp { background: color-mix(in srgb, var(--verde) 30%, #fff); border: 1px solid var(--verde); }
+.vr-sw.is-obs { background: var(--amarillo); }
+.vr-sw.is-media { width: 3px; height: 12px; background: var(--verde-osc); }
+.vr-rbar-pista { position: relative; height: 22px; border-radius: 6px; background: #f1f3f1; }
+.vr-rbar-esp { position: absolute; top: 0; bottom: 0; border: 1px solid var(--verde); border-radius: 6px; background: color-mix(in srgb, var(--verde) 22%, #fff); }
+.vr-rbar-obs { position: absolute; top: 7px; height: 8px; border-radius: 4px; background: var(--amarillo); }
+.vr-rbar-obs.is-fuera { background: var(--naranja); }
+.vr-rbar-media { position: absolute; top: 2px; bottom: 2px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--verde-osc); }
+.vr-rbar-esc { display: flex; justify-content: space-between; margin-top: 4px; color: var(--suave); font-size: 11px; font-variant-numeric: tabular-nums; }
 .vr-alerta { padding: 7px 10px; border-radius: 8px; background: #fff1e6; color: #b84d00; font-size: 12.5px; }
 .vr-chart { margin-bottom: 12px; padding: 6px; border: 1px solid var(--borde); border-radius: 12px; }
 .vr-sub { margin: 12px 0 6px; color: var(--verde-osc); font-size: 13px; font-weight: 800; }
@@ -712,7 +896,9 @@ button.vr-kpi:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(3
 .vr-slide-enter-active, .vr-slide-leave-active { transition: transform .25s ease; }
 .vr-slide-enter, .vr-slide-leave-to { transform: translateX(100%); }
 
+@media (max-width: 1199px) { .vr-filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) {
+  .vr-filtros { grid-template-columns: 1fr; }
   .vr-stats { grid-template-columns: repeat(2, 1fr); }
   .vr-acc { margin-left: 0; }
   .vr-card-acc { opacity: 1; }

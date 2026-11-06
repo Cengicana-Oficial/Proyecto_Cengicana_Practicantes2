@@ -48,6 +48,10 @@
                     <small>{{ ayudaCampo(c) }}</small>
                   </th>
                   <th class="is-libre fm-th-obs">Observaciones</th>
+                  <th v-if="capConFotos" class="is-libre fm-th-fotos">
+                    <i class="fas fa-camera"></i> Fotos
+                    <small>{{ cap.formulario.fotos.indicacion || `hasta ${cap.formulario.fotos.maximo} por parcela` }}</small>
+                  </th>
                   <th class="fm-th-est"></th>
                 </tr>
               </thead>
@@ -77,6 +81,15 @@
                   <td class="fm-cel fm-cel-obs" :class="{ 'is-sucio': (capObs[p.codigo] || '') !== (capObsOrig[p.codigo] || '') }">
                     <input v-model="capObs[p.codigo]" maxlength="1000" placeholder="—" :data-cap="r + '-' + cap.formulario.campos.length" @keydown.enter.prevent="moverCap(r, cap.formulario.campos.length, 1)">
                   </td>
+                  <!-- Las fotos se guardan al tomarlas (no esperan a "Guardar captura") -->
+                  <td v-if="capConFotos" class="fm-cel fm-cel-fotos">
+                    <fotos-parcela-celda
+                      :ensayo-id="cap.asignacion.ensayo_id" :parcela="p" :fecha="capFecha" :formulario-id="cap.formulario.id"
+                      :fotos="fotosParcela(p.id)" :maximo="cap.formulario.fotos.maximo || 2" :indicacion="cap.formulario.fotos.indicacion || ''"
+                      :editable="puedeEscribirCaptura && capFecha <= hoy()"
+                      @agregada="(f) => capFotos.push(f)" @ver="(i) => capVisor = { fotos: fotosParcela(p.id), i, parcela: p }"
+                    ></fotos-parcela-celda>
+                  </td>
                   <td class="fm-est">
                     <i v-if="estadoFila(p.codigo) === 'promovida'" class="fas fa-check-double is-prom" title="Ya esta en Evaluaciones"></i>
                     <i v-else-if="estadoFila(p.codigo) === 'pendiente'" class="fas fa-hourglass-half is-pend" title="Capturada, pendiente de revision"></i>
@@ -101,6 +114,8 @@
             </button>
           </div>
           <p v-if="!puedeEscribirCaptura" class="fm-aviso is-block"><i class="fas fa-lock"></i> La asignacion esta finalizada o el formulario inactivo: solo lectura.</p>
+          <p v-if="capConFotos" class="fm-ayuda"><i class="fas fa-camera"></i> En el celular, el botón <b>Foto</b> abre la cámara. Cada foto se guarda en cuanto termina de subir, ligada a la parcela y a la fecha {{ fmt(capFecha) }}; se comparan en el ensayo → pestaña Fotos.</p>
+          <fotos-visor v-if="capVisor" :fotos="capVisor.fotos" :inicio="capVisor.i" :describe="(f) => `${capVisor.parcela.codigo} · ${capVisor.parcela.tratamiento || ''} · R${capVisor.parcela.repeticion} · ${fmt(f.fecha)}`" @cerrar="capVisor = null" @eliminar="eliminarFotoCaptura"></fotos-visor>
         </template>
       </div>
     </template>
@@ -495,6 +510,17 @@
                 <label class="fm-req-tg" :class="{ 'is-on': c.requerido }"><input type="checkbox" v-model="c.requerido"> Obligatorio</label>
                 <button type="button" class="fm-icon is-del" title="Quitar" @click="form.campos.splice(i, 1)"><i class="fas fa-times"></i></button>
               </div>
+              <!-- Registro fotografico opcional: una columna de fotos por parcela en la planilla -->
+              <div class="fm-fotos-cfg" :class="{ 'is-on': form.fotos.activo }">
+                <label class="fm-fotos-tg"><input type="checkbox" v-model="form.fotos.activo"> <i class="fas fa-camera"></i> <b>Registro fotográfico por parcela</b> <small>(opcional)</small></label>
+                <small>Agrega una columna de fotos en la planilla: el muestreador toma la foto con el celular y queda ligada a la parcela, su tratamiento y la fecha de muestreo. Las fotos se comparan en el ensayo → pestaña Fotos y pueden ir en el Informe técnico. Ideal para mostrar el efecto de los tratamientos (control de malezas, fitotoxicidad, plagas).</small>
+                <div v-if="form.fotos.activo" class="fm-fotos-campos">
+                  <label>Qué fotografiar<input class="form-control form-control-sm" v-model="form.fotos.indicacion" maxlength="200" placeholder="p. ej. Foto cenital del marco de 1 m² en el centro de la parcela"></label>
+                  <label>Fotos por parcela
+                    <select class="form-control form-control-sm" v-model.number="form.fotos.maximo"><option v-for="n in 6" :key="n" :value="n">Hasta {{ n }}</option></select>
+                  </label>
+                </div>
+              </div>
               <p v-if="errorCampos" class="fm-error"><i class="fas fa-exclamation-circle"></i> {{ errorCampos }}</p>
               <div v-if="form.campos.length" class="fm-nota">
                 <i class="fas fa-info-circle"></i> <b>{{ form.campos.filter((c) => c.variable_id).length }}</b> campo(s) enlazados a variables pasaran a Evaluaciones con la parcela y la fecha de muestreo; los campos libres quedan solo en la captura.
@@ -505,7 +531,7 @@
           <footer class="fm-pf">
             <p v-if="errorGeneral" class="fm-error"><i class="fas fa-exclamation-circle"></i> {{ errorGeneral }}</p>
             <button type="button" class="btn btn-sm fm-btn-sec" @click="cerrarPanel">Cancelar</button>
-            <button type="button" class="btn btn-sm fm-btn" :disabled="guardando || !form.nombre || !form.ensayo_id || !form.campos.length" @click="guardarFormulario">
+            <button type="button" class="btn btn-sm fm-btn" :disabled="guardando || !form.nombre || !form.ensayo_id || (!form.campos.length && !form.fotos.activo)" @click="guardarFormulario">
               <i :class="guardando ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i> Guardar formulario
             </button>
           </footer>
@@ -578,11 +604,15 @@
 </template>
 
 <script>
+import FotosParcelaCelda from '../../../components/fotos-parcela-celda.vue';
+import FotosVisor from '../../../components/fotos-visor.vue';
+
 const TIPO_DE_VARIABLE = { Numerica: 'numero', Categorica: 'select', Texto: 'texto' };
 let llave = 0;
 
 export default {
   name: 'FormulariosIndex',
+  components: { FotosParcelaCelda, FotosVisor },
   props: {
     modo: { type: String, default: 'gestion' },
     formularios: { type: Array, default: () => [] },
@@ -625,6 +655,8 @@ export default {
       capFecha: this.hoy(),
       capResp: [],
       capVals: {},
+      capFotos: [], // fotos del ensayo en la fecha de captura (si el formulario las pide)
+      capVisor: null,
       capOrig: {},
       capObs: {},
       capObsOrig: {},
@@ -655,6 +687,7 @@ export default {
     ensayosDelProyecto() { return this.form.proyecto_id ? this.ensayos.filter((e) => e.proyecto_id === this.form.proyecto_id) : this.ensayos; },
 
     /* ---------- captura ---------- */
+    capConFotos() { return !!(this.cap && this.cap.formulario.fotos && this.cap.formulario.fotos.activo); },
     capParcelas() {
       if (!this.cap) return [];
       const lista = this.parcelasOrdenadas(this.cap.asignacion.ensayo_id);
@@ -723,7 +756,7 @@ export default {
     pendientesVisibles() { return this.lotes.flatMap((l) => l.pendientes); },
   },
   watch: {
-    capFecha() { this.initCaptura(false); },
+    capFecha() { this.initCaptura(false); this.cargarFotosCaptura(); },
     tab(v) { if (v === 'capturas') this.cargarRevision(); },
     vista(v) { try { localStorage.setItem('sigec.formularios.vista', v); } catch (e) { /* sin almacenamiento */ } },
     revForm() { this.cargarRevision(); },
@@ -808,7 +841,8 @@ export default {
     },
 
     /* ---------- disenador ---------- */
-    formVacio() { return { id: null, nombre: '', descripcion: '', proyecto_id: null, ensayo_id: null, estado: 'Activo', promocion: 'revision', campos: [] }; },
+    formVacio() { return { id: null, nombre: '', descripcion: '', proyecto_id: null, ensayo_id: null, estado: 'Activo', promocion: 'revision', campos: [], fotos: this.fotosVacio() }; },
+    fotosVacio() { return { activo: false, indicacion: '', maximo: 2 }; },
     abrirCrear() {
       this.form = this.formVacio();
       if (this.filtroEnsayo) {
@@ -823,6 +857,7 @@ export default {
       this.form = {
         id: f.id, nombre: f.nombre, descripcion: f.descripcion || '', proyecto_id: f.proyecto_id, ensayo_id: f.ensayo_id, estado: f.estado, promocion: f.promocion,
         campos: f.campos.map((c) => ({ ...c, key: ++llave, opcionesTexto: (c.opciones || []).join(', ') })),
+        fotos: f.fotos && f.fotos.activo ? { activo: true, indicacion: f.fotos.indicacion || '', maximo: f.fotos.maximo || 2 } : this.fotosVacio(),
       };
       this.formOriginal = f;
       this.prepararPanel('form');
@@ -867,6 +902,7 @@ export default {
           id: c.id, variable_id: c.variable_id, label: c.label, tipo: c.tipo, requerido: !!c.requerido,
           opciones: c.variable_id ? [] : (c.opcionesTexto || '').split(',').map((o) => o.trim()).filter(Boolean),
         })),
+        fotos: f.fotos.activo ? { activo: true, indicacion: f.fotos.indicacion || null, maximo: f.fotos.maximo } : null,
       };
       const peticion = f.id ? window.axios.put(`/soporte/formularios/${f.id}`, payload) : window.axios.post('/soporte/formularios', payload);
       peticion
@@ -974,6 +1010,26 @@ export default {
       window.axios.get(`/soporte/formularios/asignaciones/${a.id}/respuestas`)
         .then(({ data }) => { this.capResp = data; })
         .finally(() => { this.capCargando = false; this.initCaptura(true); });
+      this.cargarFotosCaptura();
+    },
+    cargarFotosCaptura() {
+      this.capFotos = [];
+      if (!this.capConFotos) return;
+      const { ensayo_id: ensayoId } = this.cap.asignacion;
+      const fecha = this.capFecha;
+      window.axios.get(`/investigacion/ensayos/${ensayoId}/fotos`, { params: { fecha } })
+        .then(({ data }) => { if (this.cap && this.capFecha === fecha) this.capFotos = data.fotos; })
+        .catch(() => { this.capFotos = []; });
+    },
+    fotosParcela(id) { return this.capFotos.filter((f) => f.parcela_id === id && f.fecha === this.capFecha); },
+    eliminarFotoCaptura(foto) {
+      this.$swal.fire({ icon: 'warning', title: '¿Eliminar esta foto?', showCancelButton: true, confirmButtonText: 'Eliminar', confirmButtonColor: '#FF6B00' }).then((r) => {
+        if (!r.isConfirmed) return;
+        window.axios.delete(`/investigacion/fotos/${foto.id}`).then(() => {
+          this.capFotos = this.capFotos.filter((f) => f.id !== foto.id);
+          if (this.capVisor) this.capVisor.fotos = this.capVisor.fotos.filter((f) => f.id !== foto.id);
+        }).catch(() => this.$swal.fire({ icon: 'error', title: 'No se pudo eliminar la foto' }));
+      });
     },
     cerrarCaptura() {
       const salir = () => { this.cap = null; this.capVals = {}; this.capOrig = {}; };
@@ -1475,4 +1531,16 @@ kbd { padding: 1px 5px; border: 1px solid var(--borde); border-radius: 4px; back
   .fm-grid.is-anchas { grid-template-columns: 1fr; }
   .fm-bar-btn { margin-left: 0; }
 }
+/* Registro fotografico por parcela */
+.fm-fotos-cfg { margin-top: 12px; padding: 12px; border: 1px dashed #b9cfa3; border-radius: 10px; background: #fafcf8; }
+.fm-fotos-cfg.is-on { border-style: solid; border-color: #73BC25; background: #f3f9ea; }
+.fm-fotos-cfg > small { display: block; margin-top: 4px; color: #61705f; font-size: 11px; line-height: 1.5; }
+.fm-fotos-tg { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; cursor: pointer; }
+.fm-fotos-tg input { accent-color: #73BC25; }
+.fm-fotos-tg i { color: #73BC25; }
+.fm-fotos-tg small { color: #8a948c; font-weight: 400; }
+.fm-fotos-campos { display: grid; grid-template-columns: 1fr 140px; gap: 10px; margin-top: 10px; }
+.fm-fotos-campos label { margin: 0; font-size: 11px; font-weight: 700; }
+.fm-th-fotos { min-width: 170px; }
+.fm-cel-fotos { padding: 3px 6px !important; background: #fbfdf8; }
 </style>

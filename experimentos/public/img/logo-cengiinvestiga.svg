@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" role="img" aria-label="Símbolo CengiInvestiga: regla de campo, gráfico de resultados y caña de azúcar">
+  <defs>
+    <linearGradient id="cc-anillo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#bcf32e"/>
+      <stop offset="1" stop-color="#5aa816"/>
+    </linearGradient>
+    <radialGradient id="cc-fondo" cx=".45" cy=".4" r=".7">
+      <stop offset="0" stop-color="#0d5a22"/>
+      <stop offset="1" stop-color="#03300f"/>
+    </radialGradient>
+    <linearGradient id="cc-cana" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f4ffe0"/>
+      <stop offset="1" stop-color="#a9dc4c"/>
+    </linearGradient>
+    <linearGradient id="cc-hoja" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#7cc62a"/>
+      <stop offset="1" stop-color="#e9ffb8"/>
+    </linearGradient>
+    <clipPath id="cc-dentro"><circle cx="290" cy="250" r="156"/></clipPath>
+  </defs>
+  <!-- Regla de medición de campo (equivale al mango de la lupa de Cengitech) -->
+  <g transform="translate(178 362) rotate(-45)">
+    <rect x="-205" y="-26" width="215" height="52" rx="9" fill="url(#cc-anillo)"/>
+    <g fill="#073c18" opacity=".75">
+      <rect x="-190" y="-26" width="5" height="24" rx="2"/>
+      <rect x="-172" y="-26" width="5" height="14" rx="2"/>
+      <rect x="-154" y="-26" width="5" height="24" rx="2"/>
+      <rect x="-136" y="-26" width="5" height="14" rx="2"/>
+      <rect x="-118" y="-26" width="5" height="24" rx="2"/>
+      <rect x="-100" y="-26" width="5" height="14" rx="2"/>
+      <rect x="-82" y="-26" width="5" height="24" rx="2"/>
+      <rect x="-64" y="-26" width="5" height="14" rx="2"/>
+    </g>
+  </g>
+
+  <!-- Gráfico de resultados al alza (equivale a los nodos de circuito de Cengitech) -->
+  <g transform="translate(24 -4)">
+    <rect x="468" y="168" width="38" height="66" rx="8" fill="url(#cc-anillo)"/>
+    <rect x="522" y="124" width="38" height="110" rx="8" fill="url(#cc-anillo)"/>
+    <rect x="576" y="78" width="38" height="156" rx="8" fill="url(#cc-anillo)"/>
+    <rect x="468" y="168" width="38" height="14" rx="6" fill="#e9ffb8" opacity=".6"/>
+    <rect x="522" y="124" width="38" height="14" rx="6" fill="#e9ffb8" opacity=".6"/>
+    <rect x="576" y="78" width="38" height="14" rx="6" fill="#e9ffb8" opacity=".6"/>
+    <path d="M452 150 L520 96 L566 112 L646 40" fill="none" stroke="#FFCC00" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M664 22 L622 34 L652 66 Z" fill="#FFCC00" stroke="#FFCC00" stroke-width="6" stroke-linejoin="round"/>
+  </g>
+  <!-- Anillo -->
+  <circle cx="290" cy="250" r="178" fill="url(#cc-fondo)" stroke="url(#cc-anillo)" stroke-width="44"/>
+
+  <!-- Interior: caña y hojas -->
+  <g clip-path="url(#cc-dentro)">
+    <g transform="rotate(-8 262 260)">
+      <rect x="240" y="128" width="44" height="74" rx="12" fill="url(#cc-cana)"/>
+      <rect x="240" y="208" width="44" height="80" rx="12" fill="url(#cc-cana)"/>
+      <rect x="240" y="294" width="44" height="80" rx="12" fill="url(#cc-cana)"/>
+      <rect x="240" y="380" width="44" height="60" rx="12" fill="url(#cc-cana)"/>
+    </g>
+    <g transform="rotate(22 330 330)">
+      <rect x="312" y="270" width="36" height="62" rx="10" fill="url(#cc-cana)" opacity=".95"/>
+      <rect x="312" y="338" width="36" height="70" rx="10" fill="url(#cc-cana)" opacity=".95"/>
+    </g>
+    <path d="M268 236 C 276 160, 330 112, 404 104 C 372 146, 330 196, 268 236 Z" fill="url(#cc-hoja)"/>
+    <path d="M276 196 C 300 176, 340 156, 380 150" fill="none" stroke="#0d5a22" stroke-width="4" stroke-linecap="round" opacity=".35"/>
+    <path d="M256 290 C 222 236, 186 214, 150 214 C 178 246, 206 280, 256 290 Z" fill="url(#cc-hoja)" opacity=".9"/>
+    <path d="M300 268 C 344 236, 392 232, 430 248 C 392 262, 350 278, 300 268 Z" fill="url(#cc-hoja)" opacity=".8"/>
+  </g>
+</svg>

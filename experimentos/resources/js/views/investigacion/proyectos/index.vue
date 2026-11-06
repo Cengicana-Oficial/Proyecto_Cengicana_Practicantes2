@@ -1,5 +1,50 @@
 <template>
   <div class="pry">
+    <!-- ============ Programas: primer nivel de la jerarquia (filtran los proyectos) ============ -->
+    <section class="pp-progs" aria-label="Programas de investigacion">
+      <div class="pp-tabs" role="tablist" aria-label="Filtrar por programa">
+        <span class="pp-tabs-l"><i class="fas fa-layer-group"></i> Programa</span>
+        <button type="button" role="tab" class="pp-tab is-todos" :class="{ 'is-on': !filtroPrograma }" :aria-selected="!filtroPrograma" @click="filtroPrograma = null">
+          Todos <small>{{ items.length }}</small>
+        </button>
+        <button
+          v-for="pg in programasOrdenados" :key="pg.id" type="button" role="tab" class="pp-tab"
+          :class="{ 'is-on': filtroPrograma === pg.id, 'is-vacio': !proyectosDe(pg.id) }" :style="estiloPrograma(pg)"
+          :aria-selected="filtroPrograma === pg.id"
+          :title="`${pg.nombre}: ${proyectosDe(pg.id)} proyecto(s), ${pg.ensayos_count || 0} ensayo(s)${enCampo(pg) ? ', ' + enCampo(pg) + ' en campo' : ''}`"
+          @click="elegirPrograma(pg.id)"
+        >
+          <i class="pp-tab-dot"></i><b>{{ pg.sigla || '?' }}</b><span class="pp-tab-n">{{ pg.nombre }}</span>
+          <small>{{ proyectosDe(pg.id) }}</small><i v-if="enCampo(pg)" class="fas fa-seedling pp-tab-campo" :title="`${enCampo(pg)} ensayo(s) en campo`"></i>
+        </button>
+        <button v-if="puedeGestionarProgramas" type="button" class="pp-tab is-nuevo" title="Nuevo programa" @click="$refs.programaModal.abrirCrear()"><i class="fas fa-plus"></i></button>
+      </div>
+
+      <!-- Ficha del programa elegido -->
+      <div v-if="programaFiltrado" class="pp-ficha" :style="estiloPrograma(programaFiltrado)">
+        <span class="pp-ficha-av">{{ programaFiltrado.sigla }}</span>
+        <div class="pp-ficha-txt">
+          <b>{{ programaFiltrado.nombre }}</b>
+          <small>
+            <template v-if="programaFiltrado.lider"><i class="fas fa-user-tie"></i> {{ programaFiltrado.lider }} · </template>
+            {{ proyectosDe(programaFiltrado.id) }} proyecto(s) · {{ programaFiltrado.ensayos_count || 0 }} ensayo(s)<template v-if="enCampo(programaFiltrado)">, {{ enCampo(programaFiltrado) }} en campo</template>
+            · <i class="fas fa-users"></i> {{ (programaFiltrado.miembros || []).length }} con acceso
+            <template v-if="programaFiltrado.ultima_actividad"> · actividad {{ relativo(programaFiltrado.ultima_actividad).toLowerCase() }}</template>
+          </small>
+          <p v-if="programaFiltrado.descripcion" :title="programaFiltrado.descripcion">{{ programaFiltrado.descripcion }}</p>
+        </div>
+        <div class="pp-ficha-acc">
+          <template v-if="puedeGestionarProgramas">
+            <button type="button" class="pry-icon" title="Editar programa" @click="$refs.programaModal.abrirEditar(programaFiltrado)"><i class="fas fa-pen"></i></button>
+            <button type="button" class="pry-icon is-danger" :class="{ 'is-locked': proyectosDe(programaFiltrado.id) }" :title="proyectosDe(programaFiltrado.id) ? 'Tiene proyectos: no se puede eliminar' : 'Eliminar programa'" @click="eliminarPrograma(programaFiltrado)"><i class="fas fa-trash"></i></button>
+          </template>
+          <button v-if="puedeCrear" type="button" class="btn btn-sm btn-success" @click="abrirCrear(programaFiltrado.id)">
+            <i class="fas fa-plus"></i> Nuevo proyecto<small v-if="programaFiltrado.proximo_codigo"> · {{ programaFiltrado.proximo_codigo }}</small>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ Resumen (los indicadores filtran la lista) ============ -->
     <div class="pry-stats">
       <button
@@ -23,9 +68,9 @@
         <i class="fas fa-search"></i>
         <input type="search" class="form-control" v-model="busqueda" placeholder="Buscar proyecto, codigo, responsable o ensayo...">
       </div>
-      <select class="form-control pry-sel" v-model="filtroPrograma" aria-label="Programa">
-        <option :value="null">Todos los programas</option>
-        <option v-for="prog in programas" :key="prog.id" :value="prog.id">{{ prog.sigla ? prog.sigla + ' · ' : '' }}{{ prog.nombre }}</option>
+      <select class="form-control pry-sel" v-model="filtroZafra" aria-label="Zafra" title="Proyectos activos en la zafra">
+        <option value="">Todas las zafras</option>
+        <option v-for="z in zafrasDisponibles" :key="z" :value="z">Zafra {{ z }}{{ z === zafraHoy ? ' (actual)' : '' }}</option>
       </select>
       <select class="form-control pry-sel" v-model="filtroEstado" aria-label="Estado">
         <option value="">Todos los estados</option>
@@ -37,7 +82,7 @@
         <option value="actividad">Ordenar: ultima actividad</option>
         <option value="ensayos">Ordenar: mas ensayos</option>
       </select>
-      <button v-if="puedeCrear" class="btn btn-success pry-nuevo" @click="abrirCrear">
+      <button v-if="puedeCrear" class="btn btn-success pry-nuevo" @click="abrirCrear(filtroPrograma)">
         <i class="fas fa-plus"></i> Nuevo proyecto
       </button>
     </div>
@@ -58,13 +103,19 @@
       <div class="pry-head">
         <span>Proyecto</span><span>Responsable</span><span>Periodo</span><span>Ensayos por estado</span><span class="pry-c">Muestras</span><span>Actividad</span><span></span>
       </div>
+      <template v-for="g in grupos">
+      <div v-if="!filtroPrograma" :key="'g' + g.id" class="pry-grupo" :style="estiloPrograma(g.programa)">
+        <a href="#" @click.prevent="elegirPrograma(g.id)"><span class="pry-grupo-av">{{ g.programa ? g.programa.sigla : '?' }}</span> {{ g.programa ? g.programa.nombre : 'Sin programa' }}</a>
+        <small>{{ g.items.length }} proyecto(s)</small>
+        <button v-if="puedeCrear && g.programa" type="button" class="pry-grupo-add" :title="`Nuevo proyecto en ${g.programa.nombre}`" @click="abrirCrear(g.id)"><i class="fas fa-plus"></i> Proyecto</button>
+      </div>
       <div
-        v-for="p in proyectosFiltrados" :key="p.id" class="pry-fila" :style="{ '--prog': colorPrograma(p) }"
+        v-for="p in g.items" :key="p.id" class="pry-fila" :style="{ '--prog': colorPrograma(p) }"
         tabindex="0" role="button" :aria-label="`Ver detalle de ${p.codigo}`"
         @click="abrirDetalle(p)" @keydown.enter.self="abrirDetalle(p)"
       >
         <div class="pry-main">
-          <span class="pry-cod">{{ p.codigo }}</span>
+          <span class="pry-cod">{{ p.codigo }}<span v-if="situacion(p)" class="pry-zafra-tag" :style="estiloSituacion(p)" :title="`Situacion en la zafra ${filtroZafra}`">{{ SITUACIONES[situacion(p)].texto }}</span></span>
           <b :title="p.nombre">{{ p.nombre }}</b>
           <small :title="p.objetivo">{{ p.programa ? p.programa.nombre : 'Sin programa' }}<template v-if="p.objetivo"> · {{ p.objetivo }}</template></small>
         </div>
@@ -108,11 +159,16 @@
           <button v-if="puedeEliminar" type="button" class="pry-icon is-danger" :class="{ 'is-locked': p.ensayos_count }" :title="p.ensayos_count ? 'Tiene ensayos: no se puede eliminar' : 'Eliminar proyecto'" @click="eliminar(p)"><i class="fas fa-trash"></i></button>
         </div>
       </div>
+      </template>
     </div>
 
     <div v-else class="pry-vacio-box">
       <i class="fas fa-folder-open"></i>
-      <template v-if="items.length">
+      <template v-if="programaFiltrado && !proyectosDe(programaFiltrado.id)">
+        <b>{{ programaFiltrado.nombre }} aun no tiene proyectos.</b>
+        <button v-if="puedeCrear" type="button" class="btn btn-sm btn-success" @click="abrirCrear(programaFiltrado.id)"><i class="fas fa-plus"></i> Crear el primer proyecto de {{ programaFiltrado.sigla }}</button>
+      </template>
+      <template v-else-if="items.length">
         <b>Ningun proyecto coincide con los filtros.</b>
         <button type="button" class="btn btn-sm btn-secondary" @click="limpiar">Limpiar filtros</button>
       </template>
@@ -128,12 +184,15 @@
       <aside v-if="detalle" class="pry-panel" :style="{ '--prog': colorPrograma(detalle) }" role="dialog" aria-modal="true" :aria-label="`Detalle de ${detalle.codigo}`">
         <header class="pry-panel-h">
           <div class="pry-panel-t">
-            <span class="pry-cod">{{ detalle.codigo }}</span>
+            <nav class="pry-migas" aria-label="Ubicacion">
+              <a v-if="detalle.programa" href="#" :title="`Ver todos los proyectos de ${detalle.programa.nombre}`" @click.prevent="elegirPrograma(detalle.programa_id); detalle = null">
+                <i class="fas fa-layer-group"></i> {{ detalle.programa.sigla }} · {{ detalle.programa.nombre }}
+              </a>
+              <i class="fas fa-chevron-right"></i>
+              <span class="pry-cod">{{ detalle.codigo }}</span>
+              <span class="pry-estado" :class="'is-' + detalle.estado.toLowerCase()">{{ detalle.estado }}</span>
+            </nav>
             <h3>{{ detalle.nombre }}</h3>
-            <small>
-              <a v-if="detalle.programa" :href="`${programasUrl}`"><i class="fas fa-layer-group"></i> {{ detalle.programa.nombre }}</a>
-              · <span class="pry-estado" :class="'is-' + detalle.estado.toLowerCase()">{{ detalle.estado }}</span>
-            </small>
           </div>
           <button v-if="puedeEditar" type="button" class="pry-icon" title="Editar proyecto" @click="abrirEditar(detalle)"><i class="fas fa-pen"></i></button>
           <button type="button" class="pry-icon" title="Cerrar (Esc)" @click="detalle = null"><i class="fas fa-times"></i></button>
@@ -162,7 +221,7 @@
           <!-- Ensayos -->
           <section class="pry-sec">
             <div class="pry-sec-h">
-              <h4><i class="fas fa-seedling"></i> Ensayos <span class="pry-badge">{{ (detalle.ensayos || []).length }}</span></h4>
+              <h4><icono-cana :tamano="20"></icono-cana> Ensayos <span class="pry-badge">{{ (detalle.ensayos || []).length }}</span></h4>
               <a v-if="(detalle.ensayos || []).length" :href="`${ensayosUrl}?proyecto=${detalle.id}`">Ver en Ensayos <i class="fas fa-arrow-right"></i></a>
             </div>
             <ul v-if="(detalle.ensayos || []).length" class="pry-ens">
@@ -188,11 +247,27 @@
                 </div>
               </li>
             </ul>
-            <div v-else class="pry-vacio-box is-mini"><i class="fas fa-seedling"></i> Este proyecto aun no tiene ensayos.</div>
+            <div v-else class="pry-vacio-box is-mini"><icono-cana :tamano="18" apagado></icono-cana> Este proyecto aun no tiene ensayos.</div>
             <div v-if="puedeCrearEnsayo && detalle.estado !== 'Finalizado'" class="pry-proximo">
               <span>Proximo ensayo: <b class="pry-cod">{{ detalle.proximo_ensayo }}</b></span>
               <a class="btn btn-sm btn-success" :href="`${ensayosUrl}?proyecto=${detalle.id}&nuevo=1`"><i class="fas fa-plus"></i> Nuevo ensayo</a>
             </div>
+          </section>
+
+          <!-- Archivos del proyecto y de sus ensayos -->
+          <section class="pry-sec">
+            <div class="pry-sec-h">
+              <h4><i class="fas fa-paperclip"></i> Archivos <span class="pry-badge">{{ (detalle.archivos || []).length }}</span></h4>
+              <a v-if="archivosUrl" :href="archivosUrl">Ir a Archivos <i class="fas fa-arrow-right"></i></a>
+            </div>
+            <ul v-if="(detalle.archivos || []).length" class="pry-arch">
+              <li v-for="a in detalle.archivos" :key="a.id">
+                <i :class="iconoArchivo(a)"></i>
+                <a :href="`${storageUrl}/${a.path}`" target="_blank" rel="noopener" :title="`Abrir ${a.nombre}`">{{ a.nombre }}</a>
+                <small>{{ a.ensayo || 'Proyecto' }}<template v-if="a.carpeta"> · {{ a.carpeta }}</template><template v-if="a.fecha"> · {{ fecha(a.fecha) }}</template></small>
+              </li>
+            </ul>
+            <p v-else class="pry-vacio pry-arch-vacio">Sin archivos. Se suben en Archivos (al proyecto) o en el detalle de cada ensayo.</p>
           </section>
 
           <!-- Equipo -->
@@ -242,7 +317,7 @@
                   <label>Programa <span class="pry-req">*</span></label>
                   <select class="form-control" :class="{ 'is-invalid': errors.programa_id }" v-model="form.programa_id">
                     <option :value="null">Seleccione...</option>
-                    <option v-for="prog in programas" :key="prog.id" :value="prog.id">{{ prog.sigla ? prog.sigla + ' · ' : '' }}{{ prog.nombre }}</option>
+                    <option v-for="prog in programasItems" :key="prog.id" :value="prog.id">{{ prog.sigla ? prog.sigla + ' · ' : '' }}{{ prog.nombre }}</option>
                   </select>
                   <span class="invalid-feedback" v-if="errors.programa_id">{{ errors.programa_id[0] }}</span>
                 </div>
@@ -302,17 +377,26 @@
         </div>
       </div>
     </div>
+
+    <programa-modal v-if="puedeGestionarProgramas" ref="programaModal" :programas="programasItems" :paleta="paleta" @guardado="programaGuardado"></programa-modal>
   </div>
 </template>
 
 <script>
+import ProgramaModal, { TONOS } from '../programas/programa-modal.vue';
+import { zafraDe, zafraActual, zafrasEntre, periodoProyecto, situacionEnZafra, SITUACIONES } from '../../../zafra';
+
 const DIA = 86400000;
 
 export default {
   name: 'ProyectosIndex',
+  components: { ProgramaModal },
   props: {
     proyectos: { type: Array, default: () => [] },
+    // Programas con conteos y resumen (ProgramasController::listado).
     programas: { type: Array, default: () => [] },
+    paleta: { type: Array, default: () => Object.keys(TONOS) },
+    puedeGestionarProgramas: { type: Boolean, default: false },
     responsables: { type: Array, default: () => [] },
     rolesEquipo: { type: Array, default: () => [] },
     diasSinActividad: { type: Number, default: 30 },
@@ -324,6 +408,8 @@ export default {
     evaluacionesUrl: { type: String, default: null },
     muestrasUrl: { type: String, default: null },
     programasUrl: { type: String, default: '' },
+    archivosUrl: { type: String, default: '' },
+    storageUrl: { type: String, default: '' },
   },
   data() {
     const qs = new URLSearchParams(window.location.search);
@@ -336,9 +422,13 @@ export default {
         { id: 'Finalizado', color: '#2a78d6', texto: '#ffffff' },
       ],
       items: this.proyectos.slice(),
+      programasItems: this.programas.slice(),
       busqueda: '',
       filtroEstado: '',
       filtroRapido: '',
+      SITUACIONES,
+      zafraHoy: zafraActual(),
+      filtroZafra: /^\d{4}-\d{4}$/.test(qs.get('zafra') || '') ? qs.get('zafra') : '',
       // ?programa=ID llega desde Programas.
       filtroPrograma: Number(qs.get('programa')) || null,
       orden: 'codigo',
@@ -354,8 +444,25 @@ export default {
   },
   computed: {
     hoy() { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); },
-    programaFiltrado() { return this.programas.find((p) => p.id === this.filtroPrograma) || null; },
-    hayFiltros() { return !!(this.busqueda.trim() || this.filtroEstado || this.filtroRapido || this.filtroPrograma); },
+    programaFiltrado() { return this.programasItems.find((p) => p.id === this.filtroPrograma) || null; },
+    // Primero los programas con proyectos; dentro de cada grupo, por sigla.
+    programasOrdenados() {
+      const sigla = (a, b) => String(a.sigla || a.nombre).localeCompare(String(b.sigla || b.nombre), 'es');
+      return this.programasItems.slice().sort((a, b) => (this.proyectosDe(b.id) > 0) - (this.proyectosDe(a.id) > 0) || sigla(a, b));
+    },
+    /** Proyectos filtrados agrupados por programa (en orden de sigla), conservando el orden elegido. */
+    grupos() {
+      const orden = this.programasItems.slice().sort((a, b) => String(a.sigla || a.nombre).localeCompare(String(b.sigla || b.nombre), 'es'));
+      const grupos = orden.map((pg) => ({ id: pg.id, programa: pg, items: [] }));
+      const sinPrograma = { id: 0, programa: null, items: [] };
+      this.proyectosFiltrados.forEach((p) => (grupos.find((g) => g.id === p.programa_id) || sinPrograma).items.push(p));
+      return [...grupos, sinPrograma].filter((g) => g.items.length);
+    },
+    hayFiltros() { return !!(this.busqueda.trim() || this.filtroEstado || this.filtroRapido || this.filtroPrograma || this.filtroZafra); },
+    zafrasDisponibles() {
+      const inicios = this.items.map((p) => zafraDe(periodoProyecto(p).inicio)).filter(Boolean).sort();
+      return inicios.length ? zafrasEntre(inicios[0], [inicios[inicios.length - 1], this.zafraHoy].sort().pop()).reverse() : [this.zafraHoy];
+    },
     resumen() {
       const activos = this.items.filter((p) => p.estado === 'Activo');
       const enCampo = this.items.reduce((s, p) => s + ((p.ensayos_estado || {})['En campo'] || 0), 0);
@@ -378,6 +485,7 @@ export default {
       const lista = this.items.filter((p) => rapido(p)
         && (!this.filtroEstado || p.estado === this.filtroEstado)
         && (!this.filtroPrograma || p.programa_id === this.filtroPrograma)
+        && (!this.filtroZafra || !!this.situacion(p))
         && (!q || this.normalizar([
           p.codigo, p.nombre, p.objetivo, p.programa && p.programa.nombre, p.responsable && p.responsable.name,
           ...(p.equipo || []).map((a) => a.nombre),
@@ -399,11 +507,24 @@ export default {
   },
   mounted() {
     // Desde Programas: ?programa=ID&nuevo=1 abre el alta con el programa ya elegido.
-    if (new URLSearchParams(window.location.search).get('nuevo') === '1' && this.puedeCrear) this.$nextTick(() => this.abrirCrear());
+    const qs = new URLSearchParams(window.location.search);
+    if (qs.get('nuevo') === '1' && this.puedeCrear) this.$nextTick(() => this.abrirCrear());
+    // Desde el detalle de un ensayo: ?proyecto=ID abre la ficha de su proyecto.
+    const proyecto = this.items.find((p) => p.id === Number(qs.get('proyecto')));
+    if (proyecto) this.abrirDetalle(proyecto);
     window.addEventListener('keydown', this.onEsc);
   },
   beforeDestroy() { window.removeEventListener('keydown', this.onEsc); },
   watch: {
+    // El programa elegido queda en la URL (?programa=ID) para compartir o volver al mismo punto.
+    filtroPrograma(id) {
+      try {
+        const url = new URL(window.location.href);
+        if (id) url.searchParams.set('programa', id); else url.searchParams.delete('programa');
+        url.searchParams.delete('nuevo');
+        window.history.replaceState(null, '', url);
+      } catch (e) { /* navegador sin URL API */ }
+    },
     'form.programa_id': 'previsualizarCodigo',
     'form.inicio': 'previsualizarCodigo',
   },
@@ -421,7 +542,52 @@ export default {
     },
     esViejo(f) { return !f || this.hoy - this.dia(f) > this.diasSinActividad * DIA; },
     iniciales(nombre) { return String(nombre || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0].toUpperCase()).join(''); },
-    colorPrograma(p) { const prog = this.programas.find((x) => x.id === p.programa_id); return (prog && prog.color) || '#CED2D5'; },
+    colorPrograma(p) { const prog = this.programasItems.find((x) => x.id === p.programa_id); return (prog && prog.color) || '#CED2D5'; },
+    estiloPrograma(pg) {
+      const c = (pg && pg.color && TONOS[String(pg.color).toUpperCase()]) ? pg.color : '#CED2D5';
+      return { '--pg': c, '--pg-osc': TONOS[String(c).toUpperCase()].oscuro };
+    },
+    proyectosDe(id) { return this.items.filter((p) => p.programa_id === id).length; },
+    iconoArchivo(a) {
+      const ext = String(a.nombre || '').split('.').pop().toLowerCase();
+      if (ext === 'pdf') return 'far fa-file-pdf';
+      if (['xls', 'xlsx', 'csv'].includes(ext)) return 'far fa-file-excel';
+      if (['doc', 'docx'].includes(ext)) return 'far fa-file-word';
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'tif', 'tiff'].includes(ext)) return 'far fa-file-image';
+      return 'far fa-file';
+    },
+    enCampo(pg) { return (pg.ensayos_estado || {})['En campo'] || 0; },
+    elegirPrograma(id) { this.filtroPrograma = this.filtroPrograma === id ? null : id; },
+    programaGuardado(data, editado) {
+      // Cambio de sigla: se recodificaron proyectos, ensayos y muestras; se recarga para verlos.
+      if (data.recodificados) { window.location.reload(); return; }
+      const idx = this.programasItems.findIndex((x) => x.id === data.id);
+      if (idx >= 0) this.$set(this.programasItems, idx, data); else this.programasItems.push(data);
+      // Los proyectos traen su programa embebido (nombre/sigla del detalle).
+      if (editado) this.items.forEach((p) => { if (p.programa_id === data.id && p.programa) Object.assign(p.programa, { nombre: data.nombre, sigla: data.sigla, color: data.color }); });
+      else this.filtroPrograma = data.id;
+    },
+    eliminarPrograma(pg) {
+      const n = this.proyectosDe(pg.id) || pg.proyectos_count || 0;
+      if (n) {
+        this.$swal.fire({ icon: 'info', title: 'No se puede eliminar', html: `<b>${this.escapar(pg.nombre)}</b> tiene ${n} proyecto(s).<br>Reasigne o elimine esos proyectos primero.`, confirmButtonColor: '#73BC25' });
+        return;
+      }
+      this.$swal.fire({
+        title: 'Eliminar programa', html: `Se eliminara <b>${this.escapar(pg.nombre)}</b>. Esta accion no se puede deshacer.`, icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'Si, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#FF6B00', cancelButtonColor: '#CED2D5', focusCancel: true,
+      }).then((res) => {
+        if (!res.isConfirmed) return;
+        window.axios.delete(`/investigacion/programas/${pg.id}`)
+          .then(() => {
+            this.programasItems = this.programasItems.filter((x) => x.id !== pg.id);
+            if (this.filtroPrograma === pg.id) this.filtroPrograma = null;
+            this.$swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Programa eliminado', timer: 2000, showConfirmButton: false });
+          })
+          .catch((err) => this.$swal.fire({ icon: 'error', title: 'No se pudo eliminar', text: (err.response && err.response.data && err.response.data.message) || 'Ocurrio un error.' }));
+      });
+    },
+    escapar(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; },
     estiloEstado(estado) { const s = this.ESTADOS_ENSAYO.find((x) => x.id === estado); return s ? { background: s.color, color: s.texto } : {}; },
     // Porcentaje del periodo (inicio-fin) ya transcurrido.
     avance(p) {
@@ -433,7 +599,9 @@ export default {
     vencido(p) { return p.estado !== 'Finalizado' && this.diasParaFin(p) !== null && this.diasParaFin(p) < 0; },
     porVencer(p) { return p.estado !== 'Finalizado' && this.diasParaFin(p) !== null && this.diasParaFin(p) <= 30; },
     sinActividad(p) { return (p.ensayos_estado || {})['En campo'] > 0 && this.esViejo(p.ultima_actividad); },
-    limpiar() { this.busqueda = ''; this.filtroEstado = ''; this.filtroRapido = ''; this.filtroPrograma = null; },
+    limpiar() { this.busqueda = ''; this.filtroEstado = ''; this.filtroRapido = ''; this.filtroPrograma = null; this.filtroZafra = ''; },
+    situacion(p) { return this.filtroZafra ? situacionEnZafra(periodoProyecto(p), this.filtroZafra) : null; },
+    estiloSituacion(p) { const s = SITUACIONES[this.situacion(p)]; return { background: s.fondo, color: s.color, borderColor: s.color }; },
     abrirDetalle(p) { this.detalle = p; this.nuevoIntegrante.usuario_id = null; },
     onEsc(e) {
       if (e.key === 'Escape' && this.detalle && !document.body.classList.contains('modal-open')) this.detalle = null;
@@ -455,9 +623,9 @@ export default {
     formVacio() {
       return { nombre: '', programa_id: null, responsable_id: null, objetivo: '', inicio: '', fin: '', estado: 'Activo' };
     },
-    abrirCrear() {
+    abrirCrear(programaId = null) {
       this.editando = null;
-      this.form = { ...this.formVacio(), programa_id: this.filtroPrograma };
+      this.form = { ...this.formVacio(), programa_id: (typeof programaId === 'number' && programaId) || this.filtroPrograma };
       this.errors = {};
       this.previsualizarCodigo();
       window.$(this.$refs.modal).modal('show');
@@ -564,6 +732,82 @@ export default {
 <style scoped>
 .pry { --verde: #73BC25; --verde-osc: #3f7a12; --borde: #e3e7e4; --suave: #5f6b66; --tinta: #1f2a1a; }
 
+/* ---------- Programas (primer nivel) ---------- */
+.pp-progs { margin-bottom: 14px; }
+/* Una sola fila de pestanas; si no caben, se desplaza horizontalmente. */
+.pp-tabs {
+  display: flex; align-items: center; gap: 6px; padding: 6px; overflow-x: auto; border: 1px solid var(--borde); border-radius: 12px; background: #fff;
+  scrollbar-width: thin;
+}
+.pp-tabs-l { flex: none; padding: 0 6px 0 4px; color: var(--suave); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.pp-tabs-l i { margin-right: 3px; color: var(--verde); }
+.pp-tab {
+  --pg: #CED2D5; --pg-osc: #5b6267;
+  display: inline-flex; flex: none; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: 9px;
+  background: transparent; color: #33433a; font-size: 12.5px; white-space: nowrap; cursor: pointer; transition: background .12s, border-color .12s;
+}
+.pp-tab:hover { background: #f4f7f1; }
+.pp-tab:focus-visible { outline: 2px solid rgba(115, 188, 37, .55); outline-offset: 1px; }
+.pp-tab b { color: var(--pg-osc); font-family: 'Space Grotesk', sans-serif; font-size: 12.5px; }
+.pp-tab-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pg); }
+.pp-tab-n { max-width: 130px; overflow: hidden; color: var(--suave); text-overflow: ellipsis; }
+.pp-tab small { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: #f0f2f0; color: #5b6267; font-size: 11px; font-weight: 700; text-align: center; }
+.pp-tab-campo { color: #5a9e1a; font-size: 11px; }
+.pp-tab.is-vacio { opacity: .62; }
+.pp-tab.is-vacio:hover, .pp-tab.is-vacio.is-on { opacity: 1; }
+.pp-tab.is-on { border-color: var(--pg); background: color-mix(in srgb, var(--pg) 14%, #fff); }
+.pp-tab.is-on .pp-tab-n { color: var(--tinta); }
+.pp-tab.is-on small { background: var(--pg); color: #fff; }
+.pp-tab.is-todos { --pg: #73BC25; --pg-osc: #3f7a12; font-weight: 700; }
+.pp-tab.is-nuevo { width: 34px; justify-content: center; margin-left: auto; border: 1px dashed #CED2D5; color: var(--verde); }
+.pp-tab.is-nuevo:hover { border-color: var(--verde); background: #f3f9ea; }
+/* Ficha del programa elegido: una franja delgada */
+.pp-ficha {
+  --pg: #CED2D5; --pg-osc: #5b6267;
+  display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--pg) 45%, #fff);
+  border-left: 4px solid var(--pg); border-radius: 10px; background: color-mix(in srgb, var(--pg) 7%, #fff);
+}
+.pp-ficha-av { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: color-mix(in srgb, var(--pg) 22%, #fff); color: var(--pg-osc); font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700; }
+.pp-ficha-txt { flex: 1; min-width: 0; line-height: 1.3; }
+.pp-ficha-txt b { color: var(--tinta); font-size: 13.5px; }
+.pp-ficha-txt small { display: block; color: var(--suave); font-size: 11.5px; }
+.pp-ficha-txt small i { color: var(--pg-osc); }
+.pp-ficha-txt p { margin: 2px 0 0; overflow: hidden; color: #4d5a48; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.pp-ficha-acc { display: flex; flex: none; align-items: center; gap: 4px; }
+.pp-ficha .btn small { opacity: .85; font-weight: 500; }
+@media (max-width: 767px) {
+  .pp-ficha { flex-wrap: wrap; }
+  .pp-ficha-acc { width: 100%; justify-content: flex-end; }
+  .pp-tab-n { display: none; }
+}
+
+/* ---------- Grupos por programa en la lista ---------- */
+.pry-grupo {
+  --pg: #CED2D5; --pg-osc: #5b6267;
+  display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid #edf1ec;
+  background: color-mix(in srgb, var(--pg) 8%, #fff);
+}
+.pry-grupo a { display: inline-flex; align-items: center; gap: 8px; color: var(--pg-osc); font-size: 13px; font-weight: 700; }
+.pry-grupo-av { padding: 1px 7px; border-radius: 6px; background: var(--pg); color: #fff; font-family: 'Space Grotesk', sans-serif; font-size: 11px; }
+.pry-grupo small { color: var(--suave); font-size: 11.5px; }
+.pry-grupo-add { margin-left: auto; padding: 2px 9px; border: 1px solid color-mix(in srgb, var(--pg) 50%, #fff); border-radius: 7px; background: #fff; color: var(--pg-osc); font-size: 11.5px; font-weight: 600; }
+.pry-grupo-add:hover { border-color: var(--pg); }
+
+/* ---------- Archivos en el detalle ---------- */
+.pry-arch { margin: 0; padding: 0; list-style: none; }
+.pry-arch li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 6px 2px; border-bottom: 1px dashed #edf1ec; font-size: 12.5px; }
+.pry-arch li:last-child { border-bottom: 0; }
+.pry-arch li > i { color: var(--verde); }
+.pry-arch a { color: var(--tinta); font-weight: 600; word-break: break-word; }
+.pry-arch a:hover { color: var(--verde-osc); text-decoration: underline; }
+.pry-arch small { color: var(--suave); }
+.pry-arch-vacio { margin: 0; font-size: 12px; }
+
+/* ---------- Ruta en el detalle ---------- */
+.pry-migas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 12px; }
+.pry-migas a { color: var(--verde-osc); font-weight: 600; }
+.pry-migas > i { color: #CED2D5; font-size: 9px; }
+
 /* Resumen */
 .pry-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
 .pry-stat { display: flex; align-items: center; gap: 14px; padding: 14px 16px; text-align: left; font: inherit; background: #fff; border: 1px solid var(--borde); border-left: 4px solid var(--acento); border-radius: 12px; cursor: pointer; transition: box-shadow .15s, border-color .15s; }
@@ -604,6 +848,7 @@ export default {
 .pry-main b { font-size: 13.5px; color: var(--tinta); }
 .pry-main small { font-size: 11.5px; color: var(--suave); }
 .pry-cod { font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .03em; color: var(--verde-osc); }
+.pry-zafra-tag { display: inline-block; margin-left: 6px; padding: 0 7px; border: 1px solid; border-radius: 8px; font-family: inherit; font-size: 10px; letter-spacing: 0; vertical-align: 1px; }
 .pry-resp { min-width: 0; font-size: 12.5px; }
 .pry-resp span, .pry-resp small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pry-resp i { color: var(--suave); font-size: 11px; margin-right: 3px; }

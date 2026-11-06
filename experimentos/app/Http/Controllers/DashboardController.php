@@ -123,7 +123,8 @@ class DashboardController extends Controller
                     'programas' => Programa::visiblesPara($user)->count(),
                     'proyectos' => Proyecto::visiblesPara($user)->count(),
                     'ingenios' => $ensayos->pluck('ingenio_id')->filter()->unique()->count(),
-                    'investigadores' => $ensayos->pluck('responsable_id')->filter()->unique()->count(),
+                    // Personas distintas a cargo de ensayos (todos los responsables, no solo el principal).
+                    'investigadores' => DB::table('ensayo_responsables')->whereIn('ensayo_id', $ensayos->pluck('id'))->distinct()->count('user_id'),
                 ],
                 'meses' => $meses,
                 'flujo' => $flujo,
@@ -203,7 +204,7 @@ class DashboardController extends Controller
         if ($p['admin']) {
             $rechazos = DB::table('lab_envios')->where('respuesta_http', '>=', 400)->where('recibido_en', '>=', $hoy->copy()->subDays(7))->count();
             if ($rechazos) {
-                $add('alerta', 'fas fa-shield-alt', "{$rechazos} envio(s) del Laboratorio rechazados en 7 dias", 'Revise la bitacora de envios de la API', route('soporte.muestras-consulta.index'));
+                $add('alerta', 'fas fa-shield-alt', "{$rechazos} envio(s) del Laboratorio rechazados en 7 dias", 'Revise la bitacora de envios de la API', route('soporte.muestras.index'));
             }
         }
 

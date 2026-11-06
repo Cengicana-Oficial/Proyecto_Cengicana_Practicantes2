@@ -31,7 +31,14 @@ class MuestrasGenController extends Controller
     /** Datos base que llena el muestreador y se pueden ajustar por tipo (mostrar, obligatorio, etiqueta). */
     const BASE_EDITABLES = ['parcela' => 'texto', 'tratamiento' => 'texto', 'repeticion' => 'numero', 'obs' => 'texto'];
 
-    public function index()
+    /** La generacion es la pestaña "Generar etiquetas" de Muestras (MuestrasController). */
+    public function index(Request $request)
+    {
+        return redirect()->route('soporte.muestras.index', ['tab' => 'generar'] + $request->query());
+    }
+
+    /** Datos de la pestaña "Generar etiquetas". */
+    public function parametros(): array
     {
         Gate::authorize('create_muestra');
 
@@ -39,31 +46,26 @@ class MuestrasGenController extends Controller
         $ensayoIds = Ensayo::visiblesPara($user)->pluck('id');
         $ensayos = Ensayo::whereIn('id', $ensayoIds)->orderBy('codigo')->get(['id', 'codigo', 'proyecto_id', 'finca', 'lote', 'variedad']);
 
-        $tipos = AnaliticoPorTipo::select('tipo_muestra')->distinct()->orderBy('tipo_muestra')->pluck('tipo_muestra');
-        if ($tipos->isEmpty()) {
-            $tipos = collect(['Suelo', 'Tejido vegetal', 'Jugos', 'Mieles', 'Agua', 'Fertilizantes']);
-        }
+        // Tipos activos del catalogo (Sistema > Catalogos > Tipos de muestra), en su orden.
+        $tipos = \App\Models\TipoMuestra::where('activo', true)->orderBy('orden')->get();
 
-        return view('component', [
-            'title' => 'Generacion de ID de Muestras',
-            'component' => 'muestras-gen-index',
-            'params' => [
+        return [
                 'proyectos' => Proyecto::visiblesPara($user)->orderBy('codigo')->get(['id', 'codigo', 'nombre']),
                 'ensayos' => $ensayos,
                 'tratamientos' => Tratamiento::whereIn('ensayo_id', $ensayoIds)->orderBy('codigo')->get(['id', 'ensayo_id', 'codigo', 'descripcion']),
                 'parcelas' => Parcela::whereIn('ensayo_id', $ensayoIds)->orderBy('codigo')->get(['id', 'ensayo_id', 'tratamiento_id', 'codigo', 'repeticion']),
                 'tipos' => $tipos->map(fn ($t) => [
-                    'nombre' => $t,
-                    'codigo' => LaboratorioController::tipoCodigo($t),
-                    'analitos' => AnaliticoPorTipo::where('tipo_muestra', $t)->count(),
+                    'nombre' => $t->nombre,
+                    'codigo' => $t->codigo,
+                    'icono' => $t->icono,
+                    'analitos' => AnaliticoPorTipo::where('tipo_muestra', $t->nombre)->count(),
                 ])->values(),
-                // Ultima secuencia usada por prefijo y año, para mostrar los IDs antes de guardar.
+                // Ultima secuencia usada por prefijo {ensayo}-{tipo}, para mostrar los IDs antes de guardar.
                 'secuencias' => (object) $this->secuencias($ensayoIds),
                 'recientes' => $this->recientes($ensayoIds),
                 'campos' => CampoMuestra::orderBy('tipo_muestra')->orderBy('orden')->get(),
                 'puedeConfigurar' => $user->can('admin_only'),
-            ],
-        ]);
+        ];
     }
 
     /* ======================= Campos por tipo de muestra ======================= */
@@ -174,7 +176,8 @@ class MuestrasGenController extends Controller
 
         $data = $request->validate([
             'ensayo_id' => 'required|integer|exists:ensayos,id',
-            'tipo' => 'required|string|max:60',
+            // Solo tipos activos del catalogo (Sistema > Catalogos > Tipos de muestra).
+            'tipo' => ['required', 'string', 'max:60', \Illuminate\Validation\Rule::exists('tipos_muestra', 'nombre')->where('activo', true)],
             'fecha' => 'required|date|before_or_equal:today',
             'filas' => 'required|array|min:1|max:500',
             'filas.*.tratamiento_id' => 'nullable|integer',
@@ -231,16 +234,16 @@ class MuestrasGenController extends Controller
         }
 
         $prefijo = LaboratorioController::prefijoId($ensayo, $data['tipo']);
-        $anio = Carbon::parse($data['fecha'])->format('y');
 
-        $creadas = DB::transaction(function () use ($filas, $data, $ensayo, $prefijo, $anio) {
+        $creadas = DB::transaction(function () use ($filas, $data, $ensayo, $prefijo) {
             // Bloquea las muestras del ensayo para que dos lotes simultaneos no tomen la misma secuencia.
             MuestraLab::where('ensayo_id', $ensayo->id)->lockForUpdate()->get(['id']);
-            $sec = LaboratorioController::ultimaSecuencia($prefijo, $anio);
+            $sec = LaboratorioController::ultimaSecuencia($ensayo, $data['tipo']);
             $out = [];
             foreach ($filas as $f) {
                 $out[] = MuestraLab::create($f + [
-                    'id_muestra' => sprintf('%s%03d-%s', $prefijo, ++$sec, $anio),
+                    // COS-26-01-E01-AG025 (ver LaboratorioController::generarIdMuestra)
+                    'id_muestra' => sprintf('%s%03d', $prefijo, ++$sec),
                     'fecha' => $data['fecha'],
                     'tipo' => $data['tipo'],
                     'proyecto_id' => $ensayo->proyecto_id,
@@ -272,12 +275,16 @@ class MuestrasGenController extends Controller
         );
     }
 
+    /**
+     * Mayor secuencia por prefijo "{ensayo}-{tipo}" (p. ej. COS-26-01-E01-AG), contando los IDs
+     * nuevos (COS-26-01-E01-AG025) y los del formato anterior (SIGEC-COS-26-01-E01-AG-025-26).
+     */
     protected function secuencias($ensayoIds): array
     {
         $out = [];
         MuestraLab::whereIn('ensayo_id', $ensayoIds)->pluck('id_muestra')->each(function ($id) use (&$out) {
-            if (preg_match('/^(.*-)(\d+)-(\d{2})$/', $id, $m)) {
-                $k = $m[1] . '|' . $m[3];
+            if (preg_match('/^SIGEC-(.+-[A-Z]{2,3})-(\d+)-\d{2}$/i', $id, $m) || preg_match('/^(.+-[A-Z]{2,3})(\d+)$/i', $id, $m)) {
+                $k = mb_strtoupper($m[1]);
                 $out[$k] = max($out[$k] ?? 0, (int) $m[2]);
             }
         });

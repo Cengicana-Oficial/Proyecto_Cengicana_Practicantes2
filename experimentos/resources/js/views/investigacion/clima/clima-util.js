@@ -31,3 +31,15 @@ export function derivados(f, tbase) {
   }
   return { ...f, vpd, gdd };
 }
+
+// Menu de descarga de los graficos (se genera en el navegador; ver exporting en app.js).
+// scale 2: imagenes nitidas para informes y presentaciones.
+export const EXPORTAR = {
+  enabled: true,
+  scale: 2,
+  buttons: {
+    contextButton: {
+      menuItems: ['viewFullscreen', 'printChart', 'separator', 'downloadPNG', 'downloadJPEG', 'downloadPDF', 'downloadSVG', 'separator', 'downloadCSV', 'downloadXLS'],
+    },
+  },
+};

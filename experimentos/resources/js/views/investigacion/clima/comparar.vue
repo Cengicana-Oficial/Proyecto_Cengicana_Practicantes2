@@ -132,7 +132,7 @@
 </template>
 
 <script>
-import { PALETA, COLOR_ESTRATO, GRIS } from './clima-util';
+import { PALETA, COLOR_ESTRATO, GRIS, EXPORTAR } from './clima-util';
 
 const DIA = 86400000;
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -354,7 +354,7 @@ export default {
         return {
           chart: { type: 'column', height: 320, style: { fontFamily: 'inherit' } },
           title: { text: `${this.meta.nombre}: ${this.meta.sumable ? 'total' : 'promedio'} por año`, style: this.estiloTitulo },
-          credits: { enabled: false },
+          credits: { enabled: false }, exporting: EXPORTAR,
           xAxis: { categories: anios, lineColor: '#CED2D5', crosshair: true },
           yAxis: { title: { text: this.meta.unidad }, gridLineColor: '#edf1ec' },
           tooltip: { shared: true, valueDecimals: this.meta.dec, valueSuffix: ` ${this.meta.unidad}` },
@@ -369,7 +369,7 @@ export default {
       return {
         chart: { type: 'bar', height: Math.max(220, 34 * filas.length + 90), style: { fontFamily: 'inherit' } },
         title: { text: `${this.meta.nombre}: ${anual ? 'promedio anual' : this.meta.sumable ? 'total del periodo' : 'promedio del periodo'}`, style: this.estiloTitulo },
-        credits: { enabled: false }, legend: { enabled: false },
+        credits: { enabled: false }, exporting: EXPORTAR, legend: { enabled: false },
         xAxis: { categories: filas.map((f) => f.nombre), lineColor: '#CED2D5' },
         yAxis: {
           title: { text: this.meta.unidad }, gridLineColor: '#edf1ec',
@@ -431,7 +431,7 @@ export default {
       return {
         chart: { type: 'line', height: alto, zoomType: 'x', style: { fontFamily: 'inherit' } },
         title: { text: titulo, style: this.estiloTitulo },
-        credits: { enabled: false },
+        credits: { enabled: false }, exporting: EXPORTAR,
         xAxis: { categories: this.serie.etiquetas, lineColor: '#CED2D5', crosshair: true, labels: { step: Math.max(1, Math.ceil(this.serie.etiquetas.length / maxEtiquetas)) } },
         yAxis: { title: { text: this.meta.unidad }, gridLineColor: '#edf1ec' },
         tooltip: { shared: true, valueDecimals: this.meta.dec, valueSuffix: ` ${this.meta.unidad}` },

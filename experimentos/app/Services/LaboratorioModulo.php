@@ -13,18 +13,30 @@ use Throwable;
  * Vinculo: cuando el Laboratorio escanea la etiqueta QR de SIGEC, el ID queda en
  * muestra_identificacion.lectura_codigo (o en las etiquetas del lote). Con ese ID se
  * enlaza la muestra de SIGEC y se copia su avance; los resultados solo se toman del
- * informe FIRMADO (lab_informe.resultados_json), que es el resultado oficial.
+ * informe FIRMADO (lab_informe.resultados_json) que el Laboratorio COMPARTIO con
+ * Experimentos (lab_experimentos_compartido, boton del informe firmado).
  * SIGEC nunca escribe en la base del Laboratorio.
  */
 class LaboratorioModulo
 {
     const CONEXION = 'laboratorio';
 
+    /**
+     * ID de muestra impreso en la etiqueta QR: actual {ensayo}-{tipo}{n} (COS-26-01-E01-AG025)
+     * y anterior SIGEC-{ensayo}-{tipo}-{n}-{aa}. Igual que LAB_EXP_PATRON_ID del Laboratorio.
+     */
+    const PATRON_ID = '/SIGEC-[A-Z0-9-]+-\d{2}|\b[A-Z][A-Z0-9]{1,3}-\d{2}-\d{2,}-E\d{2,}-[A-Z]{2,3}\d{3,}\b/i';
+
+    /** Filtro previo en SQL (REGEXP de MySQL) para no leer todas las lecturas del Laboratorio. */
+    const REGEXP_SQL = 'SIGEC-|-E[0-9]{2,}-[A-Za-z]{2,3}[0-9]{3}';
+
     const CACHE_SYNC = 'sigec.laboratorio.ultima_sync';
 
     /** Estado del informe del lote en el Laboratorio => [texto para SIGEC, estado de la muestra en SIGEC]. */
     const ESTADOS = [
         'FIRMADO' => ['Informe firmado', 'Completado'],
+        // Firmado pero el Laboratorio aun no lo compartio: no se copian resultados.
+        'SIN_COMPARTIR' => ['Firmado, pendiente de compartir', 'En proceso'],
         'LISTO' => ['Lista para aprobacion', 'En proceso'],
         'DEVUELTO' => ['Devuelta al tecnico', 'En proceso'],
         'PREP' => ['En analisis', 'En proceso'],
@@ -75,7 +87,9 @@ class LaboratorioModulo
         $resumen = ['ok' => true, 'en' => now()->toDateTimeString(), 'vinculadas' => 0, 'con_resultado' => 0, 'actualizadas' => 0, 'sin_coincidencia' => 0, 'error' => null];
 
         try {
-            $sigec = MuestraLab::where('id_muestra', 'like', 'SIGEC-%')->get()->keyBy(fn ($m) => mb_strtoupper(trim($m->id_muestra)));
+            $sigec = MuestraLab::where('id_muestra', 'REGEXP', self::REGEXP_SQL)->get()
+                ->filter(fn ($m) => preg_match(self::PATRON_ID, $m->id_muestra))
+                ->keyBy(fn ($m) => mb_strtoupper(trim($m->id_muestra)));
             if ($sigec->isEmpty()) {
                 $this->recordar($resumen);
 
@@ -91,7 +105,8 @@ class LaboratorioModulo
                 });
             $filas = $codigos ? $this->detalleMuestras(array_keys($codigos)) : [];
             $formatos = config('laboratorio.formatos', []);
-            $equiv = config('laboratorio.equivalencias', []);
+            // Formato del informe del Laboratorio por tipo (catalogo de tipos de muestra; respaldo: config).
+            $equiv = \App\Models\TipoMuestra::porNombre()->filter(fn ($t) => $t->formato_informe)->map->formato_informe->all() + config('laboratorio.equivalencias', []);
             $unidadesLab = $codigos ? $this->unidadesPorAnalisis() : [];
 
             foreach ($codigos as $idLab => $codigoSigec) {
@@ -111,6 +126,9 @@ class LaboratorioModulo
                 $resumen['vinculadas']++;
 
                 $estadoInf = $f->inf_estado ?: 'PREP';
+                if ($estadoInf === 'FIRMADO' && ! $f->compartido) {
+                    $estadoInf = 'SIN_COMPARTIR';
+                }
                 [$textoLab, $estadoSigec] = self::ESTADOS[$estadoInf] ?? ['En analisis', 'En proceso'];
                 $cambios = [
                     'lab_muestra_id' => (int) $idLab,
@@ -123,6 +141,10 @@ class LaboratorioModulo
                     'estado' => $estadoSigec,
                     'lab_sincronizado_en' => now(),
                 ];
+                // Si el Laboratorio dejo de compartir el lote, sus resultados se retiran tambien aqui.
+                if ($estadoInf !== 'FIRMADO') {
+                    $cambios += ['resultados_lab' => null, 'analitos' => null];
+                }
 
                 if ($estadoInf === 'FIRMADO') {
                     $valores = (json_decode((string) $f->resultados_json, true) ?: [])[$idLab] ?? [];
@@ -177,8 +199,11 @@ class LaboratorioModulo
 
     /* ======================= Vinculo sugerido (sin escaneo) ======================= */
 
-    /** Tipo de muestra del Laboratorio => tipo de SIGEC. */
-    const TIPOS_LAB = ['suelos' => 'Suelo', 'agua' => 'Agua', 'aguas' => 'Agua', 'foliares' => 'Tejido vegetal', 'canas' => 'Jugos', 'mieles' => 'Mieles'];
+    /** Tipo de muestra del Laboratorio => tipo de Experimentos (catalogo de tipos de muestra + alias). */
+    protected function tiposLab(): array
+    {
+        return \App\Models\TipoMuestra::desdeLaboratorio() + ['aguas' => 'Agua'];
+    }
 
     /**
      * Propone a que muestras de SIGEC corresponden las muestras del Laboratorio que no
@@ -215,7 +240,7 @@ class LaboratorioModulo
 
         foreach ($solicitudes as $s) {
             $ensayo = $porTexto[$this->normal($s->codigo_muestreo)] ?? null;
-            $tipo = self::TIPOS_LAB[$this->normal($s->tipo_lab, false)] ?? null;
+            $tipo = $this->tiposLab()[$this->normal($s->tipo_lab, false)] ?? null;
             if (! $ensayo || ! $tipo) {
                 continue;
             }
@@ -358,10 +383,10 @@ class LaboratorioModulo
 
         if (isset($tablas['muestra_identificacion'])) {
             $this->db()->table('muestra_identificacion')
-                ->where('lectura_codigo', 'like', '%SIGEC-%')
+                ->where('lectura_codigo', 'REGEXP', self::REGEXP_SQL)
                 ->get(['id_muestra', 'lectura_codigo'])
                 ->each(function ($r) use (&$out) {
-                    if (preg_match('/SIGEC-[A-Z0-9-]+-\d{2}/i', (string) $r->lectura_codigo, $mm)) {
+                    if (preg_match(self::PATRON_ID, (string) $r->lectura_codigo, $mm)) {
                         $out[(int) $r->id_muestra] = mb_strtoupper($mm[0]);
                     }
                 });
@@ -369,14 +394,14 @@ class LaboratorioModulo
 
         if (isset($tablas['lab_identificacion_lote'])) {
             $this->db()->table('lab_identificacion_lote')
-                ->where('etiquetas_json', 'like', '%SIGEC-%')
+                ->where('etiquetas_json', 'REGEXP', self::REGEXP_SQL)
                 ->pluck('etiquetas_json')
                 ->each(function ($json) use (&$out) {
                     foreach ((array) json_decode((string) $json, true) as $idLab => $etq) {
                         if (! is_numeric($idLab) || isset($out[(int) $idLab])) {
                             continue;
                         }
-                        if (preg_match('/SIGEC-[A-Z0-9-]+-\d{2}/i', json_encode($etq, JSON_UNESCAPED_UNICODE), $mm)) {
+                        if (preg_match(self::PATRON_ID, json_encode($etq, JSON_UNESCAPED_UNICODE), $mm)) {
                             $out[(int) $idLab] = mb_strtoupper($mm[0]);
                         }
                     }
@@ -389,7 +414,7 @@ class LaboratorioModulo
     /** Muestra del laboratorio con su solicitud, tipo e informe del lote. */
     protected function detalleMuestras(array $ids): array
     {
-        $tablas = $this->tablasExistentes(['lab_informe']);
+        $tablas = $this->tablasExistentes(['lab_informe', 'lab_experimentos_compartido']);
         $q = $this->db()->table('muestra as m')
             ->join('solicitud as s', 's.id_solicitud', '=', 'm.id_solicitud')
             ->leftJoin('tipo_muestra as t', 't.id_tipo', '=', 's.id_tipo')
@@ -400,6 +425,13 @@ class LaboratorioModulo
                 ->addSelect('li.estado as inf_estado', 'li.codigo as inf_codigo', 'li.firmado_por', 'li.fecha_firma', 'li.resultados_json');
         } else {
             $q->addSelect(DB::raw('NULL as inf_estado, NULL as inf_codigo, NULL as firmado_por, NULL as fecha_firma, NULL as resultados_json'));
+        }
+        // Solo los lotes que el Laboratorio marco con "Compartir con Experimentos".
+        if (isset($tablas['lab_experimentos_compartido'])) {
+            $q->leftJoin('lab_experimentos_compartido as lc', 'lc.id_lote', '=', 's.id_lote')
+                ->addSelect(DB::raw('COALESCE(lc.compartido, 0) as compartido'));
+        } else {
+            $q->addSelect(DB::raw('0 as compartido'));
         }
 
         return $q->get()->keyBy('id_muestra')->all();

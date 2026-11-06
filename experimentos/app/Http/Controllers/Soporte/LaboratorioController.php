@@ -8,6 +8,7 @@ use App\Models\Ensayo;
 use App\Models\MuestraLab;
 use App\Models\Parcela;
 use App\Models\Proyecto;
+use App\Models\TipoMuestra;
 use App\Models\Tratamiento;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,42 +21,37 @@ use Illuminate\Support\Facades\Gate;
  */
 class LaboratorioController extends Controller
 {
+    /** Codigo del tipo para el ID (AG, SU, FO, JU...), del catalogo Sistema > Catalogos > Tipos de muestra. */
     public static function tipoCodigo(string $tipo): string
     {
-        return [
-            'Suelo' => 'SU',
-            'Tejido vegetal' => 'TV',
-            'Jugos' => 'JU',
-            'Mieles' => 'MI',
-            'Agua' => 'AG',
-            'Fertilizantes' => 'FE',
-        ][$tipo] ?? 'OT';
+        return TipoMuestra::codigoDe($tipo);
     }
 
     /**
-     * ID unico: SIGEC-{ensayo}-{tipo}-{secuencia}-{aa}, con el año de la fecha de
-     * muestreo. La secuencia sigue al mayor ID existente (no al conteo), asi
-     * borrar una muestra nunca provoca un ID repetido.
+     * ID unico: {ensayo}-{tipo}{secuencia}, p. ej. COS-26-01-E01-AG025. El año ya va en el
+     * codigo del ensayo, asi que la secuencia es por ensayo y tipo y no se reinicia.
+     * Formato anterior (sigue valido para las muestras ya creadas): SIGEC-{ensayo}-{tipo}-{seq}-{aa}.
+     * La secuencia sigue al mayor ID existente de ambos formatos (no al conteo): borrar una
+     * muestra nunca provoca un ID repetido.
      */
     public static function generarIdMuestra(Ensayo $ensayo, string $tipo, $fecha = null): string
     {
-        $prefijo = self::prefijoId($ensayo, $tipo);
-        $anio = \Illuminate\Support\Carbon::parse($fecha ?: now())->format('y');
-
-        return sprintf('%s%03d-%s', $prefijo, self::ultimaSecuencia($prefijo, $anio) + 1, $anio);
+        return sprintf('%s%03d', self::prefijoId($ensayo, $tipo), self::ultimaSecuencia($ensayo, $tipo) + 1);
     }
 
     public static function prefijoId(Ensayo $ensayo, string $tipo): string
     {
-        return sprintf('SIGEC-%s-%s-', $ensayo->codigo, self::tipoCodigo($tipo));
+        return sprintf('%s-%s', $ensayo->codigo, self::tipoCodigo($tipo));
     }
 
-    /** Mayor secuencia usada con ese prefijo y año (0 si no hay). */
-    public static function ultimaSecuencia(string $prefijo, string $anio): int
+    /** Mayor secuencia usada en el ensayo para ese tipo, en el formato nuevo o el anterior (0 si no hay). */
+    public static function ultimaSecuencia(Ensayo $ensayo, string $tipo): int
     {
-        return (int) MuestraLab::where('id_muestra', 'like', str_replace(['%', '_'], ['\%', '\_'], $prefijo) . '%-' . $anio)
-            ->pluck('id_muestra')
-            ->map(fn ($id) => preg_match('/-(\d+)-\d{2}$/', $id, $m) ? (int) $m[1] : 0)
+        $nuevo = '/^' . preg_quote(self::prefijoId($ensayo, $tipo), '/') . '(\d+)$/i';
+        $anterior = '/^SIGEC-' . preg_quote(self::prefijoId($ensayo, $tipo), '/') . '-(\d+)-\d{2}$/i';
+
+        return (int) MuestraLab::where('ensayo_id', $ensayo->id)->pluck('id_muestra')
+            ->map(fn ($id) => preg_match($nuevo, $id, $m) || preg_match($anterior, $id, $m) ? (int) $m[1] : 0)
             ->max();
     }
 }

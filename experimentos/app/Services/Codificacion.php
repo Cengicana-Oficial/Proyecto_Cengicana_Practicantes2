@@ -16,7 +16,7 @@ use RuntimeException;
  *   programa  sigla           COS
  *   proyecto  SIGLA-AA-NN     COS-26-01   (año de inicio, consecutivo dentro del programa y año)
  *   ensayo    PROYECTO-ENN    COS-26-01-E03
- * El codigo del ensayo va dentro del ID de sus muestras (SIGEC-COS-26-01-E03-SU-001-26),
+ * El codigo del ensayo va dentro del ID de sus muestras (COS-26-01-E03-SU001; antes SIGEC-COS-26-01-E03-SU-001-26),
  * por eso al recodificar tambien se renombran las muestras, salvo que el Laboratorio
  * ya las tenga registradas (alli quedo el ID impreso en la etiqueta).
  */
@@ -62,10 +62,17 @@ class Codificacion
         return $prefijo . static::siguiente(Proyecto::query(), $prefijo, '/^\d+$/', $ignorar);
     }
 
-    /** Siguiente codigo libre de ensayo dentro del proyecto. */
-    public static function codigoEnsayo(Proyecto $proyecto, ?Ensayo $ignorar = null): string
+    /** Letra del codigo: E para ensayos experimentales, P para pruebas tecnicas. */
+    public static function letra(?string $tipoEstudio): string
     {
-        $prefijo = "{$proyecto->codigo}-E";
+        return $tipoEstudio === 'prueba' ? 'P' : 'E';
+    }
+
+    /** Siguiente codigo libre de ensayo (PROYECTO-Enn) o de prueba tecnica (PROYECTO-Pnn) del proyecto. */
+    public static function codigoEnsayo(Proyecto $proyecto, ?Ensayo $ignorar = null, ?string $tipoEstudio = null): string
+    {
+        $tipoEstudio = $tipoEstudio ?? ($ignorar ? $ignorar->tipo_estudio : null);
+        $prefijo = "{$proyecto->codigo}-" . static::letra($tipoEstudio);
 
         return $prefijo . static::siguiente(Ensayo::query(), $prefijo, '/^\d+$/', $ignorar);
     }
@@ -93,7 +100,7 @@ class Codificacion
 
     public static function ensayoAlDia(Ensayo $ensayo): bool
     {
-        $prefijo = "{$ensayo->proyecto->codigo}-E";
+        $prefijo = "{$ensayo->proyecto->codigo}-" . static::letra($ensayo->tipo_estudio);
 
         return Str::startsWith($ensayo->codigo, $prefijo) && preg_match('/^\d+$/', substr($ensayo->codigo, strlen($prefijo)));
     }
@@ -161,11 +168,17 @@ class Codificacion
 
         DB::transaction(function () use ($ensayo, $anterior, $nuevo) {
             $ensayo->forceFill(['codigo' => $nuevo])->save();
-            // SIGEC-{ensayo}-{tipo}-{seq}-{aa}: solo cambia el tramo del ensayo.
-            $viejo = "SIGEC-{$anterior}-";
-            MuestraLab::where('ensayo_id', $ensayo->id)->get(['id', 'id_muestra'])
-                ->filter(fn ($m) => Str::startsWith($m->id_muestra, $viejo))
-                ->each(fn ($m) => $m->forceFill(['id_muestra' => "SIGEC-{$nuevo}-" . substr($m->id_muestra, strlen($viejo))])->save());
+            // Solo cambia el tramo del ensayo, en el formato actual {ensayo}-{tipo}{n}
+            // y en el anterior SIGEC-{ensayo}-{tipo}-{n}-{aa}.
+            $prefijos = ["SIGEC-{$anterior}-" => "SIGEC-{$nuevo}-", "{$anterior}-" => "{$nuevo}-"];
+            MuestraLab::where('ensayo_id', $ensayo->id)->get(['id', 'id_muestra'])->each(function ($m) use ($prefijos) {
+                foreach ($prefijos as $viejo => $nuevoPrefijo) {
+                    if (Str::startsWith($m->id_muestra, $viejo)) {
+                        $m->forceFill(['id_muestra' => $nuevoPrefijo . substr($m->id_muestra, strlen($viejo))])->save();
+                        break;
+                    }
+                }
+            });
         });
 
         return [$anterior => $nuevo];

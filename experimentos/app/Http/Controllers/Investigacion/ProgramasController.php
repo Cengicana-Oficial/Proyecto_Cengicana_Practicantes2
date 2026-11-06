@@ -25,25 +25,24 @@ class ProgramasController extends Controller
     /** Igual que el dashboard: ensayos en campo sin movimiento en este plazo se senalan. */
     const DIAS_SIN_ACTIVIDAD = 30;
 
-    public function index()
+    /**
+     * Programas y proyectos se gestionan en una sola pagina (la de Proyectos): esta
+     * ruta se conserva para los enlaces existentes y redirige conservando ?programa=.
+     */
+    public function index(Request $request)
     {
-        $user = Auth::user();
-        $programas = $this->enriquecer($this->conConteos(Programa::visiblesPara($user))->orderBy('nombre')->get());
+        return redirect()->route('investigacion.proyectos.index', $request->only('programa', 'proyecto', 'nuevo'));
+    }
 
-        return view('component', [
-            'title' => 'Programas de investigacion',
-            'component' => 'programas-index',
-            'params' => [
-                'programas' => $programas,
-                'puedeEditar' => $user->can('admin_only'),
-                'puedeCrearProyecto' => $user->can('create_proyecto'),
-                'paleta' => $this->paleta,
-                'proyectosUrl' => route('investigacion.proyectos.index'),
-                'ensayosUrl' => route('investigacion.ensayos.index'),
-                'usuariosUrl' => $user->can('admin_only') ? route('admin.usuarios.index') : null,
-                'diasSinActividad' => self::DIAS_SIN_ACTIVIDAD,
-            ],
-        ]);
+    /** Programas visibles con conteos y resumen de avance (pagina "Programas y proyectos"). */
+    public function listado($user)
+    {
+        return $this->enriquecer($this->conConteos(Programa::visiblesPara($user))->orderBy('nombre')->get());
+    }
+
+    public function paleta(): array
+    {
+        return $this->paleta;
     }
 
     public function store(Request $request)

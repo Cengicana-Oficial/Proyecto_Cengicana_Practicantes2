@@ -1,9 +1,11 @@
 {
-    "/dist/js/app.js": "/dist/js/app.js?id=0da96077a9965b12c2074d6cb3d0418f",
-    "/dist/js/manifest.js": "/dist/js/manifest.js?id=cabf3c2a9a94c341eef1b54951780b1a",
+    "/dist/js/app.js": "/dist/js/app.js?id=a08edd393058bda4cf5feb523b536cac",
+    "/dist/js/manifest.js": "/dist/js/manifest.js?id=613a7f674d0fe8b2cd6eb6444dca70d2",
     "/dist/js/chunks/geopdf.js": "/dist/js/chunks/geopdf.js?id=5e9819225fec034364b07433ac3c766f",
-    "/dist/js/chunks/ndvi.js": "/dist/js/chunks/ndvi.js?id=773e0a97d0237db6aa474930da464f18",
-    "/dist/css/app.css": "/dist/css/app.css?id=d7debbb4d5ec459f976b480cead317f0",
-    "/dist/js/vendor.js": "/dist/js/vendor.js?id=868a0a31e685479f9f36a9867ee0ab37",
-    "/dist/js/pdf.worker.min.js": "/dist/js/pdf.worker.min.js?id=7e53a960a6f2518c6418699745822785"
+    "/dist/js/chunks/ndvi.js": "/dist/js/chunks/ndvi.js?id=10ff584606b939ebae3d9755f2640b67",
+    "/dist/css/app.css": "/dist/css/app.css?id=6867529cf0814fd5a731ce8b35035a16",
+    "/dist/js/vendor.js": "/dist/js/vendor.js?id=34c08ffa68a59a986aefef2333ef9460",
+    "/dist/js/pdf.worker.min.js": "/dist/js/pdf.worker.min.js?id=7e53a960a6f2518c6418699745822785",
+    "/dist/js/highcharts-lib/jspdf.js": "/dist/js/highcharts-lib/jspdf.js?id=3dee605c1b2640de4b13a04938c56cfb",
+    "/dist/js/highcharts-lib/svg2pdf.js": "/dist/js/highcharts-lib/svg2pdf.js?id=b521d3498045d46d78d44ce13da96317"
 }

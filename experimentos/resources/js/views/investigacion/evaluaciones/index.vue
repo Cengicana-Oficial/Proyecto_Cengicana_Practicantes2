@@ -8,11 +8,11 @@
       </div>
       <div class="ev-kpi is-ens">
         <i class="fas fa-flask"></i>
-        <div><strong>{{ ensayosConDatos }}<em>/ {{ ensayos.length }}</em></strong><span>Ensayos evaluados</span><small>con registros</small></div>
+        <div><strong>{{ ensayosConDatos }}<em>/ {{ ensayosDelProyecto.length }}</em></strong><span>Ensayos evaluados</span><small>con registros en la selección</small></div>
       </div>
       <div class="ev-kpi is-var">
         <i class="fas fa-ruler-combined"></i>
-        <div><strong>{{ variablesMedidas.total }}</strong><span>Variables medidas</span><small>{{ variablesMedidas.des }} desarrollo · {{ variablesMedidas.cos }} cosecha</small></div>
+        <div><strong>{{ variablesMedidas.total }}</strong><span>Variables medidas</span><small>{{ variablesMedidas.des }} desarrollo · {{ variablesMedidas.cos }} cosecha<template v-if="variablesMedidas.lab"> · {{ variablesMedidas.lab }} laboratorio</template></small></div>
       </div>
       <div class="ev-kpi is-ult">
         <i class="fas fa-calendar-check"></i>
@@ -34,10 +34,17 @@
     <!-- ============ Filtros ============ -->
     <div class="ev-bar">
       <div class="ev-campo ev-campo-ens">
+        <label for="ev-proyecto">Proyecto</label>
+        <select id="ev-proyecto" class="form-control form-control-sm" v-model="filtroProyecto">
+          <option value="">Todos los proyectos</option>
+          <option v-for="p in proyectosFiltro" :key="p.id" :value="p.id">{{ p.codigo }} · {{ p.nombre }}</option>
+        </select>
+      </div>
+      <div class="ev-campo ev-campo-ens">
         <label>Ensayo</label>
         <select class="form-control form-control-sm" v-model="filtroEnsayo">
           <option value="">Todos los ensayos</option>
-          <option v-for="e in ensayos" :key="e.id" :value="e.id">{{ e.codigo }}{{ e.finca ? ' · ' + e.finca : '' }}</option>
+          <option v-for="e in ensayosDelProyecto" :key="e.id" :value="e.id">{{ e.codigo }}{{ e.finca ? ' · ' + e.finca : '' }}</option>
         </select>
       </div>
       <div class="ev-campo">
@@ -46,6 +53,7 @@
           <button type="button" :class="{ 'is-on': !filtroCat }" @click="filtroCat = ''">Todas</button>
           <button type="button" class="is-des" :class="{ 'is-on': filtroCat === 'Desarrollo' }" @click="filtroCat = 'Desarrollo'"><i class="fas fa-seedling"></i> Desarrollo</button>
           <button type="button" class="is-cos" :class="{ 'is-on': filtroCat === 'Cosecha' }" @click="filtroCat = 'Cosecha'"><i class="fas fa-tractor"></i> Cosecha</button>
+          <button v-if="(laboratorio.variables || []).length" type="button" class="is-lab" :class="{ 'is-on': filtroCat === 'Laboratorio' }" title="Resultados de las muestras enviadas por el Laboratorio (solo lectura)" @click="filtroCat = 'Laboratorio'"><i class="fas fa-flask"></i> Laboratorio</button>
         </div>
       </div>
       <div class="ev-campo">
@@ -80,9 +88,18 @@
     </div>
 
     <!-- ============ Selector de ensayo (pestañas que lo requieren) ============ -->
-    <div v-if="requiereEnsayo && !ensayoSel" class="ev-picker">
+    <section v-if="analisisProyecto" class="ev-caja">
+      <div class="ev-info"><i class="fas fa-layer-group"></i><span><b>{{ ensayosDelProyecto.length }} ensayos del proyecto</b> · ANOVA y Tukey calculados por separado para cada ensayo.</span></div>
+      <p class="ev-muted p-3">Cada ensayo conserva su diseño experimental, tratamientos y repeticiones. Selecciona un ensayo en el filtro para consultar sus demás vistas.</p>
+      <div v-if="!ensayosDelProyecto.length" class="ev-vacio"><strong>No hay ensayos en este proyecto.</strong></div>
+      <article v-for="e in ensayosDelProyecto" :key="e.id" class="ev-proyecto-analisis">
+        <h3>{{ e.codigo }} <small>{{ e.finca }}</small></h3>
+        <analisis-estadistico :ensayo="e" :registros="registrosDeEnsayo(e.id)" :variables="variables" :parcelas="parcelasDeEnsayo(e.id)" :tratamientos-ensayo="tratamientosDeEnsayo(e.id)"></analisis-estadistico>
+      </article>
+    </section>
+    <div v-else-if="requiereEnsayo && !ensayoSel" class="ev-picker">
       <p class="ev-picker-tit"><i class="fas fa-hand-pointer"></i> Seleccione un ensayo para {{ tab === 'matriz' ? 'ver su base matricial' : tab === 'planilla' ? 'capturar datos' : 'graficar sus variables' }}</p>
-      <div v-if="!ensayos.length" class="ev-vacio"><i class="fas fa-flask"></i><strong>No hay ensayos disponibles.</strong></div>
+      <div v-if="!ensayosDelProyecto.length" class="ev-vacio"><i class="fas fa-flask"></i><strong>No hay ensayos disponibles.</strong></div>
       <div class="ev-picker-grid">
         <article v-for="r in resumenEnsayos" :key="r.e.id" class="ev-ens-card" tabindex="0" @click="filtroEnsayo = r.e.id" @keyup.enter="filtroEnsayo = r.e.id">
           <div class="ev-ens-top">
@@ -152,8 +169,8 @@
                 <th class="fx fx1" rowspan="2">Parcela</th>
                 <th class="fx fx2" rowspan="2">Trat.</th>
                 <th class="fx fx3" rowspan="2">Rep.</th>
-                <th v-for="g in matGrupos" :key="g.v.id" :colspan="g.fechas.length" class="ev-th-var" :class="g.v.categoria === 'Cosecha' ? 'is-cos' : 'is-des'" :title="rango(g.v)">
-                  {{ g.v.nombre }} <small>{{ g.v.unidad }}</small>
+                <th v-for="g in matGrupos" :key="g.v.id" :colspan="g.fechas.length" class="ev-th-var" :class="g.v.origen === 'lab' ? 'is-lab' : g.v.categoria === 'Cosecha' ? 'is-cos' : 'is-des'" :title="g.v.origen === 'lab' ? `Laboratorio · ${g.v.tipo_muestra} (solo lectura)` : rango(g.v)">
+                  <i v-if="g.v.origen === 'lab'" class="fas fa-flask"></i> {{ g.v.nombre }} <small>{{ g.v.unidad }}</small>
                 </th>
               </tr>
               <tr>
@@ -172,7 +189,7 @@
                     v-for="(f, fi) in g.fechas"
                     :key="g.v.id + f"
                     class="ev-cel"
-                    :class="[claseCelda(p, g.v, f), { 'is-fm': esDeFormulario(p, g.v, f), 'is-ini': fi === 0, 'is-edit': esEdit(p, g.v, f), 'is-ro': !puedeRegistrar }]"
+                    :class="[claseCelda(p, g.v, f), { 'is-fm': esDeFormulario(p, g.v, f), 'is-ini': fi === 0, 'is-edit': esEdit(p, g.v, f), 'is-ro': !puedeRegistrar || g.v.origen === 'lab', 'is-lab': g.v.origen === 'lab' }]"
                     :title="tituloCelda(p, g.v, f)"
                     @click="editarCelda(p, g.v, f)"
                   >
@@ -184,7 +201,7 @@
                       <input v-else v-model="editVal" class="ev-cel-in" :inputmode="g.v.tipo === 'Numerica' ? 'decimal' : 'text'" @keydown.enter.prevent="guardarCelda(1)" @keydown.tab.prevent="guardarCelda(1)" @keydown.esc.prevent="cancelarCelda" @keydown.up.prevent="guardarCelda(-1)" @keydown.down.prevent="guardarCelda(1)" @blur="blurCelda(p, g.v, f)">
                     </template>
                     <template v-else-if="celda(p, g.v, f)">{{ celda(p, g.v, f).valor }}</template>
-                    <span v-else class="ev-mas">+</span>
+                    <span v-else-if="g.v.origen !== 'lab'" class="ev-mas">+</span>
                   </td>
                 </template>
               </tr>
@@ -323,8 +340,9 @@
               <td><span v-if="parcelaDe(e)" class="ev-trat" :style="{ background: colorTrat(parcelaDe(e).tratamiento, 0.16), color: colorTrat(parcelaDe(e).tratamiento) }">{{ parcelaDe(e).tratamiento || '—' }}</span></td>
               <td>{{ parcelaDe(e) ? 'R' + parcelaDe(e).repeticion : '' }}</td>
               <td>
-                <span class="ev-cat-dot" :class="variableDe(e) && variableDe(e).categoria === 'Cosecha' ? 'is-cos' : 'is-des'"></span>
+                <span class="ev-cat-dot" :class="esLab(e) ? 'is-lab' : variableDe(e) && variableDe(e).categoria === 'Cosecha' ? 'is-cos' : 'is-des'"></span>
                 {{ variableDe(e) ? variableDe(e).nombre : '—' }}
+                <small v-if="esLab(e)" class="ev-lab-tag" :title="`Muestra ${e.muestra}${e.informe ? ' · informe ' + e.informe : ''}`"><i class="fas fa-flask"></i> {{ e.muestra }}</small>
               </td>
               <td class="text-right ev-nowrap">
                 <i v-if="esFuera(e)" class="fas fa-exclamation-triangle ev-txt-nar" :title="'Fuera de rango: ' + rango(variableDe(e))"></i>
@@ -334,8 +352,13 @@
               </td>
               <td class="ev-muted">{{ e.responsable || '—' }}</td>
               <td class="text-right ev-nowrap" @click.stop>
-                <button v-if="puedeRegistrar" type="button" class="ev-icon" title="Editar" @click="abrirEditar(e)"><i class="fas fa-pen"></i></button>
-                <button v-if="puedeEliminar" type="button" class="ev-icon is-del" title="Eliminar" @click="eliminar(e)"><i class="fas fa-trash"></i></button>
+                <template v-if="esLab(e)">
+                  <button v-if="muestrasUrl" type="button" class="ev-icon" title="Ver la muestra (resultado de laboratorio, solo lectura)" @click="verMuestra(e)"><i class="fas fa-flask"></i></button>
+                </template>
+                <template v-else>
+                  <button v-if="puedeRegistrar" type="button" class="ev-icon" title="Editar" @click="abrirEditar(e)"><i class="fas fa-pen"></i></button>
+                  <button v-if="puedeEliminar" type="button" class="ev-icon is-del" title="Eliminar" @click="eliminar(e)"><i class="fas fa-trash"></i></button>
+                </template>
               </td>
             </tr>
           </tbody>
@@ -351,6 +374,9 @@
     <!-- ============ GRAFICOS ============ -->
     <section v-else-if="tab === 'graficos'" class="ev-caja">
       <div class="ev-g-vistas">
+        <button type="button" :class="{ 'is-on': gVista === 'analisis' }" @click="gVista = 'analisis'">
+          <i class="fas fa-calculator"></i> Analisis estadistico <small>muestreos · ANOVA · Tukey · en el tiempo</small>
+        </button>
         <button type="button" :class="{ 'is-on': gVista === 'tratamientos' }" @click="gVista = 'tratamientos'">
           <i class="fas fa-chart-bar"></i> Comparar tratamientos <small>una fecha · medias y estadisticos</small>
         </button>
@@ -359,8 +385,17 @@
         </button>
       </div>
 
+      <analisis-estadistico
+        v-if="gVista === 'analisis'"
+        :ensayo="ensayoSel"
+        :registros="registros"
+        :variables="variables"
+        :parcelas="parcelasEnsayo"
+        :tratamientos-ensayo="tratamientos"
+      ></analisis-estadistico>
+
       <linea-tiempo
-        v-if="gVista === 'tiempo'"
+        v-else-if="gVista === 'tiempo'"
         :ensayo="ensayoSel"
         :registros="registros"
         :variables="variables"
@@ -507,10 +542,11 @@ const PESTANAS = [
 ];
 
 import LineaTiempo from './linea-tiempo.vue';
+import AnalisisEstadistico from './analisis-estadistico.vue';
 
 export default {
   name: 'EvaluacionesIndex',
-  components: { LineaTiempo },
+  components: { LineaTiempo, AnalisisEstadistico },
   props: {
     evaluaciones: { type: Array, default: () => [] },
     variables: { type: Array, default: () => [] },
@@ -522,14 +558,18 @@ export default {
     puedeExportar: { type: Boolean, default: false },
     pendientesFormularios: { type: [Number, String], default: 0 },
     puedeVerFormularios: { type: Boolean, default: false },
+    // Resultados de laboratorio como registros de solo lectura (App\Services\ResultadosLaboratorio).
+    laboratorio: { type: Object, default: () => ({ variables: [], registros: [] }) },
+    muestrasUrl: { type: String, default: null },
   },
   data() {
     return {
       items: this.evaluaciones.slice(),
       pestanas: PESTANAS,
       tab: this.tabInicial(),
-      gVista: new URLSearchParams(window.location.search).get('vista') === 'tiempo' ? 'tiempo' : 'tratamientos',
+      gVista: ['tiempo', 'tratamientos'].includes(new URLSearchParams(window.location.search).get('vista')) ? new URLSearchParams(window.location.search).get('vista') : 'analisis',
       filtroEnsayo: this.ensayoInicial(),
+      filtroProyecto: '',
       filtroCat: '',
       filtroVar: '',
       desde: '',
@@ -566,22 +606,40 @@ export default {
     };
   },
   computed: {
-    varMap() { return new Map(this.variables.map((v) => [v.id, v])); },
+    proyectosFiltro() {
+      return [...new Map(this.ensayos.filter((e) => e.proyecto).map((e) => [e.proyecto.id, e.proyecto])).values()]
+        .sort((a, b) => a.codigo.localeCompare(b.codigo, 'es', { numeric: true }));
+    },
+    ensayosDelProyecto() { return this.ensayos.filter((e) => !this.filtroProyecto || e.proyecto_id === this.filtroProyecto); },
+    analisisProyecto() { return this.tab === 'graficos' && !!this.filtroProyecto && !this.filtroEnsayo; },
+    // Variables de campo (catalogo, editables) + variables de laboratorio (categoria "Laboratorio", solo lectura).
+    todasVariables() { return [...this.variables, ...(this.laboratorio.variables || [])]; },
+    // Registros de campo + resultados de laboratorio: base de KPIs, matriz, listado y graficos.
+    todos() { return this.items.concat(this.laboratorio.registros || []); },
+    varMap() { return new Map(this.todasVariables.map((v) => [v.id, v])); },
     parcMap() { return new Map(this.parcelas.map((p) => [p.id, p])); },
     ensMap() { return new Map(this.ensayos.map((e) => [e.id, e])); },
     ensayoSel() { return this.filtroEnsayo ? this.ensMap.get(this.filtroEnsayo) || null : null; },
     variablesActivas() { return this.variables.filter((v) => v.activa !== false); },
-    variablesFiltro() { return this.variables.filter((v) => !this.filtroCat || v.categoria === this.filtroCat); },
+    variablesFiltro() { return this.todasVariables.filter((v) => !this.filtroCat || v.categoria === this.filtroCat); },
     requiereEnsayo() { return this.tab !== 'listado'; },
-    hayFiltros() { return !!(this.filtroCat || this.filtroVar || this.desde || this.hasta || this.busqueda || this.soloFuera); },
-    urlExportar() { return `${this.base}/soporte/reportes/exportar/evaluaciones${this.filtroEnsayo ? `?ensayo_id=${this.filtroEnsayo}` : ''}`; },
+    hayFiltros() { return !!(this.filtroProyecto || this.filtroCat || this.filtroVar || this.desde || this.hasta || this.busqueda || this.soloFuera); },
+    urlExportar() {
+      const q = new URLSearchParams();
+      if (this.filtroProyecto) q.set('proyecto_id', this.filtroProyecto);
+      if (this.filtroEnsayo) q.set('ensayo_id', this.filtroEnsayo);
+      if (this.desde) q.set('desde', this.desde);
+      if (this.hasta) q.set('hasta', this.hasta);
+      return `${this.base}/soporte/reportes/exportar/evaluaciones?${q.toString()}`;
+    },
 
     /* Registros que cumplen ensayo, categoria, variable y fechas (base de KPIs, matriz y listado). */
     registros() {
-      return this.items.filter((e) => {
+      return this.todos.filter((e) => {
         const p = this.parcMap.get(e.parcela_id);
         const v = this.varMap.get(e.variable_id);
         if (!p || !v) return false;
+        if (this.filtroProyecto && (this.ensMap.get(p.ensayo_id) || {}).proyecto_id !== this.filtroProyecto) return false;
         if (this.filtroEnsayo && p.ensayo_id !== this.filtroEnsayo) return false;
         if (this.filtroCat && v.categoria !== this.filtroCat) return false;
         if (this.filtroVar && v.id !== this.filtroVar) return false;
@@ -591,11 +649,16 @@ export default {
       });
     },
     fechasBase() { return new Set(this.registros.map((e) => e.fecha)).size; },
-    ensayosConDatos() { return new Set(this.items.map((e) => (this.parcMap.get(e.parcela_id) || {}).ensayo_id).filter(Boolean)).size; },
+    ensayosConDatos() { return new Set(this.registros.map((e) => (this.parcMap.get(e.parcela_id) || {}).ensayo_id).filter(Boolean)).size; },
     variablesMedidas() {
       const ids = new Set(this.registros.map((e) => e.variable_id));
       const vs = [...ids].map((id) => this.varMap.get(id)).filter(Boolean);
-      return { total: vs.length, des: vs.filter((v) => v.categoria !== 'Cosecha').length, cos: vs.filter((v) => v.categoria === 'Cosecha').length };
+      return {
+        total: vs.length,
+        des: vs.filter((v) => v.categoria === 'Desarrollo').length,
+        cos: vs.filter((v) => v.categoria === 'Cosecha').length,
+        lab: vs.filter((v) => v.categoria === 'Laboratorio').length,
+      };
     },
     ultimoMuestreo() {
       if (!this.registros.length) return null;
@@ -604,9 +667,9 @@ export default {
     },
     fueraTotal() { return this.registros.filter((e) => this.esFuera(e)).length; },
     resumenEnsayos() {
-      const r = new Map(this.ensayos.map((e) => [e.id, { e, parcelas: 0, registros: 0, vars: new Set(), ultima: null }]));
+      const r = new Map(this.ensayosDelProyecto.map((e) => [e.id, { e, parcelas: 0, registros: 0, vars: new Set(), ultima: null }]));
       this.parcelas.forEach((p) => { const x = r.get(p.ensayo_id); if (x) x.parcelas += 1; });
-      this.items.forEach((ev) => {
+      this.todos.forEach((ev) => {
         const p = this.parcMap.get(ev.parcela_id);
         const x = p && r.get(p.ensayo_id);
         if (!x) return;
@@ -629,7 +692,7 @@ export default {
     },
     celdas() {
       const m = new Map();
-      this.items.forEach((e) => { m.set(this.claveCelda(e.parcela_id, e.variable_id, e.fecha), e); });
+      this.todos.forEach((e) => { m.set(this.claveCelda(e.parcela_id, e.variable_id, e.fecha), e); });
       return m;
     },
     matGrupos() {
@@ -646,7 +709,7 @@ export default {
         const v = this.varMap.get(c.variable_id);
         if (v && (!this.filtroCat || v.categoria === this.filtroCat) && (!this.filtroVar || v.id === this.filtroVar)) add(c.variable_id, c.fecha);
       });
-      const orden = { Desarrollo: 0, Cosecha: 1 };
+      const orden = { Desarrollo: 0, Cosecha: 1, Laboratorio: 2 };
       return [...porVar.values()]
         .map((g) => ({ v: g.v, fechas: [...g.fechas].sort() }))
         .sort((a, b) => (orden[a.v.categoria] || 0) - (orden[b.v.categoria] || 0) || a.v.nombre.localeCompare(b.v.nombre, 'es'));
@@ -689,7 +752,7 @@ export default {
         const v = this.variableDe(e) || {};
         const en = this.ensayoDe(e) || {};
         return this.sinTildes(`${p.codigo} ${p.tratamiento} ${v.nombre} ${e.valor} ${e.responsable || ''} ${en.codigo} ${e.obs || ''}`.toLowerCase()).includes(q);
-      }).sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id);
+      }).sort((a, b) => b.fecha.localeCompare(a.fecha) || (Number(b.id) || 0) - (Number(a.id) || 0));
     },
     paginas() { return Math.max(1, Math.ceil(this.listado.length / POR_PAGINA)); },
     paginaListado() { return this.listado.slice((this.pagina - 1) * POR_PAGINA, this.pagina * POR_PAGINA); },
@@ -791,6 +854,10 @@ export default {
     formListo() { return this.form.fecha && this.form.parcela_id && this.form.variable_id && String(this.form.valor || '').trim() !== '' && this.estadoForm !== 'invalido'; },
   },
   watch: {
+    filtroProyecto() {
+      if (this.filtroEnsayo && !this.ensayosDelProyecto.some((e) => e.id === this.filtroEnsayo)) this.filtroEnsayo = '';
+      this.pagina = 1;
+    },
     tab(v) { this.guardar_('tab', v); this.editCell = null; },
     filtroEnsayo(v) {
       this.guardar_('ensayo', v || '');
@@ -824,6 +891,11 @@ export default {
     window.removeEventListener('beforeunload', this.onSalir);
   },
   methods: {
+    parcelasDeEnsayo(id) { return this.parcelas.filter((p) => p.ensayo_id === id); },
+    registrosDeEnsayo(id) { return this.registros.filter((r) => (this.parcMap.get(r.parcela_id) || {}).ensayo_id === id); },
+    tratamientosDeEnsayo(id) {
+      return [...new Set(this.parcelasDeEnsayo(id).map((p) => p.tratamiento).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+    },
     /* ---------- utilidades ---------- */
     tabInicial() {
       const q = new URLSearchParams(window.location.search).get('tab');
@@ -848,7 +920,7 @@ export default {
     },
     hoy() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; },
     formVacio() { return { id: null, ensayo_id: null, fecha: this.hoy(), parcela_id: null, variable_id: null, valor: '', obs: '' }; },
-    limpiarFiltros() { this.filtroCat = ''; this.filtroVar = ''; this.desde = ''; this.hasta = ''; this.busqueda = ''; this.soloFuera = false; },
+    limpiarFiltros() { this.filtroProyecto = ''; this.filtroCat = ''; this.filtroVar = ''; this.desde = ''; this.hasta = ''; this.busqueda = ''; this.soloFuera = false; },
     verFueraRango() { this.soloFuera = !this.soloFuera; if (this.soloFuera) this.tab = 'listado'; },
     sinTildes(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, ''); },
     n(x) { return Number(x || 0).toLocaleString('es-GT'); },
@@ -943,14 +1015,23 @@ export default {
       if (!e) return 'is-vacia';
       return `is-${this.estadoValor(v, e.valor)}`;
     },
+    /** Abre la muestra de laboratorio de un resultado (pagina Muestras, seguimiento). */
+    verMuestra(e) {
+      if (e.origen !== 'lab' || !this.muestrasUrl) return;
+      window.location.href = `${this.muestrasUrl}?tab=seguimiento&muestra=${encodeURIComponent(e.muestra)}`;
+    },
+    esLab(e) { return !!e && e.origen === 'lab'; },
     tituloCelda(p, v, f) {
       const e = this.celda(p, v, f);
       if (!e) return `${p.codigo} · ${v.nombre} · ${this.fmt(f)}: sin dato`;
+      if (this.esLab(e)) return `${p.codigo} · ${v.nombre} · ${this.fmt(f)}: ${e.valor} ${v.unidad || ''}\nLaboratorio · muestra ${e.muestra}${e.informe ? ` · informe ${e.informe}` : ''}\n(solo lectura; clic para ver la muestra)`;
       return `${p.codigo} · ${v.nombre} · ${this.fmt(f)}: ${e.valor} ${v.unidad || ''}\nRegistro: ${e.responsable || '—'}${e.formulario ? `\nFormulario: ${e.formulario}` : ''}${e.obs ? `\nObs: ${e.obs}` : ''}`;
     },
     esEdit(p, v, f) { const c = this.editCell; return !!c && c.p === p.id && c.v === v.id && c.f === f; },
     esColNueva(vid, f) { return this.colsExtra.some((c) => c.ensayo_id === this.filtroEnsayo && c.variable_id === vid && c.fecha === f); },
     editarCelda(p, v, f) {
+      // Laboratorio: solo lectura; el clic abre la muestra de origen.
+      if (v.origen === 'lab') { const e = this.celda(p, v, f); if (e) this.verMuestra(e); return; }
       if (!this.puedeRegistrar || this.esEdit(p, v, f)) return;
       const e = this.celda(p, v, f);
       this.editCell = { p: p.id, v: v.id, f };
@@ -1141,6 +1222,7 @@ export default {
       this.panel = 'form';
     },
     abrirEditar(e) {
+      if (this.esLab(e)) { this.verMuestra(e); return; }
       const p = this.parcelaDe(e);
       this.form = { id: e.id, ensayo_id: p ? p.ensayo_id : null, fecha: e.fecha, parcela_id: e.parcela_id, variable_id: e.variable_id, valor: e.valor, obs: e.obs || '' };
       this.formOriginal = e;
@@ -1247,6 +1329,8 @@ kbd { padding: 1px 5px; border: 1px solid var(--borde); border-radius: 4px; back
 .ev-seg-mini button.is-on { background: #fff; color: var(--verde-osc); box-shadow: 0 1px 3px rgba(30, 42, 26, .12); }
 .ev-seg-mini button.is-des.is-on { color: #3f7a12; }
 .ev-seg-mini button.is-cos.is-on { color: #b84d00; }
+.ev-seg-mini button.is-lab i { color: #2a78d6; }
+.ev-seg-mini button.is-lab.is-on { color: #1d5aa6; }
 .ev-fechas { display: flex; align-items: center; gap: 5px; }
 .ev-fechas .form-control { width: 140px; }
 .ev-fechas span { color: var(--suave); font-size: 12px; }
@@ -1322,6 +1406,10 @@ kbd { padding: 1px 5px; border: 1px solid var(--borde); border-radius: 4px; back
 .ev-th-var { height: 31px; padding: 5px 10px; color: #fff !important; text-align: center; }
 .ev-th-var.is-des { background: #3f7a12 !important; }
 .ev-th-var.is-cos { background: #c95500 !important; }
+.ev-th-var.is-lab { background: #2a78d6 !important; }
+.ev-th-var.is-lab i { margin-right: 3px; opacity: .85; }
+td.ev-cel.is-lab { background-color: #f3f7fd; color: #1d4f8f; cursor: pointer; }
+td.ev-cel.is-lab:hover { background-color: #e3edfa; }
 .ev-th-var small { opacity: .8; font-weight: 500; }
 .ev-th-var em { display: block; opacity: .85; font-size: 10px; font-style: normal; font-weight: 500; }
 .ev-th-fecha { padding: 4px 8px; text-align: center; }
@@ -1403,6 +1491,8 @@ kbd { padding: 1px 5px; border: 1px solid var(--borde); border-radius: 4px; back
 .ev-cat-dot { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; }
 .ev-cat-dot.is-des { background: var(--verde); }
 .ev-cat-dot.is-cos { background: var(--naranja); }
+.ev-cat-dot.is-lab { background: #2a78d6; }
+.ev-lab-tag { margin-left: 4px; padding: 0 6px; border-radius: 5px; background: #e8f0fb; color: #1d5aa6; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
 .ev-icon { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--suave); font-size: 12px; }
 .ev-icon:hover { border-color: var(--borde); background: #f1f8e9; color: var(--verde-osc); }
 .ev-icon.is-del:hover { border-color: #ffd2b3; background: #fff1e6; color: var(--naranja); }

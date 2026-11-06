@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Ingenio;
 use App\Models\User;
+use App\Services\RolesPortal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -34,7 +36,11 @@ class SsoController extends Controller
         $esNuevo = !$user->exists;
 
         $user->name = $claims['nombre'];
-        $user->ingenio_id = $claims['ingenio_id'] ?: null;
+        // El ingenio_id del portal es del catalogo de login (usuarios_menu), no de
+        // la tabla ingenios de SIGEC: solo se asigna si existe aqui, para no
+        // romper el login con la llave foranea users_ingenio_id_foreign.
+        $ingenioId = (int) ($claims['ingenio_id'] ?? 0);
+        $user->ingenio_id = $ingenioId && Ingenio::whereKey($ingenioId)->exists() ? $ingenioId : null;
 
         if ($esNuevo) {
             $user->password = bcrypt(bin2hex(random_bytes(16)));
@@ -42,7 +48,10 @@ class SsoController extends Controller
 
         $user->save();
 
-        $rol = config('sso.role_map')[(int) $claims['rol_id']] ?? null;
+        // Rol en Experimentos segun el portal: por nombre (config('sso.roles_portal')) y, para
+        // tokens de versiones anteriores sin nombre, por rol_id. Sin rol reconocido se conserva el actual.
+        $rol = !empty($claims['es_superadmin']) ? 'administrador'
+            : (RolesPortal::rolSigec($claims['rol'] ?? null) ?? (config('sso.role_map')[(int) $claims['rol_id']] ?? null));
         if ($rol !== null) {
             $user->syncRoles([$rol]);
         }

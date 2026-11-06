@@ -6,11 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Formulario extends Model
 {
-    protected $fillable = ['nombre', 'descripcion', 'proyecto_id', 'ensayo_id', 'campos', 'creado_por', 'fecha', 'estado', 'promocion'];
+    protected $fillable = ['nombre', 'descripcion', 'proyecto_id', 'ensayo_id', 'campos', 'fotos', 'creado_por', 'fecha', 'estado', 'promocion'];
 
     protected $casts = [
         'fecha' => 'date',
         'campos' => 'array',
+        'fotos' => 'array', // { activo, indicacion, maximo }: registro fotografico por parcela
     ];
 
     public function proyecto()

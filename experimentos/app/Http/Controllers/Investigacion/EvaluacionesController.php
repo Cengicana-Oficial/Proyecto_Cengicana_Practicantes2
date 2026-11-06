@@ -49,23 +49,36 @@ class EvaluacionesController extends Controller
                 'tratamiento_desc' => $p->tratamiento ? $p->tratamiento->descripcion : null,
             ]);
 
+        $usaBloques = \App\Models\DisenoExperimental::pluck('usa_bloques', 'nombre');
         $ensayos = Ensayo::whereIn('id', $ensayoIds)
             ->orderBy('codigo')
-            ->get(['id', 'codigo', 'finca', 'variedad', 'estado'])
+            // diseno y fecha_siembra: ANOVA (bloques) y edad del cultivo en el analisis estadistico.
+            ->with('proyecto:id,codigo,nombre')
+            ->get(['id', 'codigo', 'proyecto_id', 'finca', 'variedad', 'estado', 'diseno', 'fecha_siembra', 'ciclo'])
             ->map(fn ($e) => [
                 'id' => $e->id,
                 'codigo' => $e->codigo,
+                'proyecto_id' => $e->proyecto_id,
+                'proyecto' => $e->proyecto ? ['id' => $e->proyecto->id, 'codigo' => $e->proyecto->codigo, 'nombre' => $e->proyecto->nombre] : null,
                 'finca' => $e->finca,
                 'variedad' => $e->variedad,
                 'estado' => $e->estado,
+                'diseno' => $e->diseno,
+                'fecha_siembra' => optional($e->fecha_siembra)->format('Y-m-d'),
+                'ciclo' => $e->ciclo,
+                // Del catalogo de disenos: si la repeticion se analiza como bloque (null = no registrado).
+                'usa_bloques' => $usaBloques[$e->diseno] ?? null,
             ]);
 
         return view('component', [
-            'title' => 'Evaluaciones',
+            'title' => 'Evaluaciones y Análisis',
             'component' => 'evaluaciones-index',
             'params' => [
                 'evaluaciones' => $evaluaciones,
                 'variables' => Variable::orderBy('nombre')->get(['id', 'nombre', 'unidad', 'tipo', 'categoria', 'valor_min', 'valor_max', 'decimales', 'opciones', 'activa']),
+                // Categoria "Laboratorio": resultados de las muestras, de solo lectura.
+                'laboratorio' => app(\App\Services\ResultadosLaboratorio::class)->porEnsayos($ensayoIds),
+                'muestrasUrl' => (Auth::user()->can('create_muestra') || Auth::user()->can('view_lab')) ? route('soporte.muestras.index') : null,
                 'parcelas' => $parcelas,
                 'ensayos' => $ensayos,
                 'usuarioId' => $user->id,
@@ -246,6 +259,8 @@ class EvaluacionesController extends Controller
                         'fecha' => $m->fecha->format('Y-m-d'),
                         'parcela' => $m->parcela ? $m->parcela->codigo : null,
                         'tratamiento' => $trat ? $trat->codigo : null,
+                        // Repeticion = bloque en el ANOVA de bloques completos al azar.
+                        'repeticion' => $m->repeticion ?? ($m->parcela->repeticion ?? null),
                         'valor' => (float) $t,
                     ];
                 }

@@ -19,27 +19,63 @@
           <button type="button" :class="{ 'is-on': agrupar === 'mes' }" @click="agrupar = 'mes'">Mes</button>
         </div>
       </div>
-      <div class="an-f an-f-ancho">
-        <label>Estrato</label>
-        <div class="an-chips">
-          <button v-for="e in estratosTodos" :key="e" type="button" :class="{ 'is-on': estratosSel.includes(e) }" :style="{ '--c': colorEstrato(e) }" @click="alternar(estratosSel, e)">
-            {{ e === 'SIN ESTRATO' ? '(Sin estrato)' : e }} <small>{{ cuentaEstrato(e) }}</small>
-          </button>
-        </div>
+      <div class="an-f an-f-btn">
+        <button type="button" class="btn btn-success" :disabled="cargando || !!errorFiltro" @click="analizar">
+          <i :class="cargando ? 'fas fa-spinner fa-spin' : 'fas fa-chart-line'"></i> Analizar
+        </button>
       </div>
-      <div class="an-f">
-        <label>Zona</label>
-        <div class="an-chips">
-          <button v-for="z in zonasTodas" :key="z" type="button" :class="{ 'is-on': zonasSel.includes(z) }" @click="alternar(zonasSel, z)">{{ z === 'SIN ZONA' ? '(Sin zona)' : z }}</button>
-        </div>
+
+      <div class="an-grupos">
+        <section class="an-panel">
+          <header>
+            <span class="an-panel-t"><i class="fas fa-mountain"></i> Estrato</span>
+            <span class="an-cuenta">{{ estratosSel.length }}/{{ estratosTodos.length }}</span>
+            <span class="an-acc">
+              <button type="button" @click="estratosSel = estratosTodos.slice()">Todos</button>
+              <button type="button" @click="estratosSel = []">Ninguno</button>
+            </span>
+          </header>
+          <div class="an-chips">
+            <button v-for="e in estratosTodos" :key="e" type="button" :class="{ 'is-on': estratosSel.includes(e) }" :style="{ '--c': colorEstrato(e) }" :aria-pressed="estratosSel.includes(e)" @click="alternar(estratosSel, e)">
+              <span class="an-dot"><i class="fas fa-check"></i></span>{{ e === 'SIN ESTRATO' ? 'Sin estrato' : e }}<small>{{ cuentaEstrato(e) }}</small>
+            </button>
+          </div>
+        </section>
+
+        <section class="an-panel">
+          <header>
+            <span class="an-panel-t"><i class="fas fa-map-marked-alt"></i> Zona</span>
+            <span class="an-cuenta">{{ zonasSel.length }}/{{ zonasTodas.length }}</span>
+            <span class="an-acc">
+              <button type="button" @click="zonasSel = zonasTodas.slice()">Todas</button>
+              <button type="button" @click="zonasSel = []">Ninguna</button>
+            </span>
+          </header>
+          <div class="an-chips">
+            <button v-for="z in zonasTodas" :key="z" type="button" :class="{ 'is-on': zonasSel.includes(z) }" :style="{ '--c': z === 'SIN ZONA' ? '#8a8f87' : '#73BC25' }" :aria-pressed="zonasSel.includes(z)" @click="alternar(zonasSel, z)">
+              <span class="an-dot"><i class="fas fa-check"></i></span>{{ z === 'SIN ZONA' ? 'Sin zona' : z }}<small>{{ cuentaZona(z) }}</small>
+            </button>
+          </div>
+        </section>
+
+        <section class="an-panel">
+          <header>
+            <span class="an-panel-t"><i class="far fa-calendar-alt"></i> Años</span>
+            <span class="an-cuenta" :class="{ 'is-lleno': aniosSel.length >= 8 }">{{ aniosSel.length }}/8</span>
+            <span class="an-acc">
+              <button type="button" @click="aniosSel = aniosTodos.slice(-5)">Últimos 5</button>
+              <button type="button" @click="aniosSel = []">Limpiar</button>
+            </span>
+          </header>
+          <div class="an-chips an-anios">
+            <button v-for="a in aniosTodos" :key="a" type="button" :class="{ 'is-on': aniosSel.includes(a) }" :style="{ '--c': colorAnio(a) }" :aria-pressed="aniosSel.includes(a)" @click="alternarAnio(a)">
+              <span class="an-dot"><i class="fas fa-check"></i></span>{{ a }}
+            </button>
+          </div>
+        </section>
       </div>
-      <div class="an-f an-f-ancho">
-        <label>Años <small>(max. 8)</small></label>
-        <div class="an-chips">
-          <button v-for="a in aniosTodos" :key="a" type="button" :class="{ 'is-on': aniosSel.includes(a) }" :style="aniosSel.includes(a) ? { '--c': colorAnio(a) } : {}" @click="alternarAnio(a)">{{ a }}</button>
-        </div>
-      </div>
-      <div class="an-f an-f-ancho">
+
+      <div class="an-f an-f-est">
         <label>
           Estaciones <small>({{ estacionesSel.length }} de {{ estacionesFiltro.length }} del filtro)</small>
           <a href="#" @click.prevent="verEstaciones = !verEstaciones">{{ verEstaciones ? 'ocultar' : 'elegir' }}</a>
@@ -47,11 +83,6 @@
         <div v-if="verEstaciones" class="an-est">
           <label v-for="s in estacionesFiltro" :key="s.id"><input type="checkbox" :checked="!excluidas.includes(s.id)" @change="alternarExcluir(s.id)"> {{ s.nombre }} <small>{{ s.estrato || '—' }}</small></label>
         </div>
-      </div>
-      <div class="an-f an-f-btn">
-        <button type="button" class="btn btn-success" :disabled="cargando || !!errorFiltro" @click="analizar">
-          <i :class="cargando ? 'fas fa-spinner fa-spin' : 'fas fa-chart-line'"></i> Analizar
-        </button>
       </div>
     </div>
     <p v-if="errorFiltro" class="an-error"><i class="fas fa-exclamation-circle"></i> {{ errorFiltro }}</p>
@@ -94,6 +125,8 @@
 </template>
 
 <script>
+import { EXPORTAR } from './clima-util';
+
 // Paleta categorica validada (guia de visualizacion): orden fijo, color por entidad.
 const PALETA = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
 const COLOR_ESTRATO = { ALTO: '#2a78d6', MEDIO: '#eb6834', BAJO: '#1baf7a', LITORAL: '#eda100', 'SIN ESTRATO': '#8a8f87' };
@@ -192,7 +225,7 @@ export default {
       return {
         chart: { type: 'column', height: 320, style: { fontFamily: 'inherit' } },
         title: { text: `${this.meta.nombre} ${this.meta.sumable ? 'anual' : 'promedio'} por estrato y año`, style: this.estiloTitulo },
-        credits: { enabled: false },
+        credits: { enabled: false }, exporting: EXPORTAR,
         xAxis: { categories: anios, lineColor: '#CED2D5' },
         yAxis: { title: { text: this.meta.unidadAnual }, gridLineColor: '#edf1ec' },
         tooltip: { shared: true, valueDecimals: this.meta.dec, valueSuffix: ` ${this.meta.unidadAnual}` },
@@ -207,7 +240,7 @@ export default {
       return {
         chart: { type: 'bar', height: Math.max(220, 26 * est.length + 90), style: { fontFamily: 'inherit' } },
         title: { text: `${this.meta.nombre} ${this.meta.sumable ? 'anual' : 'promedio'} por estacion (promedio ${this.aniosTexto})`, style: this.estiloTitulo },
-        credits: { enabled: false },
+        credits: { enabled: false }, exporting: EXPORTAR,
         xAxis: { categories: est.map((e) => e.nombre), lineColor: '#CED2D5' },
         yAxis: { title: { text: this.meta.unidadAnual }, gridLineColor: '#edf1ec' },
         tooltip: { pointFormatter() { return `<b>${Highcharts_num(this.y, this.dec)}</b> ${this.unidad}<br>Estrato: ${this.estrato}`; } },
@@ -233,6 +266,7 @@ export default {
     colorAnio(a) { return PALETA[((a % 8) + 8) % 8]; },
     colorEstrato(e) { return COLOR_ESTRATO[e] || GRIS; },
     cuentaEstrato(e) { return this.estaciones.filter((s) => (s.estrato || 'SIN ESTRATO') === e).length; },
+    cuentaZona(z) { return this.estaciones.filter((s) => (s.zona || 'SIN ZONA') === z).length; },
     alternar(lista, v) {
       const i = lista.indexOf(v);
       if (i >= 0) lista.splice(i, 1); else lista.push(v);
@@ -248,7 +282,7 @@ export default {
       return {
         chart: { type: 'line', height: 330, zoomType: 'x', style: { fontFamily: 'inherit' } },
         title: { text: titulo, style: this.estiloTitulo },
-        credits: { enabled: false },
+        credits: { enabled: false }, exporting: EXPORTAR,
         xAxis: { categories: this.categorias, title: { text: this.etiquetaPeriodo }, tickInterval: this.agruparR === 'mes' ? 1 : 4, lineColor: '#CED2D5', crosshair: true },
         yAxis: { title: { text: unidad }, gridLineColor: '#edf1ec' },
         tooltip: { shared: true, valueDecimals: this.meta.dec, valueSuffix: ` ${unidad}`, headerFormat: `<b>${this.etiquetaPeriodo} {point.key}</b><br>` },
@@ -292,13 +326,43 @@ function Highcharts_num(v, d) {
 .an-seg { display: inline-flex; padding: 3px; border: 1px solid #e3e7e1; border-radius: 8px; background: #f3f5f1; }
 .an-seg button { padding: 4px 12px; border: 0; border-radius: 6px; background: transparent; color: #5b6658; font-size: 12px; font-weight: 600; }
 .an-seg button.is-on { background: #73BC25; color: #fff; }
-.an-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.an-f-est { flex: 1 1 100%; }
+
+/* Paneles de Estrato / Zona / Años */
+.an-grupos { flex: 1 1 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1.35fr); gap: 12px; }
+.an-panel { display: flex; flex-direction: column; gap: 9px; padding: 10px 12px 12px; border: 1px solid #e3e7e1; border-top: 3px solid #73BC25; border-radius: 10px; background: #fafcf7; }
+.an-panel:nth-child(2) { border-top-color: #A3D300; }
+.an-panel:nth-child(3) { border-top-color: #FFCC00; }
+.an-panel > header { display: flex; align-items: center; gap: 8px; }
+.an-panel-t { color: #1f5632; font-size: 11.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.an-panel-t i { margin-right: 3px; color: #73BC25; }
+.an-cuenta { padding: 1px 7px; border-radius: 999px; background: #eef6e2; color: #3e6b14; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.an-cuenta.is-lleno { background: #fff1e6; color: #b84d00; }
+.an-acc { display: flex; gap: 2px; margin-left: auto; }
+.an-acc button { padding: 1px 6px; border: 0; border-radius: 5px; background: transparent; color: #4f8a12; font-size: 11px; font-weight: 600; }
+.an-acc button:hover { background: #eef6e2; color: #1f5632; }
+
+/* Chips: apagado = gris con aro de color; encendido = tinte de color con check */
+.an-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .an-chips button {
   --c: #73BC25;
-  padding: 3px 10px; border: 1px solid #d8ddd5; border-radius: 999px; background: #fff; color: #5b6658; font-size: 12px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 6px; border: 1px solid #CED2D5; border-radius: 999px; background: #fff; color: #6b7568; font-size: 12px; font-weight: 600; line-height: 1.2;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
 }
-.an-chips button small { color: #8a8f87; font-weight: 500; }
-.an-chips button.is-on { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, #fff); color: #26331f; box-shadow: inset 3px 0 0 var(--c); }
+.an-chips button:hover { border-color: var(--c); color: #26331f; }
+.an-chips button:focus-visible { outline: 2px solid rgba(115, 188, 37, .5); outline-offset: 1px; }
+.an-chips button small { padding: 0 5px; border-radius: 999px; background: #f0f2f0; color: #7c868d; font-size: 10.5px; font-weight: 700; }
+.an-chips button.is-on { border-color: var(--c); background: color-mix(in srgb, var(--c) 15%, #fff); color: #1e2a1a; }
+.an-chips button.is-on small { background: #fff; color: #33402a; }
+.an-dot { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 15px; height: 15px; border: 2px solid var(--c); border-radius: 50%; background: #fff; }
+.an-dot i { display: none; color: #fff; font-size: 8px; }
+.an-chips button.is-on .an-dot { background: var(--c); }
+.an-chips button.is-on .an-dot i { display: block; }
+.an-anios { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 5px; }
+.an-anios button { justify-content: flex-start; font-variant-numeric: tabular-nums; }
+@media (max-width: 1199px) { .an-grupos { grid-template-columns: 1fr 1fr; } .an-panel:nth-child(3) { grid-column: 1 / -1; } }
+@media (max-width: 767px) { .an-grupos { grid-template-columns: 1fr; } }
 .an-est { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 10px; max-height: 160px; overflow-y: auto; padding: 6px 8px; border: 1px solid #edf1ec; border-radius: 8px; font-size: 12px; }
 .an-est label { margin: 0; font-weight: 400; }
 .an-est small { color: #8a8f87; }

@@ -32,14 +32,15 @@
       </div>
       <p>
         Suba un <b>GeoTIFF</b> NDVI (Sentinel-2/EO Browser, QGIS, Pix4D, DroneDeploy...) para calcular el NDVI de cada parcela,
+        un <b>KMZ de dron</b> (DJI Terra, Pix4D, Agisoft: se une y procesa aqui mismo, sin limite de tamaño),
         o una imagen <b>PNG/JPG</b> ya coloreada indicando sus limites. La imagen se muestra en el Mapa GPS segun su fecha.
       </p>
       <div class="form-row">
         <div class="col-md-5 form-group">
           <label>Archivo</label>
           <div class="custom-file">
-            <input type="file" class="custom-file-input" id="ni-archivo" accept=".tif,.tiff,.png,.jpg,.jpeg" @change="elegir($event.target.files[0] || null)">
-            <label class="custom-file-label" for="ni-archivo">{{ archivo ? archivo.name : 'GeoTIFF, PNG o JPG' }}</label>
+            <input type="file" class="custom-file-input" id="ni-archivo" accept=".tif,.tiff,.kmz,.png,.jpg,.jpeg" @change="elegir($event.target.files[0] || null)">
+            <label class="custom-file-label" for="ni-archivo">{{ archivo ? archivo.name : 'GeoTIFF, KMZ de dron, PNG o JPG' }}</label>
           </div>
         </div>
         <div class="col-md-3 form-group">
@@ -55,7 +56,39 @@
         </div>
       </div>
 
-      <div v-if="leyendo" class="ni-info"><i class="fas fa-spinner fa-spin"></i> Leyendo GeoTIFF...</div>
+      <div v-if="leyendo" class="ni-info"><i class="fas fa-spinner fa-spin"></i> Leyendo {{ esKmz ? 'KMZ' : 'GeoTIFF' }}...</div>
+      <!-- KMZ de dron: imagen en mosaicos GroundOverlay; se une y procesa en el navegador. -->
+      <template v-else-if="kmz">
+        <div class="ni-info">
+          <i class="fas fa-check-circle"></i>
+          KMZ {{ kmz.nombre ? '«' + kmz.nombre + '»' : '' }} · {{ kmz.mosaicos.length }} mosaico(s) ·
+          {{ Math.round(kmz.anchoM) }} × {{ Math.round(kmz.altoM) }} m
+          <span v-if="kmzEnsayo !== null" :class="{ 'ni-txt-nar': kmzEnsayo === 0 }">· {{ kmzEnsayo === 0 ? 'no cubre las parcelas del ensayo' : `cubre ${kmzEnsayo} de ${conGeometria.length} parcela(s)` }}</span>
+        </div>
+        <div class="form-row">
+          <div class="col-md-5 form-group">
+            <label>Contenido</label>
+            <select class="form-control" v-model="form.kmzModo">
+              <option value="ndvi">Mapa NDVI coloreado (rojo → amarillo → verde): calcular NDVI por parcela</option>
+              <option value="imagen">Solo mostrar en el mapa (ortomosaico RGB u otro indice)</option>
+            </select>
+          </div>
+          <template v-if="form.kmzModo === 'ndvi'">
+            <div class="col-6 col-md-2 form-group">
+              <label>Leyenda: rojo =</label>
+              <input type="number" step="0.01" min="-1" max="1" class="form-control" v-model.number="form.leyMin">
+            </div>
+            <div class="col-6 col-md-2 form-group">
+              <label>verde =</label>
+              <input type="number" step="0.01" min="-1" max="1" class="form-control" v-model.number="form.leyMax">
+            </div>
+          </template>
+        </div>
+        <p v-if="form.kmzModo === 'ndvi'" class="ni-ayuda">
+          Copie el <b>valor minimo y maximo de la leyenda</b> del reporte del dron (DJI Terra, Pix4D...): el color mas rojo equivale al minimo y el mas verde al maximo.
+          El NDVI se estima por el color, asi que es <b>aproximado</b>; para valores exactos suba el GeoTIFF del indice.
+        </p>
+      </template>
       <template v-else-if="tif">
         <div class="ni-info">
           <i class="fas fa-check-circle"></i>
@@ -87,7 +120,7 @@
         </div>
         <p v-if="tif.bandas === 3" class="det-warn"><i class="fas fa-exclamation-triangle"></i> Con 3 bandas suele ser una imagen RGB visual; verifique que contenga NIR.</p>
       </template>
-      <template v-else-if="archivo && !esTif">
+      <template v-else-if="archivo && !esTif && !esKmz">
         <p class="ni-ayuda">Limites de la imagen (grados decimales, WGS84):</p>
         <div class="form-row">
           <div class="col-6 col-md-2 form-group"><label>Norte</label><input type="number" step="any" class="form-control" v-model.number="form.n"></div>
@@ -121,7 +154,11 @@
         <div class="ni-thumb" :style="{ backgroundImage: `url(${storageUrl}/${im.imagen_path})` }"></div>
         <div class="ni-card-body">
           <strong>{{ fechaTxt(im.fecha) }}</strong>
-          <small>{{ im.fuente || 'Fuente no indicada' }} · {{ im.tipo === 'geotiff' ? 'GeoTIFF' : 'Imagen' }}</small>
+          <small>
+            {{ im.fuente || 'Fuente no indicada' }} ·
+            <template v-if="im.meta && im.meta.origen === 'kmz'">KMZ de dron{{ im.meta.leyenda ? ` · NDVI aprox. (leyenda ${im.meta.leyenda.min} a ${im.meta.leyenda.max})` : ' · solo imagen' }}</template>
+            <template v-else>{{ im.tipo === 'geotiff' ? 'GeoTIFF' : 'Imagen' }}</template>
+          </small>
           <div class="ni-card-stats">
             <span v-if="mediaImagen(im) !== null" class="ni-val" :style="estiloValor(mediaImagen(im))">{{ mediaImagen(im).toFixed(2) }}</span>
             <small>{{ nValores(im) }} de {{ conGeometria.length }} parcelas</small>
@@ -210,6 +247,7 @@ export default {
       panel: false,
       archivo: null,
       tif: null,
+      kmz: null, // KMZ de dron leido (mosaicos y limites)
       leyendo: false,
       origenGeo: null,
       trayendo: null,
@@ -222,11 +260,23 @@ export default {
   },
   computed: {
     esTif() { return !!this.archivo && /\.tiff?$/i.test(this.archivo.name); },
+    esKmz() { return !!this.archivo && /\.kmz$/i.test(this.archivo.name); },
+    /** Parcelas del ensayo cuyo centro cae dentro del KMZ (null si no hay parcelas dibujadas). */
+    kmzEnsayo() {
+      if (!this.kmz || !this.conGeometria.length) return null;
+      const { n, s, e, o } = this.kmz.limites;
+      return this.conGeometria.filter((p) => {
+        const c = p.geometria.coordinates[0];
+        const lat = c.reduce((a, x) => a + x[1], 0) / c.length;
+        const lng = c.reduce((a, x) => a + x[0], 0) / c.length;
+        return lat <= n && lat >= s && lng <= e && lng >= o;
+      }).length;
+    },
     conGeometria() { return this.parcelas.filter((p) => p.geometria); },
     imagenesDesc() { return this.imagenes.slice().reverse(); },
-    // RGB y termicas no sirven para NDVI.
+    // RGB y termicas no sirven para NDVI; el KMZ de dron se une y procesa igual que al subirlo aqui.
     geoDisponibles() {
-      return this.geo.filter((g) => ['NDVI', 'Multiespectral'].includes(g.tipo) && /\.(tiff?|png|jpe?g)$/i.test(g.path || ''));
+      return this.geo.filter((g) => ['NDVI', 'Multiespectral'].includes(g.tipo) && /\.(tiff?|kmz|png|jpe?g)$/i.test(g.path || ''));
     },
     parcelasTabla() {
       return this.parcelas.filter((p) => p.geometria || this.imagenes.some((im) => this.valor(im, p) !== null));
@@ -239,6 +289,10 @@ export default {
     },
     puedeGuardar() {
       if (!this.archivo || !this.form.fecha) return false;
+      if (this.esKmz) {
+        const { leyMin: a, leyMax: b } = this.form;
+        return !!this.kmz && (this.form.kmzModo === 'imagen' || (Number.isFinite(a) && Number.isFinite(b) && a < b && a >= -1 && b <= 1));
+      }
       if (this.esTif) return !!this.tif && (this.form.modo !== 'calcular' || this.form.rojo !== this.form.nir);
       const { n, s, e, o } = this.form;
       return [n, s, e, o].every((v) => typeof v === 'number' && Number.isFinite(v)) && n > s && e > o;
@@ -246,7 +300,10 @@ export default {
   },
   methods: {
     formVacio() {
-      return { fecha: hoy(), fuente: this.fuentes ? this.fuentes[0] || null : null, modo: 'banda', banda: 0, rojo: 0, nir: 1, n: null, s: null, e: null, o: null };
+      return {
+        fecha: hoy(), fuente: this.fuentes ? this.fuentes[0] || null : null, modo: 'banda', banda: 0, rojo: 0, nir: 1, n: null, s: null, e: null, o: null,
+        kmzModo: 'ndvi', leyMin: 0, leyMax: 1, // KMZ: contenido y valores de la leyenda (rojo / verde)
+      };
     },
     raster() { return import(/* webpackChunkName: "ndvi" */ './ndvi-raster'); },
     procesada(g) { return this.imagenes.find((im) => im.imagen_geo_id === g.id) || null; },
@@ -264,7 +321,7 @@ export default {
         const nombre = new RegExp(`${ext.replace('.', '\\.')}$`, 'i').test(g.nombre) ? g.nombre : `${g.nombre}${ext}`;
         await this.elegir(new File([blob], nombre, { type: blob.type }));
         this.origenGeo = g;
-        if (g.fecha) this.form.fecha = g.fecha;
+        if (g.fecha) this.form.fecha = String(g.fecha).slice(0, 10);
         const fuente = this.fuenteDeSensor(g.sensor);
         if (fuente) this.form.fuente = fuente;
       } catch (e) {
@@ -286,10 +343,27 @@ export default {
       this.archivo = file;
       this.origenGeo = null;
       this.tif = null;
+      this.kmz = null;
       this.error = null;
       if (!this.archivo) return;
       const m = this.archivo.name.match(/(20\d{2})[-_]?(\d{2})[-_]?(\d{2})/);
       if (m) this.form.fecha = `${m[1]}-${m[2]}-${m[3]}`;
+      if (this.esKmz) {
+        this.leyendo = true;
+        try {
+          const nr = await this.raster();
+          this.kmz = Object.freeze(nr.leerKmz(await this.archivo.arrayBuffer()));
+          // Un KMZ de indice NDVI se procesa; otro (ortomosaico RGB) solo se muestra.
+          this.form.kmzModo = /ndvi|indice|index/i.test(`${this.archivo.name} ${this.kmz.nombre}`) ? 'ndvi' : 'imagen';
+          const dron = this.fuenteDeSensor('dron');
+          if (dron) this.form.fuente = dron;
+        } catch (e) {
+          this.error = e.message || String(e);
+        } finally {
+          this.leyendo = false;
+        }
+        return;
+      }
       if (!this.esTif) { if (this.form.n === null && this.conGeometria.length) this.usarExtension(); return; }
       this.leyendo = true;
       try {
@@ -322,7 +396,29 @@ export default {
         if (this.form.fuente) fd.append('fuente', this.form.fuente);
         fd.append('nombre', this.archivo.name);
         if (this.origenGeo) fd.append('imagen_geo_id', this.origenGeo.id);
-        if (this.esTif) {
+        if (this.esKmz) {
+          // Se sube solo el resultado (unos MB); el KMZ original (decenas de MB) no se guarda.
+          const nr = await this.raster();
+          const c = await nr.componerKmz(this.kmz, { progreso: (i, n) => { this.estado = `Uniendo mosaicos ${i}/${n}...`; } });
+          const esquinas = nr.esquinas(c.georef, c.ancho, c.alto);
+          const meta = { origen: 'kmz', mosaicos: this.kmz.mosaicos.length, area_m: [Math.round(this.kmz.anchoM), Math.round(this.kmz.altoM)], resol_nativa_m: c.resolNativa, resol_m: c.resol };
+          fd.append('imagen_ancho', c.ancho);
+          fd.append('imagen_alto', c.alto);
+          fd.append('esquinas', JSON.stringify(esquinas));
+          if (this.form.kmzModo === 'ndvi') {
+            this.estado = 'Calculando NDVI...';
+            const r = nr.ndviDesdeColores(c.canvas, { min: this.form.leyMin, max: this.form.leyMax });
+            fd.append('tipo', 'geotiff');
+            fd.append('imagen', await nr.colorear(r.datos, c.ancho, c.alto), 'ndvi.png');
+            fd.append('raster', new Blob([r.datos], { type: 'application/octet-stream' }), 'ndvi.bin');
+            fd.append('meta', JSON.stringify({ ...meta, georef: c.georef, raster: { ancho: c.ancho, alto: c.alto }, leyenda: { min: this.form.leyMin, max: this.form.leyMax }, stats: r.stats }));
+            fd.append('valores', JSON.stringify(nr.valoresPorParcela(r.datos, c.ancho, c.alto, c.georef, this.parcelas)));
+          } else {
+            fd.append('tipo', 'imagen');
+            fd.append('imagen', await new Promise((ok) => c.canvas.toBlob(ok, 'image/png')), 'kmz.png');
+            fd.append('meta', JSON.stringify(meta));
+          }
+        } else if (this.esTif) {
           this.estado = 'Calculando NDVI...';
           const nr = await this.raster();
           const opc = this.form.modo === 'calcular' ? { rojo: this.form.rojo, nir: this.form.nir } : { banda: this.form.banda };
@@ -364,6 +460,7 @@ export default {
         this.archivo = null;
         this.origenGeo = null;
         this.tif = null;
+        this.kmz = null;
         this.form = this.formVacio();
       } catch (e) {
         this.error = this.mensaje(e);
@@ -472,6 +569,7 @@ export default {
 .ni-ok { color: #3f7a12; font-weight: 600; }
 .ni-origen { background: #eef4fb; color: #1d4f80; }
 .ni-ayuda { margin-bottom: 6px; color: var(--cengi-muted); font-size: 12px; }
+.ni-txt-nar { color: #b84d00; font-weight: 600; }
 .ni-galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 .ni-card { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--cengi-border); border-radius: 10px; background: #fff; }
 .ni-thumb { height: 110px; background: #f3f5f1 center / contain no-repeat; border-bottom: 1px solid var(--cengi-border); }

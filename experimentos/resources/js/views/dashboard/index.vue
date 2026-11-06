@@ -61,7 +61,7 @@
       <!-- ============ Ensayos en campo ============ -->
       <section class="db-card is-ancho">
         <header class="db-card-h">
-          <h3><i class="fas fa-seedling"></i> Ensayos en campo</h3>
+          <h3><icono-cana :tamano="20"></icono-cana> Ensayos en campo</h3>
           <small>Avance de cada ensayo en el flujo</small>
         </header>
         <div v-if="enCurso.length" class="db-tabla-wrap">
@@ -112,7 +112,7 @@
             </tbody>
           </table>
         </div>
-        <div v-else class="db-vacio"><i class="fas fa-seedling"></i><b>No hay ensayos en campo.</b></div>
+        <div v-else class="db-vacio"><icono-cana :tamano="34" apagado></icono-cana><b>No hay ensayos en campo.</b></div>
       </section>
 
       <!-- ============ Ensayos por programa ============ -->

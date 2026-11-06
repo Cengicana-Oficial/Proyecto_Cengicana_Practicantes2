@@ -386,6 +386,13 @@ textarea.form-control { min-height: 96px; }
 .modal-header { padding: 16px 20px; background: #fbfcf9; border-bottom: 1px solid var(--cengi-border); }
 .modal-body { padding: 20px; }
 .modal-footer { padding: 13px 20px; background: #fbfcf9; border-top: 1px solid var(--cengi-border); }
+/* modal-dialog-scrollable con un <form> entre .modal-content y .modal-body: Bootstrap solo hace
+   desplazable el cuerpo si es hijo directo; el form debe encogerse a la altura disponible o el
+   final del formulario queda cortado sin barra de desplazamiento. */
+.modal-dialog-scrollable .modal-content > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.modal-dialog-scrollable .modal-content > form > .modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.modal-dialog-scrollable .modal-content > form > .modal-header,
+.modal-dialog-scrollable .modal-content > form > .modal-footer { flex-shrink: 0; }
 .close { color: var(--cengi-muted); text-shadow: none; }
 .highcharts-container, .highcharts-root { font-family: 'Inter', Arial, sans-serif !important; }
 .ciclo-tracker { gap: 5px; padding: 14px 0 8px; border-top: 1px solid #edf1ec; border-bottom: 1px solid #edf1ec; }
@@ -464,25 +471,37 @@ body.sigec-shell {
     width: var(--cengi-sidebar-width);
     overflow-x: hidden;
     overflow-y: auto;
-    background: linear-gradient(180deg, #26401a 0%, #1e3315 100%);
-    color: #eaf2de;
+    border-right: 1px solid #ced2d5;
+    background: #fff;
+    color: var(--cengi-ink);
 }
 
 .sigec-shell .cengi-brand {
+    position: relative;
     display: flex;
     flex: 0 0 auto;
     align-items: center;
     gap: 10px;
     min-height: 74px;
-    padding: 13px 18px;
-    border-bottom: 3px solid var(--cengi-orange);
+    padding: 13px 18px 16px;
     background: #fff;
     text-decoration: none;
 }
 
+/* Franja de marca: verde, verde secundario, amarillo y naranja */
+.sigec-shell .cengi-brand::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #73bc25 0 25%, #a3d300 25% 50%, #ffcc00 50% 75%, #ff6b00 75% 100%);
+    content: '';
+}
+
 .sigec-shell .cengi-brand:hover,
 .sigec-shell .cengi-brand:focus {
-    background: #f6faf3;
+    background: #f7fbf1;
     text-decoration: none;
 }
 
@@ -491,15 +510,17 @@ body.sigec-shell {
     flex: none;
     align-items: center;
     justify-content: center;
-    width: 38px;
-    height: 38px;
+    width: 42px;
+    height: 42px;
     overflow: hidden;
     border-radius: 9px;
-    background: linear-gradient(135deg, var(--cengi-secondary), var(--cengi-primary));
+    border: 1px solid #dcebc8;
+    background: #fff;
+    box-shadow: 0 3px 8px rgba(115, 188, 37, .18);
 }
 
 .sigec-shell .cengi-brand-mark i {
-    color: #1e3315;
+    color: #fff;
     font-size: 18px;
 }
 
@@ -510,14 +531,14 @@ body.sigec-shell {
 }
 
 .sigec-shell .cengi-brand-copy strong {
-    color: #1e3315;
+    color: var(--cengi-primary-deep-2);
     font: 700 16px 'Space Grotesk', sans-serif;
     letter-spacing: .02em;
 }
 
 .sigec-shell .cengi-brand-copy small {
     margin-top: 3px;
-    color: var(--cengi-muted);
+    color: var(--cengi-primary-strong);
     font-size: 9px;
     font-weight: 700;
     letter-spacing: .06em;
@@ -530,10 +551,11 @@ body.sigec-shell {
 }
 
 .sigec-shell .cengi-nav-group { padding: 9px 0; }
+.sigec-shell .cengi-nav-group + .cengi-nav-group { border-top: 1px solid #eceff1; }
 
 .sigec-shell .cengi-nav-label {
     padding: 7px 10px 6px;
-    color: #8aa271;
+    color: #7c868d;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: .09em;
@@ -549,10 +571,10 @@ body.sigec-shell {
     margin: 0 0 2px;
     padding: 9px 10px;
     border: 0;
-    border-left: 2.5px solid transparent;
+    border-left: 3px solid transparent;
     border-radius: 8px;
     background: transparent;
-    color: #d9e6c8;
+    color: #33433a;
     font-family: 'Inter', Arial, sans-serif;
     font-size: 13px;
     font-weight: 500;
@@ -567,41 +589,48 @@ body.sigec-shell {
     flex: 0 0 18px;
     width: 18px;
     margin: 0;
+    color: var(--cengi-primary);
     font-size: 15px;
     text-align: center;
-    opacity: .9;
 }
 
 .sigec-shell .cengi-nav-item:hover,
 .sigec-shell .cengi-nav-item:focus {
-    background: rgba(255, 255, 255, .06);
-    color: #fff;
+    background: #f3f9ea;
+    color: var(--cengi-primary-deep-2);
     text-decoration: none;
     outline: none;
 }
 
+.sigec-shell .cengi-nav-item:focus-visible { box-shadow: 0 0 0 2px rgba(115, 188, 37, .45); }
+
 .sigec-shell .cengi-nav-item.is-active {
-    border-left-color: var(--cengi-secondary);
-    background: rgba(163, 211, 0, .16);
-    color: #fff;
+    border-left-color: var(--cengi-primary);
+    background: linear-gradient(90deg, rgba(163, 211, 0, .22), rgba(163, 211, 0, .08));
+    color: var(--cengi-primary-deep-2);
+    font-weight: 700;
 }
+
+.sigec-shell .cengi-nav-item.is-active i { color: var(--cengi-primary-strong); }
 
 .sigec-shell .cengi-sidebar-foot {
     flex: 0 0 auto;
     padding: 12px 12px 18px;
-    border-top: 1px solid rgba(255, 255, 255, .08);
+    border-top: 1px solid #ced2d5;
+    background: #fafbfa;
 }
 
 .sigec-shell .cengi-sidebar-foot form { margin: 0; }
-.sigec-shell .cengi-menu-link { color: #d9e6c8; }
-.sigec-shell .cengi-logout-link { color: #f3b3ab; }
+.sigec-shell .cengi-menu-link { color: #33433a; }
+.sigec-shell .cengi-logout-link,
+.sigec-shell .cengi-logout-link i { color: #c25200; }
 .sigec-shell .cengi-logout-link:hover,
-.sigec-shell .cengi-logout-link:focus { background: rgba(230, 90, 74, .18); color: #ffd7d1; }
+.sigec-shell .cengi-logout-link:focus { background: rgba(255, 107, 0, .1); color: #a34500; }
 
 .sigec-shell .cengi-sidebar-version {
     margin-top: 10px;
     padding: 0 10px;
-    color: #8aa271;
+    color: #7c868d;
     font-size: 10.5px;
 }
 
@@ -726,7 +755,7 @@ body.sigec-shell {
 
     .sigec-shell .cengi-sidebar.is-open {
         left: 0;
-        box-shadow: 18px 0 40px rgba(15, 30, 18, .35);
+        box-shadow: 18px 0 40px rgba(15, 30, 18, .18);
     }
 
     .sigec-shell .cengi-topbar,

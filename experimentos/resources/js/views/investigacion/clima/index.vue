@@ -166,6 +166,7 @@
 </template>
 
 <script>
+import { EXPORTAR } from './clima-util';
 import ClimaEstaciones from './estaciones.vue';
 import ClimaApiConfig from './api-config.vue';
 import ClimaAnalisis from './analisis.vue';
@@ -292,7 +293,7 @@ export default {
       return {
         chart: { type: 'bar', height: Math.max(160, 34 * datos.length + 60), style: { fontFamily: 'inherit' } },
         title: { text: 'Lluvia acumulada por estacion (mm)', style: { fontSize: '13px', fontWeight: '700' } },
-        credits: { enabled: false }, legend: { enabled: false },
+        credits: { enabled: false }, exporting: EXPORTAR, legend: { enabled: false },
         xAxis: { categories: datos.map((r) => r.nombre), lineColor: '#CED2D5' },
         yAxis: { title: { text: null }, gridLineColor: '#edf1ec' },
         tooltip: { valueSuffix: ' mm', valueDecimals: 1 },

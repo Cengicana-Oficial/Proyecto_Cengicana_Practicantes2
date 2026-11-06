@@ -134,7 +134,11 @@ class FormulariosController extends Controller
             'ensayo_id' => 'required|exists:ensayos,id',
             'estado' => 'nullable|in:Activo,Inactivo',
             'promocion' => 'nullable|in:revision,automatica',
-            'campos' => 'required|array|min:1|max:60',
+            'campos' => 'nullable|array|max:60',
+            'fotos' => 'nullable|array',
+            'fotos.activo' => 'nullable|boolean',
+            'fotos.indicacion' => 'nullable|string|max:200',
+            'fotos.maximo' => 'nullable|integer|min:1|max:6',
             'campos.*.id' => 'nullable|string|max:20',
             'campos.*.variable_id' => 'nullable|integer|exists:variables,id',
             'campos.*.label' => 'nullable|string|max:150',
@@ -150,6 +154,16 @@ class FormulariosController extends Controller
         $this->verificarEnsayo($data['ensayo_id']);
         if ((int) Ensayo::whereKey($data['ensayo_id'])->value('proyecto_id') !== (int) $data['proyecto_id']) {
             throw ValidationException::withMessages(['ensayo_id' => ['El ensayo no pertenece al proyecto seleccionado.']]);
+        }
+        // Un formulario solo de fotos (p. ej. registro visual de malezas) no necesita campos.
+        $fotos = ! empty($data['fotos']['activo']) ? [
+            'activo' => true,
+            'indicacion' => trim((string) ($data['fotos']['indicacion'] ?? '')) ?: null,
+            'maximo' => (int) ($data['fotos']['maximo'] ?? 2),
+        ] : null;
+        $data['campos'] = $data['campos'] ?? [];
+        if (! $data['campos'] && ! $fotos) {
+            throw ValidationException::withMessages(['campos' => ['Agregue al menos una variable o campo, o active el registro fotografico.']]);
         }
 
         $variables = Variable::whereIn('id', collect($data['campos'])->pluck('variable_id')->filter())->get()->keyBy('id');
@@ -209,6 +223,7 @@ class FormulariosController extends Controller
             'estado' => $data['estado'] ?? ($actual->estado ?? 'Activo'),
             'promocion' => $data['promocion'] ?? ($actual->promocion ?? 'revision'),
             'campos' => $campos,
+            'fotos' => $fotos,
         ];
     }
 
@@ -607,6 +622,7 @@ class FormulariosController extends Controller
             'proyecto_id' => $f->proyecto_id,
             'ensayo_id' => $f->ensayo_id,
             'campos' => $f->campos ?: [],
+            'fotos' => $f->fotos ?: null,
             'estado' => $f->estado,
             'promocion' => $f->promocion ?: 'revision',
             'fecha' => $f->fecha ? $f->fecha->format('Y-m-d') : null,

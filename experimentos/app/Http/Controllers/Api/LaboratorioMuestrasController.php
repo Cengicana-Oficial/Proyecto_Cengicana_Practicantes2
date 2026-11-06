@@ -19,8 +19,6 @@ class LaboratorioMuestrasController extends Controller
 {
     const MAX_IDS = 200;
 
-    /** Tipo de muestra de SIGEC => tipo_muestra.nombre del Laboratorio. */
-    const TIPOS_LAB = ['Suelo' => 'suelos', 'Agua' => 'agua', 'Tejido vegetal' => 'foliares', 'Jugos' => 'cañas', 'Mieles' => 'mieles'];
 
     public function consultar(Request $request)
     {
@@ -88,7 +86,8 @@ class LaboratorioMuestrasController extends Controller
         return [
             'id_sigec' => $m->id_muestra,
             'tipo' => $m->tipo,
-            'tipo_lab' => self::TIPOS_LAB[$m->tipo] ?? null,
+            // tipo_muestra.nombre del Laboratorio (catalogo Sistema > Catalogos > Tipos de muestra).
+            'tipo_lab' => optional(\App\Models\TipoMuestra::porNombre()->get($m->tipo))->tipo_lab,
             'fecha_muestreo' => optional($m->fecha)->format('Y-m-d'),
             // Lo que el Laboratorio escribe en "Nombre del ensayo" de la recepcion.
             'nombre_ensayo' => $e->codigo ?? null,

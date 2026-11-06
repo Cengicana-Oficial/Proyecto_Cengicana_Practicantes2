@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Investigacion;
 
 use App\Http\Controllers\Controller;
+use App\Models\Archivo;
 use App\Models\Ensayo;
 use App\Models\Programa;
 use App\Models\Proyecto;
@@ -45,12 +46,16 @@ class ProyectosController extends Controller
             ->orderBy('codigo')
             ->get());
 
+        $programas = app(ProgramasController::class);
+
         return view('component', [
-            'title' => 'Proyectos',
+            'title' => 'Programas y proyectos',
             'component' => 'proyectos-index',
             'params' => [
                 'proyectos' => $proyectos,
-                'programas' => Programa::visiblesPara($user)->orderBy('nombre')->get(['id', 'nombre', 'sigla', 'color']),
+                'programas' => $programas->listado($user),
+                'paleta' => $programas->paleta(),
+                'puedeGestionarProgramas' => $user->can('admin_only'),
                 'responsables' => User::orderBy('name')->get(['id', 'name']),
                 'rolesEquipo' => self::ROLES_EQUIPO,
                 'diasSinActividad' => self::DIAS_SIN_ACTIVIDAD,
@@ -60,8 +65,10 @@ class ProyectosController extends Controller
                 'puedeCrearEnsayo' => $user->can('create_ensayo'),
                 'ensayosUrl' => route('investigacion.ensayos.index'),
                 'evaluacionesUrl' => $user->can('menu_general') ? route('investigacion.evaluaciones.index') : null,
-                'muestrasUrl' => ($user->can('create_muestra') || $user->can('view_lab')) ? route('soporte.muestras-consulta.index') : null,
+                'muestrasUrl' => ($user->can('create_muestra') || $user->can('view_lab')) ? route('soporte.muestras.index') : null,
                 'programasUrl' => route('investigacion.programas.index'),
+                'archivosUrl' => route('soporte.archivos.index'),
+                'storageUrl' => url('storage'),
             ],
         ]);
     }
@@ -78,7 +85,7 @@ class ProyectosController extends Controller
         }
 
         $ensayos = Ensayo::whereIn('proyecto_id', $ids)
-            ->with('responsable:id,name')
+            ->with(['responsable:id,name', 'responsables:users.id,users.name'])
             ->withCount(['evaluaciones', 'muestras', 'muestras as muestras_completadas_count' => fn ($q) => $q->where('estado', 'Completado')])
             ->withMax('evaluaciones as ultima_evaluacion', 'evaluaciones.fecha')
             ->withMax('muestras as ultimo_muestreo', 'fecha')
@@ -87,14 +94,21 @@ class ProyectosController extends Controller
             ->get()
             ->groupBy('proyecto_id');
         $equipo = ProyectoAsignacion::with('usuario:id,name')->whereIn('proyecto_id', $ids)->get()->groupBy('proyecto_id');
+        // Archivos del proyecto y de sus ensayos (protocolos, croquis, informes...).
+        $archivos = Archivo::with('ensayo:id,codigo,proyecto_id')
+            ->where(fn ($q) => $q->whereIn('proyecto_id', $ids)->orWhereIn('ensayo_id', Ensayo::whereIn('proyecto_id', $ids)->select('id')))
+            ->orderByDesc('fecha')->orderByDesc('id')
+            ->get(['id', 'nombre', 'carpeta', 'tipo', 'tamano', 'fecha', 'path', 'proyecto_id', 'ensayo_id'])
+            ->groupBy(fn ($a) => $a->proyecto_id ?: optional($a->ensayo)->proyecto_id);
 
-        return $proyectos->each(function ($p) use ($ensayos, $equipo) {
+        return $proyectos->each(function ($p) use ($ensayos, $equipo, $archivos) {
             $lista = $ensayos->get($p->id, collect())->map(function ($e) {
                 $ultima = collect([$e->ultima_evaluacion, $e->ultimo_muestreo, $e->ultima_bitacora])->filter()->map(fn ($f) => substr($f, 0, 10))->max();
 
                 return [
                     'id' => $e->id, 'codigo' => $e->codigo, 'nombre' => $e->nombre, 'estado' => $e->estado,
-                    'responsable' => optional($e->responsable)->name, 'finca' => $e->finca, 'lote' => $e->lote,
+                    // Todos los responsables del ensayo (el principal primero).
+                    'responsable' => $e->responsables->pluck('name')->implode(', ') ?: optional($e->responsable)->name, 'finca' => $e->finca, 'lote' => $e->lote,
                     'variedad' => $e->variedad, 'fecha_siembra' => optional($e->fecha_siembra)->format('Y-m-d'),
                     'evaluaciones' => $e->evaluaciones_count, 'muestras' => $e->muestras_count,
                     'muestras_completadas' => $e->muestras_completadas_count, 'ultima_actividad' => $ultima,
@@ -115,6 +129,10 @@ class ProyectosController extends Controller
                 'id' => $a->id, 'usuario_id' => $a->usuario_id, 'nombre' => optional($a->usuario)->name, 'rol' => $a->rol,
             ])->sortBy('nombre')->values());
             $p->setAttribute('proximo_ensayo', Codificacion::codigoEnsayo($p));
+            $p->setAttribute('archivos', $archivos->get($p->id, collect())->map(fn ($a) => [
+                'id' => $a->id, 'nombre' => $a->nombre, 'carpeta' => $a->carpeta, 'tipo' => $a->tipo, 'tamano' => $a->tamano,
+                'fecha' => optional($a->fecha)->format('Y-m-d'), 'path' => $a->path, 'ensayo' => optional($a->ensayo)->codigo,
+            ])->values());
         });
     }
 

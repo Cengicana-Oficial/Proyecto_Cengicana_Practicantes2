@@ -212,7 +212,7 @@
               <div><span>Actualizado desde el Laboratorio</span><b>{{ fmtFechaHora(sel.lab.sincronizado_en) }}</b></div>
               <div class="mc-lab-full">
                 <span>Vinculo</span>
-                <b>{{ ({ manual: 'Confirmado a mano en SIGEC', api: 'Enviado por el Laboratorio (API)', escaneo: 'Escaneo de la etiqueta en el Laboratorio' })[sel.lab.vinculo] || 'Escaneo de la etiqueta en el Laboratorio' }}</b>
+                <b>{{ ({ manual: 'Confirmado a mano en Experimentos', api: 'Enviado por el Laboratorio (API anterior)', escaneo: 'Escaneo de la etiqueta QR en el Laboratorio' })[sel.lab.vinculo] || 'Escaneo de la etiqueta en el Laboratorio' }}</b>
                 <button v-if="sel.lab.vinculo === 'manual' && puedeActualizar" type="button" class="mc-link mc-desvinc" @click="desvincular(sel)"><i class="fas fa-unlink"></i> Quitar vinculo</button>
               </div>
             </div>
@@ -227,7 +227,7 @@
               </tbody>
             </table>
           </template>
-          <p v-else-if="sel.lab" class="mc-nota"><i class="fas fa-info-circle"></i> Los resultados aparecen aqui cuando el informe del lote se firma en el Laboratorio.</p>
+          <p v-else-if="sel.lab" class="mc-nota"><i class="fas fa-info-circle"></i> Los resultados aparecen aqui cuando el Laboratorio firma el informe del lote y lo envia a Experimentos (boton "Enviar resultados a Experimentos").</p>
 
           <template v-if="puedeActualizar && !sel.lab">
             <h6 class="mc-sub"><i class="fas fa-pen"></i> Actualizar seguimiento</h6>
@@ -498,7 +498,7 @@ export default {
     etapaIdx(estado) { return { recibida: 0, proceso: 1, completado: 2 }[this.etapa(estado)]; },
     claseEstado(estado) { return estado === 'Pendiente' ? 'pendiente' : this.etapa(estado); },
     iconoTipo(t) {
-      return { Suelo: 'fas fa-mountain', 'Tejido vegetal': 'fas fa-leaf', Jugos: 'fas fa-tint', Mieles: 'fas fa-flask', Agua: 'fas fa-water', Fertilizantes: 'fas fa-seedling' }[t] || 'fas fa-vial';
+      return { Suelo: 'fas fa-mountain', Foliares: 'fas fa-leaf', Jugos: 'fas fa-tint', Mieles: 'fas fa-flask', Agua: 'fas fa-water', Fertilizantes: 'fas fa-seedling' }[t] || 'fas fa-vial';
     },
     diasLab(m) {
       if (!m.fecha) return '—';

@@ -342,7 +342,7 @@ return [
             'can' => 'menu_general',
         ],
         [
-            'text' => 'Evaluaciones',
+            'text' => 'Evaluaciones y Análisis',
             'route' => 'investigacion.evaluaciones.index',
             'icon' => 'fas fa-fw fa-clipboard-check',
             'can' => 'menu_general',
@@ -406,7 +406,7 @@ return [
 
         ['header' => 'Datos masivos & IA', 'can' => 'run_analysis'],
         [
-            'text' => 'Importar y Analizar',
+            'text' => 'Importación de datos',
             'route' => 'analisis.index',
             'icon' => 'fas fa-fw fa-file-arrow-up',
             'can' => 'run_analysis',

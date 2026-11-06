@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\CatalogosController;
 use App\Http\Controllers\Admin\UsuariosController;
 use App\Http\Controllers\Analisis\AnalisisController;
 use App\Http\Controllers\Auth\SsoController;
@@ -8,15 +9,19 @@ use App\Http\Controllers\Investigacion\ClimaBaseController;
 use App\Http\Controllers\Investigacion\ClimaController;
 use App\Http\Controllers\Investigacion\EnsayosController;
 use App\Http\Controllers\Investigacion\EvaluacionesController;
+use App\Http\Controllers\Investigacion\FotosParcelaController;
 use App\Http\Controllers\Investigacion\ProgramasController;
 use App\Http\Controllers\Investigacion\ProyectosController;
+use App\Http\Controllers\Investigacion\PruebaDatosController;
 use App\Http\Controllers\Investigacion\VariablesController;
+use App\Http\Controllers\NotificacionesController;
 use App\Http\Controllers\Soporte\ArchivosController;
 use App\Http\Controllers\Soporte\BitacoraController;
 use App\Http\Controllers\Soporte\FormulariosController;
 use App\Http\Controllers\Soporte\ImagenesGeoController;
 use App\Http\Controllers\Soporte\LaboratorioController;
 use App\Http\Controllers\Soporte\MuestrasConsultaController;
+use App\Http\Controllers\Soporte\MuestrasController;
 use App\Http\Controllers\Soporte\MuestrasGenController;
 use App\Http\Controllers\Soporte\ReportesController;
 use Illuminate\Support\Facades\Route;
@@ -45,6 +50,8 @@ Route::get('/sso/entrar', [SsoController::class, 'entrar'])
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/notificaciones', [NotificacionesController::class, 'index'])->name('notificaciones.index');
+    Route::post('/notificaciones/vistas', [NotificacionesController::class, 'vistas'])->name('notificaciones.vistas');
 
     Route::group(['as' => 'investigacion.', 'prefix' => 'investigacion'], function () {
         Route::get('programas', [ProgramasController::class, 'index'])->name('programas.index');
@@ -66,6 +73,19 @@ Route::middleware(['auth'])->group(function () {
         Route::put('ensayos/{ensayo}', [EnsayosController::class, 'update'])->name('ensayos.update');
         Route::delete('ensayos/{ensayo}', [EnsayosController::class, 'destroy'])->name('ensayos.destroy');
         Route::get('ensayos/{ensayo}', [EnsayosController::class, 'show'])->name('ensayos.show');
+        Route::post('ensayos/{ensayo}/ciclos/siguiente', [EnsayosController::class, 'siguienteCiclo'])->name('ensayos.ciclos.siguiente');
+        Route::delete('ensayos/{ensayo}/ciclos/ultimo', [EnsayosController::class, 'deshacerCiclo'])->name('ensayos.ciclos.deshacer');
+        Route::put('ensayos/ciclos/{ciclo}', [EnsayosController::class, 'actualizarCiclo'])->name('ensayos.ciclos.update');
+        Route::post('ensayos/{ensayo}/plan', [EnsayosController::class, 'storeActividad'])->name('ensayos.plan.store');
+        Route::get('ensayos/{ensayo}/plan/excel', [EnsayosController::class, 'planExcel'])->name('ensayos.plan.excel');
+        // Datos de las pruebas tecnicas (tabla libre + grafica de calibracion).
+        Route::put('ensayos/{ensayo}/datos', [PruebaDatosController::class, 'guardar'])->name('ensayos.datos.guardar');
+        Route::post('ensayos/{ensayo}/datos/importar', [PruebaDatosController::class, 'importar'])->name('ensayos.datos.importar');
+        Route::get('ensayos/{ensayo}/datos/excel', [PruebaDatosController::class, 'excel'])->name('ensayos.datos.excel');
+        Route::post('ensayos/{ensayo}/plan/importar', [EnsayosController::class, 'importarPlan'])->name('ensayos.plan.importar');
+        Route::put('plan/{actividad}', [EnsayosController::class, 'updateActividad'])->name('plan.update');
+        Route::post('plan/{actividad}/realizada', [EnsayosController::class, 'realizarActividad'])->name('plan.realizar');
+        Route::delete('plan/{actividad}', [EnsayosController::class, 'destroyActividad'])->name('plan.destroy');
         Route::post('ensayos/{ensayo}/tratamientos', [EnsayosController::class, 'storeTratamiento'])->name('ensayos.tratamientos.store');
         Route::put('tratamientos/{tratamiento}', [EnsayosController::class, 'updateTratamiento'])->name('tratamientos.update');
         Route::delete('tratamientos/{tratamiento}', [EnsayosController::class, 'destroyTratamiento'])->name('tratamientos.destroy');
@@ -83,6 +103,12 @@ Route::middleware(['auth'])->group(function () {
         Route::put('ndvi-imagenes/{imagen}', [EnsayosController::class, 'updateNdviImagen'])->name('ndvi-imagenes.update');
         Route::delete('ndvi-imagenes/{imagen}', [EnsayosController::class, 'destroyNdviImagen'])->name('ndvi-imagenes.destroy');
         Route::post('ndvi-imagenes/{imagen}/tratamientos', [EnsayosController::class, 'ndviImagenATratamientos'])->name('ndvi-imagenes.tratamientos');
+
+        // Registro fotografico por parcela y fecha (pestaña Fotos, captura de formularios, informe).
+        Route::get('ensayos/{ensayo}/fotos', [FotosParcelaController::class, 'index'])->name('ensayos.fotos.index');
+        Route::post('ensayos/{ensayo}/fotos', [FotosParcelaController::class, 'store'])->name('ensayos.fotos.store');
+        Route::put('fotos/{foto}', [FotosParcelaController::class, 'update'])->name('fotos.update');
+        Route::delete('fotos/{foto}', [FotosParcelaController::class, 'destroy'])->name('fotos.destroy');
 
         Route::get('clima/estaciones', [ClimaController::class, 'estaciones'])->name('clima.estaciones');
         Route::post('clima/estaciones', [ClimaController::class, 'store'])->name('clima.estaciones.store');
@@ -127,7 +153,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::group(['as' => 'soporte.', 'prefix' => 'soporte'], function () {
         // El trabajo de laboratorio vive en el modulo Laboratorio del portal; SIGEC solo consulta sus resultados.
-        Route::get('laboratorio', fn () => redirect()->route('soporte.muestras-consulta.index'))->name('laboratorio.index');
+        Route::get('laboratorio', fn () => redirect()->route('soporte.muestras.index', ['tab' => 'seguimiento']))->name('laboratorio.index');
+        // Muestras: pestañas Generar etiquetas y Seguimiento (las rutas antiguas redirigen aqui).
+        Route::get('muestras', [MuestrasController::class, 'index'])->name('muestras.index');
 
         Route::get('muestras/generar', [MuestrasGenController::class, 'index'])->name('muestras-gen.index');
         Route::post('muestras/generar', [MuestrasGenController::class, 'store'])->name('muestras-gen.store');
@@ -153,9 +181,11 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('archivos', [ArchivosController::class, 'index'])->name('archivos.index');
         Route::post('archivos', [ArchivosController::class, 'store'])->name('archivos.store');
+        Route::put('archivos/{archivo}', [ArchivosController::class, 'update'])->name('archivos.update');
         Route::delete('archivos/{archivo}', [ArchivosController::class, 'destroy'])->name('archivos.destroy');
 
         Route::get('bitacora', [BitacoraController::class, 'index'])->name('bitacora.index');
+        Route::get('bitacora/listado', [BitacoraController::class, 'listado'])->name('bitacora.listado');
         Route::post('bitacora', [BitacoraController::class, 'store'])->name('bitacora.store');
         Route::put('bitacora/{bitacora}', [BitacoraController::class, 'update'])->name('bitacora.update');
         Route::delete('bitacora/{bitacora}', [BitacoraController::class, 'destroy'])->name('bitacora.destroy');
@@ -176,18 +206,34 @@ Route::middleware(['auth'])->group(function () {
         Route::get('reportes', [ReportesController::class, 'index'])->name('reportes.index');
         Route::get('reportes/exportar/evaluaciones', [ReportesController::class, 'exportarEvaluaciones'])->name('reportes.exportar-evaluaciones');
         Route::get('reportes/exportar/muestras-lab', [ReportesController::class, 'exportarMuestrasLab'])->name('reportes.exportar-muestras-lab');
+        Route::get('reportes/exportar/ensayos', [ReportesController::class, 'exportarEnsayos'])->name('reportes.exportar-ensayos');
+        Route::get('reportes/exportar/bitacora', [ReportesController::class, 'exportarBitacora'])->name('reportes.exportar-bitacora');
+        Route::get('reportes/exportar/parcelas', [ReportesController::class, 'exportarParcelas'])->name('reportes.exportar-parcelas');
+        Route::get('reportes/exportar/ndvi', [ReportesController::class, 'exportarNdvi'])->name('reportes.exportar-ndvi');
+        Route::get('reportes/informe/{ensayo}', [ReportesController::class, 'informe'])->name('reportes.informe');
         Route::get('reportes/resumen/{ensayo}', [ReportesController::class, 'resumenEnsayo'])->name('reportes.resumen-ensayo');
     });
 
-    Route::group(['as' => 'analisis.', 'prefix' => 'analisis'], function () {
+    Route::get('analisis', fn () => redirect()->route('analisis.index'));
+    Route::group(['as' => 'analisis.', 'prefix' => 'importar'], function () {
         Route::get('/', [AnalisisController::class, 'index'])->name('index');
+        Route::get('plantilla', [AnalisisController::class, 'plantilla'])->name('plantilla');
         Route::post('importar', [AnalisisController::class, 'importar'])->name('importar');
     });
 
     Route::group(['as' => 'admin.', 'prefix' => 'admin'], function () {
         Route::get('usuarios', [UsuariosController::class, 'index'])->name('usuarios.index');
-        Route::post('usuarios', [UsuariosController::class, 'store'])->name('usuarios.store');
-        Route::put('usuarios/{usuario}', [UsuariosController::class, 'update'])->name('usuarios.update');
-        Route::delete('usuarios/{usuario}', [UsuariosController::class, 'destroy'])->name('usuarios.destroy');
+        // Los usuarios se crean en el portal; aqui solo se asigna su rol en Experimentos.
+        Route::post('usuarios/acceso', [UsuariosController::class, 'asignar'])->name('usuarios.asignar');
+        Route::delete('usuarios/acceso/{portalId}', [UsuariosController::class, 'quitar'])->where('portalId', '[0-9]+')->name('usuarios.quitar');
+
+        Route::get('catalogos', [CatalogosController::class, 'index'])->name('catalogos.index');
+        Route::post('catalogos/sincronizar', [CatalogosController::class, 'sincronizar'])->name('catalogos.sincronizar');
+        Route::post('catalogos/disenos', [CatalogosController::class, 'guardarDiseno'])->name('catalogos.disenos.store');
+        Route::put('catalogos/disenos/{diseno}', [CatalogosController::class, 'guardarDiseno'])->name('catalogos.disenos.update');
+        Route::delete('catalogos/disenos/{diseno}', [CatalogosController::class, 'eliminarDiseno'])->name('catalogos.disenos.destroy');
+        Route::post('catalogos/tipos-muestra', [CatalogosController::class, 'guardarTipo'])->name('catalogos.tipos.store');
+        Route::put('catalogos/tipos-muestra/{tipo}', [CatalogosController::class, 'guardarTipo'])->name('catalogos.tipos.update');
+        Route::delete('catalogos/tipos-muestra/{tipo}', [CatalogosController::class, 'eliminarTipo'])->name('catalogos.tipos.destroy');
     });
 });

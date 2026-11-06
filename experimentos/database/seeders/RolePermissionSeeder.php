@@ -26,7 +26,10 @@ class RolePermissionSeeder extends Seeder
             'manage_memberships', 'manage_formularios', 'create_muestra', 'view_lab',
             'view_reports_menu', 'menu_general',
         ],
+        // Roles del portal (config/sso.php roles_portal): encargado = Encargado del programa,
+        // experto = Encargado de proyecto o area, investigador = Tecnico de proyecto o area.
         'experto' => [
+            'create_ensayo', 'edit_ensayo', 'manage_formularios',
             'register_evaluacion', 'upload_files', 'run_analysis', 'write_bitacora',
             'view_reports', 'create_muestra', 'view_lab',
             'view_reports_menu', 'menu_general',

@@ -25,7 +25,14 @@ class MuestrasConsultaController extends Controller
 
     const RELACIONES = ['proyecto:id,codigo', 'tratamiento:id,codigo', 'parcela:id,codigo', 'solicitante:id,name'];
 
-    public function index(LaboratorioModulo $laboratorio)
+    /** El seguimiento es la pestaña "Seguimiento" de Muestras (MuestrasController). */
+    public function index(Request $request)
+    {
+        return redirect()->route('soporte.muestras.index', ['tab' => 'seguimiento'] + $request->query());
+    }
+
+    /** Datos de la pestaña "Seguimiento". */
+    public function parametros(LaboratorioModulo $laboratorio): array
     {
         abort_unless(Auth::user()->can('view_lab') || Auth::user()->can('create_muestra'), 403);
 
@@ -42,10 +49,7 @@ class MuestrasConsultaController extends Controller
             ->get()
             ->map(fn ($m) => $this->dto($m));
 
-        return view('component', [
-            'title' => 'Consulta de Muestras',
-            'component' => 'muestras-consulta-index',
-            'params' => [
+        return [
                 'muestras' => $muestras,
                 'ensayos' => Ensayo::whereIn('id', $ensayoIds)->orderBy('codigo')->get(['id', 'codigo', 'finca', 'lote', 'proyecto_id']),
                 'campos' => \App\Models\CampoMuestra::orderBy('orden')->get(['tipo_muestra', 'clave', 'etiqueta', 'unidad']),
@@ -54,8 +58,7 @@ class MuestrasConsultaController extends Controller
                 'ultimoEnvio' => DB::table('lab_envios')->orderByDesc('id')->first(['recibido_en', 'informe', 'respuesta_http', 'aplicadas']),
                 'puedeVerEnvios' => $user->can('admin_only'),
                 'puedeActualizar' => $user->can('create_muestra'),
-            ],
-        ]);
+        ];
     }
 
     /** Bitacora de envios recibidos por la API del Laboratorio (aceptados y rechazados). */

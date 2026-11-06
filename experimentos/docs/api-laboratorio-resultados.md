@@ -1,5 +1,11 @@
 # API módulo Laboratorio ↔ SIGEC
 
+> **Reemplazado por la conexión directa entre módulos.** Las dos bases están en el mismo servidor MySQL:
+> - **Laboratorio lee la base de Experimentos** (`laboratorio/includes/experimentos_helper.php`): al escanear una etiqueta `SIGEC-…`, la ficha (parcela, bloque, tratamiento, repetición, variedad) se llena al guardar el lote, y "Nombre del ensayo" de la recepción es una lista de los ensayos de Programas y proyectos.
+> - **Experimentos lee la base del Laboratorio** (`app/Services/LaboratorioModulo.php`) y solo toma los resultados de los informes firmados que el jefe de laboratorio **compartió** con el botón "Compartir resultados con Experimentos" (tabla `lab_experimentos_compartido`).
+>
+> La API descrita abajo sigue en el código pero el flujo normal ya no la usa.
+
 Contrato para que el **módulo Laboratorio**:
 
 1. **consulte** en SIGEC los datos de una muestra a partir del ID leído en la etiqueta QR (ensayo, parcela, tratamiento, repetición, fecha de muestreo…) y los guarde en su recepción;
