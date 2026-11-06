@@ -64,6 +64,7 @@
 .evq-chip.is-hoy { background: var(--cg-amarillo); color: #3b2f00; }
 .evq-chip.is-pronto { background: var(--cg-verde2-soft); color: var(--cg-verde2-text); }
 .evq-chip.is-pasado { background: var(--cg-naranja-soft); color: var(--cg-naranja-text); }
+.evq-chip.is-transfer { background: var(--cg-verde2-soft); color: var(--cg-verde2-text); border: 1px solid currentColor; }
 .evq-cupo { width: 70px; height: 4px; margin-top: 5px; overflow: hidden; border-radius: 99px; background: var(--cg-gris-soft); }
 .evq-cupo span { display: block; height: 100%; background: var(--cg-verde-2); }
 .evq-cupo.is-lleno span { background: var(--cg-naranja); }

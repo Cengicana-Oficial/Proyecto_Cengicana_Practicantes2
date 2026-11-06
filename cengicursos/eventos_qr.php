@@ -137,10 +137,10 @@ if (($_GET['accion'] ?? '') === 'listar_participantes') {
     $evento['logo'] = $evento['logo'] && cengi_evento_imagen_archivo($evento['logo']) ? cengi_normalizar_url_archivo($evento['logo']) : '';
     $stmt = $db->prepare("
         SELECT ep.id, ep.nombre_invitado AS nombre, ep.cui_invitado AS cui,
-               ep.codigo_qr, ep.ingreso_en, ep.pagado, ep.ingenio_id, (ep.recibo_pago IS NOT NULL AND ep.recibo_pago <> '') AS tiene_recibo,
+               ep.codigo_qr, ep.ingreso_en, ep.ingreso_via, ep.pagado, ep.ingenio_id, (ep.recibo_pago IS NOT NULL AND ep.recibo_pago <> '') AS tiene_recibo,
                ep.pago_estado, ep.pago_origen, ep.pago_nota, ep.pago_validado_por, ep.pago_validado_en, ep.pago_recordatorio_en,
                ep.confirmado_en, ep.confirmado_por, ep.gafete_enviado_en, ep.categoria_gafete,
-               ep.telefono_invitado AS telefono, ep.pago_boleta, ep.pago_banco, ep.pago_fecha, ep.pago_monto,
+               ep.telefono_invitado AS telefono, ep.cargo_invitado AS cargo, ep.pago_boleta, ep.pago_banco, ep.pago_fecha, ep.pago_monto,
                COALESCE(ip.nombre_ingenios, ie.nombre_ingenios, NULLIF(ep.institucion_invitado, ''), 'Invitado externo') AS ingenio,
                COALESCE(NULLIF(p.correo_participantes, ''), NULLIF(ep.correo_invitado, '')) AS correo
         FROM evento_participantes ep
@@ -261,8 +261,8 @@ if (($_GET['accion'] ?? '') === 'exportar_participantes') {
         SELECT ep.id, ep.nombre_invitado AS nombre, ep.cui_invitado AS cui,
                COALESCE(NULLIF(p.correo_participantes, ''), NULLIF(ep.correo_invitado, '')) AS correo,
                COALESCE(ip.nombre_ingenios, ie.nombre_ingenios, NULLIF(ep.institucion_invitado, ''), 'Invitado externo') AS ingenio,
-               ep.telefono_invitado AS telefono, ep.pago_boleta, ep.pago_banco, ep.pago_fecha, ep.pago_monto,
-               ep.codigo_qr, ep.pagado, ep.ingreso_en, ep.pago_estado, ep.pago_origen, ep.pago_validado_por, ep.confirmado_en, ep.gafete_enviado_en, ep.categoria_gafete
+               ep.telefono_invitado AS telefono, ep.cargo_invitado AS cargo, ep.pago_boleta, ep.pago_banco, ep.pago_fecha, ep.pago_monto,
+               ep.codigo_qr, ep.pagado, ep.ingreso_en, ep.ingreso_via, ep.pago_estado, ep.pago_origen, ep.pago_validado_por, ep.confirmado_en, ep.gafete_enviado_en, ep.categoria_gafete
         FROM evento_participantes ep
         LEFT JOIN participantes p ON p.id = ep.participante_id
         LEFT JOIN ingenios ip ON ip.id = p.ingenio_id
@@ -274,13 +274,14 @@ if (($_GET['accion'] ?? '') === 'exportar_participantes') {
     $participantes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $eventoPagado = cengi_evt_modalidad_evento($db, $eventoId) === 'Pagado';
-    $encabezados = ['Participante', 'CUI', 'Ingenio', 'Correo', 'Teléfono', 'Categoría', 'Código QR', 'Paga desde', 'Estado del pago', 'Boleta', 'Banco', 'Fecha del pago', 'Monto pagado', 'Validado por', 'Participación', 'Gafete enviado', 'Ingreso'];
+    $encabezados = ['Participante', 'CUI', 'Ingenio', 'Cargo', 'Correo', 'Teléfono', 'Categoría', 'Código QR', 'Paga desde', 'Estado del pago', 'Boleta', 'Banco', 'Fecha del pago', 'Monto pagado', 'Validado por', 'Participación', 'Gafete enviado', 'Ingreso'];
     $filas = [];
     foreach ($participantes as $participante) {
         $filas[] = [
             $participante['nombre'] ?? '',
             $participante['cui'] ?? '',
             $participante['ingenio'] ?? 'Invitado externo',
+            $participante['cargo'] ?? '',
             $participante['correo'] ?? '',
             $participante['telefono'] ?? '',
             $participante['categoria_gafete'] ?? 'Participante',
@@ -294,7 +295,7 @@ if (($_GET['accion'] ?? '') === 'exportar_participantes') {
             $participante['pago_validado_por'] ?? '',
             $participante['confirmado_en'] ? 'Confirmada' : 'Por confirmar',
             $participante['gafete_enviado_en'] ?? '',
-            $participante['ingreso_en'] ?? 'Sin ingreso',
+            $participante['ingreso_en'] ? $participante['ingreso_en'] . ($participante['ingreso_via'] === 'encuesta' ? ' (por encuesta)' : '') : 'Sin ingreso',
         ];
     }
 
@@ -362,6 +363,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($enColaboracion && !$aliadosForm) {
             $errores[] = 'Agrega al menos una empresa aliada o desmarca “Evento en colaboración”.';
         }
+        // Evento de transferencia de Comites: debe existir y no estar vinculado a otro evento.
+        $transferenciaId = (int) ($_POST['transferencia_id'] ?? 0) ?: null;
+        $encuestaFormato = isset(CENGI_EVT_ENCUESTA_FORMATOS[$_POST['encuesta_formato'] ?? '']) ? $_POST['encuesta_formato'] : 'general';
+        if ($transferenciaId && !in_array($transferenciaId, array_map('intval', array_column(cengi_evento_transferencias($db), 'id')), true)) {
+            $errores[] = 'El evento de transferencia elegido ya no existe en Comités.';
+        } elseif ($transferenciaId) {
+            $stmtTransf = $db->prepare('SELECT nombre FROM eventos WHERE transferencia_id = ? AND id <> ?');
+            $stmtTransf->execute([$transferenciaId, $eventoEditarId]);
+            if (($otroTransf = $stmtTransf->fetchColumn()) !== false) {
+                $errores[] = 'Ese evento de transferencia ya está vinculado con “' . $otroTransf . '”.';
+            }
+        }
         // Si la empresa aliada o CENGICAÑA cubren el costo, el evento es gratuito para los participantes.
         if ($enColaboracion && $colabFinancia !== 'compartido') {
             $modalidadPago = 'Gratuito';
@@ -371,11 +384,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errores[] = 'Un evento pagado necesita costo nacional mayor que 0.';
         }
         // Imagen y logo: datos actuales del evento para conservarlos, reemplazarlos o quitarlos.
-        $eventoPrevio = ['imagen' => null, 'logo' => null, 'registrados' => 0];
+        $eventoPrevio = ['imagen' => null, 'logo' => null, 'registrados' => 0, 'fecha' => null];
         if ($eventoEditarId > 0) {
-            $stmtPrevio = $db->prepare('SELECT imagen, logo, (SELECT COUNT(*) FROM evento_participantes WHERE evento_id = eventos.id) AS registrados FROM eventos WHERE id = ?');
+            $stmtPrevio = $db->prepare('SELECT imagen, logo, fecha, (SELECT COUNT(*) FROM evento_participantes WHERE evento_id = eventos.id) AS registrados FROM eventos WHERE id = ?');
             $stmtPrevio->execute([$eventoEditarId]);
             $eventoPrevio = $stmtPrevio->fetch(PDO::FETCH_ASSOC) ?: $eventoPrevio;
+        }
+        // Un evento finalizado por fecha pasada se reabre si se le pone una fecha de hoy en adelante.
+        if ($estado === 'Finalizado' && $fecha !== (string) $eventoPrevio['fecha'] && $fecha >= date('Y-m-d')) {
+            $estado = 'Planificado';
         }
         // Acuerdo de colaboracion: la modalidad no cambia si el aporte ya tiene pagos; si cambia
         // antes, se reinician las tareas del acuerdo y los precios ajustados (como el prototipo).
@@ -457,6 +474,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     $db->prepare("UPDATE eventos SET {$campoImagen} = ? WHERE id = ?")->execute([$final, $eventoGuardadoId]);
                 }
+                $db->prepare('UPDATE eventos SET transferencia_id = ?, encuesta_formato = ? WHERE id = ?')->execute([$transferenciaId, $encuestaFormato, $eventoGuardadoId]);
 
                 // Sincroniza las empresas aliadas: actualiza las existentes, agrega las nuevas
                 // (cada una con su token de encuesta) y quita las que se eliminaron del formulario.
@@ -511,9 +529,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $categoria = in_array($_POST['categoria_gafete'] ?? '', CENGI_EVP_CATEGORIAS, true) ? $_POST['categoria_gafete'] : 'Participante';
             $origen = ($_POST['pago_origen'] ?? '') === 'extranjero' ? 'extranjero' : 'nacional';
             $codigo = cengi_evento_generar_codigo_qr($db);
-            $stmt = $db->prepare("INSERT INTO evento_participantes (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, telefono_invitado, ingenio_id, codigo_qr, pagado,
-                    pago_estado, pago_origen, categoria_gafete, pago_validado_por, pago_validado_en, confirmado_en, confirmado_por) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt = $db->prepare("INSERT INTO evento_participantes (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, telefono_invitado, cargo_invitado, ingenio_id, codigo_qr, pagado,
+                    pago_estado, pago_origen, categoria_gafete, pago_validado_por, pago_validado_en, confirmado_en, confirmado_por) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$eventoId, $nombre, $cui, $correoInvitado !== '' ? $correoInvitado : null, mb_substr(trim((string) ($_POST['telefono_invitado'] ?? '')), 0, 30, 'UTF-8') ?: null,
+                mb_substr(trim((string) ($_POST['cargo_invitado'] ?? '')), 0, 150, 'UTF-8') ?: null,
                 $ingenioId > 0 ? $ingenioId : null, $codigo, $pagoEstado === 'exonerado' ? 1 : 0, $pagoEstado, $origen, $categoria,
                 $pagoEstado === 'exonerado' ? cengi_pp_usuario_nombre() : null, $pagoEstado === 'exonerado' ? date('Y-m-d H:i:s') : null,
                 $pagoEstado !== 'pendiente' ? date('Y-m-d H:i:s') : null, $pagoEstado !== 'pendiente' ? cengi_pp_usuario_nombre() : null]);
@@ -562,17 +581,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $filasDatos = array_slice($filas, 1, CENGI_EVT_CARGA_MASIVA_MAX_FILAS);
                         $registrados = 0;
 
-                        // Resolucion del nombre del ingenio contra la tabla ingenios, mismo
-                        // patron (cache + TRIM) que cengi_carga_inscripcion en carga_inscripcion.php.
-                        $stmtBuscarIngenio = $db->prepare("SELECT id FROM ingenios WHERE TRIM(nombre_ingenios) = TRIM(?) LIMIT 1");
-                        $cacheIngenios = [];
-
                         foreach ($filasDatos as $indice => $fila) {
                             $lineaReal = $indice + 2;
-                            $nombreFila = trim((string) ($fila[0] ?? ''));
+                            $nombreFila = cengi_texto_propio($fila[0] ?? '');
                             $cuiFila = trim((string) ($fila[1] ?? ''));
                             $correoFila = trim((string) ($fila[2] ?? ''));
                             $ingenioFila = trim((string) ($fila[3] ?? ''));
+                            // TELEFONO y CARGO se agregaron al final de la plantilla: las plantillas anteriores siguen sirviendo.
+                            $telefonoFila = mb_substr(trim((string) ($fila[4] ?? '')), 0, 30, 'UTF-8');
+                            $cargoFila = mb_substr(cengi_texto_cargo($fila[5] ?? ''), 0, 150, 'UTF-8');
 
                             if ($nombreFila === '' && $cuiFila === '' && $correoFila === '' && $ingenioFila === '') {
                                 continue;
@@ -586,32 +603,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $correoValido = null;
                             if ($correoFila !== '') {
                                 if (filter_var($correoFila, FILTER_VALIDATE_EMAIL)) {
-                                    $correoValido = $correoFila;
+                                    $correoValido = strtolower($correoFila);
                                 } else {
                                     $avisos[] = "Línea {$lineaReal}: el correo \"{$correoFila}\" no es válido; se registró a {$nombreFila} sin correo.";
                                 }
                             }
 
-                            $ingenioIdFila = null;
-                            if ($ingenioFila !== '') {
-                                $claveIngenio = mb_strtolower($ingenioFila);
-                                if (array_key_exists($claveIngenio, $cacheIngenios)) {
-                                    $ingenioIdFila = $cacheIngenios[$claveIngenio];
-                                } else {
-                                    $stmtBuscarIngenio->execute([$ingenioFila]);
-                                    $encontrado = $stmtBuscarIngenio->fetchColumn();
-                                    $ingenioIdFila = $encontrado !== false ? (int) $encontrado : null;
-                                    $cacheIngenios[$claveIngenio] = $ingenioIdFila;
-                                }
-                                if ($ingenioIdFila === null) {
-                                    $avisos[] = "Línea {$lineaReal}: el ingenio \"{$ingenioFila}\" no coincide con ningún ingenio registrado; se registró a {$nombreFila} sin ingenio.";
-                                }
+                            // "trinidad", "Ingenio Trinidad" o "ING. TRINIDAD S.A." -> ingenio del catalogo.
+                            $institucionFila = cengi_institucion_normalizar($db, $ingenioFila);
+                            $ingenioIdFila = $institucionFila['ingenio_id'];
+                            $ingenioFila = $institucionFila['institucion'];
+                            if ($ingenioIdFila === null && $ingenioFila !== '' && $ingenioFila !== 'Particular') {
+                                $avisos[] = "Línea {$lineaReal}: \"{$ingenioFila}\" no es un ingenio del catálogo; se guardó como institución de {$nombreFila}.";
                             }
 
                             $codigo = cengi_evento_generar_codigo_qr($db);
                             // Gratuito: confirmado al cargar; pagado: pago pendiente (se valida y confirma despues).
-                            $stmt = $db->prepare("INSERT INTO evento_participantes (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, ingenio_id, codigo_qr, pago_estado, confirmado_en) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)");
-                            $stmt->execute([$eventoId, $nombreFila, $cuiFila, $correoValido, $ingenioIdFila, $codigo, $cargaPagada ? 'pendiente' : null, $cargaPagada ? null : date('Y-m-d H:i:s')]);
+                            $stmt = $db->prepare("INSERT INTO evento_participantes (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, telefono_invitado, cargo_invitado, ingenio_id, institucion_invitado, codigo_qr, pago_estado, confirmado_en)
+                                VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            $stmt->execute([$eventoId, $nombreFila, $cuiFila, $correoValido, $telefonoFila ?: null, $cargoFila ?: null, $ingenioIdFila,
+                                $ingenioIdFila === null && $ingenioFila !== '' ? mb_substr($ingenioFila, 0, 255, 'UTF-8') : null, $codigo, $cargaPagada ? 'pendiente' : null, $cargaPagada ? null : date('Y-m-d H:i:s')]);
                             $registrados++;
                         }
 
@@ -649,10 +660,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // (eventos_pagos_api.php, accion=pago). Mismo scoping "AND evento_id = ?" que
             // marcar_ingreso: no se confia en que el id recibido pertenezca al evento.
             $categoria = in_array($_POST['categoria_gafete'] ?? '', CENGI_EVP_CATEGORIAS, true) ? $_POST['categoria_gafete'] : 'Participante';
-            $stmt = $db->prepare("UPDATE evento_participantes SET nombre_invitado = ?, cui_invitado = ?, correo_invitado = ?, telefono_invitado = ?, ingenio_id = ?, categoria_gafete = ?,
+            $stmt = $db->prepare("UPDATE evento_participantes SET nombre_invitado = ?, cui_invitado = ?, correo_invitado = ?, telefono_invitado = ?, cargo_invitado = ?, ingenio_id = ?, categoria_gafete = ?,
                 pago_origen = IF(confirmado_en IS NULL, ?, pago_origen) WHERE id = ? AND evento_id = ?");
             $stmt->execute([$nombre, $cui, $correoInvitado !== '' ? $correoInvitado : null, mb_substr(trim((string) ($_POST['telefono_invitado'] ?? '')), 0, 30, 'UTF-8') ?: null,
-                $ingenioId > 0 ? $ingenioId : null, $categoria, ($_POST['pago_origen'] ?? '') === 'extranjero' ? 'extranjero' : 'nacional', $participanteEventoId, $eventoId]);
+                mb_substr(trim((string) ($_POST['cargo_invitado'] ?? '')), 0, 150, 'UTF-8') ?: null, $ingenioId > 0 ? $ingenioId : null, $categoria, ($_POST['pago_origen'] ?? '') === 'extranjero' ? 'extranjero' : 'nacional', $participanteEventoId, $eventoId]);
             $mensaje = 'Participante actualizado correctamente.';
         } else {
             $mensaje = 'Escribe el nombre del participante.';
@@ -814,8 +825,13 @@ foreach ($eventos as $eventoFila) {
         'en_colaboracion' => (int) $eventoFila['en_colaboracion'], 'colab_modalidad' => (int) ($eventoFila['colab_modalidad'] ?: 2),
         'colab_financia' => (string) ($eventoFila['colab_financia'] ?: 'empresa'), 'aliados' => $aliadosPorEvento[(int) $eventoFila['id']] ?? [],
         'imagen' => $eventoFila['imagen'] ? cengi_normalizar_url_archivo($eventoFila['imagen']) : '', 'logo' => $eventoFila['logo'] ? cengi_normalizar_url_archivo($eventoFila['logo']) : '',
+        'transferencia_id' => (int) ($eventoFila['transferencia_id'] ?? 0) ?: '',
+        'encuesta_formato' => (string) ($eventoFila['encuesta_formato'] ?? 'general'),
     ];
 }
+// Eventos de transferencia de Comites para el selector del formulario y la etiqueta de la tabla.
+$transferencias = $puedeGestionar || array_filter(array_column($eventos, 'transferencia_id')) ? cengi_evento_transferencias($db) : [];
+$transferenciasPorId = array_column($transferencias, 'nombre', 'id');
 
 // Catalogo de ingenios para el <select> "Ingenio" del formulario de registro
 // individual de participantes (opcion vacia = "Invitado externo").
@@ -1091,9 +1107,11 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
 /* Con la barra lateral visible, los modales anchos se centran en el espacio a su derecha. */
 @media (min-width: 1025px) {
     .cengi-eventos-qr-page .cengi-ev-modal-xl { --ancho: min(1100px, calc(100vw - var(--cengi-sidebar-width) - 48px)); }
-    .cengi-eventos-qr-page .cengi-ev-modal-informe { --ancho: min(900px, calc(100vw - var(--cengi-sidebar-width) - 48px)); }
+    .cengi-eventos-qr-page .cengi-ev-modal-informe,
+    .cengi-eventos-qr-page .cengi-ev-modal .modal-lg { --ancho: min(900px, calc(100vw - var(--cengi-sidebar-width) - 48px)); }
     .cengi-eventos-qr-page .cengi-ev-modal-xl,
-    .cengi-eventos-qr-page .cengi-ev-modal-informe { width: var(--ancho); max-width: none; margin-left: calc(var(--cengi-sidebar-width) + (100vw - var(--cengi-sidebar-width) - var(--ancho)) / 2); }
+    .cengi-eventos-qr-page .cengi-ev-modal-informe,
+    .cengi-eventos-qr-page .cengi-ev-modal .modal-lg { width: var(--ancho); max-width: none; margin-left: calc(var(--cengi-sidebar-width) + (100vw - var(--cengi-sidebar-width) - var(--ancho)) / 2); }
 }
 .cengi-eventos-qr-page .cengi-ev-chip-ok { padding: 4px 9px; border-radius: 100px; background: #EAF6DD; color: #3E7A12; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .cengi-eventos-qr-page .cengi-ev-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 100px; font-size: 11px; font-weight: 600; white-space: nowrap; }
@@ -1520,7 +1538,8 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
                     $cupoLleno = $evt['cupo'] && $registradosEvt >= (int) $evt['cupo'];
                     ?>
                     <tr class="cengi-ev-row<?php echo $esHoyEvt ? ' is-hoy' : ''; ?>" data-estado="<?php echo cengi_evt_html($evt['estado']); ?>" data-abierto="<?php echo $abiertoEvt ? 1 : 0; ?>" data-sin-cerrar="<?php echo $sinCerrarEvt ? 1 : 0; ?>" data-buscar="<?php echo cengi_evt_html(cengi_texto_normalizado($evt['nombre'] . ' ' . $evt['tipo'] . ' ' . $evt['lugar'] . ' ' . $evt['buscar_participantes'])); ?>">
-                        <td class="cengi-ev-name"><span class="evq-color" style="background:<?php echo cengi_evt_html($colorEvt); ?>;" aria-hidden="true"></span><button type="button" class="cengi-ev-link" onclick="cengiEvtAbrirParticipantes(<?php echo (int) $evt['id']; ?>)"><?php echo cengi_evt_html($evt['nombre']); ?></button><div class="cengi-ev-sub"><?php echo cengi_evt_html($evt['tipo'] . (trim((string) $evt['lugar']) !== '' ? ' · ' . $evt['lugar'] : '')); ?></div></td>
+                        <td class="cengi-ev-name"><span class="evq-color" style="background:<?php echo cengi_evt_html($colorEvt); ?>;" aria-hidden="true"></span><button type="button" class="cengi-ev-link" onclick="cengiEvtAbrirParticipantes(<?php echo (int) $evt['id']; ?>)"><?php echo cengi_evt_html($evt['nombre']); ?></button><div class="cengi-ev-sub"><?php echo cengi_evt_html($evt['tipo'] . (trim((string) $evt['lugar']) !== '' ? ' · ' . $evt['lugar'] : '')); ?></div>
+                            <?php if (!empty($evt['transferencia_id'])): ?><span class="evq-chip is-transfer" title="Evento de transferencia en Comités<?php echo isset($transferenciasPorId[$evt['transferencia_id']]) ? ': ' . cengi_evt_html($transferenciasPorId[$evt['transferencia_id']]) : ''; ?>. Los ingresos registrados se sincronizan como asistentes.">Transferencia</span><?php endif; ?></td>
                         <td class="cengi-ev-num ev-td-fecha"><?php echo cengi_evt_html(cengi_evt_fecha_corta($evt['fecha'])); ?><?php if (trim((string) $evt['hora']) !== ''): ?><div class="cengi-ev-sub"><?php echo cengi_evt_html($evt['hora']); ?></div><?php endif; ?>
                             <?php if ($esHoyEvt): ?><div><span class="evq-chip is-hoy">Hoy</span></div>
                             <?php elseif ($sinCerrarEvt): ?><div><span class="evq-chip is-pasado" title="La fecha ya pasó y el evento sigue abierto">Fecha pasada</span></div>
@@ -1793,6 +1812,7 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
                             </select>
                         </div>
                         <div class="form-group"><label class="control-label">Teléfono / WhatsApp</label><input type="text" name="telefono_invitado" id="evpRegistroTelefono" class="form-control" maxlength="30"></div>
+                        <div class="form-group"><label class="control-label">Puesto o cargo</label><input type="text" name="cargo_invitado" id="evpRegistroCargo" class="form-control" maxlength="150"></div>
                         <div class="form-group"><label class="control-label">Categoría en el gafete</label><select name="categoria_gafete" id="evpRegistroCategoria" class="form-control"><?php foreach (CENGI_EVP_CATEGORIAS as $cat): ?><option><?php echo cengi_evt_html($cat); ?></option><?php endforeach; ?></select></div>
                         <div class="form-group evp-solo-pagado"><label class="control-label">Paga desde</label><select name="pago_origen" id="evpRegistroOrigen" class="form-control"><option value="nacional">Guatemala (Q)</option><option value="extranjero">El extranjero (US$)</option></select></div>
                         <div class="form-group evp-solo-pagado evp-solo-nuevo"><label class="control-label">Pago</label><select name="pago_estado" id="evpRegistroPago" class="form-control"><option value="pendiente">Pendiente: Administración registra y valida el comprobante</option><option value="exonerado">Invitado / exonerado (no paga)</option></select></div>
@@ -1922,6 +1942,8 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
             <div class="cengi-form-grid">
                 <div class="form-group cengi-form-full"><label class="control-label" for="evfNombre">Nombre del evento</label><input type="text" name="nombre" id="evfNombre" class="form-control" maxlength="255" placeholder="Ej. DRONTECH"></div>
                 <div class="form-group"><label class="control-label" for="evfTipo">Tipo</label><select name="tipo" id="evfTipo" class="form-control"><?php foreach (CENGI_EVT_TIPOS as $tipoOpcion): ?><option><?php echo cengi_evt_html($tipoOpcion); ?></option><?php endforeach; ?></select></div>
+                <div class="form-group"><label class="control-label" for="evfTransferencia">Evento de transferencia (Comités)</label><select name="transferencia_id" id="evfTransferencia" class="form-control" aria-describedby="evfTransferenciaAyuda"><option value="">No es de transferencia</option><?php foreach ($transferencias as $transf): ?><option value="<?php echo (int) $transf['id']; ?>"><?php echo cengi_evt_html($transf['nombre'] . ' · ' . ($transf['fecha'] ? cengi_evt_fecha_corta($transf['fecha']) : $transf['plan_mes'])); ?></option><?php endforeach; ?></select><small class="cengi-ev-sub" id="evfTransferenciaAyuda">Quienes tengan ingreso registrado aparecen como asistentes en Comités.</small></div>
+                <div class="form-group"><label class="control-label" for="evfEncuesta">Encuesta de percepción</label><select name="encuesta_formato" id="evfEncuesta" class="form-control" aria-describedby="evfEncuestaAyuda"><?php foreach (CENGI_EVT_ENCUESTA_FORMATOS as $formatoClave => $formatoTexto): ?><option value="<?php echo $formatoClave; ?>"><?php echo cengi_evt_html($formatoTexto); ?></option><?php endforeach; ?></select><small class="cengi-ev-sub" id="evfEncuestaAyuda">Los formatos de transferencia piden nombre e ingenio y registran como asistente a quien responde.</small></div>
                 <div class="form-group"><label class="control-label" for="evfFecha">Fecha</label><input type="date" name="fecha" id="evfFecha" class="form-control"></div>
                 <div class="form-group"><label class="control-label" for="evfHora">Horario</label><input type="text" name="hora" id="evfHora" class="form-control" maxlength="40" placeholder="8:00–13:00"></div>
                 <div class="form-group"><label class="control-label" for="evfLugar">Lugar</label><input type="text" name="lugar" id="evfLugar" class="form-control" maxlength="255" placeholder="Auditorio CENGICAÑA"></div>
@@ -2091,6 +2113,7 @@ window.CENGI_EVT = <?php echo json_encode([
     'puedeValidar' => $puedeValidar,
     'puedeVerPagos' => $puedeVerPagos,
     'estadosPago' => CENGI_EVP_ESTADOS,
+    'formatosEncuesta' => CENGI_EVT_ENCUESTA_FORMATOS,
     'rolInicial' => $rolInicial,
     'tabInicial' => $tabInicial,
     // Enlaces desde eventos_evaluacion.php: abren el informe o las encuestas de un evento.
@@ -2289,7 +2312,7 @@ window.CENGI_EVT = <?php echo json_encode([
                 ? '<div class="cengi-person-qr"><span class="cengi-mini-qr" data-codigo="' + escapeHtml(p.codigo_qr) + '" onclick="cengiEvtVerQr(' + indice + ')"></span><span class="mono">' + escapeHtml(p.codigo_qr) + '</span></div>'
                 : '<span class="cengi-ev-sub">Se habilita al confirmar</span>';
             var ingreso = p.ingreso_en
-                ? '<span class="cengi-status-badge is-active"><i></i>Ingresó</span><small class="cengi-entry-time">' + escapeHtml(p.ingreso_en) + '</small>'
+                ? '<span class="cengi-status-badge is-active"><i></i>Ingresó</span><small class="cengi-entry-time">' + escapeHtml(p.ingreso_en) + (p.ingreso_via === 'encuesta' ? ' · por encuesta' : '') + '</small>'
                 : '<span class="cengi-status-badge is-finished"><i></i>Sin ingreso</span>';
             var marcar = (!p.ingreso_en && confirmado && puedeGestionar)
                 ? '<form method="POST" class="cengi-inline-entry-form"><input type="hidden" name="accion" value="marcar_ingreso"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><button type="submit" class="btn btn-primary btn-sm" title="Registrar ingreso">Marcar ingreso</button></form>'
@@ -2446,6 +2469,7 @@ window.CENGI_EVT = <?php echo json_encode([
         $('#evpRegistroIngenio').val(p.ingenio_id ? String(p.ingenio_id) : '');
         sincronizarControlPagoRegistro(true);
         $('#evpRegistroTelefono').val(p.telefono || '');
+        $('#evpRegistroCargo').val(p.cargo || '');
         $('#evpRegistroCategoria').val(p.categoria_gafete || 'Participante');
         $('#evpRegistroOrigen').val(p.pago_origen === 'extranjero' ? 'extranjero' : 'nacional');
         $('#evpRegistroSubmitBtn').text('Guardar cambios');

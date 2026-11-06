@@ -201,6 +201,183 @@ const CENGI_EVT_DIF_CANALES = [
 const CENGI_EVT_TIPOS = ['Capacitación', 'Evento técnico', 'Seminario', 'Taller', 'Feria', 'Congreso', 'Día de campo'];
 const CENGI_EVT_ESTADOS = ['Planificado', 'En curso', 'Finalizado', 'Cancelado'];
 
+/* Formato de la encuesta de percepcion. Los de transferencia piden datos de quien responde
+   (para registrar su asistencia) y preguntas propias del tipo de evento. */
+const CENGI_EVT_ENCUESTA_FORMATOS = [
+    'general' => 'General: calificación y comentario (anónima)',
+    'transferencia' => 'Transferencia: tercios de zafra, simposio y similares',
+    'investigacion' => 'Presentación y avances de resultados de investigación',
+];
+const CENGI_EVT_PERMANENCIA = ['completo' => 'Todo el evento', 'mitad' => 'Más de la mitad', 'parcial' => 'Menos de la mitad'];
+
+/* ---------- datos escritos por el participante: institucion, nombre y cargo ---------- */
+
+// Palabras que no distinguen a un ingenio ("Ingenio Trinidad" = "trinidad" = "Ing. Trinidad, S.A.").
+const CENGI_INGENIO_PALABRAS_VACIAS = ['ingenio', 'ingenios', 'ing', 'corporacion', 'corp', 'sociedad', 'anonima', 's', 'a', 'sa', 'de', 'del', 'la', 'el', 'los', 'las'];
+// Quien no trabaja en una institucion escribe cualquiera de estas: se guarda "Particular".
+const CENGI_INSTITUCION_PARTICULAR = ['particular', 'ninguna', 'ninguno', 'independiente', 'personal', 'no aplica', 'na', 'n a', 'n/a', 'n', 'ninguna institucion'];
+
+/** Clave de comparacion de un nombre de institucion: sin tildes, mayusculas, puntuacion ni palabras vacias. */
+function cengi_ingenio_clave($texto)
+{
+    $t = strtr(mb_strtolower(trim((string) $texto), 'UTF-8'), ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']);
+    $palabras = preg_split('/[^a-z0-9]+/', $t, -1, PREG_SPLIT_NO_EMPTY);
+    return implode(' ', array_diff($palabras, CENGI_INGENIO_PALABRAS_VACIAS));
+}
+
+/**
+ * Institucion escrita libremente -> ingenio del catalogo cuando corresponde: "trinidad",
+ * "Ingenio Trinidad", "ING. TRINIDAD S.A." o una abreviatura inequivoca ("cengi" -> Cengicana).
+ * Devuelve ['ingenio_id' => int|null, 'institucion' => texto a guardar].
+ */
+function cengi_institucion_normalizar(PDO $db, $texto)
+{
+    static $catalogo = null;
+    if ($catalogo === null) {
+        $catalogo = [];
+        foreach ($db->query('SELECT id, nombre_ingenios FROM ingenios')->fetchAll(PDO::FETCH_ASSOC) as $i) {
+            $clave = cengi_ingenio_clave($i['nombre_ingenios']);
+            if ($clave !== '') {
+                $catalogo[$clave] = ['id' => (int) $i['id'], 'nombre' => $i['nombre_ingenios']];
+            }
+        }
+    }
+    $texto = trim(preg_replace('/\s+/u', ' ', (string) $texto));
+    $clave = cengi_ingenio_clave($texto);
+    if ($clave === '' || in_array($clave, CENGI_INSTITUCION_PARTICULAR, true) || in_array(mb_strtolower($texto, 'UTF-8'), CENGI_INSTITUCION_PARTICULAR, true)) {
+        return ['ingenio_id' => null, 'institucion' => $texto === '' ? '' : 'Particular'];
+    }
+    if (isset($catalogo[$clave])) {
+        return ['ingenio_id' => $catalogo[$clave]['id'], 'institucion' => $catalogo[$clave]['nombre']];
+    }
+    // Abreviatura o nombre con agregados ("Magdalena Escuintla"): solo si coincide con un unico ingenio.
+    $candidatos = array_filter($catalogo, static function ($ingenio, $c) use ($clave) {
+        return strlen($c) >= 4 && strlen($clave) >= 4 && (strpos($c, $clave) === 0 || strpos($clave, $c . ' ') === 0);
+    }, ARRAY_FILTER_USE_BOTH);
+    if (count($candidatos) === 1) {
+        $ingenio = reset($candidatos);
+        return ['ingenio_id' => $ingenio['id'], 'institucion' => $ingenio['nombre']];
+    }
+    return ['ingenio_id' => null, 'institucion' => preg_replace('/\s(Sa|S\.a\.?)$/u', ' S.A.', cengi_texto_propio($texto))];
+}
+
+/** "JUAN PEREZ" o "juan perez" -> "Juan Perez"; lo escrito con mayusculas y minusculas se respeta. */
+function cengi_texto_propio($texto)
+{
+    $texto = trim(preg_replace('/\s+/u', ' ', (string) $texto));
+    if ($texto === '' || ($texto !== mb_strtoupper($texto, 'UTF-8') && $texto !== mb_strtolower($texto, 'UTF-8'))) {
+        return $texto;
+    }
+    $propio = mb_convert_case(mb_strtolower($texto, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
+    return preg_replace_callback('/(?<=\s)(De|Del|La|Las|Los|Y|E|En)(?=\s)/u', static function ($m) { return mb_strtolower($m[1], 'UTF-8'); }, $propio);
+}
+
+/** Cargo en mayusculas o minusculas -> "Jefe de campo" (solo la primera letra en mayuscula). */
+function cengi_texto_cargo($texto)
+{
+    $texto = trim(preg_replace('/\s+/u', ' ', (string) $texto));
+    if ($texto === '' || ($texto !== mb_strtoupper($texto, 'UTF-8') && $texto !== mb_strtolower($texto, 'UTF-8'))) {
+        return $texto;
+    }
+    $texto = mb_strtolower($texto, 'UTF-8');
+    return mb_strtoupper(mb_substr($texto, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($texto, 1, null, 'UTF-8');
+}
+
+/* Datos ya registrados de un correo: inscritos del evento, catalogo de participantes y
+   directorio de Comites (lectura directa). Null si no se conoce. */
+function cengi_evento_buscar_por_correo(PDO $db, $eventoId, $correo)
+{
+    $correo = strtolower(trim((string) $correo));
+    if (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+        return null;
+    }
+    $stmt = $db->prepare("SELECT ep.participante_id, COALESCE(NULLIF(p.nombre_participantes, ''), ep.nombre_invitado) AS nombre,
+            COALESCE(ip.nombre_ingenios, ie.nombre_ingenios, NULLIF(ep.institucion_invitado, ''), '') AS institucion
+        FROM evento_participantes ep LEFT JOIN participantes p ON p.id = ep.participante_id
+        LEFT JOIN ingenios ip ON ip.id = p.ingenio_id LEFT JOIN ingenios ie ON ie.id = ep.ingenio_id
+        WHERE ep.evento_id = ? AND LOWER(TRIM(COALESCE(NULLIF(p.correo_participantes, ''), ep.correo_invitado, ''))) = ? LIMIT 1");
+    $stmt->execute([(int) $eventoId, $correo]);
+    $fila = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$fila) {
+        $stmt = $db->prepare("SELECT p.id AS participante_id, p.nombre_participantes AS nombre, COALESCE(i.nombre_ingenios, '') AS institucion
+            FROM participantes p LEFT JOIN ingenios i ON i.id = p.ingenio_id
+            WHERE LOWER(TRIM(p.correo_participantes)) = ? AND p.nombre_participantes <> '' ORDER BY p.id DESC LIMIT 1");
+        $stmt->execute([$correo]);
+        $fila = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    if (!$fila) {
+        $env = cengicursos_env();
+        $base = str_replace('`', '``', $env['DB_COMITES_NAME'] ?? $env['COMITES_DB_NAME'] ?? 'sistema_comites');
+        try {
+            $stmt = $db->prepare("SELECT NULL AS participante_id, nombre, COALESCE(empresa, '') AS institucion FROM `{$base}`.contactos
+                WHERE LOWER(TRIM(email)) = ? AND nombre <> '' LIMIT 1");
+            $stmt->execute([$correo]);
+            $fila = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log('Directorio de Comites desde la encuesta: ' . $e->getMessage());
+        }
+    }
+    return $fila ? ['participante_id' => $fila['participante_id'] !== null ? (int) $fila['participante_id'] : null,
+        'nombre' => trim((string) $fila['nombre']), 'institucion' => trim((string) $fila['institucion'])] : null;
+}
+
+/* Registra la asistencia de quien responde la encuesta por el enlace general: si ya estaba
+   inscrito (por correo o nombre) se le marca el ingreso; si no, se crea su registro en el evento.
+   En ambos casos ingreso_via = 'encuesta'. Devuelve el id de evento_participantes. */
+function cengi_evento_asistencia_encuesta(PDO $db, $eventoId, array $d)
+{
+    require_once __DIR__ . '/cengi_texto.php';
+    $stmt = $db->prepare("SELECT ep.id, ep.ingreso_en, ep.correo_invitado, ep.institucion_invitado,
+            COALESCE(NULLIF(p.nombre_participantes, ''), ep.nombre_invitado) AS nombre,
+            LOWER(TRIM(COALESCE(NULLIF(p.correo_participantes, ''), ep.correo_invitado, ''))) AS correo
+        FROM evento_participantes ep LEFT JOIN participantes p ON p.id = ep.participante_id
+        WHERE ep.evento_id = ? FOR UPDATE");
+    $stmt->execute([(int) $eventoId]);
+    $correo = strtolower($d['correo']);
+    $nombre = cengi_texto_normalizado(preg_replace('/\s+/u', ' ', $d['nombre']));
+    $encontrado = null;
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $ep) {
+        if (($correo !== '' && $ep['correo'] === $correo) || cengi_texto_normalizado(preg_replace('/\s+/u', ' ', $ep['nombre'])) === $nombre) {
+            $encontrado = $ep;
+            if ($correo !== '' && $ep['correo'] === $correo) {
+                break;
+            }
+        }
+    }
+    if ($encontrado) {
+        $db->prepare("UPDATE evento_participantes SET ingreso_via = IF(ingreso_en IS NULL, 'encuesta', ingreso_via), ingreso_en = COALESCE(ingreso_en, NOW()),
+                correo_invitado = COALESCE(NULLIF(correo_invitado, ''), ?), institucion_invitado = COALESCE(NULLIF(institucion_invitado, ''), ?),
+                cargo_invitado = COALESCE(NULLIF(cargo_invitado, ''), ?) WHERE id = ?")
+            ->execute([$correo !== '' ? $correo : null, $d['institucion'] !== '' ? $d['institucion'] : null, ($d['cargo'] ?? '') !== '' ? $d['cargo'] : null, (int) $encontrado['id']]);
+        return (int) $encontrado['id'];
+    }
+    $institucion = cengi_institucion_normalizar($db, $d['institucion']);
+    $ingenioId = $institucion['ingenio_id'];
+    $d['institucion'] = $institucion['institucion'];
+    $db->prepare("INSERT INTO evento_participantes (evento_id, participante_id, nombre_invitado, correo_invitado, ingenio_id, institucion_invitado, cargo_invitado, codigo_qr,
+            ingreso_en, ingreso_via, confirmado_en, confirmado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'encuesta', NOW(), 'Encuesta de percepción')")
+        ->execute([(int) $eventoId, $d['participante_id'] ?? null, $d['nombre'], $correo !== '' ? $correo : null, $ingenioId, $ingenioId ? null : ($d['institucion'] !== '' ? $d['institucion'] : null),
+            ($d['cargo'] ?? '') !== '' ? $d['cargo'] : null, cengi_evento_generar_codigo_qr($db)]);
+    return (int) $db->lastInsertId();
+}
+
+/* Eventos de transferencia de Comites (misma instancia MySQL, lectura directa) para vincular
+   un evento: Comites copia como asistentes a los participantes con ingreso registrado. */
+function cengi_evento_transferencias(PDO $db)
+{
+    $env = cengicursos_env();
+    $base = str_replace('`', '``', $env['DB_COMITES_NAME'] ?? $env['COMITES_DB_NAME'] ?? 'sistema_comites');
+    try {
+        return $db->query("SELECT id, nombre, plan_mes, COALESCE(fecha, plan_fecha) AS fecha FROM `{$base}`.eventos_transferencia
+            WHERE (cancelada = 0 AND plan_mes >= '" . (date('Y') - 1) . "-01')
+               OR id IN (SELECT transferencia_id FROM eventos WHERE transferencia_id IS NOT NULL)
+            ORDER BY plan_mes, id")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('Eventos de transferencia (Comites): ' . $e->getMessage());
+        return [];
+    }
+}
+
 /* Token aleatorio de 32 caracteres hex (enlaces publicos de encuestas). */
 function cengi_evento_token()
 {

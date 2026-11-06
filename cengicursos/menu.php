@@ -67,7 +67,7 @@ function cengi_banner($titulo = null, $subtitulo = null, $antetitulo = null, $ac
     [$tituloDefecto, $subtituloDefecto] = cengi_pagina_titulo(strtok($paginaActual, '?'), $esEstudiante);
     if ($antetitulo === null) {
         $ubicacion = $esEstudiante ? null : cengi_nav_ubicar($paginaActual);
-        $antetitulo = $ubicacion ? $ubicacion[1] : 'Cengicursos';
+        $antetitulo = $ubicacion ? $ubicacion[1] : 'CengiCursos';
     }
     $h = static function ($texto) {
         return htmlspecialchars((string) $texto, ENT_QUOTES, 'UTF-8');
@@ -347,11 +347,16 @@ function menu_render($vistaEstudiante = false)
     ?>
 <?php /* Menú "Acciones" en las filas de tabla de todas las páginas (ver js/course_actions.js). */ ?>
 <link rel="stylesheet" href="css/course_actions.css?v=<?php echo $version('css/course_actions.css'); ?>">
+<?php /* Identidad CengiCursos (barra lateral, banners). */ ?>
+<link rel="stylesheet" href="css/cengicursos-marca.css?v=<?php echo $version('css/cengicursos-marca.css'); ?>">
 <script src="js/course_actions.js?v=<?php echo $version('js/course_actions.js'); ?>" defer></script>
 <aside class="cengi-sidebar" id="cengiSidebar">
-    <a class="cengi-brand" href="index.php" aria-label="Ir al inicio de Cengicursos">
-        <img class="cengi-brand-logo" src="img/logo-comite-capacitacion.png"
-            alt="Comité de Capacitación CENGICAÑA">
+    <a class="cengi-brand" href="index.php" aria-label="Ir al inicio de CengiCursos">
+        <img class="cgc-logo" src="img/logo-cengicursos.svg" alt="" aria-hidden="true">
+        <span class="cgc-copy">
+            <strong>Cengi<b>Cursos</b></strong>
+            <small>Capacitación · Cengicaña</small>
+        </span>
     </a>
 
     <nav class="cengi-sidebar-nav" id="cengiPrimaryNav" aria-label="Navegacion principal">
@@ -407,7 +412,11 @@ function menu_render($vistaEstudiante = false)
             <span class="glyphicon glyphicon-log-out"></span>
             <span>Salir</span>
         </a>
-        <div class="cengi-sidebar-version">Cengicursos &middot; Año <?php echo date('Y'); ?></div>
+        <div class="cgc-comite">
+            <img src="img/logo-comite-capacitacion.png" alt="">
+            <span>Comité de Capacitación CENGICAÑA</span>
+        </div>
+        <div class="cengi-sidebar-version">CengiCursos &middot; Año <?php echo date('Y'); ?></div>
     </div>
 </aside>
 

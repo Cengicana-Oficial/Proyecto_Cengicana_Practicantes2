@@ -14,6 +14,7 @@
     var PUEDE = !!CFG.puedeGestionar;
     var HOY = CFG.hoy || new Date().toISOString().slice(0, 10);
     var ITEMS = CFG.colabItems || [];
+    var FORMATOS_ENCUESTA = CFG.formatosEncuesta || {general: 'Calificación general de 1 a 5 estrellas y oportunidades de mejora'};
     var GRUPOS = CFG.colabGrupos || [];
     var CANALES = CFG.canales || {};
     var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -289,8 +290,9 @@
         $('#eeBody').html(
             '<div class="ee-card"><div class="ee-h"><div><b>① Encuesta de colaboración</b><div class="cengi-ev-sub">Para la empresa aliada: coordinación, aporte del Centro y valor percibido (7 calificaciones, 2 preguntas cerradas y 2 abiertas)</div></div>' +
             (e.en_colaboracion ? '<span class="cengi-ev-chip-ok">' + a.colab.resp + ' de ' + a.colab.empresas + ' respondida(s)</span>' : '') + '</div>' + colab + '</div>' +
-            '<div class="ee-card"><div class="ee-h"><div><b>② Percepción de participantes</b><div class="cengi-ev-sub">Calificación general de 1 a 5 estrellas y oportunidades de mejora</div></div><span class="cengi-ev-chip-ok">' + a.percep.n + ' respuesta(s)</span></div>' +
-            '<div class="ee-fila" style="align-items:center;"><div style="min-width:0;flex:1;"><b>Enlace general y QR</b><div class="cengi-ev-sub">Para proyectarlo al cierre del evento o compartirlo por WhatsApp (respuestas anónimas)</div>' +
+            '<div class="ee-card"><div class="ee-h"><div><b>② Percepción de participantes</b><div class="cengi-ev-sub">' + esc(FORMATOS_ENCUESTA[e.encuesta_formato] || FORMATOS_ENCUESTA.general) + '</div></div><span class="cengi-ev-chip-ok">' + a.percep.n + ' respuesta(s)</span></div>' +
+            '<div class="ee-fila" style="align-items:center;"><div style="min-width:0;flex:1;"><b>Enlace general y QR</b><div class="cengi-ev-sub">Para proyectarlo al cierre del evento o compartirlo por WhatsApp' +
+            (e.encuesta_formato && e.encuesta_formato !== 'general' ? '. Pide nombre e ingenio: quien responda queda registrado como asistente (ingreso por encuesta).' : ' (respuestas anónimas)') + '</div>' +
             '<div class="ee-link"><input readonly class="mono" value="' + esc(urlGeneral) + '"><button type="button" class="btn btn-default btn-sm" data-copiar="' + esc(urlGeneral) + '">Copiar</button></div></div>' +
             '<div style="text-align:center;"><div style="padding:4px;border:1px solid #E4E7E1;border-radius:6px;background:#fff;display:inline-block;">' + qrSvg(urlGeneral, 96) + '</div><div><button type="button" class="cengi-ev-linkbtn" id="eeImprimirQr">Imprimir QR</button></div></div></div>' +
             '<div class="ee-fila"><div><b>Enlace personal a cada asistente</b><div class="cengi-ev-sub">' + e.asistentes + ' asistente(s) con ingreso · ' + (e.asistentes - sinResp) + ' respondieron' + (e.percep_enviada_en ? ' · enviado ' + fmtTs(e.percep_enviada_en) : '') + '</div></div>' +
@@ -528,6 +530,14 @@
         // Un tipo guardado que ya no esta en la lista se agrega para no perderlo al editar.
         if (e && !$('#evfTipo option').filter(function () { return this.value === e.tipo; }).length) $('#evfTipo').append($('<option>').text(e.tipo));
         $('#evfTipo').val(e ? e.tipo : 'Evento técnico');
+        $('#evfTransferencia').val(e && e.transferencia_id ? String(e.transferencia_id) : '');
+        $('#evfEncuesta').val(e ? e.encuesta_formato || 'general' : 'general');
+        // Al vincular un evento de transferencia se propone su formato de encuesta (se puede cambiar).
+        $('#evfTransferencia').off('change.encuesta').on('change.encuesta', function () {
+            var texto = $(this).find('option:selected').text();
+            if (!this.value) { if ($('#evfEncuesta').val() !== 'general') $('#evfEncuesta').val('general'); return; }
+            if ($('#evfEncuesta').val() === 'general') $('#evfEncuesta').val(/investigaci/i.test(texto) ? 'investigacion' : 'transferencia');
+        });
         $('#evfFecha').val(e ? e.fecha : '');
         $('#evfHora').val(e ? e.hora : '');
         $('#evfLugar').val(e ? e.lugar : '');
@@ -538,6 +548,10 @@
         $('#evtSinComp').prop('checked', !!(e && e.permitir_sin_comprobante));
         $('#evfEstado').val(e ? e.estado : 'Planificado');
         $('#evfEstadoGrupo').toggle(!!e);
+        $('#evfFecha').off('change.reabrir').on('change.reabrir', function () {
+            // Igual que al guardar: una fecha de hoy en adelante reabre un evento finalizado.
+            if (e && this.value !== e.fecha && this.value >= CFG.hoy && $('#evfEstado').val() === 'Finalizado') $('#evfEstado').val('Planificado');
+        });
         $('#evfColor').val(e && /^#[0-9a-fA-F]{6}$/.test(e.color) ? e.color : '#2F6B12');
         $('#evfDesc').val(e ? e.descripcion : '');
         cargarImagenesEvento(e);

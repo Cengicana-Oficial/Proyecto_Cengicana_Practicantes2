@@ -50,7 +50,7 @@ if (preg_match('/^[a-f0-9]{32}$/', $token)) {
         }
     }
     if ($tipo !== null) {
-        $stmt = $db->prepare('SELECT id, nombre, fecha, color FROM eventos WHERE id = ?');
+        $stmt = $db->prepare('SELECT id, nombre, fecha, color, encuesta_formato FROM eventos WHERE id = ?');
         $stmt->execute([$eventoId]);
         $evento = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
         if ($evento === null) {
@@ -77,6 +77,19 @@ function cengi_enc_fecha($fecha)
 $errores = [];
 $enviado = false;
 $v = [];
+// Formato de la encuesta de percepcion; por el enlace general de un formato de transferencia
+// se piden los datos de quien responde para registrar su asistencia.
+$formato = $tipo === 'percep' && isset(CENGI_EVT_ENCUESTA_FORMATOS[$evento['encuesta_formato'] ?? '']) ? $evento['encuesta_formato'] : 'general';
+$identifica = $tipo === 'percep' && $formato !== 'general' && !$participante;
+// Busqueda del correo mientras se llena la encuesta: solo primer nombre e institucion.
+if ($identifica && isset($_GET['correo'])) {
+    $conocido = cengi_evento_buscar_por_correo($db, (int) $evento['id'], (string) $_GET['correo']);
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode($conocido ? ['encontrado' => true, 'nombre' => explode(' ', $conocido['nombre'])[0], 'institucion' => $conocido['institucion']] : ['encontrado' => false], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+$preguntaGeneral = $formato === 'investigacion' ? '¿Cómo califica los resultados de investigación presentados?'
+    : ($formato === 'transferencia' ? '¿Cómo califica el evento?' : 'En general, ¿cómo calificas el evento?');
 
 if ($tipo !== null && !$yaRespondida && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $texto = static function ($campo, $max) {
@@ -99,21 +112,65 @@ if ($tipo !== null && !$yaRespondida && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($tipo === 'percep') {
         $v['estrellas'] = $nota('estrellas');
         $v['mejora'] = $texto('mejora', 2000);
+        $v['logistica'] = $formato === 'investigacion' ? $nota('logistica') : null;
+        $v['permanencia'] = $formato === 'transferencia' && isset(CENGI_EVT_PERMANENCIA[$_POST['permanencia'] ?? '']) ? $_POST['permanencia'] : '';
+        foreach (['nombre' => 255, 'correo' => 255, 'institucion' => 255, 'cargo' => 150, 'area' => 150] as $campo => $max) {
+            $v[$campo] = $identifica ? $texto($campo, $max) : '';
+        }
+        $v['nombre'] = preg_replace('/\s+/u', ' ', $v['nombre']);
+        if ($v['correo'] !== '' && !filter_var($v['correo'], FILTER_VALIDATE_EMAIL)) {
+            $errores[] = 'El correo electrónico no es válido.';
+        }
+        // Correo ya registrado: el nombre y la institucion se toman del registro.
+        $conocido = $identifica && $v['correo'] !== '' ? cengi_evento_buscar_por_correo($db, (int) $evento['id'], $v['correo']) : null;
+        if ($conocido) {
+            $v['nombre'] = mb_substr($conocido['nombre'], 0, 255, 'UTF-8');
+            $v['institucion'] = $v['institucion'] !== '' ? $v['institucion'] : $conocido['institucion'];
+            $v['participante_id'] = $conocido['participante_id'];
+        }
+        if ($identifica && mb_strlen($v['nombre'], 'UTF-8') < 5) {
+            $errores[] = $v['correo'] !== '' && !$conocido ? 'No encontramos tu correo: escribe tu nombre y apellido.' : 'Escribe tu correo o tu nombre y apellido.';
+        }
+        if ($identifica && $v['institucion'] === '' && !$conocido) {
+            $errores[] = $formato === 'investigacion' ? 'Indica tu institución.' : 'Indica tu ingenio o institución.';
+        }
         if ($v['estrellas'] === null) {
-            $errores[] = 'Selecciona de 1 a 5 estrellas.';
+            $errores[] = 'Califica: ' . $preguntaGeneral;
+        }
+        if ($formato === 'investigacion' && $v['logistica'] === null) {
+            $errores[] = 'Califica la logística del evento.';
+        }
+        if ($formato === 'transferencia' && $v['permanencia'] === '') {
+            $errores[] = 'Indica tu permanencia en el evento.';
         }
         if (!$errores) {
             try {
-                $db->prepare('INSERT INTO evento_encuesta_percep (evento_id, evento_participante_id, via, estrellas, mejora) VALUES (?, ?, ?, ?, ?)')
+                $db->beginTransaction();
+                $participanteId = $participante ? (int) $participante['id'] : null;
+                if ($identifica) {
+                    $v['nombre'] = cengi_texto_propio($v['nombre']);
+                    $v['cargo'] = cengi_texto_cargo($v['cargo']);
+                    $v['institucion'] = cengi_institucion_normalizar($db, $v['institucion'])['institucion'];
+                    // Asistencia registrada por la encuesta (inscrito sin ingreso o persona nueva).
+                    $participanteId = cengi_evento_asistencia_encuesta($db, (int) $evento['id'], $v);
+                }
+                $db->prepare('INSERT INTO evento_encuesta_percep (evento_id, evento_participante_id, via, estrellas, mejora, nombre, correo, institucion, cargo, area, logistica, permanencia)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
                     ->execute([
                         (int) $evento['id'],
-                        $participante ? (int) $participante['id'] : null,
+                        $participanteId,
                         $participante ? 'enlace personal' : 'QR / enlace general',
                         $v['estrellas'],
                         $v['mejora'] !== '' ? $v['mejora'] : null,
+                        $v['nombre'] ?: null, $v['correo'] !== '' ? strtolower($v['correo']) : null, $v['institucion'] ?: null,
+                        $v['cargo'] ?: null, $v['area'] ?: null, $v['logistica'], $v['permanencia'] ?: null,
                     ]);
+                $db->commit();
                 $enviado = true;
             } catch (PDOException $e) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
                 if ((string) $e->getCode() === '23000') {
                     $yaRespondida = true;
                 } else {
@@ -176,6 +233,10 @@ if ($tipo !== null && !$yaRespondida && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $v['nombre'] = (string) ($aliado['contacto'] ?? '');
 }
 
+if (!$enviado && !empty($conocido)) {
+    $v['nombre'] = $v['institucion'] = ''; // el formulario no muestra los datos del registro
+}
+$ingeniosLista = $identifica ? $db->query('SELECT nombre_ingenios FROM ingenios ORDER BY nombre_ingenios')->fetchAll(PDO::FETCH_COLUMN) : [];
 $colorEvento = ($evento && preg_match('/^#[0-9a-fA-F]{6}$/', (string) $evento['color'])) ? $evento['color'] : '#2F6B12';
 $titulo = $tipo === 'colab' ? 'Encuesta de colaboración' : ($tipo === 'percep' ? '¿Cómo fue tu experiencia?' : 'Encuesta');
 $etiquetas = ['', 'Muy insatisfecho', 'Insatisfecho', 'Regular', 'Satisfecho', 'Muy satisfecho'];
@@ -241,11 +302,36 @@ function cengi_enc_opciones($clave, $etiqueta, array $opciones, $valor)
                 <input type="hidden" name="t" value="<?php echo cengi_enc_html($token); ?>">
                 <?php if ($tipo === 'percep'): ?>
                     <?php if ($participante): ?><p class="es-hola">Hola, <b><?php echo cengi_enc_html(explode(' ', trim((string) $participante['nombre_invitado']))[0]); ?></b>. Gracias por asistir.</p><?php endif; ?>
-                    <?php echo cengi_enc_estrellas('estrellas', 'En general, ¿cómo calificas el evento?', $v['estrellas'] ?? null); ?>
-                    <div class="es-q"><div class="es-lbl">Oportunidades de mejora <span>(opcional)</span></div><textarea name="mejora" id="esMejora" maxlength="2000" placeholder="¿Qué podríamos mejorar para tu próxima experiencia?"><?php echo cengi_enc_html($v['mejora'] ?? ''); ?></textarea></div>
+                    <?php if ($identifica): ?>
+                        <?php // Correo primero: si ya esta registrado no se piden mas datos; si no, se completan. ?>
+                        <div class="ep-f"><label for="esCorreo">Correo electrónico</label>
+                            <div style="display:flex;gap:8px;"><input id="esCorreo" name="correo" type="email" maxlength="255" autocomplete="email" inputmode="email" style="flex:1;min-width:0;" value="<?php echo cengi_enc_html($v['correo'] ?? ''); ?>">
+                                <button type="button" class="ep-btn is-secundario" id="esBuscar" style="width:auto;margin:0;padding:0 16px;">Continuar</button></div></div>
+                        <p class="es-hola" id="esConocido" role="status" style="margin-top:10px;" hidden></p>
+                        <p class="ep-legal" id="esAyudaCorreo" style="text-align:left;margin:6px 0 14px;">Con tu correo registramos tu asistencia. <button type="button" id="esSinCorreo" style="border:0;background:none;padding:0;color:#3E7A12;font:inherit;text-decoration:underline;cursor:pointer;">No tengo correo</button></p>
+                        <div id="esDatos"<?php echo trim((string) ($v['nombre'] ?? '')) !== '' || ($errores && ($v['correo'] ?? '') === '') ? '' : ' hidden'; ?>>
+                            <p class="es-hola" id="esNoEncontrado" hidden>No encontramos tu correo. Completa tus datos, por favor.</p>
+                            <div class="ep-grid2">
+                                <div class="ep-f"><label for="esNombre">Nombre y apellido</label><input id="esNombre" name="nombre" maxlength="255" autocomplete="name" value="<?php echo cengi_enc_html($v['nombre'] ?? ''); ?>"></div>
+                                <div class="ep-f"><label for="esInstitucion"><?php echo $formato === 'investigacion' ? 'Institución' : 'Ingenio o institución'; ?></label><input id="esInstitucion" name="institucion" maxlength="255" list="esIngenios" autocomplete="organization" value="<?php echo cengi_enc_html($v['institucion'] ?? ''); ?>">
+                                    <datalist id="esIngenios"><?php foreach ($ingeniosLista as $ingenioNombre): ?><option value="<?php echo cengi_enc_html($ingenioNombre); ?>"><?php endforeach; ?></datalist></div>
+                                <?php if ($formato === 'investigacion'): ?>
+                                    <div class="ep-f"><label for="esCargo">Puesto o cargo <span>(opcional)</span></label><input id="esCargo" name="cargo" maxlength="150" autocomplete="organization-title" value="<?php echo cengi_enc_html($v['cargo'] ?? ''); ?>"></div>
+                                    <div class="ep-f"><label for="esArea">Área a la que pertenece <span>(opcional)</span></label><input id="esArea" name="area" maxlength="150" value="<?php echo cengi_enc_html($v['area'] ?? ''); ?>"></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                    <?php echo cengi_enc_estrellas('estrellas', $preguntaGeneral, $v['estrellas'] ?? null); ?>
+                    <?php if ($formato === 'investigacion'): ?>
+                        <?php echo cengi_enc_estrellas('logistica', '¿Cómo califica la logística del evento?', $v['logistica'] ?? null); ?>
+                    <?php elseif ($formato === 'transferencia'): ?>
+                        <?php echo cengi_enc_opciones('permanencia', '¿Cuánto tiempo permaneció en el evento?', CENGI_EVT_PERMANENCIA, $v['permanencia'] ?? ''); ?>
+                    <?php endif; ?>
+                    <div class="es-q"><div class="es-lbl"><?php echo $formato === 'general' ? 'Oportunidades de mejora' : 'Comentario de mejora'; ?> <span>(opcional)</span></div><textarea name="mejora" id="esMejora" maxlength="2000" placeholder="¿Qué podríamos mejorar para tu próxima experiencia?"><?php echo cengi_enc_html($v['mejora'] ?? ''); ?></textarea></div>
                     <div class="pp-form-msg<?php echo $errores ? ' err' : ''; ?>" id="esMsg" role="alert"><?php echo implode('<br>', array_map('cengi_enc_html', $errores)); ?></div>
                     <button type="submit" class="ep-btn">Enviar</button>
-                    <div class="ep-legal">Respuesta confidencial · menos de 1 minuto</div>
+                    <div class="ep-legal"><?php echo $identifica ? 'Menos de 1 minuto · tus datos solo se usan para el registro del evento' : 'Respuesta confidencial · menos de 1 minuto'; ?></div>
                 <?php else: ?>
                     <div class="ep-grid2">
                         <div class="ep-f"><label for="esEmpresa">Empresa</label><input id="esEmpresa" name="empresa" maxlength="255" value="<?php echo cengi_enc_html($v['empresa'] ?? ''); ?>"></div>
@@ -300,12 +386,56 @@ function cengi_enc_opciones($clave, $etiqueta, array $opciones, $valor)
         });
     });
 
+    // Correo primero: si esta registrado se saluda y no se piden mas datos; si no, se muestran los campos.
+    var datos = document.getElementById('esDatos'), conocido = false;
+    if (datos) {
+        var campoCorreo = document.getElementById('esCorreo'), saludo = document.getElementById('esConocido');
+        var mostrarDatos = function (sinRegistro) {
+            datos.hidden = false;
+            document.getElementById('esNoEncontrado').hidden = !sinRegistro;
+            document.getElementById('esNombre').focus();
+        };
+        var buscar = function () {
+            var correo = campoCorreo.value.trim();
+            if (!correo || !campoCorreo.checkValidity()) { campoCorreo.focus(); return; }
+            fetch('?t=' + encodeURIComponent(form.querySelector('[name="t"]').value) + '&correo=' + encodeURIComponent(correo), {credentials: 'same-origin'})
+                .then(function (r) { return r.json(); })
+                .then(function (r) {
+                    conocido = !!r.encontrado;
+                    saludo.hidden = !conocido;
+                    if (conocido) {
+                        saludo.innerHTML = '';
+                        saludo.append('Hola, ', Object.assign(document.createElement('b'), {textContent: r.nombre}), (r.institucion ? ' · ' + r.institucion : '') + '. Ya tenemos tus datos.');
+                        datos.hidden = true;
+                        document.getElementById('esNombre').value = '';
+                        document.getElementById('esInstitucion').value = '';
+                    } else mostrarDatos(true);
+                })
+                .catch(function () { mostrarDatos(false); });
+        };
+        document.getElementById('esBuscar').addEventListener('click', buscar);
+        campoCorreo.addEventListener('change', buscar);
+        campoCorreo.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); buscar(); } });
+        campoCorreo.addEventListener('input', function () { conocido = false; saludo.hidden = true; });
+        document.getElementById('esSinCorreo').addEventListener('click', function () { campoCorreo.value = ''; conocido = false; saludo.hidden = true; mostrarDatos(false); });
+        if (campoCorreo.value && datos.hidden) buscar();
+    }
+
     // Validacion previa, con los mismos mensajes que ppEncEnviar del prototipo.
     form.addEventListener('submit', function (ev) {
         var errs = [];
         var valor = function (n) { var i = form.querySelector('[name="' + n + '"]'); return i ? i.value : ''; };
         if (tipo === 'percep') {
-            if (!valor('estrellas')) errs.push('Selecciona de 1 a 5 estrellas.');
+            var correo = form.querySelector('[name="correo"]');
+            if (correo && correo.value && !correo.checkValidity()) errs.push('El correo electrónico no es válido.');
+            if (datos && !datos.hidden) {
+                if (valor('nombre').trim().length < 5) errs.push('Escribe tu nombre y apellido.');
+                if (!valor('institucion').trim()) errs.push('Indica tu ingenio o institución.');
+            } else if (datos && !conocido) errs.push('Escribe tu correo y pulsa “Continuar”, o elige “No tengo correo”.');
+            Array.prototype.forEach.call(form.querySelectorAll('.es-stars'), function (fila) {
+                if (!valor(fila.getAttribute('data-clave'))) errs.push('Califica: ' + fila.getAttribute('aria-label'));
+            });
+            if (form.querySelector('[name="permanencia"]') && !form.querySelector('[name="permanencia"]:checked')) errs.push('Indica tu permanencia en el evento.');
         } else {
             var faltan = [];
             Array.prototype.forEach.call(form.querySelectorAll('.es-stars'), function (fila) {
