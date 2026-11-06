@@ -212,10 +212,79 @@ function app_esquema_database(PDO $pdo): void
             anonimo TINYINT(1) NOT NULL DEFAULT 0,
             nombre VARCHAR(80) NULL,
             correo VARCHAR(120) NULL,
-            estado ENUM('nueva','revisada','archivada') NOT NULL DEFAULT 'nueva',
+            estado ENUM('nueva','en_analisis','aprobada','rechazada','archivada') NOT NULL DEFAULT 'nueva',
             creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_ideas_estado (estado)
+        ) ENGINE=InnoDB"
+    );
+
+    // Estados del seguimiento: 'revisada' (version anterior) pasa a 'en_analisis'.
+    $estadoTipo = (string) $pdo->query(
+        "SELECT COLUMN_TYPE FROM information_schema.columns
+         WHERE table_schema = DATABASE() AND table_name = 'ideas' AND column_name = 'estado'"
+    )->fetchColumn();
+    if (!str_contains($estadoTipo, 'en_analisis')) {
+        $pdo->exec("ALTER TABLE ideas MODIFY estado ENUM('nueva','revisada','en_analisis','aprobada','rechazada','archivada') NOT NULL DEFAULT 'nueva'");
+        $pdo->exec("UPDATE ideas SET estado = 'en_analisis' WHERE estado = 'revisada'");
+        $pdo->exec("ALTER TABLE ideas MODIFY estado ENUM('nueva','en_analisis','aprobada','rechazada','archivada') NOT NULL DEFAULT 'nueva'");
+    }
+
+    // Revision de la idea: analisis de viabilidad y decision (una fila por idea).
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS idea_revisiones (
+            idea_id INT NOT NULL PRIMARY KEY,
+            recursos TEXT NULL,
+            implicaciones_legales TEXT NULL,
+            implicaciones_reglamentarias TEXT NULL,
+            implicaciones_organizacionales TEXT NULL,
+            costo_estimado DECIMAL(12,2) NULL,
+            costo_detalle TEXT NULL,
+            riesgos TEXT NULL,
+            oportunidades TEXT NULL,
+            requisitos TEXT NULL,
+            requiere_analisis TINYINT(1) NOT NULL DEFAULT 0,
+            analisis_detalle TEXT NULL,
+            decision_motivo TEXT NULL,
+            decidido_por INT NULL,
+            decidido_en DATETIME NULL,
+            actualizado_por INT NULL,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (idea_id) REFERENCES ideas(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB"
+    );
+
+    app_add_column_if_missing($pdo, 'idea_revisiones', 'costo_items', 'TEXT NULL');
+
+    // Ponderacion de la idea (1-5 por criterio, ver IDEA_CRITERIOS) y su puntaje 0-100.
+    foreach (['impacto', 'viabilidad', 'costo', 'riesgo', 'alineacion'] as $criterio) {
+        app_add_column_if_missing($pdo, 'idea_revisiones', 'pond_' . $criterio, 'TINYINT NULL');
+    }
+    app_add_column_if_missing($pdo, 'idea_revisiones', 'pond_puntaje', 'DECIMAL(5,1) NULL');
+    app_add_column_if_missing($pdo, 'idea_revisiones', 'pond_comentario', 'TEXT NULL');
+
+    // Responsables de seguimiento (usuarios del portal, login.usuarios).
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS idea_responsables (
+            idea_id INT NOT NULL,
+            usuario_id INT NOT NULL,
+            asignado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (idea_id, usuario_id),
+            FOREIGN KEY (idea_id) REFERENCES ideas(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB"
+    );
+
+    // Lluvia de ideas sobre la propuesta: aportes etiquetados + bitacora ('sistema').
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS idea_aportes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            idea_id INT NOT NULL,
+            usuario_id INT NOT NULL,
+            tipo ENUM('comentario','recurso','implicacion','costo','riesgo','oportunidad','requisito','sistema') NOT NULL DEFAULT 'comentario',
+            texto TEXT NOT NULL,
+            creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_idea_aportes_idea (idea_id, creado_en),
+            FOREIGN KEY (idea_id) REFERENCES ideas(id) ON DELETE CASCADE
         ) ENGINE=InnoDB"
     );
 

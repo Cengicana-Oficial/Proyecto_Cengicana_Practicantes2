@@ -12,6 +12,7 @@ session_start();
 
 require __DIR__ . '/config/database.php';
 require __DIR__ . '/includes/functions.php';
+require __DIR__ . '/includes/mailer.php';
 
 $errorEnvio = '';
 $old = [];
@@ -49,6 +50,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $idea['nombre'],
             $idea['correo'],
         ]);
+
+        // Acuse de recibo a quien la envio (solo si dejo correo y no es anonima).
+        // Un fallo de correo nunca impide guardar la idea.
+        try {
+            $nuevaIdea = ['id' => (int) $pdo->lastInsertId()] + $idea;
+            $aviso = notify_idea_submitter($pdo, $nuevaIdea, 'recibida');
+            if ($aviso !== '') {
+                registrar_historial_idea($pdo, $nuevaIdea['id'], 0, $aviso);
+            }
+        } catch (Throwable $avisoError) {
+            error_log('[buzon] aviso de recibido: ' . $avisoError->getMessage());
+        }
 
         $_SESSION['buzon_ultimo_envio'] = time();
         header('Location: buzon.php?enviada=1#formulario');
@@ -232,7 +245,7 @@ $assetVersion = static fn(string $path): int => (int) @filemtime(__DIR__ . '/' .
           <label class="anon" for="anonimo">
             <input type="checkbox" id="anonimo" name="anonimo" value="1"<?= $oldAnonimo ? ' checked' : '' ?>>
             <span><strong>Prefiero compartir mi sugerencia de forma anónima.</strong><br>
-            <span style="color:var(--ink-soft);font-size:.93rem">Si no marcas esta casilla, puedes dejar tus datos para que te contactemos.</span></span>
+            <span style="color:var(--ink-soft);font-size:.93rem">Si no marcas esta casilla, puedes dejar tus datos: con tu correo te avisaremos cada vez que tu idea avance.</span></span>
           </label>
           <div id="datosPersonales"<?= $oldAnonimo ? ' hidden' : '' ?>>
             <div>

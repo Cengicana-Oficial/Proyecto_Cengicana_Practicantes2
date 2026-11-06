@@ -806,7 +806,44 @@ const BUZON_AREAS = [
     'Comunicación y trabajo en equipo',
     'Otra',
 ];
-const BUZON_ESTADOS = ['nueva' => 'Nueva', 'revisada' => 'Revisada', 'archivada' => 'Archivada'];
+const BUZON_ESTADOS = [
+    'nueva' => 'Nueva',
+    'en_analisis' => 'En análisis',
+    'aprobada' => 'Aprobada',
+    'rechazada' => 'Rechazada',
+    'archivada' => 'Archivada',
+];
+
+/**
+ * Ficha de revision de la idea (tabla idea_revisiones): campos de texto libre.
+ * Clave => [titulo, ayuda, icono]. El costo y "requiere analisis" se manejan aparte.
+ */
+const IDEA_REVISION_CAMPOS = [
+    'recursos' => ['Recursos necesarios', 'Personas, equipo, materiales, tiempo o servicios que se necesitan.', 'ti-tools'],
+    'implicaciones_legales' => ['Implicaciones legales', 'Leyes, contratos, permisos o licencias que se deben cumplir.', 'ti-scale'],
+    'implicaciones_reglamentarias' => ['Implicaciones reglamentarias', 'Normas, certificaciones, politicas de seguridad, ambientales o de calidad.', 'ti-clipboard-check'],
+    'implicaciones_organizacionales' => ['Implicaciones organizacionales', 'Areas o procesos afectados, cambios de funciones, capacitacion, comunicacion.', 'ti-building'],
+    'riesgos' => ['Riesgos', 'Que puede salir mal y como se mitigaria.', 'ti-alert-triangle'],
+    'oportunidades' => ['Oportunidades', 'Beneficios adicionales, ahorros o mejoras que abre la idea.', 'ti-trending-up'],
+    'requisitos' => ['Requisitos a cumplir', 'Condiciones que deben cumplirse antes o durante la implementacion.', 'ti-list-check'],
+];
+
+/**
+ * Ponderacion de la idea: cada criterio se califica de 1 a 5 y pesa un % del puntaje
+ * final (0-100). Costo y riesgo van invertidos: 5 = costo/riesgo muy bajo.
+ * Clave => [titulo, pregunta, peso %, etiquetas de 1 a 5]. Columna: pond_<clave>.
+ */
+const IDEA_CRITERIOS = [
+    'impacto' => ['Impacto y beneficio', '¿Cuanto mejora el proceso, la seguridad, la calidad o la productividad?', 30, ['Muy bajo', 'Bajo', 'Medio', 'Alto', 'Muy alto']],
+    'viabilidad' => ['Viabilidad', '¿Que tan facil es implementarla con la capacidad y los recursos actuales?', 20, ['Muy dificil', 'Dificil', 'Posible', 'Facil', 'Muy facil']],
+    'costo' => ['Costo', 'Mientras menor sea el costo, mayor puntaje.', 20, ['Muy alto', 'Alto', 'Medio', 'Bajo', 'Muy bajo']],
+    'riesgo' => ['Riesgo', 'Mientras menor sea el riesgo, mayor puntaje.', 15, ['Muy alto', 'Alto', 'Medio', 'Bajo', 'Muy bajo']],
+    'alineacion' => ['Alineacion institucional', '¿Apoya los objetivos y prioridades de CENGICAÑA?', 15, ['Ninguna', 'Baja', 'Media', 'Alta', 'Total']],
+];
+/** Puntaje minimo para recomendar la implementacion, y para "con reservas". */
+const IDEA_PUNTAJE_RECOMENDADA = 70;
+const IDEA_PUNTAJE_RESERVAS = 50;
+const IDEA_TEXTO_MAX = 4000;
 const BUZON_FOTO_TIPOS = ['image/jpeg' => 'jpg', 'image/png' => 'png'];
 const BUZON_FOTO_MAX_BYTES = 5 * 1024 * 1024;
 /** Segundos minimos entre dos envios desde la misma sesion (freno basico contra spam). */
@@ -814,7 +851,13 @@ const BUZON_ESPERA_SEGUNDOS = 30;
 
 function can_view_ideas(array $user): bool
 {
-    return has_permission($user, 'solicitudes_internas.buzon.ver') || has_permission($user, 'solicitudes_internas.buzon.gestionar');
+    return can_approve_ideas($user) || has_permission($user, 'solicitudes_internas.buzon.ver') || has_permission($user, 'solicitudes_internas.buzon.gestionar');
+}
+
+/** Direccion general decide; superadmin conserva acceso administrativo. */
+function can_approve_ideas(array $user): bool
+{
+    return in_array(module_role($user), ['director', 'superadmin'], true);
 }
 
 function can_manage_ideas(array $user): bool
@@ -824,9 +867,150 @@ function can_manage_ideas(array $user): bool
 
 function badge_idea_estado(string $estado): string
 {
-    $clases = ['nueva' => 'recibido', 'revisada' => 'completado', 'archivada' => 'rechazado'];
+    $clases = [
+        'nueva' => 'recibido',
+        'en_analisis' => 'proceso',
+        'aprobada' => 'completado',
+        'rechazada' => 'rechazado',
+        'archivada' => 'programa',
+    ];
 
     return '<span class="badge badge-' . e($clases[$estado] ?? 'recibido') . '">' . e(BUZON_ESTADOS[$estado] ?? $estado) . '</span>';
+}
+
+/**
+ * Puede llenar la ficha de revision: quien gestiona el buzon o un responsable
+ * asignado a la idea. Aprobar/rechazar sigue siendo solo de can_manage_ideas().
+ */
+function can_edit_idea_review(array $user, array $responsableIds): bool
+{
+    return can_manage_ideas($user) || (can_view_ideas($user) && in_array((int) $user['id'], $responsableIds, true));
+}
+
+/** @return int[] */
+function idea_responsable_ids(PDO $pdo, int $ideaId): array
+{
+    $stmt = $pdo->prepare('SELECT usuario_id FROM idea_responsables WHERE idea_id = ?');
+    $stmt->execute([$ideaId]);
+
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/** Avance de la ficha: [puntos llenos, total] (campos de texto + costo + responsables). */
+function idea_revision_avance(?array $revision, bool $tieneResponsables = false): array
+{
+    $total = count(IDEA_REVISION_CAMPOS) + 2;
+    $llenos = $tieneResponsables ? 1 : 0;
+    if (!$revision) {
+        return [$llenos, $total];
+    }
+
+    foreach (array_keys(IDEA_REVISION_CAMPOS) as $campo) {
+        if (trim((string) ($revision[$campo] ?? '')) !== '') {
+            $llenos++;
+        }
+    }
+    if ($revision['costo_estimado'] !== null || trim((string) ($revision['costo_detalle'] ?? '')) !== '') {
+        $llenos++;
+    }
+
+    return [$llenos, $total];
+}
+
+/** Texto de un campo de la revision: recortado, con limite y null si viene vacio. */
+function idea_texto_post(string $campo): ?string
+{
+    $valor = trim(str_replace("\r\n", "\n", (string) ($_POST[$campo] ?? '')));
+    if ($valor === '') {
+        return null;
+    }
+    if (mb_strlen($valor, 'UTF-8') > IDEA_TEXTO_MAX) {
+        throw new RuntimeException('Un campo supera los ' . IDEA_TEXTO_MAX . ' caracteres permitidos.');
+    }
+
+    return $valor;
+}
+
+/** Monto en quetzales: acepta "1,500.50"; vacio = null. */
+function idea_costo_post(string $campo): ?string
+{
+    $valor = str_replace([',', ' ', 'Q'], '', trim((string) ($_POST[$campo] ?? '')));
+    if ($valor === '') {
+        return null;
+    }
+    if (!preg_match('/^\d{1,10}(\.\d{1,2})?$/', $valor)) {
+        throw new RuntimeException('El costo estimado debe ser un monto valido (ej. 1500.00).');
+    }
+
+    return $valor;
+}
+
+/** Bitacora de la idea (tabla idea_aportes, tipo 'sistema'). usuario_id 0 = formulario publico. */
+function registrar_historial_idea(PDO $pdo, int $ideaId, int $userId, string $texto): void
+{
+    $pdo->prepare("INSERT INTO idea_aportes (idea_id, usuario_id, tipo, texto) VALUES (?, ?, 'sistema', ?)")
+        ->execute([$ideaId, $userId, $texto]);
+}
+
+/** Calificaciones de la ponderacion [criterio => 1..5|null] tomadas de idea_revisiones. */
+function idea_ponderacion_notas(?array $revision): array
+{
+    $notas = [];
+    foreach (array_keys(IDEA_CRITERIOS) as $criterio) {
+        $valor = $revision['pond_' . $criterio] ?? null;
+        $notas[$criterio] = $valor !== null ? (int) $valor : null;
+    }
+
+    return $notas;
+}
+
+/** Puntaje 0-100 de la ponderacion, o null si falta calificar algun criterio. */
+function idea_puntaje(array $notas): ?float
+{
+    $suma = 0.0;
+    foreach (IDEA_CRITERIOS as $criterio => [, , $peso]) {
+        if (($notas[$criterio] ?? null) === null) {
+            return null;
+        }
+        $suma += $notas[$criterio] / 5 * $peso;
+    }
+
+    return round($suma, 1);
+}
+
+/** [clave css, etiqueta] de la recomendacion segun el puntaje. */
+function idea_recomendacion(?float $puntaje): array
+{
+    if ($puntaje === null) {
+        return ['pendiente', 'Sin ponderar'];
+    }
+    if ($puntaje >= IDEA_PUNTAJE_RECOMENDADA) {
+        return ['alta', 'Recomendada para implementacion'];
+    }
+    if ($puntaje >= IDEA_PUNTAJE_RESERVAS) {
+        return ['media', 'Con reservas'];
+    }
+
+    return ['baja', 'No recomendada'];
+}
+
+function badge_idea_puntaje(?float $puntaje): string
+{
+    [$clave, $etiqueta] = idea_recomendacion($puntaje);
+    if ($puntaje === null) {
+        return '<span class="idea-score is-pendiente">' . e($etiqueta) . '</span>';
+    }
+
+    return '<span class="idea-score is-' . e($clave) . '" title="' . e($etiqueta) . '"><strong>'
+        . e(rtrim(rtrim(number_format($puntaje, 1), '0'), '.')) . '</strong>/100 · ' . e($etiqueta) . '</span>';
+}
+
+/** ¿Se puede avisar por correo a quien envio la idea? Devuelve el correo o ''. */
+function idea_correo_remitente(array $idea): string
+{
+    $correo = trim((string) ($idea['correo'] ?? ''));
+
+    return (int) ($idea['anonimo'] ?? 0) !== 1 && filter_var($correo, FILTER_VALIDATE_EMAIL) ? $correo : '';
 }
 
 /** Texto de un textarea con saltos de linea normalizados (el navegador cuenta \r\n como 1). */
@@ -905,4 +1089,37 @@ function guardar_foto_idea(?array $file): ?array
     }
 
     return ['ruta' => 'uploads/ideas/' . $nombre, 'mime' => $mime];
+}
+
+/** Categorias generales para el presupuesto de implementacion. */
+const IDEA_COSTO_CATEGORIAS = ['Materiales e insumos', 'Equipos', 'Mano de obra', 'Servicios', 'Transporte', 'Capacitacion', 'Otros'];
+
+function idea_costos_post(): array
+{
+    if (!isset($_POST['costo_items_enviados'])) {
+        return ['items' => null, 'total' => idea_costo_post('costo_estimado')];
+    }
+    $filas = $_POST['costo_items'] ?? [];
+    if (!is_array($filas) || count($filas) > 100) throw new RuntimeException('El desglose admite hasta 100 items.');
+    $items = [];
+    $total = 0;
+    foreach ($filas as $fila) {
+        if (!is_array($fila)) throw new RuntimeException('Item de costo invalido.');
+        foreach (['categoria', 'descripcion', 'cantidad', 'unidad', 'precio'] as $campo) {
+            if (!isset($fila[$campo]) || !is_scalar($fila[$campo])) throw new RuntimeException('Item de costo incompleto.');
+            $fila[$campo] = trim((string) $fila[$campo]);
+        }
+        if (!in_array($fila['categoria'], IDEA_COSTO_CATEGORIAS, true) || $fila['descripcion'] === '' || mb_strlen($fila['descripcion']) > 250 || mb_strlen($fila['unidad']) > 40
+            || !preg_match('/^\d{1,7}(\.\d{1,2})?$/', $fila['cantidad']) || (float) $fila['cantidad'] <= 0
+            || !preg_match('/^\d{1,10}(\.\d{1,2})?$/', $fila['precio'])) {
+            throw new RuntimeException('Revise los items: descripcion, cantidad positiva y costo unitario con hasta dos decimales.');
+        }
+        $subtotal = (int) round((float) $fila['cantidad'] * (float) $fila['precio'] * 100);
+        $total += $subtotal;
+        if ($total > 999999999999) throw new RuntimeException('El costo total excede el monto permitido.');
+        $items[] = ['categoria' => $fila['categoria'], 'descripcion' => $fila['descripcion'], 'cantidad' => $fila['cantidad'], 'unidad' => $fila['unidad'],
+            'precio' => number_format((float) $fila['precio'], 2, '.', ''), 'subtotal' => number_format($subtotal / 100, 2, '.', '')];
+    }
+    return ['items' => $items ? json_encode($items, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) : null,
+        'total' => $items ? number_format($total / 100, 2, '.', '') : idea_costo_post('costo_estimado')];
 }

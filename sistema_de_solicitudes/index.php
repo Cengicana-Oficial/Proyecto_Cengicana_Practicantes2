@@ -334,17 +334,175 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        if ($action === 'actualizar_idea') {
+        if (in_array($action, ['iniciar_analisis_idea', 'guardar_revision_idea', 'guardar_ponderacion_idea', 'decidir_idea', 'notificar_idea'], true)) {
             $ideaId = (int) ($_POST['idea_id'] ?? 0);
-            $ideaStatus = (string) ($_POST['estado'] ?? '');
-            if (!can_manage_ideas($user) || !isset(BUZON_ESTADOS[$ideaStatus])) {
-                throw new RuntimeException('No puedes actualizar esta idea.');
+            $ideaStmt = $pdo->prepare('SELECT * FROM ideas WHERE id = ?');
+            $ideaStmt->execute([$ideaId]);
+            $ideaRow = $ideaStmt->fetch();
+            if (!$ideaRow || !can_view_ideas($user)) {
+                throw new RuntimeException('No se encontro la idea o no tienes permiso para verla.');
+            }
+            $ideaUrl = 'index.php?view=idea&id=' . $ideaId;
+            $userId = (int) $user['id'];
+            $notificar = !empty($_POST['notificar']);
+
+            // Cambia el estado, lo deja en el historial y (si se pidio) avisa a quien envio la idea.
+            $cambiarEstado = static function (string $nuevoEstado, ?string $motivo, bool $avisar) use ($pdo, $ideaRow, $ideaId, $userId): string {
+                $pdo->prepare('UPDATE ideas SET estado = ? WHERE id = ?')->execute([$nuevoEstado, $ideaId]);
+                registrar_historial_idea($pdo, $ideaId, $userId,
+                    'Cambio el estado a ' . BUZON_ESTADOS[$nuevoEstado] . '.' . ($motivo !== null ? "\nMotivo: " . $motivo : ''));
+                if (!$avisar) {
+                    return '';
+                }
+                $aviso = notify_idea_submitter($pdo, $ideaRow, $nuevoEstado, (string) $motivo);
+                if ($aviso !== '') {
+                    registrar_historial_idea($pdo, $ideaId, $userId, $aviso);
+                }
+
+                return $aviso;
+            };
+
+            if ($action === 'iniciar_analisis_idea') {
+                if (!can_manage_ideas($user)) {
+                    throw new RuntimeException('No tienes permiso para gestionar ideas.');
+                }
+                $aviso = $ideaRow['estado'] === 'nueva' ? $cambiarEstado('en_analisis', null, $notificar) : '';
+
+                header('Location: ' . $ideaUrl . '&message=' . urlencode(trim('Analisis iniciado. ' . $aviso)) . '#paso-analisis');
+                exit;
             }
 
-            $pdo->prepare('UPDATE ideas SET estado = ? WHERE id = ?')->execute([$ideaStatus, $ideaId]);
+            if ($action === 'notificar_idea') {
+                if (!can_manage_ideas($user) && !can_approve_ideas($user)) {
+                    throw new RuntimeException('No tienes permiso para notificar la decision.');
+                }
+                if (!in_array($ideaRow['estado'], ['aprobada', 'rechazada', 'archivada'], true)) {
+                    throw new RuntimeException('Primero debe registrarse la decision de Direccion General.');
+                }
+                if (idea_correo_remitente($ideaRow) === '') {
+                    throw new RuntimeException('La propuesta es anonima o no tiene un correo valido.');
+                }
+                $stmt = $pdo->prepare('SELECT decision_motivo FROM idea_revisiones WHERE idea_id = ?');
+                $stmt->execute([$ideaId]);
+                $aviso = notify_idea_submitter($pdo, $ideaRow, $ideaRow['estado'], (string) $stmt->fetchColumn());
+                registrar_historial_idea($pdo, $ideaId, $userId, $aviso);
+                header('Location: ' . $ideaUrl . '&message=' . urlencode($aviso) . '#paso-notificacion');
+                exit;
+            }
+            if (in_array($action, ['guardar_revision_idea', 'guardar_ponderacion_idea'], true) && !can_edit_idea_review($user, idea_responsable_ids($pdo, $ideaId))) {
+                throw new RuntimeException('Solo quien gestiona el buzon o un responsable asignado puede editar esta idea.');
+            }
 
-            header('Location: index.php?view=buzon&message=' . urlencode('Idea #' . $ideaId . ' marcada como ' . mb_strtolower(BUZON_ESTADOS[$ideaStatus], 'UTF-8') . '.') . '#idea-' . $ideaId);
-            exit;
+            if ($action === 'guardar_revision_idea') {
+                $campos = array_keys(IDEA_REVISION_CAMPOS);
+                $valores = [];
+                foreach ($campos as $campo) {
+                    $valores[] = idea_texto_post($campo);
+                }
+                $costos = idea_costos_post();
+                $campos = array_merge($campos, ['costo_items', 'costo_estimado', 'costo_detalle', 'requiere_analisis', 'analisis_detalle', 'actualizado_por']);
+                $valores = array_merge($valores, [
+                    $costos['items'],
+                    $costos['total'],
+                    idea_texto_post('costo_detalle'),
+                    !empty($_POST['requiere_analisis']) ? 1 : 0,
+                    idea_texto_post('analisis_detalle'),
+                    $userId,
+                ]);
+
+                $pdo->beginTransaction();
+                $pdo->prepare(
+                    'INSERT INTO idea_revisiones (idea_id, ' . implode(', ', $campos) . ')
+                     VALUES (?' . str_repeat(', ?', count($campos)) . ')
+                     ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(static fn(string $c): string => "{$c} = VALUES({$c})", $campos))
+                )->execute(array_merge([$ideaId], $valores));
+
+                // Responsables de seguimiento: solo quien gestiona el buzon los cambia.
+                if (can_manage_ideas($user) && isset($_POST['responsables_enviados'])) {
+                    $permitidos = [];
+                    foreach (fetch_module_users($menuPdo, $pdo, $user) as $moduleUser) {
+                        $permitidos[(int) $moduleUser['id']] = $moduleUser['nombre'];
+                    }
+                    $elegidos = array_values(array_unique(array_filter(
+                        array_map('intval', (array) ($_POST['responsables'] ?? [])),
+                        static fn(int $id): bool => isset($permitidos[$id])
+                    )));
+                    $anteriores = idea_responsable_ids($pdo, $ideaId);
+                    sort($anteriores);
+                    $ordenados = $elegidos;
+                    sort($ordenados);
+                    if ($ordenados !== $anteriores) {
+                        $pdo->prepare('DELETE FROM idea_responsables WHERE idea_id = ?')->execute([$ideaId]);
+                        $insert = $pdo->prepare('INSERT INTO idea_responsables (idea_id, usuario_id) VALUES (?, ?)');
+                        foreach ($elegidos as $responsableId) {
+                            $insert->execute([$ideaId, $responsableId]);
+                        }
+                        $nombres = array_map(static fn(int $id): string => $permitidos[$id], $elegidos);
+                        registrar_historial_idea($pdo, $ideaId, $userId, $nombres
+                            ? 'Responsables de seguimiento: ' . implode(', ', $nombres) . '.'
+                            : 'Quito a todos los responsables de seguimiento.');
+                    }
+                }
+
+                registrar_historial_idea($pdo, $ideaId, $userId, 'Actualizo el analisis.');
+                $aviso = $ideaRow['estado'] === 'nueva' ? $cambiarEstado('en_analisis', null, true) : '';
+                $pdo->commit();
+
+                header('Location: ' . $ideaUrl . '&message=' . urlencode(trim('Analisis guardado. ' . $aviso)) . '#paso-analisis');
+                exit;
+            }
+
+            if ($action === 'guardar_ponderacion_idea') {
+                $notas = [];
+                foreach (array_keys(IDEA_CRITERIOS) as $criterio) {
+                    $nota = (int) ($_POST['pond_' . $criterio] ?? 0);
+                    $notas[$criterio] = $nota >= 1 && $nota <= 5 ? $nota : null;
+                }
+                $puntaje = idea_puntaje($notas);
+                $campos = array_merge(array_map(static fn(string $c): string => 'pond_' . $c, array_keys($notas)), ['pond_puntaje', 'pond_comentario', 'actualizado_por']);
+                $valores = array_merge(array_values($notas), [$puntaje, idea_texto_post('pond_comentario'), $userId]);
+
+                $pdo->beginTransaction();
+                $pdo->prepare(
+                    'INSERT INTO idea_revisiones (idea_id, ' . implode(', ', $campos) . ')
+                     VALUES (?' . str_repeat(', ?', count($campos)) . ')
+                     ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(static fn(string $c): string => "{$c} = VALUES({$c})", $campos))
+                )->execute(array_merge([$ideaId], $valores));
+                registrar_historial_idea($pdo, $ideaId, $userId, $puntaje !== null
+                    ? 'Pondero la idea: ' . $puntaje . '/100 (' . idea_recomendacion($puntaje)[1] . ').'
+                    : 'Guardo una ponderacion incompleta.');
+                $pdo->commit();
+
+                header('Location: ' . $ideaUrl . '&message=' . urlencode($puntaje !== null ? 'Ponderacion guardada: ' . $puntaje . '/100.' : 'Ponderacion guardada; faltan criterios por calificar.') . '#paso-' . ($puntaje !== null ? 'decision' : 'ponderacion'));
+                exit;
+            }
+
+            if ($action === 'decidir_idea') {
+                if (!can_approve_ideas($user)) {
+                    throw new RuntimeException('Solo Direccion General puede aprobar, rechazar o archivar la idea.');
+                }
+                $nuevoEstado = (string) ($_POST['estado'] ?? '');
+                $motivo = idea_texto_post('motivo');
+                if (!isset(BUZON_ESTADOS[$nuevoEstado]) || $nuevoEstado === 'nueva') {
+                    throw new RuntimeException('Estado no valido.');
+                }
+                if (in_array($nuevoEstado, ['aprobada', 'rechazada', 'archivada'], true) && $motivo === null) {
+                    throw new RuntimeException('Explica el motivo de la decision.');
+                }
+
+                $pdo->beginTransaction();
+                if (in_array($nuevoEstado, ['aprobada', 'rechazada', 'archivada'], true)) {
+                    $pdo->prepare(
+                        'INSERT INTO idea_revisiones (idea_id, decision_motivo, decidido_por, decidido_en) VALUES (?, ?, ?, NOW())
+                         ON DUPLICATE KEY UPDATE decision_motivo = VALUES(decision_motivo), decidido_por = VALUES(decidido_por), decidido_en = VALUES(decidido_en)'
+                    )->execute([$ideaId, $motivo, $userId]);
+                }
+                $aviso = $cambiarEstado($nuevoEstado, $motivo, false);
+                $pdo->commit();
+
+                header('Location: ' . $ideaUrl . '&message=' . urlencode(trim('Idea #' . $ideaId . ': ' . BUZON_ESTADOS[$nuevoEstado] . '. ' . $aviso)) . '#paso-decision');
+                exit;
+            }
         }
     } catch (Throwable $exception) {
         if ($menuPdo->inTransaction()) {
@@ -565,15 +723,80 @@ if ($view === 'detalle' && isset($_GET['id'])) {
 $ideas = [];
 $ideaCounts = array_fill_keys(array_keys(BUZON_ESTADOS), 0);
 $buzonPublicUrl = '';
+$ideaRevisions = [];
 if ($view === 'buzon' && can_view_ideas($user)) {
-    $ideas = $pdo->query('SELECT * FROM ideas ORDER BY creado_en DESC, id DESC')->fetchAll();
+    $ideas = $pdo->query(
+        "SELECT i.*,
+            (SELECT GROUP_CONCAT(u.nombre ORDER BY u.nombre SEPARATOR ', ')
+             FROM idea_responsables ir
+             INNER JOIN {$menuDbName}.usuarios u ON u.id = ir.usuario_id
+             WHERE ir.idea_id = i.id) AS responsables
+         FROM ideas i
+         ORDER BY i.creado_en DESC, i.id DESC"
+    )->fetchAll();
+    $asignacionesStmt = $pdo->prepare('SELECT idea_id FROM idea_responsables WHERE usuario_id = ?');
+    $asignacionesStmt->execute([(int) $user['id']]);
+    $ideasAsignadas = array_fill_keys(array_map('intval', $asignacionesStmt->fetchAll(PDO::FETCH_COLUMN)), true);
     foreach ($ideas as $idea) {
         $ideaCounts[$idea['estado']] = ($ideaCounts[$idea['estado']] ?? 0) + 1;
+    }
+    foreach ($pdo->query('SELECT * FROM idea_revisiones')->fetchAll() as $revisionRow) {
+        $ideaRevisions[(int) $revisionRow['idea_id']] = $revisionRow;
     }
 
     $https = ($_SERVER['HTTPS'] ?? '') === 'on' || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
     $basePath = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php')), '/');
     $buzonPublicUrl = ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $basePath . '/buzon.php';
+}
+
+// Seguimiento de una idea (view=idea): revision, responsables, decision y lluvia de ideas.
+$ideaDetail = null;
+$ideaRevision = null;
+$ideaResponsables = [];
+$ideaAportes = [];
+$ideaCandidatos = [];
+if ($view === 'idea' && can_view_ideas($user) && isset($_GET['id'])) {
+    $ideaDetailStmt = $pdo->prepare('SELECT * FROM ideas WHERE id = ?');
+    $ideaDetailStmt->execute([(int) $_GET['id']]);
+    $ideaDetail = $ideaDetailStmt->fetch() ?: null;
+
+    if ($ideaDetail) {
+        $ideaDetailId = (int) $ideaDetail['id'];
+
+        $revisionStmt = $pdo->prepare(
+            "SELECT r.*, ua.nombre AS actualizado_por_nombre, ud.nombre AS decidido_por_nombre
+             FROM idea_revisiones r
+             LEFT JOIN {$menuDbName}.usuarios ua ON ua.id = r.actualizado_por
+             LEFT JOIN {$menuDbName}.usuarios ud ON ud.id = r.decidido_por
+             WHERE r.idea_id = ?"
+        );
+        $revisionStmt->execute([$ideaDetailId]);
+        $ideaRevision = $revisionStmt->fetch() ?: null;
+
+        $responsablesStmt = $pdo->prepare(
+            "SELECT u.id, u.nombre, u.correo
+             FROM idea_responsables ir
+             INNER JOIN {$menuDbName}.usuarios u ON u.id = ir.usuario_id
+             WHERE ir.idea_id = ?
+             ORDER BY u.nombre"
+        );
+        $responsablesStmt->execute([$ideaDetailId]);
+        $ideaResponsables = $responsablesStmt->fetchAll();
+
+        $aportesStmt = $pdo->prepare(
+            "SELECT a.*, COALESCE(u.nombre, 'Usuario eliminado') AS nombre
+             FROM idea_aportes a
+             LEFT JOIN {$menuDbName}.usuarios u ON u.id = a.usuario_id
+             WHERE a.idea_id = ? AND a.tipo = 'sistema'
+             ORDER BY a.creado_en DESC, a.id DESC"
+        );
+        $aportesStmt->execute([$ideaDetailId]);
+        $ideaAportes = $aportesStmt->fetchAll();
+
+        if (can_manage_ideas($user)) {
+            $ideaCandidatos = fetch_module_users($menuPdo, $pdo, $user);
+        }
+    }
 }
 
 $notifications = fetch_notifications($pdo, $menuDbName, $user);
@@ -591,6 +814,7 @@ $sidebarTitles = [
     'nueva' => ['Nueva solicitud', 'Registra una nueva solicitud'],
     'detalle' => ['Detalle de solicitud', 'Seguimiento de la solicitud'],
     'buzon' => ['Buzon de ideas', 'Ideas y sugerencias enviadas desde el formulario publico'],
+    'idea' => ['Seguimiento de idea', 'Revision, responsables y decision sobre la propuesta'],
 ];
 [$topbarTitle, $topbarSub] = $sidebarTitles[$view] ?? ['Sistema de solicitudes', 'CENGICANA'];
 
@@ -608,21 +832,23 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sistema de solicitudes CENGICANA</title>
+    <title>CengiColabora · Solicitudes internas</title>
+    <link rel="icon" type="image/svg+xml" href="assets/img/logo-cengicolabora.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
     <link rel="stylesheet" href="assets/css/styles.css?v=<?= (int) @filemtime(__DIR__ . '/assets/css/styles.css') ?>">
+    <link rel="stylesheet" href="assets/css/cengicolabora.css?v=<?= (int) @filemtime(__DIR__ . '/assets/css/cengicolabora.css') ?>">
 </head>
 <body>
 <div class="app" data-manual-permission-roles="[]">
     <aside class="sidebar" id="appSidebar">
         <a class="sidebar-brand" href="index.php?view=panel">
-            <span class="sidebar-brand-mark"><i class="ti ti-hexagon-letter-c"></i></span>
+            <img class="sidebar-brand-logo" src="assets/img/logo-cengicolabora.svg" alt="" aria-hidden="true">
             <span class="sidebar-brand-copy">
-                <strong>CENGICANA</strong>
-                <small>Solicitudes</small>
+                <strong>Cengi<b>Colabora</b></strong>
+                <small>Solicitudes internas</small>
             </span>
         </a>
 
@@ -646,7 +872,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                     </a>
                 <?php endif; ?>
                 <?php if (can_view_ideas($user)): ?>
-                    <a href="index.php?view=buzon" class="sidebar-nav-item <?= e($active('buzon')) ?>">
+                    <a href="index.php?view=buzon" class="sidebar-nav-item <?= in_array($view, ['buzon', 'idea'], true) ? 'is-active' : '' ?>">
                         <i class="ti ti-bulb"></i><span>Buzon de ideas</span>
                     </a>
                 <?php endif; ?>
@@ -784,6 +1010,11 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                             y <strong><?= count($urgentRequests) ?></strong> de prioridad alta pendientes.
                         <?php endif; ?>
                     </p>
+                    <div class="cb-hero-brand">
+                        <img src="assets/img/logo-cengicolabora.svg" alt="" aria-hidden="true">
+                        <strong>Cengi<b>Colabora</b></strong>
+                        <span>· parte del ecosistema Cengitech</span>
+                    </div>
                 </div>
                 <div class="panel-hero-actions">
                     <?php if (can_view_received_requests($user)): ?>
@@ -1289,12 +1520,27 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                     <?php foreach (BUZON_ESTADOS as $estadoKey => $estadoLabel): ?>
                         <button class="filter-chip" data-estado="<?= e($estadoKey) ?>" onclick="setIdeaFilter(this)"><?= e($estadoLabel) ?> (<?= (int) $ideaCounts[$estadoKey] ?>)</button>
                     <?php endforeach; ?>
+                    <label class="idea-sort">Ordenar
+                        <select class="form-control" id="ordenar-ideas" onchange="sortIdeas(this.value)">
+                            <option value="recientes">Mas recientes</option>
+                            <option value="puntaje">Mayor puntaje</option>
+                        </select>
+                    </label>
                 </div>
 
                 <section class="idea-list" id="lista-ideas">
                     <?php foreach ($ideas as $idea): ?>
-                        <?php $ideaId = (int) $idea['id']; ?>
-                        <article class="idea-card card" id="idea-<?= $ideaId ?>" data-estado="<?= e($idea['estado']) ?>">
+                        <?php
+                        $ideaId = (int) $idea['id'];
+                        $cardRevision = $ideaRevisions[$ideaId] ?? null;
+                        $cardPuedeAnalizar = can_edit_idea_review($user, isset($ideasAsignadas[$ideaId]) ? [(int) $user['id']] : []);
+                        $cardPuedeAprobar = can_approve_ideas($user);
+                        $cardPuedeNotificar = (can_manage_ideas($user) || $cardPuedeAprobar)
+                            && in_array($idea['estado'], ['aprobada', 'rechazada', 'archivada'], true)
+                            && idea_correo_remitente($idea) !== '';
+                        $cardPuntaje = $cardRevision && $cardRevision['pond_puntaje'] !== null ? (float) $cardRevision['pond_puntaje'] : null;
+                        ?>
+                        <article class="idea-card card" id="idea-<?= $ideaId ?>" data-estado="<?= e($idea['estado']) ?>" data-puntaje="<?= $cardPuntaje ?? -1 ?>" data-orden="<?= $ideaId ?>">
                             <header class="idea-card-head">
                                 <div>
                                     <div class="idea-card-title">
@@ -1315,6 +1561,9 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                                 </div>
                                 <?= badge_idea_estado($idea['estado']) ?>
                             </header>
+                            <p class="idea-card-preview"><?= e($idea['propuesta']) ?></p>
+                            <details class="idea-card-expand">
+                                <summary>Ver propuesta completa</summary>
                             <dl class="idea-card-body">
                                 <dt>Situacion o problema</dt>
                                 <dd><?= nl2br(e($idea['situacion'])) ?></dd>
@@ -1323,28 +1572,38 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                                 <dt>Beneficio esperado</dt>
                                 <dd><?= nl2br(e($idea['beneficio'])) ?></dd>
                             </dl>
-                            <?php if ($idea['foto_ruta'] || $canManageIdeas): ?>
-                                <footer class="idea-card-foot">
-                                    <?php if ($idea['foto_ruta']): ?>
-                                        <a class="idea-photo" href="buzon_foto.php?id=<?= $ideaId ?>" target="_blank" rel="noopener">
-                                            <img src="buzon_foto.php?id=<?= $ideaId ?>" alt="Foto adjunta a la idea #<?= $ideaId ?>" loading="lazy">
-                                        </a>
+                            </details>
+                            <?php [$avanceLleno, $avanceTotal] = idea_revision_avance($cardRevision, (string) $idea['responsables'] !== ''); ?>
+                            <footer class="idea-card-foot">
+                                <?php if ($idea['foto_ruta']): ?>
+                                    <a class="idea-photo" href="buzon_foto.php?id=<?= $ideaId ?>" target="_blank" rel="noopener">
+                                        <img src="buzon_foto.php?id=<?= $ideaId ?>" alt="Foto adjunta a la idea #<?= $ideaId ?>" loading="lazy">
+                                    </a>
+                                <?php endif; ?>
+                                <div class="idea-follow-summary">
+                                    <?= badge_idea_puntaje($cardPuntaje) ?>
+                                    <span title="Avance del analisis"><i class="ti ti-checklist"></i>Analisis <?= $avanceLleno ?>/<?= $avanceTotal ?></span>
+                                    <span><i class="ti ti-users"></i><?= $idea['responsables'] ? e($idea['responsables']) : 'Sin responsables' ?></span>
+                                    <?php if (idea_correo_remitente($idea) === ''): ?>
+                                        <span title="No se le puede avisar por correo"><i class="ti ti-mail-off"></i>Sin aviso</span>
                                     <?php endif; ?>
-                                    <?php if ($canManageIdeas): ?>
-                                        <div class="idea-actions">
-                                            <?php foreach (BUZON_ESTADOS as $estadoKey => $estadoLabel): ?>
-                                                <?php if ($estadoKey === $idea['estado']) { continue; } ?>
-                                                <form method="post"><?= csrf_field() ?>
-                                                    <input type="hidden" name="action" value="actualizar_idea">
-                                                    <input type="hidden" name="idea_id" value="<?= $ideaId ?>">
-                                                    <input type="hidden" name="estado" value="<?= e($estadoKey) ?>">
-                                                    <button class="btn-outline btn-sm" type="submit">Marcar como <?= e(mb_strtolower($estadoLabel, 'UTF-8')) ?></button>
-                                                </form>
-                                            <?php endforeach; ?>
-                                        </div>
+                                    <?php if ((int) ($cardRevision['requiere_analisis'] ?? 0) === 1): ?>
+                                        <span class="idea-flag"><i class="ti ti-microscope"></i>Requiere analisis</span>
                                     <?php endif; ?>
-                                </footer>
-                            <?php endif; ?>
+                                </div>
+                                <div class="idea-actions">
+                                    <?php if ($cardPuedeAnalizar): ?>
+                                        <a class="btn-outline btn-sm" href="index.php?view=idea&id=<?= $ideaId ?>#paso-analisis">Análisis</a>
+                                    <?php endif; ?>
+                                    <?php if ($cardPuedeAprobar): ?>
+                                        <a class="btn-outline btn-sm" href="index.php?view=idea&id=<?= $ideaId ?>#paso-decision">Aprobación</a>
+                                    <?php endif; ?>
+                                    <?php if ($cardPuedeNotificar): ?>
+                                        <a class="btn-outline btn-sm" href="index.php?view=idea&id=<?= $ideaId ?>#paso-notificacion">Notificación</a>
+                                    <?php endif; ?>
+                                    <a class="btn-primary btn-sm" href="index.php?view=idea&id=<?= $ideaId ?>">Ver detalle</a>
+                                </div>
+                            </footer>
                         </article>
                     <?php endforeach; ?>
                 </section>
@@ -1352,6 +1611,17 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                 <?php if (!$ideas): ?>
                     <div class="panel-empty"><i class="ti ti-bulb-off"></i>Todavia no se han recibido ideas. Comparte el link del formulario.</div>
                 <?php endif; ?>
+            <?php endif; ?>
+        <?php endif; ?>
+
+        <?php if ($view === 'idea'): ?>
+            <?php if (!can_view_ideas($user)): ?>
+                <div class="alert error">No tienes permiso para ver el buzon de ideas.</div>
+            <?php elseif (!$ideaDetail): ?>
+                <div class="alert error">No se encontro la idea.</div>
+                <a class="btn-outline" href="index.php?view=buzon">Volver al buzon</a>
+            <?php else: ?>
+                <?php require __DIR__ . '/includes/idea-seguimiento.php'; ?>
             <?php endif; ?>
         <?php endif; ?>
 

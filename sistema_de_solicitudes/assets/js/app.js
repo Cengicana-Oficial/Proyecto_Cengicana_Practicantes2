@@ -498,3 +498,97 @@ function copyBuzonLink(button) {
     done();
   }
 }
+
+// Seguimiento de idea: filtra la lista de posibles responsables.
+function filterIdeaResponsables(input) {
+  const query = input.value.trim().toLowerCase();
+  const list = input.form.querySelector('.idea-responsables-list');
+  list.querySelectorAll('.permission-option').forEach((option) => {
+    option.classList.toggle('hidden', !option.textContent.toLowerCase().includes(query));
+  });
+}
+
+
+// Seguimiento de idea: al ir a un paso (barra superior o #paso-x), abrirlo.
+function openIdeaStepFromHash() {
+  if (!location.hash.startsWith('#paso-')) return;
+  const target = document.querySelector(location.hash);
+  const step = target && target.closest('details.idea-step');
+  if (step) step.open = true;
+}
+window.addEventListener('hashchange', openIdeaStepFromHash);
+document.addEventListener('DOMContentLoaded', openIdeaStepFromHash);
+
+// Ponderacion de idea: puntaje en vivo (misma formula que idea_puntaje() en PHP).
+document.addEventListener('change', (event) => {
+  const form = event.target.closest('#form-ponderacion');
+  if (!form || event.target.type !== 'radio') return;
+  const live = document.getElementById('puntaje-vivo');
+  let total = 0;
+  let completo = true;
+  form.querySelectorAll('.idea-criterio').forEach((criterio) => {
+    const marcado = criterio.querySelector('input:checked');
+    if (!marcado) { completo = false; return; }
+    total += (Number(marcado.value) / 5) * Number(criterio.dataset.peso);
+  });
+  const puntaje = Math.round(total * 10) / 10;
+  const alta = Number(live.dataset.alta);
+  const media = Number(live.dataset.media);
+  const [clave, texto] = !completo ? ['pendiente', 'Califica todos los criterios']
+    : puntaje >= alta ? ['alta', 'Recomendada para implementacion']
+    : puntaje >= media ? ['media', 'Con reservas'] : ['baja', 'No recomendada'];
+  live.className = 'idea-score-live is-' + clave;
+  live.querySelector('.idea-score-num strong').textContent = completo ? String(puntaje) : '—';
+  live.querySelector('.idea-score-meter span').style.width = (completo ? puntaje : total) + '%';
+  live.querySelector('.idea-score-label').textContent = texto;
+});
+
+// Buzon de ideas: ordenar por fecha (id) o por puntaje de ponderacion.
+function sortIdeas(criterio) {
+  const list = document.getElementById('lista-ideas');
+  if (!list) return;
+  const cards = Array.from(list.querySelectorAll('.idea-card'));
+  cards.sort((a, b) => criterio === 'puntaje'
+    ? Number(b.dataset.puntaje) - Number(a.dataset.puntaje) || Number(b.dataset.orden) - Number(a.dataset.orden)
+    : Number(b.dataset.orden) - Number(a.dataset.orden));
+  cards.forEach((card) => list.appendChild(card));
+}
+
+// Presupuesto de implementacion: filas y total calculado.
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-costos]').forEach((container) => {
+    const add = container.querySelector('[data-agregar-costo]');
+    if (!add) return;
+    const body = container.querySelector('tbody');
+    const totalInput = container.parentElement.querySelector('[name="costo_estimado"]');
+    let index = body.rows.length;
+    const update = () => {
+      let total = 0;
+      body.querySelectorAll('tr').forEach((row) => {
+        const quantity = Number(row.querySelector('[name$="[cantidad]"]').value);
+        const price = Number(row.querySelector('[name$="[precio]"]').value);
+        const subtotal = Math.round(quantity * price * 100) / 100;
+        total += subtotal;
+        row.querySelector('[data-subtotal]').textContent = subtotal.toFixed(2);
+      });
+      totalInput.readOnly = body.rows.length > 0;
+      if (body.rows.length) totalInput.value = total.toFixed(2);
+    };
+    add.addEventListener('click', () => {
+      if (body.rows.length >= 100) return;
+      const html = container.querySelector('template').innerHTML.replaceAll('__INDEX__', String(index++));
+      body.insertAdjacentHTML('beforeend', html);
+      update();
+      body.lastElementChild.querySelector('[name$="[descripcion]"]').focus();
+    });
+    container.addEventListener('input', update);
+    container.addEventListener('click', (event) => {
+      const remove = event.target.closest('[data-quitar-costo]');
+      if (!remove) return;
+      remove.closest('tr').remove();
+      if (!body.rows.length) totalInput.value = '';
+      update();
+    });
+    update();
+  });
+});

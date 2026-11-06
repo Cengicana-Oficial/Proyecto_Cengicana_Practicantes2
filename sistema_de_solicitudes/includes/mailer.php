@@ -350,3 +350,98 @@ function notify_request_progress(PDO $pdo, string $menuDbName, array $actor, int
         error_log('Solicitudes internas: aviso de avance fallido: ' . $exception->getMessage());
     }
 }
+
+/*
+ * Avisos del Buzon de ideas a quien envio la idea
+ * -----------------------------------------------
+ * Quien envia una idea no tiene cuenta en la plataforma: solo se le avisa si dejo
+ * su correo y no la envio como anonima. Eventos: recibida (desde buzon.php),
+ * en_analisis, aprobada, rechazada y archivada. El motivo escrito al decidir se
+ * incluye en el correo. Respeta el interruptor general de la vista "Correos".
+ */
+const IDEA_AVISOS = [
+    'recibida' => [
+        'Recibimos tu idea #%d',
+        'Gracias por compartir tu idea. Ya llegó al equipo responsable del Buzón de ideas; te avisaremos por este medio cada vez que avance.',
+    ],
+    'en_analisis' => [
+        'Tu idea #%d está en análisis',
+        'Tu idea está siendo analizada: se revisan los recursos que necesita, su costo, los requisitos que debe cumplir y sus riesgos y oportunidades.',
+    ],
+    'aprobada' => [
+        'Tu idea #%d fue aprobada',
+        '¡Buenas noticias! Tu idea fue aprobada para su implementación. Gracias por contribuir a mejorar CENGICAÑA.',
+    ],
+    'rechazada' => [
+        'Resultado de tu idea #%d',
+        'Tu idea fue analizada con cuidado y, en esta ocasión, no será implementada. Te compartimos el motivo y te animamos a seguir enviando propuestas.',
+    ],
+    'archivada' => [
+        'Tu idea #%d fue archivada',
+        'Tu idea quedó archivada por el momento. Gracias por tomarte el tiempo de compartirla.',
+    ],
+];
+
+function mail_idea_layout(string $name, string $intro, array $rows, string $note = ''): string
+{
+    $rowsHtml = '';
+    foreach ($rows as $label => $value) {
+        if ($value === '' || $value === null) {
+            continue;
+        }
+        $rowsHtml .= '<tr><td style="padding:6px 12px 6px 0;color:#5b6b4f;white-space:nowrap;vertical-align:top;">' . e($label)
+            . '</td><td style="padding:6px 0;color:#1a2e0a;">' . nl2br(e((string) $value)) . '</td></tr>';
+    }
+    $noteHtml = $note !== ''
+        ? '<p style="margin:16px 0 0;padding:12px 14px;background:#f3f8ec;border-left:3px solid #73BC25;border-radius:4px;">' . nl2br(e($note)) . '</p>'
+        : '';
+
+    return '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1a2e0a;">'
+        . '<h2 style="color:#73BC25;margin:0 0 16px;">CENGICAÑA · Buzón de ideas</h2>'
+        . '<p>Hola ' . e($name) . ',</p>'
+        . '<p>' . e($intro) . '</p>'
+        . '<table style="border-collapse:collapse;font-size:14px;margin-top:8px;">' . $rowsHtml . '</table>'
+        . $noteHtml
+        . '<p style="font-size:12px;color:#7a8a6e;margin-top:24px;">Este es un aviso automático; no respondas a este correo.</p>'
+        . '</div>';
+}
+
+/**
+ * Avisa a quien envio la idea. Devuelve el texto para el historial de la idea
+ * ('' si no aplica: idea anonima o sin correo).
+ */
+function notify_idea_submitter(PDO $pdo, array $idea, string $evento, string $motivo = ''): string
+{
+    $to = idea_correo_remitente($idea);
+    if ($to === '' || !isset(IDEA_AVISOS[$evento])) {
+        return '';
+    }
+    if (!mail_enabled($pdo)) {
+        return 'No se envio aviso a ' . $to . ': los correos estan apagados (vista Correos).';
+    }
+
+    try {
+        $ideaId = (int) $idea['id'];
+        [$asunto, $intro] = IDEA_AVISOS[$evento];
+        $subject = sprintf($asunto, $ideaId);
+        $name = trim((string) ($idea['nombre'] ?? '')) ?: 'colaborador(a)';
+        $propuesta = (string) $idea['propuesta'];
+        if (mb_strlen($propuesta, 'UTF-8') > 300) {
+            $propuesta = mb_substr($propuesta, 0, 300, 'UTF-8') . '…';
+        }
+        $html = mail_idea_layout($name, $intro, [
+            'Idea' => '#' . $ideaId,
+            'Área' => $idea['area'] . ($idea['area_otra'] ? ': ' . $idea['area_otra'] : ''),
+            'Tu propuesta' => $propuesta,
+            'Estado' => BUZON_ESTADOS[$evento] ?? ($evento === 'recibida' ? 'Recibida' : $evento),
+        ], $motivo !== '' ? 'Comentario del equipo: ' . $motivo : '');
+
+        $error = send_request_mail($pdo, 'idea', 'IDEA-' . $ideaId, $to, $name, $subject, $html);
+
+        return $error === '' ? 'Se aviso por correo a ' . $to . '.' : 'No se pudo avisar por correo a ' . $to . ': ' . $error;
+    } catch (Throwable $exception) {
+        error_log('Buzon de ideas: aviso fallido: ' . $exception->getMessage());
+
+        return 'No se pudo avisar por correo a ' . $to . '.';
+    }
+}

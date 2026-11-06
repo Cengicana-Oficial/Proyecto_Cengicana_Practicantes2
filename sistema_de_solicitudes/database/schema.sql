@@ -88,10 +88,61 @@ CREATE TABLE IF NOT EXISTS ideas (
   anonimo TINYINT(1) NOT NULL DEFAULT 0,
   nombre VARCHAR(80) NULL,
   correo VARCHAR(120) NULL,
-  estado ENUM('nueva','revisada','archivada') NOT NULL DEFAULT 'nueva',
+  estado ENUM('nueva','en_analisis','aprobada','rechazada','archivada') NOT NULL DEFAULT 'nueva',
   creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_ideas_estado (estado)
+) ENGINE=InnoDB;
+
+-- Revision de la idea: analisis de viabilidad y decision (una fila por idea)
+CREATE TABLE IF NOT EXISTS idea_revisiones (
+  idea_id INT NOT NULL PRIMARY KEY,
+  recursos TEXT NULL,
+  implicaciones_legales TEXT NULL,
+  implicaciones_reglamentarias TEXT NULL,
+  implicaciones_organizacionales TEXT NULL,
+  costo_estimado DECIMAL(12,2) NULL,
+  costo_detalle TEXT NULL,
+  costo_items TEXT NULL,
+  riesgos TEXT NULL,
+  oportunidades TEXT NULL,
+  requisitos TEXT NULL,
+  requiere_analisis TINYINT(1) NOT NULL DEFAULT 0,
+  analisis_detalle TEXT NULL,
+  pond_impacto TINYINT NULL,
+  pond_viabilidad TINYINT NULL,
+  pond_costo TINYINT NULL,
+  pond_riesgo TINYINT NULL,
+  pond_alineacion TINYINT NULL,
+  pond_puntaje DECIMAL(5,1) NULL,
+  pond_comentario TEXT NULL,
+  decision_motivo TEXT NULL,
+  decidido_por INT NULL,
+  decidido_en DATETIME NULL,
+  actualizado_por INT NULL,
+  actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (idea_id) REFERENCES ideas(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Responsables de seguimiento de la idea (usuarios del portal)
+CREATE TABLE IF NOT EXISTS idea_responsables (
+  idea_id INT NOT NULL,
+  usuario_id INT NOT NULL,
+  asignado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (idea_id, usuario_id),
+  FOREIGN KEY (idea_id) REFERENCES ideas(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Lluvia de ideas sobre la propuesta: aportes etiquetados + bitacora ('sistema')
+CREATE TABLE IF NOT EXISTS idea_aportes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  idea_id INT NOT NULL,
+  usuario_id INT NOT NULL,
+  tipo ENUM('comentario','recurso','implicacion','costo','riesgo','oportunidad','requisito','sistema') NOT NULL DEFAULT 'comentario',
+  texto TEXT NOT NULL,
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_idea_aportes_idea (idea_id, creado_en),
+  FOREIGN KEY (idea_id) REFERENCES ideas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 INSERT IGNORE INTO programas (id, nombre) VALUES
