@@ -15,6 +15,11 @@ require dirname(__DIR__) . '/config/database.php';
 require dirname(__DIR__) . '/includes/functions.php';
 require dirname(__DIR__) . '/includes/redes.php';
 require dirname(__DIR__) . '/includes/redes-api.php';
+// Audiencia y metricas mensuales de la cuenta que guarda la sincronizacion.
+require dirname(__DIR__) . '/includes/estadisticas.php';
+require dirname(__DIR__) . '/includes/redes-analisis.php';
+require dirname(__DIR__) . '/includes/redes-audiencia.php';
+require dirname(__DIR__) . '/includes/redes-cuenta-api.php';
 
 $forzar = in_array('--forzar', $argv, true);
 $hubo = false;

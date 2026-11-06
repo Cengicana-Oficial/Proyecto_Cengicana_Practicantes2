@@ -18,6 +18,13 @@ require __DIR__ . '/includes/catalogo.php';
 require __DIR__ . '/includes/tableros.php';
 require __DIR__ . '/includes/redes.php';
 require __DIR__ . '/includes/redes-api.php';
+require __DIR__ . '/includes/estadisticas.php';
+require __DIR__ . '/includes/cifras.php';
+require __DIR__ . '/includes/redes-analisis.php';
+require __DIR__ . '/includes/redes-audiencia.php';
+require __DIR__ . '/includes/redes-resumen.php';
+require __DIR__ . '/includes/redes-cuenta.php';
+require __DIR__ . '/includes/redes-cuenta-api.php';
 require __DIR__ . '/includes/usuarios.php';
 require __DIR__ . '/includes/notificaciones.php';
 require __DIR__ . '/includes/correo-eventos.php';
@@ -63,6 +70,7 @@ $sections = [
     'tableros' => ['label' => 'Tableros', 'icon' => 'ti-chart-bar', 'group' => 'Resultados'],
     'informes' => ['label' => 'Informes cuatrimestrales', 'icon' => 'ti-report', 'group' => 'Resultados'],
     'memorias' => ['label' => 'Memoria de resultados', 'icon' => 'ti-book-2', 'group' => 'Resultados'],
+    'cifras' => ['label' => 'Cifras institucionales', 'icon' => 'ti-presentation-analytics', 'group' => 'Resultados'],
     'publicaciones' => ['label' => 'Redes sociales', 'icon' => 'ti-share', 'group' => 'Comunicacion'],
     'estadisticas' => ['label' => 'Estadisticas', 'icon' => 'ti-chart-pie', 'group' => 'Comunicacion'],
     'config' => ['label' => 'Configuracion', 'icon' => 'ti-settings', 'group' => 'Administración'],
@@ -89,6 +97,7 @@ $recursoPorVista = [
     'memorias' => 'memorias',
     'publicaciones' => 'publicaciones',
     'estadisticas' => 'estadisticas',
+    'cifras' => 'estadisticas', // mismos permisos: ver = consultar, gestionar = administrar alianzas
     'config' => 'configuracion',
     'notificaciones' => 'configuracion',
     'usuarios' => 'usuarios',
@@ -99,7 +108,7 @@ $seccionesImplementadas = [
     'eventos',
     'comites',
     'contactos', 'reuniones', 'acuerdos', 'documentos', 'biblioteca_interna',
-    'correos', 'tableros', 'informes', 'memorias', 'publicaciones', 'estadisticas', 'config', 'notificaciones', 'usuarios',
+    'correos', 'tableros', 'informes', 'memorias', 'publicaciones', 'estadisticas', 'cifras', 'config', 'notificaciones', 'usuarios',
 ];
 
 $puedeVerSeccionActual = $view === 'dashboard'
@@ -217,6 +226,30 @@ if ($view === 'comites') {
         } catch (Throwable $error) {
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
             $flashError = $error instanceof PDOException ? 'No se pudo guardar el cambio. Revisa los datos e inténtalo de nuevo.' : $error->getMessage();
+        }
+    }
+}
+
+// Cifras institucionales: descargas (página para imprimir, PDF, PowerPoint) y registro de alianzas.
+if ($view === 'cifras' && $puedeVerSeccionActual) {
+    $_SESSION['cifras_csrf'] ??= bin2hex(random_bytes(32));
+    $anioCifras = max(2015, min((int) date('Y'), (int) ($_GET['anio'] ?? date('Y'))));
+    if (in_array($_GET['exportar'] ?? '', ['html', 'pdf', 'pptx'], true)) {
+        cifras_exportar($pdo, $anioCifras, (string) $_GET['exportar']);
+    }
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && str_starts_with((string) ($_POST['accion'] ?? ''), 'alianza_')) {
+        try {
+            if (!$puedeGestionarSeccionActual) {
+                throw new RuntimeException('No tienes permiso para gestionar alianzas.');
+            }
+            if (!hash_equals($_SESSION['cifras_csrf'], (string) ($_POST['csrf'] ?? ''))) {
+                throw new RuntimeException('La sesión del formulario expiró. Recarga la página.');
+            }
+            $mensajeCifras = cifras_alianza_accion($pdo, $_POST, $_FILES);
+            header('Location: index.php?view=cifras&anio=' . $anioCifras . '&msg=' . urlencode($mensajeCifras) . '#alianzas-registro');
+            exit;
+        } catch (Throwable $error) {
+            $flashError = $error instanceof PDOException ? 'No se pudo guardar la alianza. Revisa los datos e inténtalo de nuevo.' : $error->getMessage();
         }
     }
 }
@@ -845,6 +878,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $responsablePublicacion = trim((string) ($_POST['responsable'] ?? '')) ?: null;
             $urlPublicacion = trim((string) ($_POST['url'] ?? '')) ?: null;
             $destinosPublicacion = $plataforma === 'WhatsApp' ? (trim((string) ($_POST['destinos'] ?? '')) ?: null) : null;
+            $pilarPublicacion = in_array($_POST['pilar'] ?? '', REDES_PILARES, true) ? (string) $_POST['pilar'] : null;
+            $pautadaPublicacion = !empty($_POST['pautada']) ? 1 : 0;
+            $inversionPublicacion = $pautadaPublicacion ? max(0, round((float) str_replace(',', '', (string) ($_POST['inversion'] ?? '0')), 2)) : 0;
 
             $metricas = [];
             foreach (['alcance', 'impresiones', 'interacciones', 'reacciones', 'comentarios', 'compartidos', 'clics', 'reproducciones', 'guardados'] as $campoMetrica) {
@@ -870,31 +906,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $materialRuta = $materialPublicacion['ruta'] !== null ? $materialPublicacion['ruta'] : $actualPublicacion['material'];
 
                 $stmt = $pdo->prepare(
-                    'UPDATE publicaciones SET fecha = ?, plataforma = ?, tipo = ?, titulo = ?, copy_texto = ?, material = ?, estado = ?,
+                    'UPDATE publicaciones SET fecha = ?, plataforma = ?, tipo = ?, pilar = ?, pautada = ?, inversion = ?, titulo = ?, copy_texto = ?, material = ?, estado = ?,
                         responsable = ?, url = ?, destinos = ?, alcance = ?, impresiones = ?, interacciones = ?, reacciones = ?, comentarios = ?,
                         compartidos = ?, clics = ?, reproducciones = ?, guardados = ? WHERE id = ?'
                 );
                 $stmt->execute([
-                    $fechaPublicacion, $plataforma, $tipoPublicacion, $tituloPublicacion, $copyTexto, $materialRuta, $estadoPublicacion,
+                    $fechaPublicacion, $plataforma, $tipoPublicacion, $pilarPublicacion, $pautadaPublicacion, $inversionPublicacion, $tituloPublicacion, $copyTexto, $materialRuta, $estadoPublicacion,
                     $responsablePublicacion, $urlPublicacion, $destinosPublicacion,
                     $metricas['alcance'], $metricas['impresiones'], $metricas['interacciones'], $metricas['reacciones'], $metricas['comentarios'],
                     $metricas['compartidos'], $metricas['clics'], $metricas['reproducciones'], $metricas['guardados'], $id,
                 ]);
             } else {
                 $stmt = $pdo->prepare(
-                    'INSERT INTO publicaciones (fecha, plataforma, tipo, titulo, copy_texto, material, estado, responsable, url, destinos,
+                    'INSERT INTO publicaciones (fecha, plataforma, tipo, pilar, pautada, inversion, titulo, copy_texto, material, estado, responsable, url, destinos,
                         alcance, impresiones, interacciones, reacciones, comentarios, compartidos, clics, reproducciones, guardados)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute([
-                    $fechaPublicacion, $plataforma, $tipoPublicacion, $tituloPublicacion, $copyTexto, $materialPublicacion['ruta'], $estadoPublicacion,
+                    $fechaPublicacion, $plataforma, $tipoPublicacion, $pilarPublicacion, $pautadaPublicacion, $inversionPublicacion, $tituloPublicacion, $copyTexto, $materialPublicacion['ruta'], $estadoPublicacion,
                     $responsablePublicacion, $urlPublicacion, $destinosPublicacion,
                     $metricas['alcance'], $metricas['impresiones'], $metricas['interacciones'], $metricas['reacciones'], $metricas['comentarios'],
                     $metricas['compartidos'], $metricas['clics'], $metricas['reproducciones'], $metricas['guardados'],
                 ]);
             }
 
-            header('Location: index.php?view=publicaciones&msg=' . urlencode('Publicacion guardada correctamente.' . $avisoArchivo));
+            header('Location: index.php?view=publicaciones&tab=publicaciones&msg=' . urlencode('Publicacion guardada correctamente.' . $avisoArchivo));
             exit;
         }
 
@@ -908,7 +944,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $pdo->prepare('DELETE FROM publicaciones WHERE id = ?')->execute([$id]);
 
-            header('Location: index.php?view=publicaciones&msg=' . urlencode('Publicacion eliminada.'));
+            header('Location: index.php?view=publicaciones&tab=publicaciones&msg=' . urlencode('Publicacion eliminada.'));
             exit;
         }
 
@@ -966,12 +1002,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 throw new RuntimeException('No se pudo completar la operación con ' . redes_api_proveedores()[$proveedorApi]['nombre'] . ': ' . $e->getMessage());
             }
+            if (($_POST['volver'] ?? '') === 'audiencia') {
+                header('Location: index.php?view=publicaciones&tab=audiencia&msg=' . urlencode($mensaje));
+                exit;
+            }
             header('Location: index.php?view=publicaciones&tab=conexiones&msg=' . urlencode($mensaje) . '#conexion-' . $proveedorApi);
             exit;
         }
 
         // ---------- Importacion de estadisticas y sitio web (Google Analytics) ----------
-        if (in_array($accion, ['publicacion_importar', 'web_importar', 'web_guardar', 'web_eliminar'], true)) {
+        if (in_array($accion, ['publicacion_importar', 'web_importar', 'web_guardar', 'web_eliminar', 'audiencia_importar', 'audiencia_eliminar', 'cuenta_guardar', 'cuenta_eliminar'], true)) {
             if (!can_manage_resource($user, 'publicaciones')) {
                 throw new RuntimeException('No tienes permiso para gestionar redes sociales.');
             }
@@ -980,6 +1020,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $mensaje = redes_importar_publicaciones($pdo, (string) ($_POST['plataforma'] ?? ''), $_FILES['archivo'] ?? []);
                 } elseif ($accion === 'web_importar') {
                     $mensaje = redes_importar_web($pdo, $_FILES['archivo'] ?? []);
+                } elseif ($accion === 'audiencia_importar') {
+                    $mensaje = redes_importar_audiencia($pdo, $_POST, $_FILES['archivo'] ?? []);
+                } elseif ($accion === 'cuenta_guardar') {
+                    $mensaje = redes_cuenta_guardar($pdo, $_POST);
+                } elseif ($accion === 'cuenta_eliminar') {
+                    $pdo->prepare('DELETE FROM redes_cuenta_mensual WHERE plataforma = ? AND periodo = ?')->execute([(string) ($_POST['plataforma'] ?? ''), (string) ($_POST['periodo'] ?? '')]);
+                    $mensaje = 'Mes eliminado.';
+                } elseif ($accion === 'audiencia_eliminar') {
+                    $pdo->prepare('DELETE FROM redes_audiencia WHERE plataforma = ?')->execute([(string) ($_POST['plataforma'] ?? '')]);
+                    $mensaje = 'Audiencia eliminada.';
                 } elseif ($accion === 'web_guardar') {
                     $mensaje = redes_guardar_web($pdo, $_POST);
                 } else {
@@ -991,7 +1041,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 throw new RuntimeException('No se pudo leer el archivo. Verifica que sea la exportación original en CSV o Excel.');
             }
-            $tabWeb = str_starts_with($accion, 'web_') ? '&tab=web' : '';
+            $tabWeb = str_starts_with($accion, 'web_') ? '&tab=web' : (str_starts_with($accion, 'audiencia_') ? '&tab=audiencia' : (str_starts_with($accion, 'cuenta_') ? '&tab=resumen' : '&tab=publicaciones'));
             header('Location: index.php?view=publicaciones' . $tabWeb . '&msg=' . urlencode($mensaje));
             exit;
         }
@@ -1294,7 +1344,27 @@ if ($view === 'tableros' && $puedeVerSeccionActual) {
 }
 
 if ($view === 'publicaciones' && $puedeVerSeccionActual) {
-    $redesTab = in_array($_GET['tab'] ?? '', ['web', 'conexiones'], true) ? (string) $_GET['tab'] : 'publicaciones';
+    if (in_array($_GET['generar'] ?? '', ['pdf', 'html', 'xlsx'], true)) {
+        redes_reporte_exportar($pdo, $_GET);
+    }
+    // Sin pestana explicita se abre el Resumen, salvo que se pida algo propio de la lista.
+    $pideLista = (bool) array_intersect_key($_GET, array_flip(['nuevo', 'editar', 'importar', 'q', 'plataforma', 'mes', 'exportar', 'pilar', 'pauta', 'nivel', 'orden', 'vista', 'ficha']));
+    $redesTab = in_array($_GET['tab'] ?? '', ['resumen', 'publicaciones', 'analisis', 'audiencia', 'web', 'conexiones'], true)
+        ? (string) $_GET['tab'] : ($pideLista ? 'publicaciones' : 'resumen');
+    if ($redesTab === 'resumen') {
+        $periodoRs = estadisticas_periodo($_GET);
+        $rs = redes_resumen($pdo, $periodoRs);
+    }
+    if ($redesTab === 'audiencia') {
+        $periodoAud = estadisticas_periodo($_GET);
+        $audienciaEjemplo = isset($_GET['ejemplo']);
+        $audiencia = $audienciaEjemplo ? redes_audiencia_ejemplo($periodoAud) : redes_audiencia_datos($pdo, $periodoAud);
+    }
+    if ($redesTab === 'analisis') {
+        $periodoAna = estadisticas_periodo($_GET);
+        $filtroPlataformaAna = array_key_exists($_GET['plataforma'] ?? '', redes_plataformas()) ? (string) $_GET['plataforma'] : '';
+        $analisis = redes_analisis(redes_analisis_filas($pdo, $periodoAna, $filtroPlataformaAna));
+    }
     if ($redesTab === 'conexiones' && !$puedeGestionarSeccionActual) {
         $redesTab = 'publicaciones';
     }
@@ -1306,9 +1376,17 @@ if ($view === 'publicaciones' && $puedeVerSeccionActual) {
     $where = ' WHERE 1=1';
     $params = [];
     if ($q !== '') {
-        $where .= ' AND (titulo LIKE ? OR plataforma LIKE ? OR tipo LIKE ? OR destinos LIKE ?)';
+        $where .= ' AND (titulo LIKE ? OR copy_texto LIKE ? OR plataforma LIKE ? OR tipo LIKE ? OR destinos LIKE ?)';
         $like = '%' . $q . '%';
-        array_push($params, $like, $like, $like, $like);
+        array_push($params, $like, $like, $like, $like, $like);
+    }
+    $filtroPilar = in_array($_GET['pilar'] ?? '', [...REDES_PILARES, 'Sin clasificar'], true) ? (string) $_GET['pilar'] : '';
+    $filtroPauta = in_array($_GET['pauta'] ?? '', ['organica', 'pautada'], true) ? (string) $_GET['pauta'] : '';
+    $filtroNivel = array_key_exists($_GET['nivel'] ?? '', REDES_NIVELES) ? (string) $_GET['nivel'] : '';
+    $ordenLista = in_array($_GET['orden'] ?? '', ['fecha', 'tasa', 'alcance', 'interacciones'], true) ? (string) $_GET['orden'] : 'fecha';
+    $vistaLista = ($_GET['vista'] ?? '') === 'tarjetas' ? 'tarjetas' : 'lista';
+    if ($filtroPauta !== '') {
+        $where .= ' AND pautada = ' . ($filtroPauta === 'pautada' ? 1 : 0);
     }
     if ($filtroPlataforma !== '') {
         $where .= ' AND plataforma = ?';
@@ -1319,6 +1397,37 @@ if ($view === 'publicaciones' && $puedeVerSeccionActual) {
         $params[] = $filtroMes;
     }
     $publicaciones = fetch_placeholder_rows($pdo, 'SELECT * FROM publicaciones' . $where . ' ORDER BY fecha DESC, id DESC', $params);
+    // Cada publicacion se evalua frente al promedio de su red; el tema (pilar) puede ser sugerido.
+    $promediosRedes = redes_promedios_plataforma($pdo);
+    foreach ($publicaciones as &$pubEval) {
+        $pubEval['eval'] = redes_evaluar_publicacion($pubEval, $promediosRedes);
+    }
+    unset($pubEval);
+    $publicaciones = array_values(array_filter($publicaciones, static fn($p) => ($filtroPilar === '' || ($p['eval']['pilar'] ?: 'Sin clasificar') === $filtroPilar)
+        && ($filtroNivel === '' || $p['eval']['nivel'] === $filtroNivel)));
+    if ($ordenLista !== 'fecha') {
+        usort($publicaciones, static fn($x, $y) => ($y['eval'][$ordenLista] ?? -1) <=> ($x['eval'][$ordenLista] ?? -1));
+    }
+    if (($_GET['exportar'] ?? '') === 'xlsx') {
+        $filasExcel = [['Fecha', 'Plataforma', 'Tipo', 'Pilar de contenido', 'Pautada', 'Inversión (Q)', 'Título', 'Estado', 'Responsable', 'Alcance', 'Impresiones', 'Interacciones', 'Reacciones', 'Comentarios', 'Compartidos', 'Clics', 'Reproducciones', 'Guardados', 'Tasa de interacción (%)', 'Índice vs promedio de la red', 'Rendimiento', 'Clics por cada 100 alcanzados', 'Grupos / destinos', 'Enlace']];
+        foreach ($publicaciones as $p) {
+            $ev = $p['eval'];
+            $filasExcel[] = [
+                (string) $p['fecha'], (string) $p['plataforma'], (string) $p['tipo'], $ev['pilar'] . ($ev['pilar_sugerido'] ? ' (sugerido)' : ''), $p['pautada'] ? 'Sí' : 'No', (float) $p['inversion'],
+                (string) $p['titulo'], (string) $p['estado'], (string) $p['responsable'],
+                (int) $p['alcance'], (int) $p['impresiones'], (int) $p['interacciones'], (int) $p['reacciones'], (int) $p['comentarios'],
+                (int) $p['compartidos'], (int) $p['clics'], (int) $p['reproducciones'], (int) $p['guardados'],
+                $ev['tasa'] === null ? '' : round($ev['tasa'], 1), $ev['indice'] === null ? '' : round($ev['indice'], 2), REDES_NIVELES[$ev['nivel']][0],
+                $ev['ctr'] === null ? '' : round($ev['ctr'], 2),
+                (string) $p['destinos'], (string) $p['url'],
+            ];
+        }
+        $contenido = estadisticas_excel([['nombre' => 'Publicaciones', 'filas' => $filasExcel]]);
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="publicaciones_redes_' . ($filtroMes ?: date('Y-m-d')) . '.xlsx"');
+        echo $contenido;
+        exit;
+    }
     // Resumen por plataforma con los mismos filtros (excepto la plataforma, para poder comparar).
     $paramsResumen = $params;
     $whereResumen = $where;
@@ -1353,6 +1462,9 @@ if ($view === 'publicaciones' && $puedeVerSeccionActual) {
             'fecha' => (string) ($prefillPost['fecha'] ?? date('Y-m-d')),
             'plataforma' => (string) ($prefillPost['plataforma'] ?? 'Facebook'),
             'tipo' => (string) ($prefillPost['tipo'] ?? ''),
+            'pilar' => (string) ($prefillPost['pilar'] ?? ''),
+            'pautada' => !empty($prefillPost['pautada']) ? 1 : 0,
+            'inversion' => (float) ($prefillPost['inversion'] ?? 0),
             'titulo' => (string) ($prefillPost['titulo'] ?? ''),
             'copy_texto' => (string) ($prefillPost['copy_texto'] ?? ''),
             'estado' => (string) ($prefillPost['estado'] ?? 'Borrador'),
@@ -1378,7 +1490,7 @@ if ($view === 'publicaciones' && $puedeVerSeccionActual) {
         $modalPublicacionesAbierto = (bool) $publicacionEditar;
     } elseif (isset($_GET['nuevo']) && $puedeGestionarSeccionActual) {
         $publicacionEditar = [
-            'id' => 0, 'fecha' => date('Y-m-d'), 'plataforma' => 'Facebook', 'tipo' => '', 'titulo' => '', 'copy_texto' => '',
+            'id' => 0, 'fecha' => date('Y-m-d'), 'plataforma' => 'Facebook', 'tipo' => '', 'pilar' => '', 'pautada' => 0, 'inversion' => 0, 'titulo' => '', 'copy_texto' => '',
             'estado' => 'Borrador', 'responsable' => '', 'url' => '', 'destinos' => '', 'material' => null,
             'alcance' => 0, 'impresiones' => 0, 'interacciones' => 0, 'reacciones' => 0, 'comentarios' => 0,
             'compartidos' => 0, 'clics' => 0, 'reproducciones' => 0, 'guardados' => 0,
@@ -1430,25 +1542,11 @@ if ($view === 'usuarios' && $puedeVerSeccionActual) {
 }
 
 if ($view === 'estadisticas' && $puedeVerSeccionActual) {
-    $kpiAcuerdosPorEstado = fetch_placeholder_rows($pdo, 'SELECT estado, COUNT(*) AS total FROM acuerdos GROUP BY estado');
-    $kpiDocumentosPorEstado = fetch_placeholder_rows($pdo, 'SELECT ambito, estado, COUNT(*) AS total FROM documentos GROUP BY ambito, estado ORDER BY ambito, total DESC');
-    $kpiPublicacionesPorPlataforma = fetch_placeholder_rows(
-        $pdo,
-        'SELECT plataforma, COUNT(*) AS total, COALESCE(SUM(alcance),0) AS alcance, COALESCE(SUM(interacciones),0) AS interacciones
-         FROM publicaciones GROUP BY plataforma ORDER BY total DESC'
-    );
-    $kpiReunionesPorComite = fetch_placeholder_rows(
-        $pdo,
-        'SELECT c.nombre AS comite, COUNT(r.id) AS total
-         FROM comites c LEFT JOIN reuniones r ON r.comite_id = c.id
-         WHERE c.activo = 1 GROUP BY c.id, c.nombre ORDER BY total DESC'
-    );
-    $kpiPromedioAvanceAcuerdos = (float) $pdo->query('SELECT COALESCE(AVG(avance),0) FROM acuerdos')->fetchColumn();
-    $kpiMemoriasPorEstado = fetch_placeholder_rows($pdo, 'SELECT estado, COUNT(*) AS total FROM memorias_resultados GROUP BY estado');
-    $kpiCorreosPorMes = fetch_placeholder_rows(
-        $pdo,
-        "SELECT DATE_FORMAT(enviado_en, '%Y-%m') AS mes, COUNT(*) AS total FROM correos_enviados GROUP BY mes ORDER BY mes DESC LIMIT 6"
-    );
+    $periodoEstadisticas = estadisticas_periodo($_GET);
+    if (in_array($_GET['exportar'] ?? '', ['xlsx', 'pdf', 'html'], true)) {
+        estadisticas_exportar($pdo, $periodoEstadisticas, (string) $_GET['exportar']);
+    }
+    $est = estadisticas_datos($pdo, $periodoEstadisticas);
 }
 $notificaciones = notif_obtener($pdo, $user);
 ?>
@@ -1457,21 +1555,23 @@ $notificaciones = notif_obtener($pdo, $user);
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Comites, Transferencia y Comunicacion · CENGICANA</title>
+    <title>CengiConecta · Comités, Transferencia y Comunicación</title>
+    <link rel="icon" type="image/svg+xml" href="assets/img/logo-cengiconecta.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
     <link rel="stylesheet" href="assets/css/styles.css?v=<?= @filemtime(__DIR__ . '/assets/css/styles.css') ?>">
+    <link rel="stylesheet" href="assets/css/cengiconecta.css?v=<?= @filemtime(__DIR__ . '/assets/css/cengiconecta.css') ?>">
 </head>
 <body>
 <div class="app">
     <aside class="sidebar" id="appSidebar">
         <a class="sidebar-brand" href="index.php?view=dashboard">
-            <span class="sidebar-brand-mark"><i class="ti ti-hexagon-letter-c"></i></span>
+            <img class="sidebar-brand-logo" src="assets/img/logo-cengiconecta.svg" alt="" aria-hidden="true">
             <span class="sidebar-brand-copy">
-                <strong>CENGICANA</strong>
-                <small>Comites, Transferencia y Comunicacion</small>
+                <strong>Cengi<b>Conecta</b></strong>
+                <small>Comités · Transferencia · Comunicación</small>
             </span>
         </a>
 
@@ -1614,6 +1714,11 @@ $notificaciones = notif_obtener($pdo, $user);
                         la gestión de los comités técnicos con los ingenios, el seguimiento de sus acuerdos,
                         la documentación que se comparte y la comunicación de resultados.
                     </p>
+                    <div class="dash-hero-brand">
+                        <img src="assets/img/logo-cengiconecta.svg" alt="" aria-hidden="true">
+                        <strong>Cengi<b>Conecta</b></strong>
+                        <span>· parte del ecosistema Cengitech</span>
+                    </div>
                 </div>
                 <div class="dash-hero-kpis">
                     <div><strong><?= $stats['comites'] ?></strong><span>Comités activos</span></div>
@@ -1942,17 +2047,26 @@ $notificaciones = notif_obtener($pdo, $user);
                     $p = $plataformasRedes[$nombre] ?? $plataformasRedes['Otro'];
                     return '<span class="red-chip" style="--red:' . e($p['color']) . '"><i class="ti ' . e($p['icon']) . '"></i> ' . e($nombre) . '</span>';
                 };
-                $urlFiltros = static fn(array $extra = []): string => 'index.php?' . http_build_query(array_filter(['view' => 'publicaciones', 'q' => $q, 'plataforma' => $filtroPlataforma, 'mes' => $filtroMes] + $extra, static fn($v) => $v !== '' && $v !== null));
+                $urlFiltros = static fn(array $extra = []): string => 'index.php?' . http_build_query(array_filter($extra + ['view' => 'publicaciones', 'tab' => 'publicaciones', 'q' => $q, 'plataforma' => $filtroPlataforma, 'mes' => $filtroMes, 'pilar' => $filtroPilar ?? '', 'pauta' => $filtroPauta ?? '', 'nivel' => $filtroNivel ?? '', 'orden' => ($ordenLista ?? 'fecha') === 'fecha' ? '' : $ordenLista, 'vista' => ($vistaLista ?? 'lista') === 'lista' ? '' : $vistaLista], static fn($v) => $v !== '' && $v !== null));
                 ?>
-                <nav class="red-tabs" aria-label="Secciones de redes sociales">
-                    <a href="index.php?view=publicaciones" class="<?= $redesTab === 'publicaciones' ? 'is-active' : '' ?>"><i class="ti ti-share"></i> Publicaciones y WhatsApp</a>
-                    <a href="index.php?view=publicaciones&tab=web" class="<?= $redesTab === 'web' ? 'is-active' : '' ?>"><i class="ti ti-world"></i> Sitio web (Google Analytics)</a>
-                    <?php if ($puedeGestionarSeccionActual): ?><a href="index.php?view=publicaciones&tab=conexiones" class="<?= $redesTab === 'conexiones' ? 'is-active' : '' ?>"><i class="ti ti-plug-connected"></i> Conexiones</a><?php endif; ?>
-                </nav>
+                <div class="red-nav">
+                    <nav class="red-tabs" aria-label="Secciones de redes sociales">
+                        <a href="index.php?view=publicaciones&tab=resumen" class="<?= $redesTab === 'resumen' ? 'is-active' : '' ?>"><i class="ti ti-layout-dashboard"></i> Resumen</a>
+                        <a href="index.php?view=publicaciones&tab=publicaciones" class="<?= $redesTab === 'publicaciones' ? 'is-active' : '' ?>"><i class="ti ti-share"></i> Publicaciones y WhatsApp</a>
+                        <a href="index.php?view=publicaciones&tab=analisis" class="<?= $redesTab === 'analisis' ? 'is-active' : '' ?>"><i class="ti ti-bulb"></i> ¿Qué funciona?</a>
+                        <a href="index.php?view=publicaciones&tab=audiencia" class="<?= $redesTab === 'audiencia' ? 'is-active' : '' ?>"><i class="ti ti-world-pin"></i> Audiencia</a>
+                        <a href="index.php?view=publicaciones&tab=web" class="<?= $redesTab === 'web' ? 'is-active' : '' ?>"><i class="ti ti-world"></i> Sitio web</a>
+                        <?php if ($puedeGestionarSeccionActual): ?><a href="index.php?view=publicaciones&tab=conexiones" class="<?= $redesTab === 'conexiones' ? 'is-active' : '' ?>"><i class="ti ti-plug-connected"></i> Conexiones</a><?php endif; ?>
+                    </nav>
+                    <?php if ($redesTab !== 'resumen'): ?>
+                        <a class="btn-primary red-nav-reporte" href="index.php?<?= e(http_build_query(['reporte' => 1] + $_GET)) ?>"><i class="ti ti-file-analytics"></i> Generar reporte</a>
+                    <?php endif; ?>
+                </div>
+                <?php if (isset($_GET['reporte'])) { require __DIR__ . '/includes/redes-reporte-modal.php'; } ?>
 
                 <?php
                 $conexionesActivas = array_filter($redesConexiones, static fn($c) => $c['activo']);
-                $relevantes = $redesTab === 'web' ? ['ga4'] : ($redesTab === 'publicaciones' ? ['meta', 'linkedin'] : []);
+                $relevantes = $redesTab === 'web' ? ['ga4'] : (in_array($redesTab, ['publicaciones', 'analisis'], true) ? ['meta', 'linkedin'] : (in_array($redesTab, ['resumen', 'audiencia'], true) ? ['meta', 'linkedin', 'ga4'] : []));
                 $estadoVisible = array_intersect_key($conexionesActivas, array_flip($relevantes));
                 ?>
                 <?php if ($estadoVisible): ?>
@@ -1968,106 +2082,7 @@ $notificaciones = notif_obtener($pdo, $user);
                 <?php endif; ?>
 
                 <?php if ($redesTab === 'publicaciones'): ?>
-                    <?php
-                    $totalesRedes = ['total' => 0, 'alcance' => 0, 'interacciones' => 0, 'clics' => 0];
-                    foreach ($resumenRedes as $r) {
-                        foreach ($totalesRedes as $k => $v) {
-                            $totalesRedes[$k] += (int) $r[$k];
-                        }
-                    }
-                    ?>
-                    <section class="red-resumen">
-                        <a class="red-card red-card-total <?= $filtroPlataforma === '' ? 'is-active' : '' ?>" href="<?= e($urlFiltros(['plataforma' => ''])) ?>">
-                            <span class="red-card-head"><i class="ti ti-chart-donut"></i> Todas</span>
-                            <strong><?= redes_formato($totalesRedes['total']) ?></strong><small>publicaciones</small>
-                            <span class="red-card-meta"><?= redes_formato($totalesRedes['alcance']) ?> alcance · <?= redes_formato($totalesRedes['interacciones']) ?> interacciones</span>
-                        </a>
-                        <?php foreach ($resumenRedes as $r): $p = $plataformasRedes[$r['plataforma']] ?? $plataformasRedes['Otro']; $esWa = $r['plataforma'] === 'WhatsApp'; ?>
-                            <a class="red-card <?= $filtroPlataforma === $r['plataforma'] ? 'is-active' : '' ?>" style="--red:<?= e($p['color']) ?>" href="<?= e($urlFiltros(['plataforma' => $r['plataforma']])) ?>">
-                                <span class="red-card-head"><i class="ti <?= e($p['icon']) ?>"></i> <?= e((string) $r['plataforma']) ?></span>
-                                <strong><?= redes_formato((int) $r['total']) ?></strong><small><?= $esWa ? 'envíos' : 'publicaciones' ?></small>
-                                <span class="red-card-meta">
-                                    <?php if ($esWa): ?>
-                                        <?= redes_formato((int) $r['alcance']) ?> personas · <?= redes_formato((int) $r['compartidos']) ?> reenvíos
-                                    <?php else: ?>
-                                        <?= redes_formato((int) $r['alcance']) ?> alcance · <?= redes_formato((int) $r['interacciones']) ?> interacciones
-                                    <?php endif; ?>
-                                </span>
-                            </a>
-                        <?php endforeach; ?>
-                    </section>
-
-                    <div class="section-toolbar">
-                        <form class="filters-form" method="get">
-                            <input type="hidden" name="view" value="publicaciones">
-                            <div class="search-box">
-                                <i class="ti ti-search"></i>
-                                <input class="form-control" type="text" name="q" placeholder="Buscar por título, tipo o grupo..." value="<?= e($q) ?>">
-                            </div>
-                            <select class="form-control filter-select" name="plataforma" aria-label="Plataforma" onchange="this.form.submit()">
-                                <option value="">Todas las plataformas</option>
-                                <?php foreach (array_keys($plataformasRedes) as $opt): ?><option value="<?= e($opt) ?>" <?= $filtroPlataforma === $opt ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?>
-                            </select>
-                            <input class="form-control filter-select" type="month" name="mes" value="<?= e($filtroMes) ?>" aria-label="Mes" onchange="this.form.submit()">
-                            <button type="submit" class="btn-outline btn-sm"><i class="ti ti-filter"></i> Filtrar</button>
-                            <?php if ($q !== '' || $filtroPlataforma !== '' || $filtroMes !== ''): ?><a class="btn-outline btn-sm" href="index.php?view=publicaciones">Limpiar</a><?php endif; ?>
-                        </form>
-                        <?php if ($puedeGestionarSeccionActual): ?>
-                            <div class="toolbar-actions">
-                                <a class="btn-outline" href="<?= e($urlFiltros(['importar' => 'redes'])) ?>"><i class="ti ti-file-import"></i> Importar estadísticas</a>
-                                <a class="btn-outline" href="index.php?view=publicaciones&nuevo=1&plataforma_nueva=WhatsApp"><i class="ti ti-brand-whatsapp"></i> Registrar envío</a>
-                                <a class="btn-primary" href="index.php?view=publicaciones&nuevo=1"><i class="ti ti-plus"></i> Nueva publicación</a>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="table-card">
-                        <div class="table-wrap">
-                            <table class="red-tabla">
-                                <thead><tr><th>Fecha</th><th>Publicación</th><th>Estado</th><th class="num">Alcance</th><th class="num">Interacciones</th><th class="num">Clics</th><th class="acc"><?= $puedeGestionarSeccionActual ? 'Acciones' : '' ?></th></tr></thead>
-                                <tbody>
-                                <?php if (!$publicaciones): ?>
-                                    <tr><td colspan="7"><div class="empty-state"><i class="ti ti-inbox"></i><?= ($q !== '' || $filtroPlataforma !== '' || $filtroMes !== '') ? 'No hay publicaciones con estos filtros.' : 'Todavía no hay publicaciones registradas. Regístralas a mano o importa las estadísticas exportadas de cada red.' ?></div></td></tr>
-                                <?php endif; ?>
-                                <?php foreach ($publicaciones as $p): $esWa = $p['plataforma'] === 'WhatsApp'; ?>
-                                    <tr>
-                                        <td class="red-fecha"><?= $p['fecha'] ? e(date('d/m/Y', strtotime((string) $p['fecha']))) : '—' ?></td>
-                                        <td class="cell-wide">
-                                            <div class="red-pub">
-                                                <?= $chipPlataforma((string) $p['plataforma']) ?><?php if (!empty($p['tipo'])): ?><span class="text-muted"><?= e((string) $p['tipo']) ?></span><?php endif; ?><?php if (($p['origen'] ?? '') === 'importado'): ?><span class="red-origen" title="Métricas importadas del archivo exportado"><i class="ti ti-file-import"></i> Importado</span><?php endif; ?>
-                                            </div>
-                                            <strong><?= e($p['titulo']) ?></strong>
-                                            <?php if ($esWa && !empty($p['destinos'])): ?><div class="text-muted red-destinos"><i class="ti ti-users-group"></i> <?= e(mb_strimwidth((string) $p['destinos'], 0, 120, '…')) ?></div><?php endif; ?>
-                                        </td>
-                                        <td><span class="badge <?= comites_estado_badge_class((string) $p['estado']) ?>"><?= e((string) $p['estado']) ?></span></td>
-                                        <td class="num"><?= redes_formato((int) $p['alcance']) ?><?php if ($esWa): ?><small>personas</small><?php endif; ?></td>
-                                        <td class="num"><?= redes_formato((int) $p['interacciones']) ?><?php if ($esWa && ((int) $p['compartidos'] || (int) $p['comentarios'])): ?><small><?= (int) $p['compartidos'] ?> reenv. · <?= (int) $p['comentarios'] ?> resp.</small><?php endif; ?></td>
-                                        <td class="num"><?= redes_formato((int) $p['clics']) ?></td>
-                                        <td class="acc">
-                                            <?php if ($puedeGestionarSeccionActual || !empty($p['url'])): ?>
-                                            <details class="row-menu">
-                                                <summary><i class="ti ti-dots-vertical"></i> Acciones <i class="ti ti-chevron-down"></i></summary>
-                                                <div class="row-menu-list" role="menu">
-                                                    <?php if (!empty($p['url'])): ?><a href="<?= e((string) $p['url']) ?>" target="_blank" rel="noopener noreferrer"><i class="ti ti-external-link"></i> Ver publicación</a><?php endif; ?>
-                                                    <?php if (!empty($p['material'])): ?><a href="<?= e((string) $p['material']) ?>" target="_blank" rel="noopener"><i class="ti ti-photo"></i> Ver material</a><?php endif; ?>
-                                                    <?php if ($puedeGestionarSeccionActual): ?>
-                                                        <a href="<?= e($urlFiltros(['editar' => (int) $p['id']])) ?>"><i class="ti ti-edit"></i> Editar y actualizar métricas</a>
-                                                        <form method="post" onsubmit="return confirm('¿Eliminar esta publicación?');">
-                                                            <input type="hidden" name="accion" value="publicacion_eliminar">
-                                                            <input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
-                                                            <button type="submit" class="is-danger"><i class="ti ti-trash"></i> Eliminar</button>
-                                                        </form>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </details>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                    <?php require __DIR__ . '/includes/redes-publicaciones-vista.php'; ?>
 
                     <?php if ($modalImportar === 'redes'): ?>
                         <div class="modal-backdrop is-open" data-close-href="<?= e($urlFiltros()) ?>">
@@ -2131,6 +2146,20 @@ $notificaciones = notif_obtener($pdo, $user);
                                         <label class="form-group"><span class="form-label">Tipo</span>
                                             <input class="form-control" type="text" name="tipo" value="<?= e((string) $publicacionEditar['tipo']) ?>" placeholder="Foto, video, boletín, invitación..."></label>
                                     </div>
+                                    <?php $pilarSugerido = redes_pilar_sugerido(trim($publicacionEditar['copy_texto'] . ' ' . $publicacionEditar['titulo'])); ?>
+                                    <div class="form-grid form-grid-3" data-no-whatsapp <?= $esWaForm ? 'hidden' : '' ?>>
+                                        <label class="form-group"><span class="form-label">Pilar de contenido</span>
+                                            <select class="form-control" name="pilar">
+                                                <option value="">Sin clasificar<?= $pilarSugerido ? ' (sugerido: ' . e($pilarSugerido) . ')' : '' ?></option>
+                                                <?php foreach (REDES_PILARES as $opt): ?><option value="<?= e($opt) ?>" <?= ($publicacionEditar['pilar'] ?? '') === $opt ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?>
+                                            </select>
+                                            <small class="text-muted">Agrupa las publicaciones por tema para saber cuál interesa más.</small></label>
+                                        <label class="form-group"><span class="form-label">¿Se pautó (pagó)?</span>
+                                            <label class="red-check"><input type="checkbox" name="pautada" value="1" <?= !empty($publicacionEditar['pautada']) ? 'checked' : '' ?>> Sí, tuvo publicidad pagada</label>
+                                            <small class="text-muted">Separa el resultado orgánico del pagado.</small></label>
+                                        <label class="form-group"><span class="form-label">Inversión en pauta (Q)</span>
+                                            <input class="form-control" type="number" name="inversion" min="0" step="0.01" value="<?= e(number_format((float) ($publicacionEditar['inversion'] ?? 0), 2, '.', '')) ?>"></label>
+                                    </div>
                                     <label class="form-group form-full"><span class="form-label">Título <span class="req">*</span></span>
                                         <input class="form-control" type="text" name="titulo" required value="<?= e((string) $publicacionEditar['titulo']) ?>"></label>
                                     <label class="form-group form-full" data-solo-whatsapp <?= $esWaForm ? '' : 'hidden' ?>><span class="form-label">Grupos, listas o contactos a los que se envió</span>
@@ -2178,6 +2207,15 @@ $notificaciones = notif_obtener($pdo, $user);
                             </div>
                         </div>
                     <?php endif; ?>
+
+                <?php elseif ($redesTab === 'resumen'): ?>
+                    <?php require __DIR__ . '/includes/redes-resumen-vista.php'; ?>
+
+                <?php elseif ($redesTab === 'audiencia'): ?>
+                    <?php require __DIR__ . '/includes/redes-audiencia-vista.php'; ?>
+
+                <?php elseif ($redesTab === 'analisis'): ?>
+                    <?php require __DIR__ . '/includes/redes-analisis-vista.php'; ?>
 
                 <?php elseif ($redesTab === 'web'): ?>
                     <?php
@@ -2358,6 +2396,16 @@ $notificaciones = notif_obtener($pdo, $user);
                                             <label class="form-group"><span class="form-label">Versión de la API</span>
                                                 <input class="form-control" name="version" value="<?= e((string) ($cfg['version'] ?? 'v23.0')) ?>"></label>
                                         </div>
+                                        <details class="red-con-mas" <?= !empty($cfg['ad_account_id']) ? 'open' : '' ?>>
+                                            <summary>Inversión en pauta (cuenta publicitaria, opcional)</summary>
+                                            <div class="form-grid">
+                                                <label class="form-group"><span class="form-label">ID de la cuenta publicitaria</span>
+                                                    <input class="form-control" name="ad_account_id" value="<?= e((string) ($cfg['ad_account_id'] ?? '')) ?>" placeholder="act_1234567890"></label>
+                                                <label class="form-group"><span class="form-label">Token con permiso ads_read</span>
+                                                    <input class="form-control" type="password" name="ads_token" autocomplete="off" placeholder="<?= !empty($sec['ads_token']) ? e(redes_api_mascara($sec['ads_token'])) . ' (guardado)' : 'Vacío = usa el token de la página' ?>"></label>
+                                            </div>
+                                            <span class="form-hint">Con esto se obtienen el importe gastado por mes y por publicación pautada (Administrador de anuncios › Configuración › ID de la cuenta). Un token de usuario del sistema de Business Manager con <b>ads_read</b> no vence.</span>
+                                        </details>
                                     <?php elseif ($p === 'linkedin'): ?>
                                         <label class="form-group"><span class="form-label">ID de la organización (página) <span class="req">*</span></span>
                                             <input class="form-control" name="org_id" inputmode="numeric" value="<?= e((string) ($cfg['org_id'] ?? '')) ?>" placeholder="Número de linkedin.com/company/12345678/admin"></label>
@@ -2436,109 +2484,10 @@ $notificaciones = notif_obtener($pdo, $user);
                 <?php require __DIR__ . '/includes/usuarios-vista.php'; ?>
 
             <?php elseif ($view === 'estadisticas'): ?>
-                <section class="stats-row">
-                    <div class="stat-card"><div class="stat-icon"><i class="ti ti-affiliate"></i></div><div><div class="stat-num"><?= $stats['comites'] ?></div><div class="stat-label">Comites activos</div></div></div>
-                    <div class="stat-card"><div class="stat-icon"><i class="ti ti-calendar-event"></i></div><div><div class="stat-num"><?= $stats['reuniones_realizadas'] ?>/<?= $stats['reuniones'] ?></div><div class="stat-label">Reuniones realizadas</div></div></div>
-                    <div class="stat-card"><div class="stat-icon"><i class="ti ti-percentage"></i></div><div><div class="stat-num"><?= number_format($kpiPromedioAvanceAcuerdos, 0) ?>%</div><div class="stat-label">Avance promedio de acuerdos</div></div></div>
-                    <div class="stat-card"><div class="stat-icon"><i class="ti ti-mail"></i></div><div><div class="stat-num"><?= $stats['correos'] ?></div><div class="stat-label">Correos enviados</div></div></div>
-                </section>
+                <?php require __DIR__ . '/includes/estadisticas-vista.php'; ?>
 
-                <div class="dash-grid">
-                    <div class="card" style="padding:16px;">
-                        <div class="card-title"><i class="ti ti-clipboard-list"></i> Acuerdos por estado</div>
-                        <div class="table-wrap">
-                            <table>
-                                <thead><tr><th>Estado</th><th>Total</th></tr></thead>
-                                <tbody>
-                                <?php if (!$kpiAcuerdosPorEstado): ?><tr><td colspan="2"><div class="empty-state"><i class="ti ti-inbox"></i>Sin datos.</div></td></tr><?php endif; ?>
-                                <?php foreach ($kpiAcuerdosPorEstado as $row): ?>
-                                    <tr><td><span class="badge <?= comites_estado_badge_class((string) $row['estado']) ?>"><?= e((string) $row['estado']) ?></span></td><td><?= (int) $row['total'] ?></td></tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="card" style="padding:16px;">
-                        <div class="card-title"><i class="ti ti-calendar-event"></i> Reuniones por comite</div>
-                        <div class="table-wrap">
-                            <table>
-                                <thead><tr><th>Comite</th><th>Reuniones</th></tr></thead>
-                                <tbody>
-                                <?php if (!$kpiReunionesPorComite): ?><tr><td colspan="2"><div class="empty-state"><i class="ti ti-inbox"></i>Sin datos.</div></td></tr><?php endif; ?>
-                                <?php foreach ($kpiReunionesPorComite as $row): ?>
-                                    <tr><td><?= e((string) $row['comite']) ?></td><td><?= (int) $row['total'] ?></td></tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="dash-grid">
-                    <div class="card" style="padding:16px;">
-                        <div class="card-title"><i class="ti ti-folder"></i> Documentos por estado</div>
-                        <div class="table-wrap">
-                            <table>
-                                <thead><tr><th>Biblioteca</th><th>Estado</th><th>Total</th></tr></thead>
-                                <tbody>
-                                <?php if (!$kpiDocumentosPorEstado): ?><tr><td colspan="3"><div class="empty-state"><i class="ti ti-inbox"></i>Sin datos.</div></td></tr><?php endif; ?>
-                                <?php foreach ($kpiDocumentosPorEstado as $row): ?>
-                                    <tr>
-                                        <td><?= $row['ambito'] === 'interna' ? 'Interna' : 'Ingenios' ?></td>
-                                        <td><span class="badge <?= comites_estado_badge_class((string) $row['estado']) ?>"><?= e((string) $row['estado']) ?></span></td>
-                                        <td><?= (int) $row['total'] ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="card" style="padding:16px;">
-                        <div class="card-title"><i class="ti ti-share"></i> Publicaciones por plataforma</div>
-                        <div class="table-wrap">
-                            <table>
-                                <thead><tr><th>Plataforma</th><th>Publicaciones</th><th>Alcance</th><th>Interacciones</th></tr></thead>
-                                <tbody>
-                                <?php if (!$kpiPublicacionesPorPlataforma): ?><tr><td colspan="4"><div class="empty-state"><i class="ti ti-inbox"></i>Sin datos.</div></td></tr><?php endif; ?>
-                                <?php foreach ($kpiPublicacionesPorPlataforma as $row): ?>
-                                    <tr><td><?= e((string) $row['plataforma']) ?></td><td><?= (int) $row['total'] ?></td><td><?= (int) $row['alcance'] ?></td><td><?= (int) $row['interacciones'] ?></td></tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="dash-grid">
-                    <div class="card" style="padding:16px;">
-                        <div class="card-title"><i class="ti ti-book-2"></i> Memorias por estado</div>
-                        <div class="table-wrap">
-                            <table>
-                                <thead><tr><th>Estado</th><th>Total</th></tr></thead>
-                                <tbody>
-                                <?php if (!$kpiMemoriasPorEstado): ?><tr><td colspan="2"><div class="empty-state"><i class="ti ti-inbox"></i>Sin datos.</div></td></tr><?php endif; ?>
-                                <?php foreach ($kpiMemoriasPorEstado as $row): ?>
-                                    <tr><td><span class="badge <?= comites_estado_badge_class((string) $row['estado']) ?>"><?= e((string) $row['estado']) ?></span></td><td><?= (int) $row['total'] ?></td></tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="card" style="padding:16px;">
-                        <div class="card-title"><i class="ti ti-mail"></i> Correos enviados (ultimos 6 meses)</div>
-                        <div class="table-wrap">
-                            <table>
-                                <thead><tr><th>Mes</th><th>Correos</th></tr></thead>
-                                <tbody>
-                                <?php if (!$kpiCorreosPorMes): ?><tr><td colspan="2"><div class="empty-state"><i class="ti ti-inbox"></i>Sin datos.</div></td></tr><?php endif; ?>
-                                <?php foreach ($kpiCorreosPorMes as $row): ?>
-                                    <tr><td><?= e((string) $row['mes']) ?></td><td><?= (int) $row['total'] ?></td></tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+            <?php elseif ($view === 'cifras'): ?>
+                <?php $cifras = cifras_datos($pdo, $anioCifras); $alianzasTodas = cifras_alianzas($pdo); require __DIR__ . '/includes/cifras-vista.php'; ?>
 
             <?php elseif ($view === 'notificaciones'): ?>
                 <?php require __DIR__ . '/includes/notificaciones-correo-vista.php'; ?>

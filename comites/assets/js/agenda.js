@@ -32,7 +32,7 @@
     const fd = new FormData(); fd.set('agenda_accion', action); fd.set('csrf', data.csrf); fd.set('datos', JSON.stringify(values));
     Object.entries(files).forEach(([k, f]) => { if (f?.size) fd.set(k, f); });
     const response = await fetch(endpoint, { method: 'POST', body: fd });
-    if (['preview', 'html', 'pdf', 'csv'].includes(action) && response.ok) return response;
+    if (['preview', 'html', 'pdf', 'csv', 'informe_html', 'informe_pdf'].includes(action) && response.ok) return response;
     const result = await response.json(); if (!response.ok || !result.ok) throw new Error(result.error || 'No se pudo completar la operación.');
     data = result.datos; render(); message(result.mensaje); return result;
   }
@@ -87,13 +87,80 @@
     else content = `<div class="ag-row">${badge(r)}<span>${esc(r.responsable)}</span></div><div class="ag-detail-grid"><section class="ag-panel"><h3>Planificación</h3><strong>${esc(r.plan_fecha || r.plan_mes || 'Extraordinaria')}</strong><p class="ag-textarea">${esc(eventos ? r.objetivo : r.plan_temas || 'Sin temas registrados')}</p>${eventos ? `<p>${esc(r.lugar)} · ${esc(r.modalidad)}</p><p>${esc(r.publico)}</p>` : ''}</section><section class="ag-panel"><h3>Ejecución</h3><strong>${done(r) ? esc(r.fecha) : 'Pendiente de registrar'}</strong><p class="ag-textarea">${esc(eventos ? r.notas : r.temas)}</p><p>${eventos ? `${num(r.participantes)} participantes · ${num(r.ingenios)} ingenios` : `${r.asistentes.length} asistentes`}</p>${documentLink(r)}</section></div>${!eventos ? `<section class="ag-panel"><h3>Asistentes</h3><p>${r.asistentes.map(id => esc(data.contactos.find(c => num(c.id) === id)?.nombre || '')).join(' · ') || 'Sin asistentes registrados'}</p><h3>Próximos pasos</h3>${r.acuerdos.map(p => `<p><strong>${esc(p.acuerdo)}</strong><span class="ag-sub">${esc(p.responsable)} · Plazo: ${esc(p.plazo || 'Sin definir')} · ${esc(p.estado)} · ${num(p.avance)}%</span>${esc(p.observaciones)}</p>`).join('') || '<p>Sin próximos pasos.</p>'}</section>` : ''}${history(r)}${actions}`;
     modal(name(r), tabs + content, true);
   }
+  // Asistentes: lista compacta (una línea por persona) con filtros por resultado en el directorio,
+  // búsqueda y acciones en lote; la edición se abre por persona solo cuando hace falta.
+  const ATT_GROUPS = [['todos', 'Todos'], ['nuevo', 'Nuevos'], ['posible', 'Coincidencias'], ['directorio', 'En directorio'], ['incompleto', 'Datos incompletos'], ['descartado', 'Descartados']];
+  const ATT_FIELDS = [['email', 'correo'], ['telefono', 'teléfono'], ['cargo', 'cargo'], ['empresa', 'institución']];
+  const attState = id => { if (state.att?.evento !== id) state.att = { evento: id, filtro: 'todos', abierto: 0, crear: {} }; return state.att; };
+  const attLinked = a => a.estado === 'existente' || a.estado === 'integrado';
+  const attMissing = a => a.estado === 'nuevo' ? ATT_FIELDS.filter(([k]) => !String(a[k] ?? '').trim()).map(([, label]) => label) : [];
+  const attGroup = (a, g) => g === 'todos' || (g === 'nuevo' ? a.estado === 'nuevo' && !a.coincidencia : g === 'posible' ? a.estado === 'nuevo' && !!a.coincidencia : g === 'directorio' ? attLinked(a)
+    : g === 'incompleto' ? attMissing(a).length > 0 || !!a.contacto?.faltan.length : a.estado === 'descartado');
   function attendeeView(r) {
-    const pending = r.asistentes.filter(a => a.estado === 'nuevo'), editable = r.gestionar && !canceled(r);
-    return `${editable ? `<div class="ag-row">${button('cargar-asistentes', '↑ Cargar asistentes', r.id)}<a class="ag-btn" href="${endpoint}&plantilla=asistentes">Plantilla CSV</a></div><form data-form="sincronizar" data-id="${r.id}"><label class="ag-label">Enlace público CSV (hoja publicada)<div class="ag-sync"><input class="ag-input" type="url" name="sync_url" value="${esc(r.sync_url)}" placeholder="https://…" required><button class="ag-btn" type="submit">Sincronizar</button></div></label><p class="ag-note">El enlace debe permitir su lectura desde el navegador. También puedes descargar la hoja y cargar el archivo.</p></form>` : ''}<p class="ag-note">${esc(r.fuente_asistentes || 'Sin importaciones')} ${r.sincronizado ? '· ' + esc(r.sincronizado) : ''}</p>${pending.length ? `<div class="ag-alert">${pending.length} contactos nuevos pendientes de revisión.${editable && data.gestionar_contactos ? `<div class="ag-row"><select id="ag-att-comite" class="ag-input" aria-label="Asignar comité">${options([['', 'Sin comité'], ...committeeOptions()], '')}</select>${button('integrar-todos', 'Integrar todos', r.id)}${button('integrar', 'Integrar seleccionados', r.id)}${button('descartar', 'Descartar seleccionados', r.id, 'danger')}</div>` : ''}</div>` : ''}<div class="ag-scroll"><table class="ag-table"><thead><tr><th></th><th>Nombre / correo</th><th>Cargo</th><th>Empresa / ingenio</th><th>Estado</th></tr></thead><tbody>${r.asistentes.map(a => `<tr><td>${a.estado === 'nuevo' && editable && data.gestionar_contactos ? `<input type="checkbox" data-att="${a.id}" aria-label="Seleccionar ${esc(a.nombre)}">` : ''}</td><td>${esc(a.nombre)}<span class="ag-sub">${esc(a.email)} · ${esc(a.telefono)}</span></td><td>${esc(a.cargo)}</td><td>${esc(a.empresa)}</td><td>${esc({ nuevo: 'Pendiente', existente: 'En directorio', integrado: 'Integrado', descartado: 'Descartado' }[a.estado] || a.estado)}</td></tr>`).join('') || '<tr><td colspan="5">Sin asistentes cargados.</td></tr>'}</tbody></table></div>`;
+    const editable = r.gestionar && !canceled(r), canEdit = editable && data.gestionar_contactos, st = attState(r.id);
+    const cursos = r.cursos ? `<div class="ag-alert ag-cursos"><span><strong>Vinculado con el Control QR de Cengicursos:</strong> ${esc(r.cursos.nombre)}${r.cursos.fecha ? ' · ' + esc(r.cursos.fecha) : ''} · ${num(r.cursos.ingresos)} con ingreso registrado. Los asistentes se actualizan al abrir esta página.</span>${editable ? button('cursos-sincronizar', '↻ Actualizar ahora', r.id) : ''}</div>` : '';
+    const tools = editable ? `<details class="ag-att-tools"><summary>Cargar asistentes por archivo o enlace CSV</summary><div class="ag-row">${button('cargar-asistentes', '↑ Cargar asistentes', r.id)}<a class="ag-btn" href="${endpoint}&plantilla=asistentes">Plantilla CSV</a></div><form data-form="sincronizar" data-id="${r.id}"><label class="ag-label">Enlace público CSV (hoja publicada)<div class="ag-sync"><input class="ag-input" type="url" name="sync_url" value="${esc(r.sync_url)}" placeholder="https://…" required><button class="ag-btn" type="submit">Sincronizar</button></div></label><p class="ag-note">El enlace debe permitir su lectura desde el navegador. También puedes descargar la hoja y cargar el archivo.</p></form></details>` : '';
+    const source = `<p class="ag-note">${esc(r.fuente_asistentes || 'Sin importaciones')} ${r.sincronizado ? '· ' + esc(r.sincronizado) : ''}</p>`;
+    if (!r.asistentes.length) return cursos + tools + source + empty('Sin asistentes cargados.');
+    const tabs = `<div class="ag-att-tabs" role="tablist">${ATT_GROUPS.map(([g, label]) => { const n = r.asistentes.filter(a => attGroup(a, g)).length; return n || g === 'todos' || g === st.filtro ? `<button type="button" role="tab" aria-selected="${g === st.filtro}" class="ag-att-tab ${g}${g === st.filtro ? ' on' : ''}" data-ag="att-filtro" data-id="${r.id}" data-filtro="${g}">${label} <b>${n}</b></button>` : ''; }).join('')}</div>`;
+    const bulk = canEdit ? `<div class="ag-att-bulk"><input type="search" id="ag-att-q" class="ag-input" placeholder="Buscar nombre, correo o institución" aria-label="Buscar asistente"><span id="ag-att-sel" class="ag-muted">0 seleccionados</span><select id="ag-att-comite" class="ag-input" aria-label="Comité para los integrados">${options([['', 'Sin comité'], ...committeeOptions()], '')}</select>${button('att-integrar', 'Integrar', r.id, 'primary')}${button('att-completar', 'Completar contactos', r.id)}${button('att-descartar', 'Descartar', r.id, 'danger')}</div>`
+      : '<div class="ag-att-bulk"><input type="search" id="ag-att-q" class="ag-input" placeholder="Buscar nombre, correo o institución" aria-label="Buscar asistente"></div>';
+    const list = r.asistentes.filter(a => attGroup(a, st.filtro));
+    return `${cursos}${tools}${source}${tabs}${bulk}<div class="ag-scroll ag-att-scroll"><table class="ag-table ag-att"><thead><tr><th>${canEdit ? '<input type="checkbox" id="ag-att-all" aria-label="Seleccionar todos los visibles">' : ''}</th><th>Nombre</th><th>Institución</th><th>Directorio</th><th>Faltan</th><th></th></tr></thead><tbody>${list.map(a => attRow(r, a, canEdit, st)).join('') || `<tr><td colspan="6" class="ag-muted">Sin asistentes en este filtro.</td></tr>`}</tbody></table></div>${canEdit ? '<p class="ag-note">Integrar: los nuevos se crean en el directorio y las coincidencias se vinculan al contacto encontrado (completando sus datos vacíos). Completar contactos: agrega a los ya registrados los datos que les falten; nunca se sobrescribe nada.</p>' : ''}`;
+  }
+  function attRow(r, a, canEdit, st) {
+    const c = a.coincidencia, crear = !!st.crear[a.id], missing = attMissing(a), faltan = a.contacto?.faltan || [];
+    const selectable = canEdit && (a.estado === 'nuevo' || faltan.length);
+    const dir = a.estado === 'nuevo' ? (c && !crear ? `<span class="ag-dir posible" title="${esc(c.motivo)}: ${esc([c.nombre, c.email, c.empresa].filter(Boolean).join(' · '))}">≈ ${esc(c.nombre)}</span>` : `<span class="ag-dir nuevo">Nuevo${c ? ' (otra persona)' : ''}</span>`)
+      : attLinked(a) ? `<span class="ag-dir integrado" title="${esc(a.contacto ? [a.contacto.nombre, a.contacto.email].filter(Boolean).join(' · ') : '')}${a.contacto?.otro_correo ? ' · en el evento usó otro correo' : ''}">${a.estado === 'integrado' ? 'Integrado' : 'En directorio'}${a.contacto?.otro_correo ? ' ✉' : ''}</span>` : '<span class="ag-dir descartado">Descartado</span>';
+    const gaps = faltan.length ? `<span class="ag-dir posible" title="${esc(faltan.map(f => `${f.campo}: ${f.valor}`).join(' · '))}">Completar: ${esc(faltan.map(f => f.campo).join(', '))}</span>` : missing.length ? `<span class="ag-warn">${esc(missing.join(', '))}</span>` : '<span class="ag-good">✓</span>';
+    const q = esc([a.nombre, a.email, a.empresa, a.telefono].join(' ').toLowerCase());
+    const row = `<tr data-q="${q}"${a.id === st.abierto ? ' class="open"' : ''}><td>${selectable ? `<input type="checkbox" data-att="${a.id}" data-tipo="${a.estado === 'nuevo' ? 'pendiente' : 'completar'}" aria-label="Seleccionar ${esc(a.nombre)}">` : ''}</td><td><b>${esc(a.nombre)}</b><span class="ag-sub">${[a.email, a.telefono].filter(Boolean).map(esc).join(' · ') || '—'}</span></td><td>${esc(a.empresa) || '<span class="ag-muted">—</span>'}</td><td>${dir}</td><td>${gaps}</td><td>${canEdit && a.estado === 'nuevo' ? `<button type="button" class="ag-icon" data-ag="att-editar" data-id="${r.id}" data-att-id="${a.id}" aria-label="Editar datos de ${esc(a.nombre)}" title="Editar">✎</button>` : ''}</td></tr>`;
+    if (a.id !== st.abierto) return row;
+    const input = (k, label, type = 'text') => `<label>${label}<input class="ag-input" name="${k}" type="${type}" value="${esc(a[k])}"${k === 'empresa' ? ' list="ag-empresas"' : ''}></label>`;
+    const companies = [...new Set(data.contactos.map(x => x.empresa).filter(Boolean))];
+    return row + `<tr class="ag-att-edit" data-edit="${a.id}"><td></td><td colspan="5"><div class="ag-att-fields">${input('nombre', 'Nombre')}${input('email', 'Correo', 'email')}${input('telefono', 'Teléfono', 'tel')}${input('cargo', 'Cargo')}${input('empresa', 'Institución')}</div><datalist id="ag-empresas">${companies.map(x => `<option value="${esc(x)}">`).join('')}</datalist>${c ? `<label class="ag-note"><input type="checkbox" name="crear" ${crear ? 'checked' : ''}> No es ${esc(c.nombre)} (${esc(c.email || c.empresa || 'directorio')}): crear contacto nuevo</label>` : ''}<div class="ag-row">${button('att-guardar', 'Guardar datos', r.id, 'primary small', `data-att-id="${a.id}"`)}${button('att-cerrar', 'Cancelar', r.id, 'small')}</div></td></tr>`;
   }
   function surveyView(r) {
     const n = r.encuesta.length, avg = n ? (r.encuesta.reduce((s, a) => s + num(a.calificacion), 0) / n).toFixed(1) : '—';
-    return `${r.gestionar && !canceled(r) ? `<div class="ag-row">${button('cargar-encuesta', '↑ Importar evaluación', r.id)}<a class="ag-btn" href="${endpoint}&plantilla=encuesta">Plantilla CSV</a>${n ? button('encuesta-quitar', 'Limpiar respuestas', r.id, 'danger') : ''}</div>` : ''}<div class="ag-survey"><div class="ag-panel"><div class="ag-survey-score">${avg}</div><p class="ag-note">Promedio / 5 · ${n} respuestas</p></div><div>${[5, 4, 3, 2, 1].map(v => { const count = r.encuesta.filter(a => num(a.calificacion) === v).length; return `<div class="ag-rating"><span>${v} ★</span><div class="ag-progress"><span style="width:${n ? count / n * 100 : 0}%"></span></div><span>${count}</span></div>`; }).join('')}</div></div><h3>Comentarios</h3>${r.encuesta.filter(a => a.comentario).map(a => `<div class="ag-panel">${num(a.calificacion)} ★<p class="ag-textarea">${esc(a.comentario)}</p></div>`).join('') || empty('Sin comentarios.')}`;
+    const editable = r.gestionar && !canceled(r), importadas = r.encuesta.filter(a => !a.origen_id).length;
+    const sync = r.cursos ? `<div class="ag-alert ag-cursos"><span>Respuestas de la encuesta de Cengicursos (${esc(r.cursos.nombre)}) con los datos de contacto de quien responde. Se actualizan al abrir esta página.</span>${editable ? button('cursos-sincronizar', '↻ Actualizar ahora', r.id) : ''}</div>` : '';
+    const report = `<div class="ag-row ag-report-row"><span class="ag-note">Informe de evaluación del evento</span>${button('informe', 'Ver informe', r.id, '', 'data-formato="html"')}${button('informe', '↓ Descargar PDF', r.id, 'primary', 'data-formato="pdf"')}</div>`;
+    return `${sync}${report}${editable ? `<div class="ag-row">${button('cargar-encuesta', '↑ Importar evaluación', r.id)}<a class="ag-btn" href="${endpoint}&plantilla=encuesta">Plantilla CSV</a>${importadas ? button('encuesta-quitar', 'Limpiar respuestas importadas', r.id, 'danger') : ''}</div>` : ''}<div class="ag-survey"><div class="ag-panel"><div class="ag-survey-score">${avg}</div><p class="ag-note">Promedio / 5 · ${n} respuestas</p></div><div>${[5, 4, 3, 2, 1].map(v => { const count = r.encuesta.filter(a => num(a.calificacion) === v).length; return `<div class="ag-rating"><span>${v} ★</span><div class="ag-progress"><span style="width:${n ? count / n * 100 : 0}%"></span></div><span>${count}</span></div>`; }).join('')}</div></div>${comments(r, editable)}`;
+  }
+  // Comentarios: tabla compacta (una línea por comentario) con filtros, clasificación automática o
+  // manual, seguimiento con nota de retroalimentación y acciones en lote.
+  const COM_GROUPS = [['todos', 'Todos'], ['atencion', 'Requieren atención'], ['pendiente', 'Seguimiento pendiente'], ['atendido', 'Atendidos'], ['sin', 'Sin clasificar'], ['auto', 'Clasificación automática']];
+  const COM_STARS = [['todas', 'Todas las calificaciones'], ['bajas', '1-2 ★'], ['medias', '3 ★'], ['altas', '4-5 ★']];
+  const comState = id => { if (state.com?.evento !== id) state.com = { evento: id, filtro: 'todos', estrellas: 'todas', abierto: 0 }; return state.com; };
+  const comNeeds = a => (data.requieren_seguimiento || []).includes(a.categoria);
+  const comFollow = a => a.seguimiento_estado || (comNeeds(a) ? 'pendiente' : '');
+  const comGroup = (a, g) => g === 'todos' ? true : g === 'atencion' ? comNeeds(a) : g === 'pendiente' ? ['pendiente', 'en_proceso'].includes(comFollow(a))
+    : g === 'atendido' ? comFollow(a) === 'atendido' : g === 'sin' ? !a.categoria : g === 'auto' ? a.categoria_por === 'Automático' : a.categoria === g;
+  const comStars = (a, f) => f === 'todas' || (f === 'bajas' ? num(a.calificacion) <= 2 : f === 'medias' ? num(a.calificacion) === 3 : num(a.calificacion) >= 4);
+  function comments(r, editable) {
+    const st = comState(r.id), cats = Object.entries(data.categorias || {}), conTexto = a => String(a.comentario || '').trim();
+    const visibles = r.encuesta.filter(conTexto), ocultos = (r.encuesta_ocultos || []).filter(conTexto), enOcultos = st.filtro === 'ocultos';
+    const list = enOcultos ? ocultos : visibles;
+    if (!visibles.length && !ocultos.length) return `<h3 class="ag-com-title">Comentarios</h3>${empty('Sin comentarios.')}`;
+    const tabs = [...COM_GROUPS, ...cats, ['ocultos', 'Ocultos']].map(([g, label]) => { const n = g === 'ocultos' ? ocultos.length : visibles.filter(a => comGroup(a, g)).length; return n || g === 'todos' || g === st.filtro ? `<button type="button" class="ag-att-tab ${g}${g === st.filtro ? ' on' : ''}" aria-pressed="${g === st.filtro}" data-ag="com-filtro" data-id="${r.id}" data-filtro="${g}">${esc(label)} <b>${n}</b></button>` : ''; }).join('');
+    const tools = `<div class="ag-att-bulk"><input type="search" id="ag-com-q" class="ag-input" placeholder="Buscar en comentarios, nombre o institución" aria-label="Buscar comentario"><select id="ag-com-stars" class="ag-input" data-id="${r.id}" aria-label="Filtrar por calificación">${options(COM_STARS, st.estrellas)}</select>${editable ? '<span class="ag-muted">Marca comentarios para clasificarlos o gestionarlos en grupo.</span>' : ''}</div>`;
+    const bulk = editable ? `<div class="ag-com-bulk" id="ag-com-bulk" role="region" aria-label="Acciones para los comentarios seleccionados" hidden><b id="ag-com-sel">0 seleccionados</b>${enOcultos ? button('com-ocultar', '↺ Restaurar', r.id, 'primary', 'data-ocultar="0"') : `<select id="ag-com-cat" class="ag-input" data-id="${r.id}" aria-label="Clasificar los seleccionados como">${options([['', 'Clasificar como…'], ...cats], '')}</select>${button('com-estado', 'En proceso', r.id, '', 'data-estado="en_proceso"')}${button('com-estado', '✓ Atendido', r.id, '', 'data-estado="atendido"')}${button('com-ocultar', 'Ocultar', r.id, '', 'data-ocultar="1" title="No cuenta en el promedio ni en el informe; se puede restaurar"')}`}${button('com-eliminar', 'Eliminar', r.id, 'danger', 'title="Solo comentarios cargados por archivo CSV"')}<button type="button" class="ag-btn small" data-ag="com-limpiar" data-id="${r.id}">Quitar selección</button></div>` : '';
+    const shown = list.filter(a => (enOcultos || comGroup(a, st.filtro)) && comStars(a, st.estrellas));
+    const auto = !enOcultos && visibles.filter(a => !a.categoria).length && editable ? button('com-auto', 'Clasificar automáticamente', r.id, 'small') : '';
+    return `<div class="ag-row ag-com-head"><h3 class="ag-com-title">Comentarios</h3>${auto}</div><div class="ag-att-tabs">${tabs}</div>${tools}${bulk}${enOcultos ? '<p class="ag-note">Los comentarios ocultos no cuentan en el promedio, los conteos ni el informe. Selecciónalos para restaurarlos.</p>' : ''}<div class="ag-scroll ag-att-scroll"><table class="ag-table ag-att ag-com"><thead><tr><th>${editable ? '<input type="checkbox" id="ag-com-all" aria-label="Seleccionar todos los visibles">' : ''}</th><th>★</th><th>Comentario</th><th>Participante</th><th>Contacto</th><th>Clasificación</th><th>Seguimiento</th><th></th></tr></thead><tbody>${shown.map(a => commentRow(r, a, editable && !enOcultos, st, editable)).join('') || '<tr><td colspan="8" class="ag-muted">Sin comentarios en este filtro.</td></tr>'}</tbody></table></div>`;
+  }
+  function commentRow(r, a, editable, st, selectable = editable) {
+    const cal = num(a.calificacion), follow = comFollow(a), isAuto = a.categoria_por === 'Automático';
+    const stars = `<span class="ag-stars ${cal <= 2 ? 'low' : cal === 3 ? 'mid' : 'high'}">${cal}★</span>`;
+    const contact = [a.email ? `<a class="ag-icon" href="mailto:${esc(a.email)}" title="${esc(a.email)}" aria-label="Escribir a ${esc(a.email)}">✉</a>` : '', a.telefono ? `<a class="ag-icon" href="tel:${esc(String(a.telefono).replace(/[^\d+]/g, ''))}" title="${esc(a.telefono)}" aria-label="Llamar al ${esc(a.telefono)}">☎</a>` : ''].join('') || '<span class="ag-muted">—</span>';
+    const cat = editable ? `<select class="ag-input ag-com-select${a.categoria ? ' cat-' + esc(a.categoria) : ''}" data-categoria="${a.id}" data-id="${r.id}" aria-label="Clasificación del comentario de ${esc(a.nombre || 'Anónimo')}">${options([['', 'Sin clasificar'], ...Object.entries(data.categorias || {})], a.categoria || '')}</select>${isAuto ? `<button type="button" class="ag-auto" data-ag="com-confirmar" data-id="${r.id}" data-respuesta="${a.id}" title="Propuesta automática: pulsa para confirmarla">auto ✓</button>` : ''}`
+      : `<span class="ag-dir">${esc(data.categorias?.[a.categoria] || 'Sin clasificar')}</span>`;
+    const seg = follow ? `<span class="ag-seg ${follow}">${esc(data.seguimientos?.[follow] || follow)}</span>${a.seguimiento_nota ? `<span class="ag-sub" title="${esc(a.seguimiento_nota)}">${esc(a.seguimiento_nota)}</span>` : ''}` : '<span class="ag-muted">—</span>';
+    const q = esc([a.comentario, a.nombre, a.institucion, a.email].join(' ').toLowerCase());
+    const row = `<tr data-q="${q}"${a.id === st.abierto ? ' class="open"' : ''}><td>${selectable ? `<input type="checkbox" data-com="${a.id}"${a.origen_id ? ' data-sincronizado="1"' : ''} aria-label="Seleccionar comentario de ${esc(a.nombre || 'Anónimo')}">` : ''}</td><td>${stars}</td><td><div class="ag-com-text" title="${esc(a.comentario)}">${esc(a.comentario)}</div>${a.detalle ? `<span class="ag-sub">${esc(a.detalle)}</span>` : ''}</td><td><b>${esc(a.nombre || 'Anónimo')}</b><span class="ag-sub">${esc(a.institucion || '')}</span></td><td class="ag-com-contact">${contact}</td><td>${cat}</td><td>${seg}</td><td>${editable ? `<button type="button" class="ag-icon" data-ag="com-editar" data-id="${r.id}" data-respuesta="${a.id}" title="Anotar seguimiento" aria-label="Anotar seguimiento de ${esc(a.nombre || 'Anónimo')}">✎</button>` : ''}</td></tr>`;
+    if (a.id !== st.abierto) return row;
+    return row + `<tr class="ag-att-edit" data-com-edit="${a.id}"><td></td><td colspan="7"><p class="ag-com-full">“${esc(a.comentario)}”</p><div class="ag-com-follow"><label>Estado<select class="ag-input" name="estado">${options(Object.entries(data.seguimientos || {}), follow || 'pendiente')}</select></label><label class="ag-wide">Seguimiento o retroalimentación<textarea class="ag-input" name="nota" rows="2" maxlength="2000" placeholder="Ej. Se le envió la presentación por correo el 05/11.">${esc(a.seguimiento_nota || '')}</textarea></label></div>${a.seguimiento_por ? `<p class="ag-note">Última actualización: ${esc(a.seguimiento_por)} · ${esc(a.seguimiento_en)}</p>` : ''}<div class="ag-row">${button('com-guardar', 'Guardar seguimiento', r.id, 'primary small', `data-respuesta="${a.id}"`)}${button('com-cerrar', 'Cancelar', r.id, 'small')}</div></td></tr>`;
   }
   function importForm(action, id = 0) {
     const kind = action === 'importar_plan' ? 'plan' : action === 'asistentes_cargar' ? 'asistentes' : 'encuesta';
@@ -102,7 +169,7 @@
   let shareLogo = '';
   function shareForm() {
     shareLogo = '';
-    modal('Compartir planificación anual', `<form data-form="compartir"><div class="ag-share"><aside>${field('Título', 'titulo', `Planificación de ${data.tipo} ${state.year}`)}${area('Descripción', 'descripcion')}${area('Nota al pie', 'nota', 'Las fechas están sujetas a reprogramación.')}${select('Color', 'color', [['verde', 'Verde CENGICAÑA'], ['azul', 'Azul'], ['cafe', 'Café'], ['gris', 'Gris']], 'verde')}${field('Logo (PNG, JPG o WebP)', 'logo_archivo', '', 'file', 'accept="image/png,image/jpeg,image/webp"')}<div class="ag-row">${button('reporte', 'Vista previa', 'preview')}${button('reporte', 'CSV', 'csv')}${button('reporte', 'HTML', 'html')}${button('reporte', 'PDF', 'pdf')}</div></aside><iframe id="ag-preview" title="Vista previa de planificación" sandbox=""></iframe></div>${data.enviar ? `<details class="ag-panel"><summary>Enviar PDF por correo</summary><div class="ag-fields">${field('Destinatarios separados por coma', 'para')}${field('Asunto', 'asunto', `Planificación de ${data.tipo} ${state.year}`)}${area('Mensaje', 'cuerpo')}</div><div class="ag-form-actions"><button type="submit" class="ag-btn primary">Enviar correo</button></div></details>` : ''}</form>`, true);
+    modal('Compartir planificación anual', `<form data-form="compartir"><div class="ag-share"><aside>${field('Título', 'titulo', `Planificación de ${data.tipo} ${state.year}`)}${area('Descripción', 'descripcion')}${area('Nota al pie', 'nota', 'Las fechas están sujetas a reprogramación.')}${select('Color de la marca', 'color', [['verde', 'Verde principal'], ['verde2', 'Verde secundario'], ['amarillo', 'Amarillo'], ['naranja', 'Naranja'], ['gris', 'Gris']], 'verde')}${field('Logo (PNG, JPG o WebP)', 'logo_archivo', '', 'file', 'accept="image/png,image/jpeg,image/webp"')}<div class="ag-row">${button('reporte', 'Vista previa', 'preview')}${button('reporte', 'CSV', 'csv')}${button('reporte', 'HTML', 'html')}${button('reporte', 'PDF', 'pdf')}</div></aside><iframe id="ag-preview" title="Vista previa de planificación" sandbox=""></iframe></div>${data.enviar ? `<details class="ag-panel"><summary>Enviar PDF por correo</summary><div class="ag-fields">${field('Destinatarios separados por coma', 'para')}${field('Asunto', 'asunto', `Planificación de ${data.tipo} ${state.year}`)}${area('Mensaje', 'cuerpo')}</div><div class="ag-form-actions"><button type="submit" class="ag-btn primary">Enviar correo</button></div></details>` : ''}</form>`, true);
     report('preview').catch(failure);
   }
   function readValues(f) { const out = {}; [...f.elements].forEach(el => { if (el.name && el.type !== 'file' && !el.closest('[data-step],[data-new]')) out[el.name] = el.type === 'checkbox' ? el.checked : el.value; }); return out; }
@@ -141,13 +208,68 @@
       else if (action === 'fijos') await request('fijos', { anio: state.year });
       else if (action === 'importar') importForm('importar_plan');
       else if (action === 'cargar-asistentes') importForm('asistentes_cargar', r.id);
+      else if (action === 'cursos-sincronizar') { b.disabled = true; const tab = state.detailTab; await request('cursos_sincronizar', { id: r.id }); detail(r.id, tab); }
       else if (action === 'cargar-encuesta') importForm('encuesta_cargar', r.id);
-      else if (action === 'encuesta-quitar' && confirm('¿Eliminar todas las respuestas de evaluación de este evento?')) { await request('encuesta_quitar', { id: r.id }); detail(r.id, 'evaluacion'); }
-      else if (['integrar', 'integrar-todos', 'descartar'].includes(action)) {
-        const ids = action === 'integrar-todos' ? r.asistentes.filter(a => a.estado === 'nuevo').map(a => a.id) : [...$('ag-modal').querySelectorAll('[data-att]:checked')].map(el => num(el.dataset.att));
-        if (!ids.length) throw new Error('Selecciona al menos un asistente.');
-        if (action === 'descartar' && !confirm('¿Descartar los asistentes seleccionados de la integración al directorio?')) return;
-        await request(action === 'descartar' ? 'descartar' : 'integrar', { id: r.id, ids, comite_id: $('ag-att-comite').value }); detail(r.id, 'asistentes');
+      else if (action === 'encuesta-quitar' && confirm('¿Eliminar las respuestas importadas por archivo? Las que vienen de Cengicursos se conservan.')) { await request('encuesta_quitar', { id: r.id }); detail(r.id, 'evaluacion'); }
+      else if (action === 'informe') {
+        // La ventana se abre antes de pedir el informe para que el navegador no la bloquee.
+        const pdf = b.dataset.formato === 'pdf', win = pdf ? null : window.open('', '_blank');
+        b.disabled = true;
+        try {
+          const blob = await (await request(pdf ? 'informe_pdf' : 'informe_html', { id: r.id })).blob(), url = URL.createObjectURL(blob);
+          if (pdf) { const a = document.createElement('a'); a.href = url; a.download = `informe_${r.nombre.replace(/[^\w]+/g, '_')}.pdf`; a.click(); }
+          else if (win) win.location.href = url;
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch (error) { if (win) win.close(); throw error; }
+      }
+      else if (action === 'att-filtro') { attState(r.id).filtro = b.dataset.filtro; detail(r.id, 'asistentes'); }
+      else if (action === 'com-filtro') { comState(r.id).filtro = b.dataset.filtro; detail(r.id, 'evaluacion'); }
+      else if (action === 'com-editar') { const st = comState(r.id), rid = num(b.dataset.respuesta); st.abierto = st.abierto === rid ? 0 : rid; detail(r.id, 'evaluacion'); }
+      else if (action === 'com-cerrar') { comState(r.id).abierto = 0; detail(r.id, 'evaluacion'); }
+      else if (action === 'com-guardar') {
+        const rid = num(b.dataset.respuesta), tr = $('ag-modal').querySelector(`[data-com-edit="${rid}"]`);
+        b.disabled = true; await request('encuesta_seguimiento', { id: r.id, respuesta: rid, estado: tr.querySelector('[name="estado"]').value, nota: tr.querySelector('[name="nota"]').value });
+        comState(r.id).abierto = 0; detail(r.id, 'evaluacion');
+      } else if (action === 'com-confirmar') {
+        const a = r.encuesta.find(x => x.id === num(b.dataset.respuesta));
+        b.disabled = true; await request('encuesta_categoria', { id: r.id, respuesta: a.id, categoria: a.categoria }); detail(r.id, 'evaluacion');
+      } else if (action === 'com-auto') { b.disabled = true; await request('encuesta_autoclasificar', { id: r.id }); detail(r.id, 'evaluacion'); }
+      else if (action === 'com-limpiar') { $('ag-modal').querySelectorAll('[data-com]:checked').forEach(c => { c.checked = false; }); listCount('com'); }
+      else if (['com-estado', 'com-ocultar', 'com-eliminar'].includes(action)) {
+        const boxes = comSelected(), ids = boxes.map(c => num(c.dataset.com));
+        if (!ids.length) throw new Error('Selecciona al menos un comentario.');
+        if (action === 'com-eliminar') {
+          // Las respuestas de la encuesta de Cengicursos volverían al sincronizar: se ocultan.
+          const sync = boxes.filter(c => c.dataset.sincronizado).length;
+          if (sync === ids.length) throw new Error('Estos comentarios vienen de la encuesta de Cengicursos y volverían al sincronizar: usa “Ocultar”.');
+          if (!confirm(`¿Eliminar definitivamente ${ids.length - sync} comentario(s) cargados por archivo?` + (sync ? ` Los ${sync} de la encuesta de Cengicursos no se eliminan (ocúltalos).` : ''))) return;
+          b.disabled = true; await request('encuesta_eliminar', { id: r.id, respuestas: ids });
+        } else if (action === 'com-ocultar') { b.disabled = true; await request('encuesta_ocultar', { id: r.id, respuestas: ids, ocultar: b.dataset.ocultar === '1' }); }
+        else { b.disabled = true; await request('encuesta_seguimiento', { id: r.id, respuestas: ids, estado: b.dataset.estado }); }
+        detail(r.id, 'evaluacion');
+      }
+      else if (action === 'att-editar') { const st = attState(r.id), aid = num(b.dataset.attId); st.abierto = st.abierto === aid ? 0 : aid; detail(r.id, 'asistentes'); }
+      else if (action === 'att-cerrar') { attState(r.id).abierto = 0; detail(r.id, 'asistentes'); }
+      else if (action === 'att-guardar') {
+        // Guarda las correcciones sin integrar (acción "omitir"); la integración se hace en lote.
+        const aid = num(b.dataset.attId), st = attState(r.id), tr = $('ag-modal').querySelector(`[data-edit="${aid}"]`), v = k => (tr.querySelector(`[name="${k}"]`)?.value || '').trim();
+        const correo = tr.querySelector('[name="email"]'); if (!correo.checkValidity()) { correo.focus(); throw new Error('Revisa el correo.'); }
+        if (v('nombre').length < 2) throw new Error('Escribe el nombre.');
+        const crear = tr.querySelector('[name="crear"]'); if (crear) st.crear[aid] = crear.checked;
+        b.disabled = true; await request('integrar', { id: r.id, filas: [{ id: aid, accion: 'omitir', nombre: v('nombre'), email: v('email'), telefono: v('telefono'), cargo: v('cargo'), empresa: v('empresa') }] });
+        st.abierto = 0; detail(r.id, 'asistentes');
+      } else if (['att-integrar', 'att-completar', 'att-descartar'].includes(action)) {
+        const st = attState(r.id), selected = tipo => [...$('ag-modal').querySelectorAll(`[data-att][data-tipo="${tipo}"]:checked`)].filter(el => !el.closest('tr').hidden).map(el => num(el.dataset.att));
+        if (action === 'att-completar') {
+          const ids = selected('completar'); if (!ids.length) throw new Error('Selecciona contactos marcados con “Completar”.');
+          b.disabled = true; await request('completar_contacto', { id: r.id, asistentes: ids });
+        } else {
+          const ids = selected('pendiente'); if (!ids.length) throw new Error('Selecciona asistentes nuevos o con coincidencia.');
+          if (action === 'att-descartar' && !confirm(`¿Descartar ${ids.length} asistente(s)? No se agregarán al directorio.`)) return;
+          const filas = ids.map(id => { const a = r.asistentes.find(x => x.id === id), link = a.coincidencia && !st.crear[id]; return { id, accion: action === 'att-descartar' ? 'descartar' : link ? 'vincular' : 'crear', contacto_id: link ? a.coincidencia.id : 0 }; });
+          b.disabled = true; await request('integrar', { id: r.id, comite_id: $('ag-att-comite').value, filas });
+        }
+        detail(r.id, 'asistentes');
       } else if (action === 'compartir') shareForm();
       else if (action === 'reporte') { b.disabled = true; await report(id); }
     } catch (error) { failure(error); } finally { b.disabled = false; }
@@ -158,9 +280,35 @@
       if (el.id === 'ag-year') { if (!el.checkValidity()) return; state.year = num(el.value); render(); }
       else if (el.id === 'ag-comite') { state.comite = el.value; render(); }
       else if (el.id === 'ag-status') { state.status = el.value; render(); }
+      else if (el.id === 'ag-com-stars') { comState(num(el.dataset.id)).estrellas = el.value; detail(num(el.dataset.id), 'evaluacion'); }
+      else if (el.id === 'ag-com-all') { $('ag-modal').querySelectorAll('[data-com]').forEach(c => { if (!c.closest('tr').hidden) c.checked = el.checked; }); listCount('com'); }
+      else if (el.dataset.com) listCount('com');
+      else if (el.id === 'ag-com-cat') {
+        // Clasificación en lote: se aplica al elegirla.
+        const ids = comSelected().map(c => num(c.dataset.com)); if (!el.value || !ids.length) return;
+        el.disabled = true; await request('encuesta_categoria', { id: num(el.dataset.id), respuestas: ids, categoria: el.value }); detail(num(el.dataset.id), 'evaluacion');
+      }
+      else if (el.id === 'ag-att-all') { $('ag-modal').querySelectorAll('[data-att]').forEach(c => { if (!c.closest('tr').hidden) c.checked = el.checked; }); attCount(); }
+      else if (el.dataset.att) attCount();
+      else if (el.dataset.categoria) { el.disabled = true; await request('encuesta_categoria', { id: num(el.dataset.id), respuesta: num(el.dataset.categoria), categoria: el.value }); detail(num(el.dataset.id), 'evaluacion'); }
       else if (el.dataset.date) { const r = data.registros.find(x => x.id === num(el.dataset.date)); await request('ejecutar_evento', { ...r, fecha: el.value }); }
       else if (el.name === 'logo_archivo') { const f = el.files[0]; if (!f) shareLogo = ''; else { if (f.size > 1000000 || !['image/png', 'image/jpeg', 'image/webp'].includes(f.type)) throw new Error('Elige una imagen PNG, JPG o WebP de hasta 1 MB.'); shareLogo = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(f); }); } await report('preview'); }
     } catch (error) { failure(error); }
+  });
+  // Listas de asistentes ('att') y comentarios ('com'): búsqueda en pantalla sin recargar ni perder la selección.
+  function listCount(kind) {
+    const boxes = [...$('ag-modal').querySelectorAll(`[data-${kind}]`)].filter(c => !c.closest('tr').hidden), n = boxes.filter(c => c.checked).length;
+    if ($(`ag-${kind}-sel`)) $(`ag-${kind}-sel`).textContent = `${n} seleccionado${n === 1 ? '' : 's'}`;
+    const all = $(`ag-${kind}-all`); if (all) { all.checked = !!boxes.length && n === boxes.length; all.indeterminate = n > 0 && n < boxes.length; }
+    if ($(`ag-${kind}-bulk`)) $(`ag-${kind}-bulk`).hidden = n === 0;
+  }
+  const comSelected = () => [...$('ag-modal').querySelectorAll('[data-com]:checked')].filter(c => !c.closest('tr').hidden);
+  const attCount = () => listCount('att');
+  root.addEventListener('input', event => {
+    const kind = { 'ag-att-q': 'att', 'ag-com-q': 'com' }[event.target.id]; if (!kind) return;
+    const q = event.target.value.trim().toLowerCase();
+    $('ag-modal').querySelectorAll(`.ag-${kind === 'att' ? 'att:not(.ag-com)' : 'com'} tr[data-q]`).forEach(tr => { tr.hidden = !!q && !tr.dataset.q.includes(q); });
+    listCount(kind);
   });
   root.addEventListener('input', event => { if (event.target.id === 'ag-find-contact') { const q = event.target.value.toLowerCase(); $('ag-contact-list').querySelectorAll('[data-contact]').forEach(el => { el.hidden = !el.dataset.contact.includes(q); }); } });
   root.addEventListener('submit', async event => {

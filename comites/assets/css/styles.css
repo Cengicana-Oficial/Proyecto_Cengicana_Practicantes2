@@ -366,6 +366,9 @@ a.red-card:hover { border-color: var(--red); }
 .red-ayuda strong { display: flex; align-items: center; gap: 6px; color: var(--texto); margin-bottom: 6px; }
 .red-ayuda ul, .red-ayuda ol { padding-left: 18px; margin-bottom: 6px; }
 .red-ayuda b { color: var(--texto); }
+.red-check { display: flex; align-items: center; gap: 8px; min-height: 38px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.red-check input { width: 16px; height: 16px; accent-color: var(--verde); }
+#red-form [data-no-whatsapp][hidden] { display: none; }
 
 /* ===== Menu desplegable de acciones por fila (generico) ===== */
 .row-menu { display: inline-block; }

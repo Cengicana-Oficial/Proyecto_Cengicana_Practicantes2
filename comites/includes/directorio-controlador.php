@@ -13,6 +13,8 @@ if ($esApi) {
         $accion=(string)($_POST['dir_accion'] ?? ($_GET['accion'] ?? 'datos'));
         $d=json_decode((string)($_POST['datos'] ?? '{}'),true,64,JSON_THROW_ON_ERROR);
         if (!is_array($d)) throw new RuntimeException('Datos no válidos.');
+        // Periodo de analisis de la participacion elegido en el panel (por defecto 12 meses).
+        $meses=array_key_exists((int)($d['meses'] ?? 12),DIRECTORIO_PERIODOS) ? (int)$d['meses'] : 12;
         if ($_SERVER['REQUEST_METHOD']==='POST' && !hash_equals($_SESSION['directorio_csrf'],(string)($_POST['csrf'] ?? ''))) { http_response_code(403); throw new RuntimeException('El formulario expiró. Recarga la página.'); }
         if ($_SERVER['REQUEST_METHOD']!=='POST' && !in_array($accion,['datos','plantilla'],true)) { http_response_code(405); throw new RuntimeException('Método no permitido.'); }
         if ($accion==='plantilla') {
@@ -22,8 +24,24 @@ if ($esApi) {
             $contenido=directorio_excel([['nombre'=>'Contactos','filas'=>[['Nombre completo','Cargo','Empresa / ingenio','Área','Nivel','Teléfono','Correo','Comités','Estado'],['Ing. Nombre Apellido','Jefe de Riego','Ingenio Ejemplo','Agrícola','Jefatura','5555-0000','correo@empresa.com',implode('; ',array_slice($comites,0,2)),'Activo']]],['nombre'=>'Valores permitidos','filas'=>$valores]]);
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); header('Content-Disposition: attachment; filename="plantilla_directorio_contactos.xlsx"'); echo $contenido; exit;
         }
+        if (in_array($accion,['part_pdf','part_xlsx','part_html'],true)) {
+            // Reporte de participacion de los contactos indicados (los filtrados en pantalla).
+            $datos=directorio_datos($pdo,$user,$meses); $lista=directorio_seleccionar($datos,$d); $comites=array_column($datos['comites'],'nombre','id');
+            if (!$lista) throw new RuntimeException('No hay contactos para el reporte.');
+            if ($accion==='part_xlsx') {
+                $contenido=estadisticas_excel(directorio_participacion_hojas($lista,$comites,$d));
+                header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); header('Content-Disposition: attachment; filename="participacion_contactos.xlsx"');
+            } elseif ($accion==='part_pdf') {
+                directorio_dependencias(); $options=new \Dompdf\Options(); $options->set('isRemoteEnabled',false); $options->set('isPhpEnabled',false);
+                $pdf=new \Dompdf\Dompdf($options); $pdf->loadHtml(directorio_participacion_html($lista,$d,$comites),'UTF-8'); $pdf->setPaper('A4','portrait'); $pdf->render();
+                $contenido=$pdf->output(); header('Content-Type: application/pdf'); header('Content-Disposition: attachment; filename="participacion_contactos.pdf"');
+            } else {
+                $contenido=directorio_participacion_html($lista,['imprimir'=>true]+$d,$comites); header('Content-Type: text/html; charset=utf-8');
+            }
+            echo $contenido; exit;
+        }
         if (in_array($accion,['exportar','preview','html','pdf','enviar'],true)) {
-            $datos=directorio_datos($pdo,$user); $lista=directorio_seleccionar($datos,$d); $comites=array_column($datos['comites'],'nombre','id');
+            $datos=directorio_datos($pdo,$user,$meses); $lista=directorio_seleccionar($datos,$d); $comites=array_column($datos['comites'],'nombre','id');
             if (!$lista) throw new RuntimeException('Selecciona al menos un contacto.');
             if ($accion==='exportar') {
                 $cols=array_values(array_intersect(array_keys(DIRECTORIO_COLUMNAS),(array)($d['cols'] ?? array_keys(DIRECTORIO_COLUMNAS))));
@@ -47,7 +65,7 @@ if ($esApi) {
             $mensaje=directorio_mutar($pdo,$user,$accion,$d,$_FILES);
         }
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['ok'=>true,'mensaje'=>$mensaje ?? '', 'datos'=>directorio_datos($pdo,$user)],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
+        echo json_encode(['ok'=>true,'mensaje'=>$mensaje ?? '', 'datos'=>directorio_datos($pdo,$user,$meses)],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         if (http_response_code()<400) http_response_code(422);

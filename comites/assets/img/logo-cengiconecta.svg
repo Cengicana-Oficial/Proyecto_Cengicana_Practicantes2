@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 520" role="img" aria-label="Símbolo Cengiconecta: globo de diálogo, caña de azúcar y red de conexiones">
+  <defs>
+    <linearGradient id="cc-anillo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#bcf32e"/>
+      <stop offset="1" stop-color="#5aa816"/>
+    </linearGradient>
+    <radialGradient id="cc-fondo" cx=".45" cy=".4" r=".7">
+      <stop offset="0" stop-color="#0d5a22"/>
+      <stop offset="1" stop-color="#03300f"/>
+    </radialGradient>
+    <linearGradient id="cc-cana" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f4ffe0"/>
+      <stop offset="1" stop-color="#a9dc4c"/>
+    </linearGradient>
+    <linearGradient id="cc-hoja" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#7cc62a"/>
+      <stop offset="1" stop-color="#e9ffb8"/>
+    </linearGradient>
+    <clipPath id="cc-dentro"><circle cx="290" cy="250" r="156"/></clipPath>
+  </defs>
+
+  <!-- Cola del globo de diálogo (equivale al mango de la lupa de Cengitech) -->
+  <path d="M150 330 L58 478 Q50 494 66 489 L232 408 Z" fill="url(#cc-anillo)" stroke="url(#cc-anillo)" stroke-width="10" stroke-linejoin="round"/>
+
+  <!-- Red de conexiones (equivale a los nodos de circuito de Cengitech) -->
+  <g fill="none" stroke="url(#cc-anillo)" stroke-width="16" stroke-linecap="round">
+    <path d="M428 150 C 460 110, 480 85, 520 72"/>
+    <path d="M520 72 C 560 92, 585 118, 604 150"/>
+    <path d="M604 150 C 592 190, 572 214, 548 236"/>
+    <path d="M548 236 C 520 240, 492 236, 462 222"/>
+    <path d="M520 72 C 530 130, 538 180, 548 236" stroke-width="10" opacity=".75"/>
+  </g>
+  <!-- Ondas de comunicación -->
+  <g fill="none" stroke="#bcf32e" stroke-linecap="round">
+    <path d="M652 112 A 62 62 0 0 1 652 188" stroke-width="12" opacity=".85"/>
+    <path d="M678 88 A 92 92 0 0 1 678 212" stroke-width="10" opacity=".5"/>
+  </g>
+  <g>
+    <circle cx="520" cy="72" r="30" fill="url(#cc-anillo)"/><circle cx="520" cy="72" r="13" fill="#f4ffe0"/>
+    <circle cx="604" cy="150" r="30" fill="url(#cc-anillo)"/><circle cx="604" cy="150" r="13" fill="#f4ffe0"/>
+    <circle cx="548" cy="236" r="30" fill="url(#cc-anillo)"/><circle cx="548" cy="236" r="13" fill="#f4ffe0"/>
+  </g>
+
+  <!-- Anillo del globo -->
+  <circle cx="290" cy="250" r="178" fill="url(#cc-fondo)" stroke="url(#cc-anillo)" stroke-width="44"/>
+
+  <!-- Interior: caña y hojas -->
+  <g clip-path="url(#cc-dentro)">
+    <g transform="rotate(-8 262 260)">
+      <rect x="240" y="128" width="44" height="74" rx="12" fill="url(#cc-cana)"/>
+      <rect x="240" y="208" width="44" height="80" rx="12" fill="url(#cc-cana)"/>
+      <rect x="240" y="294" width="44" height="80" rx="12" fill="url(#cc-cana)"/>
+      <rect x="240" y="380" width="44" height="60" rx="12" fill="url(#cc-cana)"/>
+    </g>
+    <g transform="rotate(22 330 330)">
+      <rect x="312" y="270" width="36" height="62" rx="10" fill="url(#cc-cana)" opacity=".95"/>
+      <rect x="312" y="338" width="36" height="70" rx="10" fill="url(#cc-cana)" opacity=".95"/>
+    </g>
+    <path d="M268 236 C 276 160, 330 112, 404 104 C 372 146, 330 196, 268 236 Z" fill="url(#cc-hoja)"/>
+    <path d="M276 196 C 300 176, 340 156, 380 150" fill="none" stroke="#0d5a22" stroke-width="4" stroke-linecap="round" opacity=".35"/>
+    <path d="M256 290 C 222 236, 186 214, 150 214 C 178 246, 206 280, 256 290 Z" fill="url(#cc-hoja)" opacity=".9"/>
+    <path d="M300 268 C 344 236, 392 232, 430 248 C 392 262, 350 278, 300 268 Z" fill="url(#cc-hoja)" opacity=".8"/>
+  </g>
+</svg>

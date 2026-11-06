@@ -154,7 +154,7 @@ function comites_descargar_plantilla_contactos(): void
 function comites_descargar_plantilla_reunion(): void
 {
     $contenido = '<!DOCTYPE html><html><head><meta charset="utf-8">'
-        . '<title>Plantilla Ayuda Memoria CENGICANA</title></head><body>'
+        . '<title>Plantilla Ayuda Memoria CENGICANA</title><style>body{font-family:Arial,sans-serif;color:#2B3328}h1{color:#1F5632;border-bottom:4px solid #73BC25;padding-bottom:6px}h2,h3{color:#1F5632}table{border-collapse:collapse}th{background:#EEF7E4;color:#2F5A0B;border:1px solid #CED2D5}td{border:1px solid #CED2D5}</style></head><body>'
         . '<h1>AYUDA MEMORIA DE REUNION</h1>'
         . '<p><b>Comite:</b> ______________________________</p>'
         . '<p><b>Fecha:</b> ______________________________</p>'

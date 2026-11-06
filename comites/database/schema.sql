@@ -392,5 +392,10 @@ CREATE TABLE IF NOT EXISTS evento_asistentes (
 
 CREATE TABLE IF NOT EXISTS evento_encuestas (
       id INT AUTO_INCREMENT PRIMARY KEY, evento_id INT NOT NULL, calificacion TINYINT NOT NULL, comentario TEXT NULL,
+      origen_id INT NULL, nombre VARCHAR(255) NULL, institucion VARCHAR(255) NULL, email VARCHAR(255) NULL, telefono VARCHAR(40) NULL,
+      detalle VARCHAR(255) NULL, categoria VARCHAR(20) NULL, categoria_por VARCHAR(180) NULL, categoria_en DATETIME NULL,
+      seguimiento_estado VARCHAR(20) NULL, seguimiento_nota TEXT NULL, seguimiento_por VARCHAR(180) NULL, seguimiento_en DATETIME NULL,
+      oculto TINYINT(1) NOT NULL DEFAULT 0,
+      UNIQUE KEY evento_origen(evento_id,origen_id),
       FOREIGN KEY(evento_id) REFERENCES eventos_transferencia(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
