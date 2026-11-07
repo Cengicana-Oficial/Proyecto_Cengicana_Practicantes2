@@ -141,6 +141,7 @@ if (($_GET['accion'] ?? '') === 'listar_participantes') {
                ep.pago_estado, ep.pago_origen, ep.pago_nota, ep.pago_validado_por, ep.pago_validado_en, ep.pago_recordatorio_en,
                ep.confirmado_en, ep.confirmado_por, ep.gafete_enviado_en, ep.categoria_gafete,
                ep.telefono_invitado AS telefono, ep.cargo_invitado AS cargo, ep.pago_boleta, ep.pago_banco, ep.pago_fecha, ep.pago_monto,
+               ep.creado AS registrado_en, (ep.creado >= NOW() - INTERVAL 1 DAY) AS nuevo,
                COALESCE(ip.nombre_ingenios, ie.nombre_ingenios, NULLIF(ep.institucion_invitado, ''), 'Invitado externo') AS ingenio,
                COALESCE(NULLIF(p.correo_participantes, ''), NULLIF(ep.correo_invitado, '')) AS correo
         FROM evento_participantes ep
@@ -148,13 +149,16 @@ if (($_GET['accion'] ?? '') === 'listar_participantes') {
         LEFT JOIN ingenios ip ON ip.id = p.ingenio_id
         LEFT JOIN ingenios ie ON ie.id = ep.ingenio_id
         WHERE ep.evento_id = ?
-        ORDER BY ep.nombre_invitado, ep.id
+        ORDER BY ep.id DESC
     ");
+    // Los más recientes primero (antes alfabético: los recién agregados quedaban intercalados y
+    // fuera de vista). "nuevo" marca a los registrados en las últimas 24 horas.
     $stmt->execute([$eventoId]);
     // pagado / ingenio_id llegan como string desde PDO; se normalizan a int para el front.
     $participantes = array_map(static function (array $fila) {
         $fila['pagado'] = (int) $fila['pagado'];
         $fila['tiene_recibo'] = (int) $fila['tiene_recibo'];
+        $fila['nuevo'] = (int) $fila['nuevo'];
         $fila['ingenio_id'] = $fila['ingenio_id'] !== null ? (int) $fila['ingenio_id'] : null;
         return $fila;
     }, $stmt->fetchAll(PDO::FETCH_ASSOC));
@@ -1782,6 +1786,9 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
                     <?php if ($puedeGestionar || $puedeValidar): ?>
                     <button type="button" class="btn btn-default btn-sm" id="evpRecordar" style="display:none;">Recordar pago</button>
                     <?php endif; ?>
+                    <?php if ($puedeValidar): ?>
+                    <button type="button" class="btn btn-default btn-sm" id="evpPagosLote" style="display:none;" disabled><span class="glyphicon glyphicon-usd" aria-hidden="true"></span> Registrar como pagados <span data-sel-count>(0)</span></button>
+                    <?php endif; ?>
                     <?php if ($puedeGestionar): ?>
                     <button type="button" class="btn btn-default btn-sm" id="evpMostrarCargaMasiva">Carga masiva</button>
                     <button type="button" class="btn btn-primary btn-sm" id="evpMostrarRegistro">+ Registrar participante</button>
@@ -1789,7 +1796,7 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
                 </div>
                 <div class="cengi-ev-strip" id="evpResumen"></div>
 
-                <?php if ($puedeGestionar): ?>
+                <?php if ($puedeGestionar || $puedeValidar): ?>
                 <div id="evpGafetesFeedback" style="display:none;"></div>
                 <?php endif; ?>
 
@@ -1838,7 +1845,7 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
                 <div class="cengi-table-wrap" id="evpTablaWrap" style="display:none;">
                     <table class="table cengi-event-participants-table">
                         <thead><tr>
-                            <?php if ($puedeGestionar): ?><th class="cengi-participant-check-col"><input type="checkbox" id="evpSeleccionarTodos" title="Seleccionar todos"></th><?php endif; ?>
+                            <?php if ($puedeGestionar || $puedeValidar): ?><th class="cengi-participant-check-col"><input type="checkbox" id="evpSeleccionarTodos" title="Seleccionar todos"></th><?php endif; ?>
                             <th>Participante</th><th>Institución</th><th>Pago</th><th>Participación</th><th>Código QR</th><th>Ingreso</th><th></th>
                         </tr></thead>
                         <tbody id="tablaEventoParticipantes"></tbody>
@@ -1849,6 +1856,42 @@ function cengi_evt_kpi($roles, $valor, $label, $delta, $tono, $icono, $valorEsHt
         </div>
     </div>
 </div>
+
+<?php if ($puedeValidar): ?>
+<!-- Registrar como pagados: una fila por persona para revisar el monto pagado contra el costo (js/eventos_pagos.js). -->
+<div class="modal" id="modalEvpPagosLote" tabindex="-1" role="dialog" aria-labelledby="evplTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document"><div class="modal-content">
+        <form id="evplForm">
+            <div class="modal-header">
+                <button class="close" type="button" data-dismiss="modal" aria-label="Cerrar">&times;</button>
+                <h4 class="modal-title" id="evplTitulo">Registrar como pagados</h4>
+                <div class="cengi-modal-hint" id="evplResumen"></div>
+            </div>
+            <div class="modal-body">
+                <?php $evplFormas = ['Depósito', 'Transferencia', 'Efectivo', 'Tarjeta', 'Cheque', 'Proforma / factura de la institución']; ?>
+                <div class="evpl-comunes">
+                    <span class="evpl-comunes-tit">Aplicar a todas las filas</span>
+                    <label>Forma de pago<select class="form-control input-sm" id="evplFormaTodos"><option value="">—</option><?php foreach ($evplFormas as $f): ?><option><?php echo cengi_evt_html($f); ?></option><?php endforeach; ?></select></label>
+                    <label>Fecha del pago<input class="form-control input-sm" type="date" id="evplFechaTodos" max="<?php echo date('Y-m-d'); ?>"></label>
+                    <label>Boleta o comentario<input class="form-control input-sm" type="text" id="evplRefTodos" maxlength="150" placeholder="Ej.: pagado"></label>
+                    <button type="button" class="btn btn-default btn-sm" id="evplAplicar">Aplicar</button>
+                </div>
+                <div class="cengi-table-wrap"><table class="table evpl-tabla">
+                    <thead><tr><th>Participante</th><th class="text-right">Costo</th><th>Monto pagado</th><th>Forma de pago</th><th>Fecha del pago</th><th>Boleta o comentario</th><th>Revisión</th></tr></thead>
+                    <tbody id="evplFilas"></tbody>
+                    <tfoot><tr><th>Total</th><th class="text-right" id="evplTotalEsperado"></th><th id="evplTotalPagado"></th><th colspan="4"></th></tr></tfoot>
+                </table></div>
+                <template id="evplFormasOpciones"><?php foreach ($evplFormas as $f): ?><option><?php echo cengi_evt_html($f); ?></option><?php endforeach; ?></template>
+                <p class="evpl-ayuda">En <b>Boleta o comentario</b> escribe el número de boleta o transferencia; si escribes solo texto (p. ej. «pagado», «efectivo en oficina»), se guarda como comentario del pago.</p>
+                <label class="evpl-nota">Nota <small>(opcional, queda en cada participante)</small><input class="form-control" type="text" name="nota" maxlength="300" placeholder="Ej.: estado de cuenta de noviembre"></label>
+                <label class="evpl-check"><input type="checkbox" name="confirmar" value="1" checked> <span><b>Confirmar participación y enviar gafete</b> con el QR (igual que al validar un pago uno por uno)</span></label>
+                <div class="evpl-error" id="evplError" hidden></div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-primary" id="evplGuardar">Registrar pagos</button></div>
+        </form>
+    </div></div>
+</div>
+<?php endif; ?>
 
 <div class="modal" id="modalQrParticipante" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog cengi-qr-detail-dialog">
@@ -2163,7 +2206,7 @@ window.CENGI_EVT = <?php echo json_encode([
         var total = 0;
         for (var k in seleccionados) { if (seleccionados[k]) total++; }
         $('[data-sel-count]').text('(' + total + ')');
-        $('#evpEnviarGafetes, #evpIngresoLote, #evpImprimirGafetes').prop('disabled', total === 0);
+        $('#evpEnviarGafetes, #evpIngresoLote, #evpImprimirGafetes, #evpPagosLote').prop('disabled', total === 0);
 
         if (!filtrados) return;
         var visiblesSeleccionados = filtrados.filter(function (p) { return !!seleccionados[p.id]; }).length;
@@ -2216,6 +2259,7 @@ window.CENGI_EVT = <?php echo json_encode([
         opciones += '<option value="por-confirmar">Por confirmar</option><option value="confirmado">Con QR (confirmados)</option><option value="ingreso">Con ingreso</option><option value="sin-ingreso">Con QR, sin ingreso</option>';
         $('#evpFiltro').html(opciones);
         $('#evpRecordar').toggle(esEventoPagadoActual());
+        $('#evpPagosLote').toggle(esEventoPagadoActual());
     }
 
     function participantesFiltrados() {
@@ -2285,6 +2329,7 @@ window.CENGI_EVT = <?php echo json_encode([
                 }
                 if (estadoPago === 'rechazado' && p.pago_nota) pago += '<div class="cengi-ev-sub" style="color:#B23223;">Motivo: ' + escapeHtml(p.pago_nota) + '</div>';
                 if (p.pago_validado_por && (estadoPago === 'validado' || estadoPago === 'exonerado')) pago += '<div class="cengi-ev-sub">Por ' + escapeHtml(p.pago_validado_por) + '</div>';
+                if (estadoPago === 'validado' && p.pago_nota) pago += '<div class="cengi-ev-sub"><i>' + escapeHtml(p.pago_nota) + '</i></div>';
                 if (p.pago_recordatorio_en && (estadoPago === 'pendiente' || estadoPago === 'rechazado')) pago += '<div class="cengi-ev-sub">Recordatorio ' + escapeHtml(fechaCorta(p.pago_recordatorio_en)) + '</div>';
                 if (p.tiene_recibo && CFGP.puedeVerPagos) pago += '<div class="cengi-ev-cell-action"><a href="eventos_pagos_api.php?recibo=' + Number(p.id) + '" target="_blank" rel="noopener" class="cengi-ev-linkbtn">Ver comprobante</a></div>';
                 if (CFGP.puedeValidar && !confirmado) {
@@ -2317,7 +2362,7 @@ window.CENGI_EVT = <?php echo json_encode([
             var marcar = (!p.ingreso_en && confirmado && puedeGestionar)
                 ? '<form method="POST" class="cengi-inline-entry-form"><input type="hidden" name="accion" value="marcar_ingreso"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><button type="submit" class="btn btn-primary btn-sm" title="Registrar ingreso">Marcar ingreso</button></form>'
                 : '';
-            var check = puedeGestionar
+            var check = (puedeGestionar || CFGP.puedeValidar)
                 ? '<td class="cengi-td-check"><input type="checkbox" class="cengi-participant-check" data-id="' + Number(p.id) + '"' + (seleccionados[p.id] ? ' checked' : '') + ' aria-label="Seleccionar"></td>'
                 : '';
             var verGafete = confirmado
@@ -2330,7 +2375,7 @@ window.CENGI_EVT = <?php echo json_encode([
                 ? '<form method="POST" class="cengi-ev-acc-form" data-participante-nombre="' + escapeHtml(p.nombre) + '" onsubmit="return cengiEvtConfirmarEliminarParticipante(this);"><input type="hidden" name="accion" value="eliminar_participante"><input type="hidden" name="evento_id" value="' + Number(eventoActual.id) + '"><input type="hidden" name="evento_participante_id" value="' + Number(p.id) + '"><button type="submit" class="cengi-ev-icon-btn is-danger" title="Eliminar" aria-label="Eliminar participante">' + ICONO_ELIMINAR + '</button></form>'
                 : '';
             return '<tr>' + check +
-                '<td class="cengi-td-participante"><div class="cengi-person-cell"><span class="cengi-avatar-sm">' + escapeHtml(iniciales(p.nombre)) + '</span><span><strong>' + escapeHtml(p.nombre) + '</strong><small>' + (p.cui ? 'CUI ' + escapeHtml(p.cui) : 'Sin CUI') + '</small><small>' + (p.correo ? escapeHtml(p.correo) : 'Sin correo') + '</small>' + (p.telefono ? '<small>Tel. ' + escapeHtml(p.telefono) + '</small>' : '') + '</span></div></td>' +
+                '<td class="cengi-td-participante"><div class="cengi-person-cell"><span class="cengi-avatar-sm">' + escapeHtml(iniciales(p.nombre)) + '</span><span><strong>' + escapeHtml(p.nombre) + '</strong>' + (p.nuevo ? ' <em class="evp-nuevo" title="Registrado ' + escapeHtml(p.registrado_en || '') + '">Nuevo</em>' : '') + '<small>' + (p.cui ? 'CUI ' + escapeHtml(p.cui) : 'Sin CUI') + '</small><small>' + (p.correo ? escapeHtml(p.correo) : 'Sin correo') + '</small>' + (p.telefono ? '<small>Tel. ' + escapeHtml(p.telefono) + '</small>' : '') + '</span></div></td>' +
                 '<td class="cengi-td-ingenio">' + escapeHtml(p.ingenio) + (esEventoPagado && usd ? '<div class="cengi-ev-sub">' + (p.pago_origen === 'extranjero' ? 'Paga desde el extranjero' : 'Paga en Guatemala') + '</div>' : '') + '</td>' +
                 '<td class="cengi-td-pago">' + pago + '</td>' +
                 '<td class="cengi-td-participacion">' + participacion + '</td>' +
@@ -2340,7 +2385,7 @@ window.CENGI_EVT = <?php echo json_encode([
         }).join(''));
         $('#tablaEventoParticipantes .cengi-mini-qr').each(function () { crearQr($(this).attr('data-codigo'), this, false); });
 
-        if (puedeGestionar) {
+        if (puedeGestionar || CFGP.puedeValidar) {
             $('#tablaEventoParticipantes .cengi-participant-check').on('change', function () {
                 var id = $(this).data('id');
                 seleccionados[id] = this.checked;
@@ -2416,7 +2461,8 @@ window.CENGI_EVT = <?php echo json_encode([
         $('#evpTablaWrap, #evpVacio').hide();
         $('#evpGafetesFeedback').hide().empty();
         $('[data-sel-count]').text('(0)');
-        $('#evpEnviarGafetes, #evpIngresoLote, #evpImprimirGafetes').prop('disabled', true);
+        $('#evpEnviarGafetes, #evpIngresoLote, #evpImprimirGafetes, #evpPagosLote').prop('disabled', true);
+        $('#evpPagosLote').hide();
         $('#evpCargando').show();
         $('#modalEventoParticipantes').modal('show');
         $.getJSON('eventos_qr.php', {accion: 'listar_participantes', evento_id: eventoId})

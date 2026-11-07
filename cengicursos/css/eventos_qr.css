@@ -129,3 +129,57 @@
     .evq-flujo ol { grid-template-columns: minmax(0, 1fr); }
     .evq-link-qr-img { flex-basis: 100%; height: 200px; }
 }
+
+/* Registrar como pagados (varios participantes): revisión del monto por persona */
+#modalEvpPagosLote .modal-dialog { width: min(980px, calc(100% - 20px)); }
+.evpl-comunes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.evpl-comunes label, .evpl-nota { display: block; margin: 0; font-size: 12px; font-weight: 600; color: #3d5034; }
+.evpl-comunes label .form-control, .evpl-nota .form-control { margin-top: 5px; }
+.evpl-comunes small, .evpl-nota small { font-weight: 400; color: #7a8571; }
+.evpl-tabla { margin-bottom: 0; font-size: 12.5px; }
+.evpl-tabla > thead > tr > th { font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: #1f5632; border-bottom: 2px solid #E4E7E1; }
+.evpl-tabla td small { display: block; color: #7a8571; font-size: 11px; }
+.evpl-tabla .evpl-monto { max-width: 120px; }
+.evpl-tabla tr.is-omitida > td { background: #FFF8F2; }
+.evpl-tabla tfoot th { border-top: 2px solid #E4E7E1; }
+.evpl-estado { display: block; font-size: 11.5px; font-weight: 700; }
+.evpl-estado.is-ok { color: #3E7A12; }
+.evpl-estado.is-warn { color: #B34E00; }
+.evpl-estado.is-error { color: #B23223; }
+.evpl-acepta-wrap { display: flex; align-items: center; gap: 5px; margin: 4px 0 0; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.evpl-nota { margin-top: 12px; }
+.evpl-check { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 0; font-size: 12.5px; font-weight: 400; cursor: pointer; }
+.evpl-check input { margin-top: 3px; }
+.evpl-error { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: #FDF0EE; color: #B23223; font-size: 12.5px; }
+@media (max-width: 700px) { .evpl-comunes { grid-template-columns: minmax(0, 1fr); } }
+.evpl-acepta-wrap[hidden] { display: none; }
+.evpl-ayuda { margin: 8px 0 0; color: #7a8571; font-size: 11.5px; line-height: 1.5; }
+.evp-nuevo { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 9px; background: #FFCC00; color: #3b2f00; font-size: 10px; font-style: normal; font-weight: 700; line-height: 17px; vertical-align: 1px; }
+/* Forma y fecha por persona: barra "Aplicar a todas las filas" y tabla más ancha */
+#modalEvpPagosLote .modal-dialog { width: min(1180px, calc(100% - 20px)); }
+.evpl-comunes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; padding: 10px 12px; border-radius: 10px; background: #F6F9F1; border: 1px solid #E4E7E1; }
+.evpl-comunes-tit { flex-basis: 100%; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #1f5632; }
+.evpl-comunes label { flex: 1 1 170px; }
+.evpl-comunes .btn { flex: 0 0 auto; }
+.evpl-tabla .evpl-forma { min-width: 150px; }
+.evpl-tabla .evpl-fecha { min-width: 135px; }
+.evpl-tabla .evpl-ref { min-width: 150px; }
+/* Registrar como pagados: centrado en el área de contenido (la barra lateral queda por encima
+   de los modales en escritorio) y tabla compacta para que quepan las siete columnas. */
+#modalEvpPagosLote .modal-dialog { width: auto; max-width: 1080px; margin: 30px auto; }
+@media (min-width: 1025px) {
+    #modalEvpPagosLote.in { padding-left: calc(var(--cengi-sidebar-width, 280px) + 20px) !important; padding-right: 20px !important; }
+    #modalEvpPagosLote .modal-dialog { width: min(1080px, calc(100vw - var(--cengi-sidebar-width, 280px) - 40px)); }
+}
+#modalEvpPagosLote .modal-body { padding: 16px 20px; }
+.evpl-tabla > thead > tr > th, .evpl-tabla > tbody > tr > td, .evpl-tabla > tfoot > tr > th { padding: 7px 6px; }
+.evpl-tabla td:first-child { min-width: 140px; max-width: 200px; }
+.evpl-tabla .form-control.input-sm { height: 32px; padding: 4px 8px; font-size: 12.5px; border-radius: 6px; }
+.evpl-tabla .evpl-monto { width: 96px; min-width: 0; }
+.evpl-tabla .evpl-forma { min-width: 0; width: 140px; }
+.evpl-tabla .evpl-fecha { min-width: 0; width: 140px; }
+.evpl-tabla .evpl-ref { min-width: 0; width: 100%; min-width: 130px; }
+.evpl-tabla .evpl-estado { white-space: normal; max-width: 130px; }
+.evpl-comunes { padding: 8px 10px; gap: 8px 10px; }
+.evpl-comunes label { flex: 1 1 150px; }
+.evpl-comunes .form-control.input-sm { height: 32px; }

@@ -387,4 +387,103 @@
     $('#esCodigo').on('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('#esRegistrar').trigger('click'); } });
     $('#esBuscar').on('input', buscarPuerta);
     $('#esLista').on('click', '[data-puerta]', function () { registrar({id: $(this).attr('data-puerta')}); });
+
+    /* ---------- registrar como pagados (varios a la vez, revisando el monto de cada persona) ---------- */
+    var lote = {ev: null, filas: []};
+    function dineroEv(n, usd) { return (usd ? 'US$' : 'Q') + Number(n || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+    function esperadoEv(ev, p) {
+        var usd = p.pago_origen === 'extranjero' && Number(ev.costo_usd) > 0;
+        return {monto: usd ? Number(ev.costo_usd) : Number(ev.costo || 0), usd: usd};
+    }
+    function revisarFilaLote(tr) {
+        var esp = Number(tr.getAttribute('data-esperado')), usd = tr.getAttribute('data-usd') === '1';
+        var pagado = parseFloat(String(tr.querySelector('.evpl-monto').value).replace(/,/g, ''));
+        var acepta = tr.querySelector('.evpl-acepta'), estado = tr.querySelector('.evpl-estado');
+        var txt, clase = 'is-ok', pide = false;
+        if (!(pagado > 0)) { txt = 'Indica el monto pagado'; clase = 'is-error'; }
+        else {
+            var dif = Math.round((pagado - esp) * 100) / 100;
+            if (esp > 0 && Math.abs(dif) > 0.009) { txt = (dif > 0 ? 'Pagó de más ' : 'Faltan ') + dineroEv(Math.abs(dif), usd); clase = 'is-warn'; pide = true; }
+            else txt = 'Coincide con el costo';
+        }
+        acepta.parentNode.hidden = !pide;
+        estado.textContent = txt; estado.className = 'evpl-estado ' + clase;
+        tr.classList.toggle('is-omitida', clase === 'is-error' || (pide && !acepta.checked));
+    }
+    function totalesLote() {
+        var esp = {q: 0, u: 0}, pag = {q: 0, u: 0};
+        $('#evplFilas tr').each(function () {
+            var k = this.getAttribute('data-usd') === '1' ? 'u' : 'q';
+            esp[k] += Number(this.getAttribute('data-esperado'));
+            pag[k] += parseFloat(String($(this).find('.evpl-monto').val()).replace(/,/g, '')) || 0;
+        });
+        var fmt = function (o) { return [o.q || !o.u ? dineroEv(o.q, false) : '', o.u ? dineroEv(o.u, true) : ''].filter(Boolean).join(' + '); };
+        $('#evplTotalEsperado').text(fmt(esp)); $('#evplTotalPagado').text(fmt(pag));
+    }
+    $('#evpPagosLote').on('click', function () {
+        var ev = window.cengiEvtEventoActual && window.cengiEvtEventoActual();
+        var sel = window.cengiEvtParticipantesSeleccionados ? window.cengiEvtParticipantesSeleccionados() : [];
+        if (!ev || !sel.length) return;
+        var pendientes = sel.filter(function (p) { return p.pago_estado !== 'validado' && p.pago_estado !== 'exonerado'; });
+        if (!pendientes.length) { window.alert('Los seleccionados ya tienen el pago validado o están exonerados.'); return; }
+        lote.ev = ev;
+        $('#evplResumen').text(ev.nombre + ' · ' + pendientes.length + ' participante(s)' + (sel.length > pendientes.length ? ' · se omiten ' + (sel.length - pendientes.length) + ' ya validado(s) o exonerado(s)' : ''));
+        $('#evplError').prop('hidden', true).text('');
+        var opcionesForma = ($('#evplFormasOpciones').html() || '');
+        var hoy = CFG.hoy || new Date().toISOString().slice(0, 10);
+        $('#evplFormaTodos').val(''); $('#evplFechaTodos').val(''); $('#evplRefTodos').val('');
+        $('#evplFilas').html(pendientes.map(function (p) {
+            var e = esperadoEv(ev, p), sugerido = p.pago_monto ? Number(p.pago_monto) : e.monto, id = Number(p.id);
+            return '<tr data-id="' + id + '" data-esperado="' + e.monto + '" data-usd="' + (e.usd ? 1 : 0) + '" data-banco="' + esc(p.pago_banco || '') + '">'
+                + '<td><b>' + esc(p.nombre) + '</b><small>' + esc(p.ingenio || '') + (p.pago_estado === 'por_validar' ? ' · comprobante por validar' : '') + '</small></td>'
+                + '<td class="text-right">' + dineroEv(e.monto, e.usd) + '</td>'
+                + '<td><input class="form-control input-sm evpl-monto" type="number" min="0" step="0.01" name="monto[' + id + ']" value="' + (sugerido ? sugerido.toFixed(2) : '') + '"></td>'
+                + '<td><select class="form-control input-sm evpl-forma" name="forma_fila[' + id + ']">' + opcionesForma + '</select></td>'
+                + '<td><input class="form-control input-sm evpl-fecha" type="date" max="' + hoy + '" name="fecha_fila[' + id + ']" value="' + esc(/^\d{4}-\d{2}-\d{2}$/.test(p.pago_fecha || '') ? p.pago_fecha : hoy) + '"></td>'
+                + '<td><input class="form-control input-sm evpl-ref" type="text" maxlength="150" name="boleta[' + Number(p.id) + ']" value="' + esc(p.pago_boleta || '') + '" placeholder="N.° de boleta o comentario"></td>'
+                + '<td><span class="evpl-estado"></span><label class="evpl-acepta-wrap" hidden><input type="checkbox" class="evpl-acepta" name="aceptar[' + Number(p.id) + ']" value="1"> aceptar diferencia</label></td></tr>';
+        }).join(''));
+        $('#evplFilas tr').each(function () {
+            var tr = this, banco = tr.getAttribute('data-banco'), $forma = $(tr).find('.evpl-forma');
+            // Si el comprobante ya traía una forma conocida, se respeta; si no, Depósito.
+            $forma.val($forma.find('option').filter(function () { return this.value === banco; }).length ? banco : 'Depósito');
+            $(tr).find('.evpl-monto').on('input', function () { revisarFilaLote(tr); totalesLote(); });
+            $(tr).find('.evpl-acepta').on('change', function () { revisarFilaLote(tr); });
+            revisarFilaLote(tr);
+        });
+        totalesLote();
+        $('#modalEvpPagosLote').modal('show');
+    });
+    // "Aplicar a todas las filas": solo copia los campos que se llenaron arriba.
+    $('#evplAplicar').on('click', function () {
+        var forma = $('#evplFormaTodos').val(), fecha = $('#evplFechaTodos').val(), ref = $('#evplRefTodos').val().trim();
+        if (!forma && !fecha && !ref) { $('#evplError').prop('hidden', false).text('Elige arriba la forma de pago, la fecha o el comentario que quieres aplicar a todas las filas.'); return; }
+        $('#evplError').prop('hidden', true);
+        $('#evplFilas tr').each(function () {
+            if (forma) $(this).find('.evpl-forma').val(forma);
+            if (fecha) $(this).find('.evpl-fecha').val(fecha);
+            if (ref) $(this).find('.evpl-ref').val(ref);
+        });
+    });
+    $('#evplForm').on('submit', function (e) {
+        e.preventDefault();
+        var omitidas = $('#evplFilas tr.is-omitida').length, total = $('#evplFilas tr').length;
+        if (omitidas === total) { $('#evplError').prop('hidden', false).text('Revisa los montos: ninguna fila está lista (falta el monto o una diferencia sin aceptar).'); return; }
+        if (omitidas && !window.confirm(omitidas + ' fila(s) con monto pendiente de revisar se omitirán. ¿Registrar las demás?')) return;
+        var fd = new FormData(this);
+        fd.append('accion', 'pagos_lote');
+        fd.append('evento_id', lote.ev.id);
+        $('#evplFilas tr').each(function () { fd.append('ids[]', this.getAttribute('data-id')); });
+        $('#evplGuardar').prop('disabled', true).text('Registrando…');
+        post(fd).then(function (r) {
+            $('#evplGuardar').prop('disabled', false).text('Registrar pagos');
+            if (!r.ok) { $('#evplError').prop('hidden', false).text(r.error || 'No fue posible registrar los pagos.'); return; }
+            $('#modalEvpPagosLote').modal('hide');
+            window.cengiEvtRecargarParticipantes();
+            $('#evpGafetesFeedback').attr('class', 'cengi-feedback' + (r.omitidos ? ' is-warning' : '')).html('<div class="cengi-feedback-icon"><span class="glyphicon glyphicon-' + (r.omitidos ? 'warning-sign' : 'ok') + '"></span></div><div><p>' + esc(r.mensaje) + '</p></div>').show();
+        }, function () {
+            $('#evplGuardar').prop('disabled', false).text('Registrar pagos');
+            $('#evplError').prop('hidden', false).text('No fue posible conectar con el servidor.');
+        });
+    });
 })();
