@@ -184,6 +184,11 @@ function cengi_cob_pendientes(PDO $db, $anio, $planId = 0, $limitado = null)
             continue;
         }
         $moneda = $g['moneda'] ?? 'GTQ';
+        // Integrantes de la orden: se pueden seleccionar uno por uno (p. ej. ya pagados con una proforma fuera del sistema).
+        $qm = $db->prepare("SELECT id_solicitud, nombre_participante, cui_participante, monto, moneda, cuota, validacion_ingenio, estado, asignado_por
+            FROM solicitudes_inscripcion WHERE grupo_pago_id = ? AND estado <> 'Rechazado' ORDER BY nombre_participante");
+        $qm->execute([(int) $g['id']]);
+        $g['miembros_lista'] = $qm->fetchAll(PDO::FETCH_ASSOC);
         $filas[] = [
             'tipo' => 'g', 'id' => (int) $g['id'], 'quien' => $g['nombre_ingenios'],
             'detalle' => 'Orden ' . ($g['orden'] ?: 'sin número') . ' · ' . (int) $g['miembros'] . ' participante(s): ' . $g['nombres'],

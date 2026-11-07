@@ -134,3 +134,57 @@
 .pagos-ingenio-tabs .pp-chip.is-warn { background: #FFE9D9; color: #B34E00; }
 .pagos-tab-ayuda { margin: 0; padding: 12px 18px 4px; color: #5B6459; font-size: 12.5px; }
 .pagos-vacio.is-gris { color: #5B6459; }
+
+/* Registro de pagos en grupo: integrantes de órdenes del ingenio y revisión del monto por persona */
+.cob-tarifa { color: var(--cengi-muted); }
+.cob-tarifa.is-asociado { padding: 1px 7px; border-radius: 99px; background: var(--cg-amarillo-soft); color: #6b5300; font-weight: 600; }
+.cg-tema .cob-tabla .cob-miembro > td { padding-top: 6px; padding-bottom: 6px; background: #FAFBF8; font-size: 12px; }
+.cg-tema .cob-tabla .cob-miembro > td:nth-child(2) { padding-left: 26px; box-shadow: inset 3px 0 0 var(--cg-gris, #CED2D5); }
+.cob-miembro-nombre { color: #1E2A1A; font-weight: 600; }
+.cob-miembro-nombre .glyphicon { color: #8A958C; font-size: 10px; margin-right: 3px; }
+.cob-lote-aviso { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 12px; padding: 10px 12px; border-radius: 8px; background: var(--cg-amarillo-soft); color: #6b5300; font-size: 12px; line-height: 1.5; }
+.cob-lote-tabla { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 12.5px; }
+.cob-lote-tabla th { padding: 8px; border-bottom: 2px solid var(--cg-line); color: var(--cg-deep, #1F5632); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; text-align: left; }
+.cob-lote-tabla td { padding: 8px; border-bottom: 1px solid var(--cg-line); vertical-align: top; }
+.cob-lote-tabla td .pp-sub { display: block; }
+.cob-lote-tabla tfoot th { border-top: 2px solid var(--cg-line); border-bottom: 0; font-size: 12.5px; text-transform: none; color: #1E2A1A; }
+.cob-lote-tabla .lote-monto { max-width: 120px; }
+.cob-lote-tabla tr.is-omitida td { background: #FFF8F2; }
+.lote-estado { display: block; font-size: 11.5px; font-weight: 700; }
+.lote-estado.is-ok { color: var(--cg-verde-text, #3C6E14); }
+.lote-estado.is-warn { color: var(--cg-naranja-text); }
+.lote-estado.is-error { color: #B23223; }
+.lote-acepta-wrap { display: flex; align-items: center; gap: 5px; margin: 4px 0 0; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.lote-acepta-wrap[hidden] { display: none; }
+/* Forma y fecha por persona: barra "Aplicar a todas las filas" y modal más ancho */
+#lote-modal .modal-dialog { width: min(1180px, calc(100% - 20px)); }
+.cob-lote-comunes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--cg-line); border-radius: 10px; background: #F6F9F1; }
+.cob-lote-comunes-tit { flex-basis: 100%; color: var(--cg-deep, #1F5632); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.cob-lote-comunes label { flex: 1 1 170px; margin: 0; font-size: 12px; font-weight: 600; color: #3d5034; }
+.cob-lote-comunes label .form-control { margin-top: 4px; }
+.cob-lote-tabla .lote-forma { min-width: 150px; }
+.cob-lote-tabla .lote-fecha { min-width: 135px; }
+.cob-lote-tabla .lote-ref { min-width: 150px; }
+/* Registrar como pagados: centrado en el área de contenido y tabla compacta (siete columnas). */
+#lote-modal .modal-dialog { width: auto; max-width: 1080px; margin: 30px auto; }
+@media (min-width: 1025px) {
+    #lote-modal.in { padding-left: calc(var(--cengi-sidebar-width, 280px) + 20px) !important; padding-right: 20px !important; }
+    #lote-modal .modal-dialog { width: min(1080px, calc(100vw - var(--cengi-sidebar-width, 280px) - 40px)); }
+}
+.cob-lote-tabla th, .cob-lote-tabla td { padding: 7px 6px; }
+.cob-lote-tabla td:first-child { min-width: 140px; max-width: 200px; }
+.cob-lote-tabla .form-control.input-sm { height: 32px; padding: 4px 8px; font-size: 12.5px; border-radius: 6px; }
+.cob-lote-tabla .lote-monto { width: 96px; max-width: none; }
+.cob-lote-tabla .lote-forma { min-width: 0; width: 150px; }
+.cob-lote-tabla .lote-fecha { min-width: 0; width: 140px; }
+.cob-lote-tabla .lote-ref { width: 100%; min-width: 130px; }
+.cob-lote-tabla .lote-estado { max-width: 130px; }
+.cob-lote-comunes { padding: 8px 10px; gap: 8px 10px; }
+.cob-lote-comunes label { flex: 1 1 150px; }
+.cob-lote-comunes .form-control.input-sm { height: 32px; }
+/* Inscritos: casillas para registrar pagos en grupo */
+.ins-table .ins-col-check { width: 34px; text-align: center; }
+.ins-table .ins-col-check input { width: 16px; height: 16px; margin: 0; cursor: pointer; }
+.ins-lote-barra { margin: 0 0 12px; }
+.ins-kpi.is-activo { box-shadow: inset 0 0 0 2px var(--cg-naranja, #FF6B00); }
+.cob-lote-ayuda-fila { margin: 8px 0 0; color: var(--cengi-muted, #6b7a72); font-size: 11.5px; line-height: 1.5; }

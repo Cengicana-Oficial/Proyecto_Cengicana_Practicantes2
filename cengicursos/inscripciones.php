@@ -40,7 +40,41 @@ const CENGI_INSC_MENSAJES = [
     'curso' => 'Curso abierto: ya aparece en Cursos y se asignaron las inscripciones validadas.',
 ];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// Inscritos con el pago pendiente: registro de pagos en grupo (mismo proceso que Cobros pendientes),
+// útil cuando la proforma no se generó en el sistema o no hubo validación previa.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'pagados_lote') {
+    require_once __DIR__ . '/pago_lote_helpers.php';
+    try {
+        if (!hash_equals($_SESSION['ins_csrf'], (string) ($_POST['csrf'] ?? ''))) throw new InvalidArgumentException('Actualiza la página antes de guardar.');
+        if (!cengi_ins_puede_validar_pagos()) throw new InvalidArgumentException('Solo Administración (permiso «Validar pagos») puede registrar pagos.');
+        $db->beginTransaction();
+        $lote = cengi_ins_pagos_lote($db, $_POST, $usuario, $limitado, cengi_pp_hoy(), !empty($_POST['avisar']));
+        if (!$lote['hechos']) {
+            throw new InvalidArgumentException('Ningún pago se registró. ' . implode(' · ', array_slice($lote['omitidos'], 0, 6)) . (count($lote['omitidos']) > 6 ? ' · y ' . (count($lote['omitidos']) - 6) . ' más.' : ''));
+        }
+        foreach (array_keys($lote['planes']) as $planLote) cengi_ins_procesar_plan($db, $planLote);
+        $db->commit();
+        cengi_ins_enviar_cola($db);
+        foreach ($lote['avisos'] as [$sAviso, $tipoAviso]) cengi_cob_avisar_pago($db, $sAviso, $tipoAviso);
+        $_SESSION['ins_lote_msg'] = [$lote['hechos'], $lote['omitidos']];
+        cengi_pp_redirigir('inscripciones.php', array_filter(['vista' => 'inscripciones', 'regularizar' => ($_POST['regularizar'] ?? '') === '1' ? '1' : '', 'q' => (string) ($_POST['q'] ?? '')]));
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        $GLOBALS['cengi_ins_cola'] = [];
+        $mensajeTipo = 'error';
+        $mensaje = $e instanceof InvalidArgumentException ? cengi_pp_h($e->getMessage()) : 'No fue posible registrar los pagos.';
+        if (!($e instanceof InvalidArgumentException)) error_log('Inscritos, pagos en grupo: ' . $e->getMessage());
+        $_GET['vista'] = 'inscripciones';
+    }
+}
+if (!empty($_SESSION['ins_lote_msg'])) {
+    [$nLote, $omitLote] = $_SESSION['ins_lote_msg'];
+    unset($_SESSION['ins_lote_msg']);
+    $mensaje = cengi_pp_h($nLote . ' pago(s) registrados como pagados.' . ($omitLote ? ' Se omitieron ' . count($omitLote) . ': ' . implode(' · ', array_slice($omitLote, 0, 10)) . (count($omitLote) > 10 ? ' · …' : '') : ''));
+    $mensajeTipo = $omitLote ? 'warning' : 'success';
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') !== 'pagados_lote') {
     $accion = (string) ($_POST['accion'] ?? '');
     $aviso = null;
     try {
@@ -158,7 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 error_log('Inscripciones: no se pudo avisar: ' . $e->getMessage());
             }
         }
-        cengi_pp_redirigir('inscripciones.php', ['plan' => $planId, 'msg' => $codigo]);
+        cengi_pp_redirigir('inscripciones.php', array_filter(['vista' => ($_POST['vista'] ?? '') === 'inscripciones' ? 'inscripciones' : '', 'plan' => $planId, 'msg' => $codigo]));
     } catch (Throwable $e) {
         if ($db->inTransaction()) {
             $db->rollBack();

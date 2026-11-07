@@ -17,6 +17,7 @@ if (defined('CENGI_INS_PAGOS_INTEGRADOS')) ob_start('cengi_ins_pago_html');
  * por curso / ingenio.
  */
 require_once __DIR__ . '/cobranza_helpers.php';
+require_once __DIR__ . '/pago_lote_helpers.php';
 require_once __DIR__ . '/calendario_ics_helpers.php';
 require_once __DIR__ . '/menu.php';
 
@@ -195,42 +196,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $codigo = 'pagado';
         } elseif ($accion === 'pagados_lote') {
-            // Registrar el ingreso de varios pagos propios a la vez (p. ej. un estado de cuenta).
+            // Registro de pagos en grupo (pago propio y personas pagadas con proforma del ingenio):
+            // lógica compartida con la lista de Inscritos en pago_lote_helpers.php.
             $soloAdmin();
-            $forma = mb_substr(trim((string) ($_POST['pago_forma'] ?? '')), 0, 60, 'UTF-8');
-            $refComun = mb_substr(trim((string) ($_POST['pago_referencia'] ?? '')), 0, 120, 'UTF-8');
-            $fecha = (string) ($_POST['pago_fecha'] ?? '');
-            if ($forma === '' || !cengi_pp_es_fecha($fecha) || $fecha > $hoy) {
-                throw new InvalidArgumentException('Indica la forma de pago y la fecha del ingreso.');
+            $lote = cengi_ins_pagos_lote($db, $_POST, $usuario, $limitado, $hoy, $avisar);
+            if (!$lote['hechos']) {
+                throw new InvalidArgumentException('Ningún pago se registró. ' . implode(' · ', array_slice($lote['omitidos'], 0, 6)) . (count($lote['omitidos']) > 6 ? ' · y ' . (count($lote['omitidos']) - 6) . ' más.' : ''));
             }
-            $hechos = 0;
-            $omitidos = [];
-            foreach (array_unique((array) ($_POST['claves'] ?? [])) as $clave) {
-                if (strpos((string) $clave, 's:') !== 0) {
-                    continue;
-                }
-                $s = $cargar((int) substr($clave, 2));
-                $montoOk = $s['monto_comprobante'] === null || abs((float) $s['monto_comprobante'] - (float) $s['monto']) <= 0.009;
-                // Un comprobante sin validar con boleta repetida se revisa uno por uno, no en lote.
-                $boletaRepetida = $s['pago_estado'] === 'en revisión' && cengi_cob_boletas_repetidas($db, $s['boleta'], $s['id_solicitud']);
-                if ($s['tipo_pago'] !== 'Propio' || $s['pago_estado'] !== 'validado' || !$montoOk || $boletaRepetida) {
-                    $omitidos[] = $s['nombre_participante'];
-                    continue;
-                }
-                $ref = $refComun !== '' ? $refComun : ($s['boleta'] ?: 'Sin referencia');
-                $db->prepare("UPDATE solicitudes_inscripcion SET pago_estado = 'pagado', pago_forma = ?, pago_referencia = ?, pago_fecha = COALESCE(pago_fecha, ?),
-                    pago_registrado_en = NOW(), pago_registrado_por = ?, pago_verificado_por = IF(pago_verificado_por = '', ?, pago_verificado_por),
-                    pago_verificado_en = COALESCE(pago_verificado_en, NOW()) WHERE id_solicitud = ?")->execute([$forma, $ref, $fecha, $usuario, $usuario, $s['id_solicitud']]);
-                $planes[$s['planificacion_id']] = true;
-                if ($avisar) {
-                    $avisosPago[] = [array_merge($s, ['pago_referencia' => $ref]), 'pagado'];
-                }
-                $hechos++;
-            }
-            if (!$hechos) {
-                throw new InvalidArgumentException('Ningún pago se pudo registrar: solo aplica a pagos propios con comprobante validado y con el monto correcto.');
-            }
-            $extraRedir = array_filter(['n' => $hechos, 'omitidos' => count($omitidos)]);
+            $planes += $lote['planes'];
+            $avisosPago = array_merge($avisosPago, $lote['avisos']);
+            $_SESSION['cob_omitidos'] = $lote['omitidos'];
+            $extraRedir = array_filter(['n' => $lote['hechos'], 'omitidos' => count($lote['omitidos'])]);
             $codigo = 'pagados-lote';
         } elseif ($accion === 'recordar') {
             // Recordatorios de pago: a participantes (pago propio) y a usuarios del ingenio (órdenes).
@@ -238,6 +214,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $vistos = [];
             foreach (array_unique((array) ($_POST['claves'] ?? [])) as $clave) {
                 [$tipoClave, $idClave] = array_pad(explode(':', (string) $clave, 2), 2, 0);
+                if ($tipoClave === 'm') $tipoClave = 's'; // integrante de una orden del ingenio
                 if ($tipoClave === 's') {
                     $s = $cargar((int) $idClave);
                     if ($s['tipo_pago'] === 'Ingenio' && $s['grupo_pago_id']) {
@@ -417,8 +394,11 @@ if ($mensaje === '' && ($_GET['msg'] ?? '') === 'recordatorios') {
     ]))));
     $mensajeTipo = (int) ($_GET['nf'] ?? 0) || (int) ($_GET['nsin'] ?? 0) ? 'warning' : 'success';
 } elseif ($mensaje === '' && ($_GET['msg'] ?? '') === 'pagados-lote') {
+    $omitidosLista = (array) ($_SESSION['cob_omitidos'] ?? []);
+    unset($_SESSION['cob_omitidos']);
     $mensaje = cengi_pp_h((int) ($_GET['n'] ?? 0) . ' pago(s) registrados como pagados.'
-        . ((int) ($_GET['omitidos'] ?? 0) ? ' ' . (int) $_GET['omitidos'] . ' se omitieron: no tenían comprobante, ya estaban pagados, el monto no coincide o la boleta se repite en otra inscripción (revísalos uno por uno).' : ''));
+        . ((int) ($_GET['omitidos'] ?? 0) ? ' ' . (int) $_GET['omitidos'] . ' se omitieron' . ($omitidosLista ? ': ' . implode(' · ', array_slice($omitidosLista, 0, 10)) . (count($omitidosLista) > 10 ? ' · …' : '') : '.') : ''));
+    $mensajeTipo = (int) ($_GET['omitidos'] ?? 0) ? 'warning' : 'success';
 } elseif ($mensaje === '' && isset(CENGI_PI_MENSAJES[$_GET['msg'] ?? ''])) {
     $mensaje = cengi_pp_h(CENGI_PI_MENSAJES[$_GET['msg']]);
 }
@@ -941,16 +921,28 @@ function cengi_pagos_nav(PDO $db, $actual)
                     <thead><tr><?php if ($puedeValidarPagos): ?><th class="cob-check"></th><?php endif; ?><th>Debe</th><th>Curso</th><th class="pp-num">Monto</th><th>Situación</th><th>Fecha límite</th><th>Seguimiento</th><th class="is-actions"></th></tr></thead>
                     <tbody>
                         <?php if (!$pendientesLista): ?><tr><td colspan="8" class="pp-empty"><?php echo $pendientes ? 'Ningún pendiente coincide con esos filtros.' : '¡Todo cobrado! No hay pagos pendientes en esta selección.'; ?></td></tr><?php endif; ?>
+                        <?php
+                        // Datos de cada persona para el registro de pagos en grupo (monto esperado, boleta…).
+                        $cobDatos = static function (array $s) {
+                            return ' data-pago="1" data-id="' . (int) $s['id_solicitud'] . '" data-nombre="' . cengi_pp_h($s['nombre_participante']) . '" data-pagador="' . cengi_pp_h($s['tipo_pago'])
+                                . '" data-monto="' . ($s['monto'] === null ? '' : number_format((float) $s['monto'], 2, '.', '')) . '" data-moneda="' . cengi_pp_h($s['moneda'] ?: 'GTQ')
+                                . '" data-boleta="' . cengi_pp_h($s['boleta'] ?? '') . '" data-comprobante="' . (isset($s['monto_comprobante']) && $s['monto_comprobante'] !== null ? number_format((float) $s['monto_comprobante'], 2, '.', '') : '')
+                                . '" data-tarifa="' . cengi_pp_h(CENGI_INS_CUOTAS[$s['cuota'] ?? '']['0'] ?? '') . '"';
+                        };
+                        $cobIdsIndividuales = [];
+                        foreach ($pendientesLista as $p) if ($p['tipo'] === 's') $cobIdsIndividuales[$p['id']] = true;
+                        ?>
                         <?php foreach ($pendientesLista as $p):
                             $f = $p['fila'];
                             $clave = $p['tipo'] . ':' . $p['id'];
                             $seleccionable = $p['tipo'] !== 'pf';
+                            $tarifa = $p['tipo'] === 's' ? (CENGI_INS_CUOTAS[$f['cuota']][0] ?? '') : '';
                         ?>
                             <tr class="cob-fila is-<?php echo $p['venc']['clase']; ?>">
-                                <?php if ($puedeValidarPagos): ?><td class="cob-check"><?php if ($seleccionable): ?><input type="checkbox" name="claves[]" value="<?php echo cengi_pp_h($clave); ?>" data-situacion="<?php echo $p['situacion']; ?>" aria-label="Seleccionar"><?php endif; ?></td><?php endif; ?>
+                                <?php if ($puedeValidarPagos): ?><td class="cob-check"><?php if ($seleccionable): ?><input type="checkbox" name="claves[]" value="<?php echo cengi_pp_h($clave); ?>" data-situacion="<?php echo $p['situacion']; ?>"<?php echo $p['tipo'] === 's' ? $cobDatos($f) : ''; ?> aria-label="Seleccionar"><?php endif; ?></td><?php endif; ?>
                                 <td style="min-width:220px;"><strong><?php echo cengi_pp_h($p['quien']); ?></strong>
                                     <span class="pp-sub"><?php echo cengi_pp_h($p['detalle']); ?></span>
-                                    <span class="pp-sub"><?php echo ['Propio' => 'Pago propio', 'Ingenio' => 'Paga el ingenio'][$p['pagador']] ?? ''; ?><?php echo $p['asignado'] ? ' · <b class="cob-asignado">ya asignado al curso</b>' : ''; ?></span></td>
+                                    <span class="pp-sub"><?php echo ['Propio' => 'Pago propio', 'Ingenio' => 'Paga el ingenio'][$p['pagador']] ?? ''; ?><?php if ($tarifa !== ''): ?> · <span class="cob-tarifa<?php echo $p['pagador'] === 'Propio' && $f['cuota'] === 'asociado' ? ' is-asociado' : ''; ?>"><?php echo $p['pagador'] === 'Propio' && $f['cuota'] === 'asociado' ? 'cuota de ingenio (asociado)' : 'cuota ' . cengi_pp_h(mb_strtolower($tarifa, 'UTF-8')); ?></span><?php endif; ?><?php echo $p['asignado'] ? ' · <b class="cob-asignado">ya asignado al curso</b>' : ''; ?></span></td>
                                 <td style="min-width:150px;"><?php echo cengi_pp_h($p['curso']); ?><span class="pp-sub"><?php echo ($p['tipo'] === 'pf' ? 'vigente hasta ' : 'inicia ') . cengi_pp_fecha($p['fecha_inicio']); ?></span></td>
                                 <td class="pp-num"><b><?php echo cengi_pp_h($p['monto_txt']); ?></b></td>
                                 <td><?php echo cengi_pp_badge(CENGI_COB_SITUACIONES, $p['situacion']); ?>
@@ -979,6 +971,17 @@ function cengi_pagos_nav(PDO $db, $actual)
                                     <?php endif; ?>
                                 </div></td>
                             </tr>
+                            <?php if ($p['tipo'] === 'g' && $puedeValidarPagos):
+                                foreach ($f['miembros_lista'] ?? [] as $m):
+                                    if (isset($cobIdsIndividuales[(int) $m['id_solicitud']])) continue; // ya aparece como fila propia ?>
+                            <tr class="cob-miembro">
+                                <td class="cob-check"><input type="checkbox" name="claves[]" value="m:<?php echo (int) $m['id_solicitud']; ?>" data-situacion="ingenio-miembro"<?php echo $cobDatos($m + ['tipo_pago' => 'Ingenio', 'boleta' => '', 'monto_comprobante' => null]); ?> aria-label="Seleccionar a <?php echo cengi_pp_h($m['nombre_participante']); ?>"></td>
+                                <td colspan="2"><span class="cob-miembro-nombre"><span class="glyphicon glyphicon-user" aria-hidden="true"></span> <?php echo cengi_pp_h($m['nombre_participante']); ?></span>
+                                    <span class="pp-sub">CUI <?php echo cengi_pp_h($m['cui_participante'] ?: '—'); ?> · cuota <?php echo cengi_pp_h(mb_strtolower(CENGI_INS_CUOTAS[$m['cuota']][0] ?? '', 'UTF-8')); ?><?php echo strpos((string) $m['asignado_por'], 'Asignaci') === 0 ? ' · asignado antes del proceso' : ($m['estado'] === 'Aprobado' ? ' · asignado' : ''); ?><?php echo $m['validacion_ingenio'] !== 'validada' ? ' · falta validación del ingenio' : ''; ?></span></td>
+                                <td class="pp-num"><?php echo $m['monto'] === null ? '<span class="pp-sub">Por definir</span>' : cengi_pp_h(cengi_ins_dinero($m['monto'], $m['moneda'])); ?></td>
+                                <td colspan="4"><span class="pp-sub">Integrante de la orden de <?php echo cengi_pp_h($p['quien']); ?>. Si ya se pagó con una proforma, selecciónalo y usa «Registrar como pagados».</span></td>
+                            </tr>
+                            <?php endforeach; endif; ?>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
@@ -998,21 +1001,7 @@ function cengi_pagos_nav(PDO $db, $actual)
                         <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-primary" name="accion" value="recordar"><span class="glyphicon glyphicon-envelope"></span> Enviar recordatorios</button></div>
                     </div></div>
                 </div>
-                <div class="modal fade cengi-course-form-modal pp-modal" id="lote-modal" tabindex="-1" role="dialog" aria-labelledby="lote-title">
-                    <div class="modal-dialog" role="document"><div class="modal-content">
-                        <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span>&times;</span></button><span class="cengi-course-modal-kicker">Seguimiento del cobro</span><h4 class="modal-title" id="lote-title">Registrar varios pagos</h4><p id="lote-resumen"></p></div>
-                        <div class="modal-body">
-                            <p class="pp-sub">Aplica a pagos propios con comprobante (por validar o validado) cuyo monto coincide con la cuota. Los demás se omiten y se indica cuántos.</p>
-                            <div class="cengi-course-modal-grid">
-                                <div class="form-group"><label for="lote-forma">Forma de pago</label><select class="form-control" id="lote-forma" name="pago_forma"><option>Depósito</option><option>Transferencia</option><option>Cheque</option><option>Tarjeta</option><option>Efectivo</option></select></div>
-                                <div class="form-group"><label for="lote-fecha">Fecha del ingreso</label><input type="date" class="form-control" id="lote-fecha" name="pago_fecha" value="<?php echo $hoy; ?>" max="<?php echo $hoy; ?>"></div>
-                                <div class="form-group is-full"><label for="lote-ref">Referencia común (opcional)</label><input type="text" class="form-control" id="lote-ref" name="pago_referencia" maxlength="120" placeholder="Si la dejas vacía se usa la boleta de cada comprobante"></div>
-                            </div>
-                            <div class="pp-ics-check"><label><input type="checkbox" name="avisar" value="1" checked><span><b>Avisar al participante</b> que recibimos su pago</span></label></div>
-                        </div>
-                        <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-primary" name="accion" value="pagados_lote">Registrar pagos</button></div>
-                    </div></div>
-                </div>
+                <?php $loteFormId = 'cobranza-form'; require __DIR__ . '/pago_lote_modal.php'; ?>
             <?php endif; ?>
         </form>
     <?php elseif ($tab === 'grupos'):
@@ -1326,13 +1315,13 @@ function cengi_pagos_nav(PDO $db, $actual)
         var casillas = formCobro.querySelectorAll('input[name="claves[]"]');
         var actualizar = function () {
             var marcadas = [].filter.call(casillas, function (c) { return c.checked; });
-            var pagables = marcadas.filter(function (c) { return ['por-validar', 'falta-registrar'].indexOf(c.getAttribute('data-situacion')) >= 0 && c.value.indexOf('s:') === 0; });
+            var pagables = marcadas.filter(function (c) { return c.getAttribute('data-pago') === '1'; });
             if ($id('cob-n')) $id('cob-n').textContent = marcadas.length;
             if ($id('cob-btn-recordar')) $id('cob-btn-recordar').disabled = !marcadas.length;
             if ($id('cob-btn-lote')) $id('cob-btn-lote').disabled = !pagables.length;
             if ($id('cob-lote')) $id('cob-lote').classList.toggle('is-activo', marcadas.length > 0);
             if ($id('recordar-resumen')) $id('recordar-resumen').textContent = marcadas.length + ' pendiente(s) seleccionado(s)';
-            if ($id('lote-resumen')) $id('lote-resumen').textContent = pagables.length + ' de ' + marcadas.length + ' seleccionado(s) se pueden registrar como pagados';
+            if ($id('lote-resumen')) $id('lote-resumen').textContent = pagables.length + ' persona(s) para registrar' + (marcadas.length > pagables.length ? ' · ' + (marcadas.length - pagables.length) + ' orden(es) del ingenio no se incluyen: selecciona a sus integrantes' : '');
         };
         casillas.forEach(function (c) { c.addEventListener('change', actualizar); });
         if ($id('cob-todos')) $id('cob-todos').addEventListener('change', function () { var v = this.checked; casillas.forEach(function (c) { c.checked = v; }); actualizar(); });
@@ -1352,7 +1341,7 @@ function cengi_pagos_nav(PDO $db, $actual)
                 else { window.prompt('Copia el enlace:', url); }
             });
         });
-        formCobro.addEventListener('submit', function () { var b = formCobro.querySelectorAll('button[type="submit"]'); setTimeout(function () { b.forEach(function (x) { x.disabled = true; }); }, 0); });
+        formCobro.addEventListener('submit', function (e) { if (e.defaultPrevented) return; var b = formCobro.querySelectorAll('button[type="submit"]'); setTimeout(function () { b.forEach(function (x) { x.disabled = true; }); }, 0); });
         actualizar();
     }
     $('#nota-modal').on('show.bs.modal', function (e) {

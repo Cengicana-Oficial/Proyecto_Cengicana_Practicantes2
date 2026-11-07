@@ -550,7 +550,14 @@ function cengi_ins_admitida(array $s) {
 
 /** Reconoce también inscritos históricos cuyo pago propio todavía debe conciliarse. */
 function cengi_ins_inscrito(array $s) {
-    return cengi_ins_admitida($s);
+    // Quien ya está asignado al curso (p. ej. asignación directa antes del proceso de
+    // validación) es inscrito aunque su validación o cobro sigan pendientes.
+    return $s['estado'] === 'Aprobado' || cengi_ins_admitida($s);
+}
+
+/** Asignado al curso pero con validación del ingenio o pago propio aún por regularizar. */
+function cengi_ins_por_regularizar(array $s) {
+    return $s['estado'] === 'Aprobado' && !cengi_ins_admitida($s);
 }
 
 /** Quita la asignacion (desactiva) y devuelve la solicitud a "validada, por asignar". */
