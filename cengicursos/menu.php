@@ -464,7 +464,7 @@ function menu_render($vistaEstudiante = false)
     </div>
 </header>
 
-<script src="js/cengi-navigation.js"></script>
+<script src="js/cengi-navigation.js?v=<?= (int) @filemtime(__DIR__ . '/js/cengi-navigation.js') ?>"></script>
 <script>
 (function () {
     var sidebar = document.getElementById('cengiSidebar');
@@ -516,11 +516,58 @@ function menu_render($vistaEstudiante = false)
         notifPanel.hidden = true;
         notifBtn.setAttribute('aria-expanded', 'false');
     }
+    // Lo ya visto se recuerda en este navegador (por usuario): el número rojo cuenta solo los
+    // pendientes nuevos; al abrir la campana se marcan como vistos. Los avisos siguen en la
+    // lista hasta resolverse (notificaciones_helpers.php).
+    var notifClave = notif ? 'cengiNotifVistos:' + (notif.getAttribute('data-usuario') || '0') : '';
+    function leerVistos() {
+        try { return JSON.parse(localStorage.getItem(notifClave) || '{}') || {}; } catch (e) { return {}; }
+    }
+    function marcarVistos() {
+        var vistos = {};
+        if (!notif) return;
+        notif.querySelectorAll('[data-clave]').forEach(function (a) {
+            vistos[a.getAttribute('data-clave')] = (a.getAttribute('data-ids') || '').split(',').filter(Boolean);
+        });
+        try { localStorage.setItem(notifClave, JSON.stringify(vistos)); } catch (e) { /* sin almacenamiento */ }
+    }
+    function pintarNovedades() {
+        if (!notif) return;
+        var vistos = leerVistos(), nuevos = 0, pendientes = 0;
+        notif.querySelectorAll('[data-clave]').forEach(function (a) {
+            var ids = (a.getAttribute('data-ids') || '').split(',').filter(Boolean);
+            var previos = vistos[a.getAttribute('data-clave')] || [];
+            var n = ids.filter(function (id) { return previos.indexOf(id) === -1; }).length;
+            var marca = a.querySelector('.cengi-notif-nuevo');
+            if (marca) { marca.hidden = !n; marca.textContent = n === 1 ? '1 nuevo' : n + ' nuevos'; }
+            a.classList.toggle('is-nuevo', n > 0);
+            nuevos += n; pendientes += ids.length;
+        });
+        var badge = document.getElementById('cengiNotifN');
+        if (badge) {
+            badge.textContent = nuevos > 99 ? '99+' : String(nuevos);
+            badge.hidden = nuevos === 0;
+        }
+        notifBtn.classList.toggle('has-avisos', nuevos > 0);
+        notifBtn.classList.toggle('has-vistos', nuevos === 0 && pendientes > 0);
+        notifBtn.setAttribute('aria-label', 'Notificaciones: ' + (nuevos ? nuevos + ' nueva' + (nuevos === 1 ? '' : 's') : (pendientes ? 'pendientes ya revisados' : 'sin pendientes')));
+    }
     if (notifBtn && notifPanel) {
+        pintarNovedades();
         notifBtn.addEventListener('click', function () {
             var willOpen = notifPanel.hidden;
             notifPanel.hidden = !willOpen;
             notifBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            if (willOpen) {
+                // Se marcan como vistos al abrir; las etiquetas "nuevo" siguen visibles mientras el panel está abierto.
+                marcarVistos();
+                var badge = document.getElementById('cengiNotifN');
+                if (badge) badge.hidden = true;
+                notifBtn.classList.remove('has-avisos');
+                notifBtn.classList.toggle('has-vistos', !!notif.querySelector('[data-clave]'));
+            } else {
+                pintarNovedades();
+            }
         });
         document.addEventListener('click', function (event) {
             if (!notif.contains(event.target)) closeNotif();
