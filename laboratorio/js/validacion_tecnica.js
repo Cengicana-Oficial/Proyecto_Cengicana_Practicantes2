@@ -98,6 +98,40 @@ function abrirRechazo(endpoint,id,referencia,motivo,despues){
   modal.hidden=false;modal.querySelector('textarea').focus();
 }
 
+/* ---------- constancia de validación: el técnico confirma con su usuario antes de aprobar ----------
+   No hay firma dibujada: la constancia (quién, cargo, fecha y declaración) queda en el historial del
+   formulario y el informe la muestra como "Validado electrónicamente el …". Devuelve true si confirma. */
+let modalConst=null;
+function confirmarValidacion(validador,referencia,reanalisis){
+  return new Promise(resolve=>{
+    if(!modalConst){
+      modalConst=document.createElement('div');modalConst.className='vt-modal';modalConst.hidden=true;
+      modalConst.innerHTML='<div class="vt-modal-box vt-constancia" role="dialog" aria-modal="true" aria-labelledby="vtConstTit"><h3 id="vtConstTit">Constancia de validación técnica</h3><div class="vt-modal-ref"></div>'
+        +'<dl class="vt-const-datos"><dt>Validado por</dt><dd data-c="quien"></dd><dt>Fecha y hora</dt><dd data-c="cuando"></dd></dl>'
+        +'<div class="vt-const-aviso" data-c="rea" hidden></div>'
+        +'<p class="vt-const-texto">Declaro que revisé los datos capturados, los cálculos, los controles y, cuando aplica, la curva de calibración de esta hoja, y que los resultados aprobados son conformes para el informe del lote.</p>'
+        +'<label class="vt-const-check"><input type="checkbox" data-c="ok"> Confirmo esta validación con mi usuario</label>'
+        +'<div class="vt-modal-error"></div><div class="vt-actions" style="justify-content:flex-end"><button type="button" class="cengi-btn cengi-btn-ghost" data-vt="cancelar">Cancelar</button><button type="button" class="cengi-btn cengi-btn-primary" data-vt="confirmar" disabled>Validar</button></div></div>';
+      document.body.appendChild(modalConst);
+      const ok=modalConst.querySelector('[data-c="ok"]'),btn=modalConst.querySelector('[data-vt="confirmar"]');
+      ok.addEventListener('change',()=>{btn.disabled=!ok.checked;});
+      const cerrar=valor=>{if(modalConst.hidden)return;modalConst.hidden=true;const r=modalConst._resolve;modalConst._resolve=null;if(r)r(valor);};
+      modalConst.addEventListener('click',e=>{if(e.target===modalConst||e.target.closest('[data-vt="cancelar"]'))cerrar(false);});
+      document.addEventListener('keydown',e=>{if(e.key==='Escape')cerrar(false);});
+      btn.addEventListener('click',()=>cerrar(true));
+    }
+    const v=validador||{},d=new Date(),dos=n=>String(n).padStart(2,'0');
+    modalConst.querySelector('.vt-modal-ref').textContent=referencia||'';
+    modalConst.querySelector('[data-c="quien"]').textContent=(v.nombre||'Usuario actual')+(v.cargo?' · '+v.cargo:'');
+    modalConst.querySelector('[data-c="cuando"]').textContent=dos(d.getDate())+'/'+dos(d.getMonth()+1)+'/'+d.getFullYear()+' '+dos(d.getHours())+':'+dos(d.getMinutes())+' (se registra la hora del servidor)';
+    const rea=modalConst.querySelector('[data-c="rea"]');rea.hidden=!reanalisis;
+    rea.textContent=reanalisis?'Además, '+reanalisis+' resultado(s) marcados se devolverán a reanálisis.':'';
+    modalConst.querySelector('[data-c="ok"]').checked=false;modalConst.querySelector('[data-vt="confirmar"]').disabled=true;
+    modalConst.querySelector('.vt-modal-error').textContent='';
+    modalConst._resolve=resolve;modalConst.hidden=false;modalConst.querySelector('[data-c="ok"]').focus();
+  });
+}
+
 /* ---------- lista: fuera de rango y acciones por línea ---------- */
 function iniciarLista(){
   const nodo=document.getElementById('vt-list-data');if(!nodo)return;
@@ -131,12 +165,13 @@ function iniciarLista(){
   document.querySelectorAll('.js-vt-accion').forEach(btn=>btn.addEventListener('click',async()=>{
     const tr=btn.closest('tr[data-ids]'),ids=tr.dataset.ids.split(',').map(Number).filter(Boolean);
     if(btn.dataset.accion==='rechazar'){abrirRechazo(data.endpoint,ids,tr.dataset.ref||etiquetaIds(ids),'',recargar);return;}
+    if(!await confirmarValidacion(data.validador,tr.dataset.ref||etiquetaIds(ids),0))return;
     const botones=tr.querySelectorAll('button');botones.forEach(b=>b.disabled=true);
-    try{await resolver(data.endpoint,{ids_formulario:ids,accion:'aprobar',comentario:''});recargar(etiquetaIds(ids)+' validado — sus resultados pasan al informe del lote.');}
+    try{await resolver(data.endpoint,{ids_formulario:ids,accion:'aprobar',comentario:'',constancia:true});recargar(etiquetaIds(ids)+' validado — sus resultados pasan al informe del lote.');}
     catch(e){toast(e.message,true);botones.forEach(b=>b.disabled=false);}
   }));
 }
 
-root.LabVal={esc,fechaTxt,contexto,filaCalc,vistaDe,vistasDe,esLegado,valorPrincipal,checkRango,textoRango,muestrasCalculadas,toast,resolver,abrirRechazo,setMotivos,selectMotivos,etiquetaIds};
+root.LabVal={confirmarValidacion,esc,fechaTxt,contexto,filaCalc,vistaDe,vistasDe,esLegado,valorPrincipal,checkRango,textoRango,muestrasCalculadas,toast,resolver,abrirRechazo,setMotivos,selectMotivos,etiquetaIds};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',iniciarLista);else iniciarLista();
 })(window);

@@ -87,6 +87,14 @@ table.ws-curva-tbl{max-width:300px;}
 .vt-modal-box h3{margin:0 0 4px;font-size:16px;}
 .vt-modal-ref{font-size:12px;color:var(--cengi-muted);margin-bottom:14px;}
 .vt-modal-error{color:var(--cengi-danger);font-size:12px;font-weight:700;margin-top:6px;min-height:1em;}
+/* Constancia de validación técnica */
+.vt-constancia{max-width:520px;}
+.vt-const-datos{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:0 0 12px;padding:12px 14px;border:1px solid #CFE6B8;border-radius:10px;background:#F3F9EC;font-size:13px;}
+.vt-const-datos dt{color:var(--cengi-muted);font-weight:600;}.vt-const-datos dd{margin:0;font-weight:700;color:var(--cengi-ink);}
+.vt-const-aviso{margin:0 0 10px;padding:8px 12px;border-radius:8px;background:#FFF8DB;color:#7A5600;font-size:12.5px;font-weight:600;}
+.vt-const-texto{margin:0 0 12px;font-size:13px;line-height:1.5;color:var(--cengi-ink);}
+.vt-const-check{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;cursor:pointer;}
+.vt-const-check input{width:17px;height:17px;accent-color:var(--cengi-primary);}
 .vt-toast{position:fixed;bottom:24px;right:24px;background:#1F2326;color:#fff;padding:12px 18px;border-radius:10px;font-size:12.5px;font-weight:600;box-shadow:0 6px 20px rgba(31, 35, 38,.2);z-index:400;max-width:min(440px,calc(100vw - 48px));transform:translateY(20px);opacity:0;transition:all .25s ease;pointer-events:none;border-left:4px solid var(--cengi-primary);}
 .vt-toast.show{transform:translateY(0);opacity:1;}
 .vt-toast.is-error{border-left-color:var(--cengi-danger);}

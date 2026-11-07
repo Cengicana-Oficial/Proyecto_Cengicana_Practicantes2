@@ -247,9 +247,10 @@ node.addEventListener('click',async e=>{
     const comentario=notaActual();
     if(Object.values(texturas).some(rows=>Object.values(rows).some(x=>!x.motivo.trim()))){V.toast('Indique el motivo de cada cambio de clase textural, incluso al volver a automática.',true);return;}
     if(n&&!data.categoria){V.toast('Seleccione la categoría del reanálisis.',true);document.getElementById('valCategoria')?.focus();return;}
+    if(!await V.confirmarValidacion(data.validador,referencia(),n))return;
     btn.disabled=true;
     const encabezado={};encCambiado().forEach(c=>encabezado[c.k]=encEditado[c.k]);
-    try{await V.resolver(data.endpoint,{ids_formulario:ids,accion:'aprobar',comentario,reanalizar,categoria:data.categoria,encabezado,texturas});
+    try{await V.resolver(data.endpoint,{ids_formulario:ids,accion:'aprobar',comentario,reanalizar,categoria:data.categoria,encabezado,texturas,constancia:true});
       irALista(V.etiquetaIds(ids)+' validado'+(n?' — '+n+' resultado(s) devuelto(s) a reanálisis':'')+'.');}
     catch(err){V.toast(err.message,true);btn.disabled=false;}
   }

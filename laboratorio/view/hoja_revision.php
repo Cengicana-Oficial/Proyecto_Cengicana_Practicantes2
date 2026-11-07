@@ -68,6 +68,8 @@ $payload=[
     'motivos'=>LAB_MOTIVOS_RECHAZO,
     'volver'=>'validacion_tecnica_view.php',
     'notas'=>$notas,
+    // Quién valida: se muestra en la constancia antes de aprobar.
+    'validador'=>['nombre'=>(string)(lab_current_user()['nombre']??''),'cargo'=>(string)(lab_current_user()['rol']??'')],
     'formularios'=>$formularios,
 ];
 $subtitulo=count($ids)===1?'Formulario #'.$ids[0]:'Hoja con '.count($ids).' formularios (#'.implode(', #',$ids).')';

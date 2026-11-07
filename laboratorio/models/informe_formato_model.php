@@ -13,6 +13,28 @@
 
 require_once __DIR__ . '/../includes/lote_etiqueta_helper.php';
 
+if (!function_exists('lab_informe_sello_revision')) {
+    /**
+     * Constancia de la revisión técnica en el espacio "Revisado por": no hay firma dibujada; la
+     * validación se hace en el sistema y queda registrado quién aprobó cada hoja y cuándo.
+     * Un revisor: "Validado electrónicamente el <fecha>". Varios: cada nombre con su fecha.
+     */
+    function lab_informe_sello_revision(array $meta, callable $e): string
+    {
+        $det = array_values(array_filter($meta['revisores_detalle'] ?? [], static fn($r) => ($r['nombre'] ?? '') !== ''));
+        if (!$det) {
+            return '<span class="fval">' . (!empty($meta['revisores']) ? 'Validado electrónicamente' : 'Pendiente de validación técnica') . '</span>';
+        }
+        if (count($det) === 1) {
+            return '<div class="sello"><b>✓ Validado electrónicamente</b>' . ($det[0]['fecha'] !== '' ? '<br><span>el ' . $e($det[0]['fecha']) . ' · Validación técnica</span>' : '') . '</div>';
+        }
+        return '<div class="sello"><b>✓ Validado electrónicamente</b>' . implode('', array_map(
+            static fn($r) => '<br><span>' . $e($r['nombre']) . ($r['fecha'] !== '' ? ' · ' . $e($r['fecha']) : '') . '</span>',
+            array_slice($det, 0, 2)
+        )) . (count($det) > 2 ? '<br><span>y ' . (count($det) - 2) . ' más</span>' : '') . '</div>';
+    }
+}
+
 if (!function_exists('lab_informe_bloque_verificacion')) {
     /**
      * QR y código de verificación pública del informe firmado (como los diplomas): al escanearlo se
@@ -320,7 +342,9 @@ table{border-collapse:collapse}
 .obs{font-size:9px;margin:4px 0 8px}
 .firmas{width:100%;margin:6px 0 8px}.firmas td{vertical-align:bottom;text-align:center;width:28%;font-size:9px}
 .flbl{text-align:left;font-size:8px;color:#6C757D;font-weight:bold}.farea{height:44px;vertical-align:bottom}.farea img{height:42px}
-.fval{font-size:8px;color:#6C757D;font-style:italic}.fpend{font-size:8px;color:#B6BDC5;font-style:italic}.flinea{border-top:1px solid #1F2429;padding-top:2px}
+.fval{font-size:8px;color:#6C757D;font-style:italic}
+.sello{display:inline-block;border:1px solid #9CC97A;background:#F3F9EC;color:#2F5A12;padding:3px 7px;font-size:7.5px;text-align:left;line-height:1.35}
+.sello b{font-size:8px}.sello span{color:#495057}.fpend{font-size:8px;color:#B6BDC5;font-style:italic}.flinea{border-top:1px solid #1F2429;padding-top:2px}
 .fsmall{font-size:7.5px;color:#6C757D}
 .pie{border-top:1px solid #DDE1E5;padding-top:5px;font-size:7.5px;color:#495057}.pie p{margin:0 0 2px}
 .pief{width:100%;margin-top:4px;color:#6C757D;font-size:7.5px}
@@ -336,7 +360,7 @@ table{border-collapse:collapse}
 ' . $metodos . '
 <div class="obs"><b>Observaciones:</b> ' . nl2br($e($meta['observaciones'] ?? '')) . '</div>
 <table class="firmas"><tr><td style="width:44%;text-align:left;vertical-align:bottom">' . lab_informe_bloque_verificacion($meta, $e) . '</td>
-<td><div class="flbl">Revisado por:</div><div class="farea"><span class="fval">Validado electrónicamente</span></div><div class="flinea"><b>' . $e(implode(', ', $meta['revisores'] ?? []) ?: '—') . '</b></div><div class="fsmall">' . $e($F['revisado_cargo']) . '</div></td>
+<td><div class="flbl">Revisado por:</div><div class="farea">' . lab_informe_sello_revision($meta, $e) . '</div><div class="flinea"><b>' . $e(implode(', ', $meta['revisores'] ?? []) ?: '—') . '</b></div><div class="fsmall">' . $e($F['revisado_cargo']) . '</div></td>
 <td><div class="flbl">Aprobado por:</div><div class="farea">' . ($firmado ? '<img src="' . $e($meta['firma_png']) . '" alt="Firma">' : '<span class="fpend">Pendiente de firma</span>') . '</div><div class="flinea"><b>' . $e(($firmante !== '' ? $firmante . ', ' : '') . $cfg['firmante_cargo']) . '</b></div><div class="fsmall">' . ($firmado ? 'Firmado electrónicamente el ' . $e($meta['fecha_firma_txt'] ?? '') : 'Pendiente de aprobación y firma') . '</div></td>
 </tr></table>
 <div class="pie">' . implode('', array_map(static fn($p) => '<p>' . $e($p) . '</p>', $cfg['pie'])) . (!empty($F['nota']) ? '<p>' . $e($F['nota']) . '</p>' : '') . '
@@ -492,7 +516,8 @@ if (!function_exists('lab_informe_xlsx')) {
         }
         $poner(1, $fila++, 'Observaciones: ' . ($meta['observaciones'] ?? ''));
         $fila++;
-        $poner(1, $fila++, 'Revisado por: ' . (implode(', ', $meta['revisores'] ?? []) ?: '—') . ' · ' . $F['revisado_cargo'] . ' · Validado electrónicamente');
+        $detalleRev = array_map(static fn($r) => $r['nombre'] . ($r['fecha'] !== '' ? ' (' . $r['fecha'] . ')' : ''), $meta['revisores_detalle'] ?? []);
+        $poner(1, $fila++, 'Revisado por: ' . (implode(', ', $detalleRev ?: ($meta['revisores'] ?? [])) ?: '—') . ' · ' . $F['revisado_cargo'] . ' · Validado electrónicamente en Validación técnica');
         $poner(1, $fila++, 'Aprobado por: ' . trim(($meta['firmante'] ?? '') . ', ' . $cfg['firmante_cargo'], ', ')
             . (!empty($meta['firma_png']) ? ' · Firmado electrónicamente el ' . ($meta['fecha_firma_txt'] ?? '') : ' · Pendiente de aprobación y firma'));
         $fila++;

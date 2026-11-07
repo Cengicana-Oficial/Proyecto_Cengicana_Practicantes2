@@ -131,10 +131,8 @@ if (!function_exists('lab_informes_lotes')) {
         unset($l);
 
         $orden = ['LISTO' => 0, 'DEVUELTO' => 1, 'PREP' => 2, 'FIRMADO' => 3];
-        $prioridad = ['alta' => 0, 'media' => 1, 'baja' => 2];
-        uasort($lotes, static function ($a, $b) use ($orden, $prioridad) {
+        uasort($lotes, static function ($a, $b) use ($orden) {
             return $orden[$a['estado']] <=> $orden[$b['estado']]
-                ?: ($prioridad[$a['prioridad']] ?? 1) <=> ($prioridad[$b['prioridad']] ?? 1)
                 ?: $b['id_lote'] <=> $a['id_lote']; // más recientes primero (paginación de 25)
         });
 
@@ -235,12 +233,17 @@ if (!function_exists('lab_informe_detalle')) {
         }
 
         // "Revisado por": técnicos que validaron los formularios del lote en Validación técnica.
+        // Con la fecha de su última validación, para dejar constancia en el informe (sin firma dibujada).
         $revisores = [];
+        $revisoresDetalle = [];
         if ($formularios) {
             $ids = array_keys($formularios);
-            $stmt = $pdo->prepare("SELECT DISTINCT usuario FROM historial_formulario WHERE accion = 'validacion_tecnica' AND LOWER(estado_nuevo) LIKE '%aprob%' AND usuario IS NOT NULL AND id_formulario IN (" . implode(',', array_fill(0, count($ids), '?')) . ')');
+            $stmt = $pdo->prepare("SELECT usuario, MAX(fecha) AS fecha FROM historial_formulario WHERE accion = 'validacion_tecnica' AND LOWER(estado_nuevo) LIKE '%aprob%' AND usuario IS NOT NULL AND usuario <> '' AND id_formulario IN (" . implode(',', array_fill(0, count($ids), '?')) . ') GROUP BY usuario ORDER BY MAX(fecha)');
             $stmt->execute($ids);
-            $revisores = array_values(array_filter($stmt->fetchAll(PDO::FETCH_COLUMN)));
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $revisores[] = (string) $r['usuario'];
+                $revisoresDetalle[] = ['nombre' => (string) $r['usuario'], 'fecha' => $r['fecha'] ? date('d/m/Y H:i', strtotime((string) $r['fecha'])) : ''];
+            }
         }
 
         $historial = $pdo->prepare('SELECT accion, detalle, usuario, fecha FROM lab_informe_historial WHERE id_lote = ? ORDER BY fecha, id_historial');
@@ -254,6 +257,7 @@ if (!function_exists('lab_informe_detalle')) {
             'celdas' => $celdas,
             'celdas_hoja' => $celdasHoja,
             'revisores' => $revisores,
+            'revisores_detalle' => $revisoresDetalle,
             'snapshots' => lab_validacion_snapshots($pdo, array_keys($formularios)),
             'historial' => $historial->fetchAll(PDO::FETCH_ASSOC),
         ];
@@ -288,15 +292,30 @@ if (!function_exists('lab_informe_meta')) {
             $stmt->execute([(int) $inf['id_documento']]);
             $firma = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
         }
+        // Informe firmado: el mismo código y QR de verificación que se imprimió al firmar
+        // (si no, la vista regenerada saldría sin QR aunque el PDF guardado lo tenga).
+        $verificacion = null;
+        if (!$preview && ($inf['estado'] ?? '') === 'FIRMADO') {
+            require_once __DIR__ . '/../includes/verificacion_documentos_helper.php';
+            if (lab_verif_tabla_existe($pdo)) {
+                $q = $pdo->prepare("SELECT codigo FROM lab_documento_verificacion WHERE tipo = 'informe' AND id_lote = ? AND estado = 'vigente' ORDER BY id DESC LIMIT 1");
+                $q->execute([(int) $detalle['lote']['id_lote']]);
+                if ($codigoVerif = $q->fetchColumn()) {
+                    $urlVerif = lab_verif_url((string) $codigoVerif);
+                    $verificacion = ['codigo' => (string) $codigoVerif, 'url' => $urlVerif, 'qr' => lab_verif_qr_png($urlVerif)];
+                }
+            }
+        }
         return [
             'codigo' => $inf['codigo'] ?? '',
             'observaciones' => (string) ($inf['observaciones'] ?? ''),
-            'revisores' => $detalle['revisores'],
+            'revisores' => $detalle['revisores'], 'revisores_detalle' => $detalle['revisores_detalle'] ?? [],
             'firmante' => $firma['firmante_nombre'] ?? ($inf['firmado_por'] ?? ''),
             'firma_png' => $firma['firma_png'] ?? '',
             'fecha_firma' => $inf['fecha_firma'] ?? null,
             'fecha_firma_txt' => $firma['fh'] ?? '',
             'preview' => $preview,
+            'verificacion' => $verificacion,
         ];
     }
 }
@@ -339,7 +358,7 @@ if (!function_exists('lab_informe_firmar')) {
                 $verificacion = ['codigo' => $codigoVerif, 'url' => $urlVerif, 'qr' => lab_verif_qr_png($urlVerif)];
             }
             $html = lab_informe_reporte_html($est, $detalle, $limpios, [
-                'codigo' => $inf['codigo'], 'observaciones' => $observaciones, 'revisores' => $detalle['revisores'],
+                'codigo' => $inf['codigo'], 'observaciones' => $observaciones, 'revisores' => $detalle['revisores'], 'revisores_detalle' => $detalle['revisores_detalle'] ?? [],
                 'firmante' => $firmante, 'firma_png' => $firmaPng, 'fecha_firma' => date('Y-m-d'), 'fecha_firma_txt' => $fecha, 'preview' => false,
                 'verificacion' => $verificacion,
             ]);

@@ -39,7 +39,9 @@ asort($lotesDisponibles);
 ksort($tiposDisponibles);
 
 // Datos para calcular en el navegador los resultados fuera de rango (mismas formulas que el detalle).
-$datosLista = ['endpoint' => '../controllers/validacion_tecnica_controller.php', 'motivos' => LAB_MOTIVOS_RECHAZO, 'formularios' => []];
+$datosLista = ['endpoint' => '../controllers/validacion_tecnica_controller.php', 'motivos' => LAB_MOTIVOS_RECHAZO, 'formularios' => [],
+    // Quién valida: se muestra en la constancia antes de aprobar.
+    'validador' => ['nombre' => (string) (lab_current_user()['nombre'] ?? ''), 'cargo' => (string) (lab_current_user()['rol'] ?? '')]];
 foreach ($pendientesTodos as $l) {
     $idf = (int) $l['id_formulario'];
     if (isset($snapshots[$idf])) {

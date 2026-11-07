@@ -75,7 +75,7 @@ lab_shell_open('informes_view.php');
         <?php foreach ($lotes as $l): $inf = $l['informe']; ?>
             <tr data-estado="<?= $l['estado'] ?>" data-buscar="<?= inf_e(mb_strtolower(implode(' ', [$l['codigo_lote'], $l['cliente'], $inf['codigo'] ?? '']))) ?>">
                 <td class="vt-mono"><b><?= inf_e($inf['codigo'] ?? '—') ?></b><?php if ($inf && (int) $inf['version'] > 1): ?> <span class="vt-chip">v<?= (int) $inf['version'] ?></span><?php endif; ?></td>
-                <td><b class="vt-mono"><?= inf_e($l['codigo_lote']) ?></b><div class="small muted"><?= inf_e($l['tipo_muestra']) ?> · <span class="vt-chip pr-<?= inf_e($l['prioridad']) ?>"><?= inf_e(ucfirst($l['prioridad'])) ?></span></div></td>
+                <td><b class="vt-mono"><?= inf_e($l['codigo_lote']) ?></b><div class="small muted"><?= inf_e($l['tipo_muestra']) ?></div></td>
                 <td><?= inf_e($l['cliente']) ?><div class="small muted"><?= (int) $l['numero_muestras'] ?> muestra(s) · <?= (int) $l['total'] ?> análisis</div></td>
                 <td class="inf-col-validacion"><div class="inf-bar"><span style="width:<?= (int) $l['porcentaje'] ?>%"></span></div><div class="small muted"><?= (int) $l['validados'] ?>/<?= (int) $l['total'] ?> validados (<?= (int) $l['porcentaje'] ?>%)</div></td>
                 <td><span class="vt-chip <?= $chipEstado[$l['estado']] ?>"><?= inf_e($l['estado_texto']) ?></span>
@@ -107,7 +107,7 @@ lab_shell_open('informes_view.php');
         <div class="ws-card">
             <div class="ws-card-head"><div>
                 <div class="ws-sec-title"><?= inf_e($inf['codigo'] ?? 'Borrador') ?> <span class="vt-chip <?= $chipEstado[$l['estado']] ?>"><?= inf_e($l['estado_texto']) ?></span></div>
-                <div class="small muted">Lote <b class="vt-mono"><?= inf_e($l['codigo_lote']) ?></b> · <?= inf_e($l['cliente']) ?> · <?= inf_e($l['tipo_muestra']) ?> · <?= (int) $l['validados'] ?>/<?= (int) $l['total'] ?> análisis validados · prioridad <?= inf_e($l['prioridad']) ?></div>
+                <div class="small muted">Lote <b class="vt-mono"><?= inf_e($l['codigo_lote']) ?></b> · <?= inf_e($l['cliente']) ?> · <?= inf_e($l['tipo_muestra']) ?> · <?= (int) $l['validados'] ?>/<?= (int) $l['total'] ?> análisis validados</div>
             </div>
             <div class="ws-chips">
                 <span class="vt-chip"><?= inf_e($formatoInforme['codigo'] ?? '') ?> · <?= inf_e($formatoInforme['titulo'] ?? '') ?></span>
