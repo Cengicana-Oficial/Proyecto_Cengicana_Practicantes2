@@ -46,15 +46,94 @@ final class ComitesPptx
         return '<a:xfrm><a:off x="' . self::emu($x) . '" y="' . self::emu($y) . '"/><a:ext cx="' . self::emu($w) . '" cy="' . self::emu($h) . '"/></a:xfrm>';
     }
 
-    /** Rectángulo de color (fondos, barras, franjas). $redondo usa esquinas redondeadas. */
-    public function rect(int $s, float $x, float $y, float $w, float $h, string $fill, ?string $linea = null, bool $redondo = false): void
+    /** Color sólido con opacidad opcional (0-100). */
+    private static function relleno(string $hex, int $opacidad = 100): string
+    {
+        return '<a:solidFill><a:srgbClr val="' . self::color($hex) . '">' . ($opacidad < 100 ? '<a:alpha val="' . max(0, $opacidad) * 1000 . '"/>' : '') . '</a:srgbClr></a:solidFill>';
+    }
+
+    /**
+     * Rectángulo de color (fondos, barras, franjas, tarjetas). $redondo usa esquinas redondeadas.
+     * Opciones: opacidad y opacidad_linea (0-100), radio (0-50000, curvatura de las esquinas).
+     */
+    public function rect(int $s, float $x, float $y, float $w, float $h, string $fill, ?string $linea = null, bool $redondo = false, array $o = []): void
     {
         $id = $this->nextId++;
-        $ln = $linea ? '<a:ln w="12700"><a:solidFill><a:srgbClr val="' . self::color($linea) . '"/></a:solidFill></a:ln>' : '<a:ln><a:noFill/></a:ln>';
+        $ln = $linea ? '<a:ln w="12700">' . self::relleno($linea, (int) ($o['opacidad_linea'] ?? 100)) . '</a:ln>' : '<a:ln><a:noFill/></a:ln>';
+        $av = $redondo && isset($o['radio']) ? '<a:gd name="adj" fmla="val ' . (int) $o['radio'] . '"/>' : '';
         $this->slides[$s]['shapes'][] = '<p:sp><p:nvSpPr><p:cNvPr id="' . $id . '" name="Forma ' . $id . '"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>'
-            . $this->xfrm($x, $y, $w, $h) . '<a:prstGeom prst="' . ($redondo ? 'roundRect' : 'rect') . '"><a:avLst/></a:prstGeom>'
-            . '<a:solidFill><a:srgbClr val="' . self::color($fill) . '"/></a:solidFill>' . $ln . '</p:spPr>'
+            . $this->xfrm($x, $y, $w, $h) . '<a:prstGeom prst="' . ($redondo ? 'roundRect' : 'rect') . '"><a:avLst>' . $av . '</a:avLst></a:prstGeom>'
+            . self::relleno($fill, (int) ($o['opacidad'] ?? 100)) . $ln . '</p:spPr>'
             . '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="es-GT"/></a:p></p:txBody></p:sp>';
+    }
+
+    /** Rectángulo con degradado lineal. $paradas: [[posición 0-100, color, opacidad 0-100], ...]; $angulo en grados. */
+    public function gradiente(int $s, float $x, float $y, float $w, float $h, array $paradas, float $angulo = 0): void
+    {
+        $id = $this->nextId++;
+        $gs = '';
+        foreach ($paradas as [$pos, $color, $op]) {
+            $gs .= '<a:gs pos="' . (int) round($pos * 1000) . '"><a:srgbClr val="' . self::color($color) . '"><a:alpha val="' . (int) $op * 1000 . '"/></a:srgbClr></a:gs>';
+        }
+        $this->slides[$s]['shapes'][] = '<p:sp><p:nvSpPr><p:cNvPr id="' . $id . '" name="Velo ' . $id . '"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>'
+            . $this->xfrm($x, $y, $w, $h) . '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
+            . '<a:gradFill rotWithShape="1"><a:gsLst>' . $gs . '</a:gsLst><a:lin ang="' . (int) round($angulo * 60000) . '" scaled="0"/></a:gradFill><a:ln><a:noFill/></a:ln></p:spPr>'
+            . '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="es-GT"/></a:p></p:txBody></p:sp>';
+    }
+
+    /**
+     * Sector de anillo (para gráficos de dona) dentro del cuadrado ($x, $y, $d): desde $inicio hasta
+     * $fin en grados, en sentido horario y 0° a las 3 en punto. $grosor: 0-50 (% del diámetro).
+     */
+    public function arco(int $s, float $x, float $y, float $d, float $inicio, float $fin, int $grosor, string $color): void
+    {
+        $id = $this->nextId++;
+        $ang = static fn(float $g) => (int) round(fmod(fmod($g, 360) + 360, 360) * 60000);
+        $this->slides[$s]['shapes'][] = '<p:sp><p:nvSpPr><p:cNvPr id="' . $id . '" name="Sector ' . $id . '"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>'
+            . $this->xfrm($x, $y, $d, $d) . '<a:prstGeom prst="blockArc"><a:avLst><a:gd name="adj1" fmla="val ' . $ang($inicio) . '"/><a:gd name="adj2" fmla="val ' . $ang($fin) . '"/><a:gd name="adj3" fmla="val ' . ($grosor * 1000) . '"/></a:avLst></a:prstGeom>'
+            . self::relleno($color) . '<a:ln><a:noFill/></a:ln></p:spPr>'
+            . '<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="es-GT"/></a:p></p:txBody></p:sp>';
+    }
+
+    /** Registra la imagen en el paquete (una sola copia aunque se use en varias diapositivas) y la relaciona con la diapositiva. */
+    private function relImagen(int $s, string $datos, string $ext): string
+    {
+        $ruta = 'ppt/media/imagen_' . substr(md5($datos), 0, 12) . '.' . $ext;
+        $this->media[$ruta] = $datos;
+        $rid = array_search('../media/' . basename($ruta), $this->slides[$s]['rels'], true);
+        if ($rid === false) {
+            $rid = 'rId' . (count($this->slides[$s]['rels']) + 2);
+            $this->slides[$s]['rels'][$rid] = '../media/' . basename($ruta);
+        }
+        return $rid;
+    }
+
+    /**
+     * Foto de fondo a sangre (cubre toda la diapositiva sin deformarse): se recorta lo que sobra.
+     * $posY (0-100) elige qué franja vertical de la foto queda visible, como background-position.
+     */
+    public function fondo(int $s, string $datos, int $posY = 50): bool
+    {
+        $info = @getimagesizefromstring($datos);
+        if (!$info || !in_array($info[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
+            return false;
+        }
+        $rid = $this->relImagen($s, $datos, $info[2] === IMAGETYPE_PNG ? 'png' : 'jpeg');
+        $ia = $info[0] / $info[1];
+        $sa = self::W / self::H;
+        $l = $t = $r = $b = 0;
+        if ($ia > $sa) {
+            $l = $r = (int) round((1 - $sa / $ia) / 2 * 100000);
+        } else {
+            $sobra = 1 - $ia / $sa;
+            $t = (int) round($sobra * $posY / 100 * 100000);
+            $b = (int) round($sobra * (100 - $posY) / 100 * 100000);
+        }
+        $id = $this->nextId++;
+        $this->slides[$s]['shapes'][] = '<p:pic><p:nvPicPr><p:cNvPr id="' . $id . '" name="Foto de fondo ' . $id . '"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>'
+            . '<p:blipFill><a:blip r:embed="' . $rid . '"/><a:srcRect l="' . $l . '" t="' . $t . '" r="' . $r . '" b="' . $b . '"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>'
+            . $this->xfrm(0, 0, self::W / self::EMU, self::H / self::EMU) . '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>';
+        return true;
     }
 
     /**
@@ -74,8 +153,9 @@ final class ComitesPptx
                 $linea = substr($linea, 2, -2);
                 $bold = true;
             }
-            $parrafos .= '<a:p><a:pPr algn="' . ($o['align'] ?? 'l') . '"/>' . ($linea === '' ? '' : '<a:r><a:rPr lang="es-GT" sz="' . $size . '"' . ($bold ? ' b="1"' : '') . ' dirty="0">'
-                . '<a:solidFill><a:srgbClr val="' . $color . '"/></a:solidFill><a:latin typeface="' . $font . '"/><a:cs typeface="' . $font . '"/></a:rPr><a:t>' . self::xml($linea) . '</a:t></a:r>')
+            $parrafos .= '<a:p><a:pPr algn="' . ($o['align'] ?? 'l') . '"/>' . ($linea === '' ? '' : '<a:r><a:rPr lang="es-GT" sz="' . $size . '"' . ($bold ? ' b="1"' : '')
+                . (isset($o['espaciado']) ? ' spc="' . (int) $o['espaciado'] . '"' : '') . ' dirty="0">'
+                . self::relleno($color, (int) ($o['opacidad'] ?? 100)) . '<a:latin typeface="' . $font . '"/><a:cs typeface="' . $font . '"/></a:rPr><a:t>' . self::xml($linea) . '</a:t></a:r>')
                 . '<a:endParaRPr lang="es-GT" sz="' . $size . '"/></a:p>';
         }
         $fill = isset($o['fill']) ? '<a:solidFill><a:srgbClr val="' . self::color($o['fill']) . '"/></a:solidFill>' : '<a:noFill/>';
@@ -94,16 +174,12 @@ final class ComitesPptx
         if (!$info || !in_array($info[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
             return false;
         }
-        $ext = $info[2] === IMAGETYPE_PNG ? 'png' : 'jpeg';
         $escala = min($w / $info[0], $h / $info[1]);
         $iw = $info[0] * $escala;
         $ih = $info[1] * $escala;
         $ix = $alinear === 'l' ? $x : ($alinear === 'r' ? $x + $w - $iw : $x + ($w - $iw) / 2);
         $iy = $y + ($h - $ih) / 2;
-        $ruta = 'ppt/media/imagen' . (count($this->media) + 1) . '.' . $ext;
-        $this->media[$ruta] = $datos;
-        $rid = 'rId' . (count($this->slides[$s]['rels']) + 2);
-        $this->slides[$s]['rels'][$rid] = '../media/' . basename($ruta);
+        $rid = $this->relImagen($s, $datos, $info[2] === IMAGETYPE_PNG ? 'png' : 'jpeg');
         $id = $this->nextId++;
         $this->slides[$s]['shapes'][] = '<p:pic><p:nvPicPr><p:cNvPr id="' . $id . '" name="Imagen ' . $id . '"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>'
             . '<p:blipFill><a:blip r:embed="' . $rid . '"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>' . $this->xfrm($ix, $iy, $iw, $ih)

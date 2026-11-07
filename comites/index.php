@@ -237,16 +237,22 @@ if ($view === 'cifras' && $puedeVerSeccionActual) {
     if (in_array($_GET['exportar'] ?? '', ['html', 'pdf', 'pptx'], true)) {
         cifras_exportar($pdo, $anioCifras, (string) $_GET['exportar']);
     }
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && str_starts_with((string) ($_POST['accion'] ?? ''), 'alianza_')) {
+    $accionCifras = (string) ($_POST['accion'] ?? '');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && (str_starts_with($accionCifras, 'alianza_') || $accionCifras === 'cifras_diapositiva')) {
         try {
             if (!$puedeGestionarSeccionActual) {
-                throw new RuntimeException('No tienes permiso para gestionar alianzas.');
+                throw new RuntimeException('No tienes permiso para gestionar las cifras institucionales.');
             }
             if (!hash_equals($_SESSION['cifras_csrf'], (string) ($_POST['csrf'] ?? ''))) {
                 throw new RuntimeException('La sesión del formulario expiró. Recarga la página.');
             }
-            $mensajeCifras = cifras_alianza_accion($pdo, $_POST, $_FILES);
-            header('Location: index.php?view=cifras&anio=' . $anioCifras . '&msg=' . urlencode($mensajeCifras) . '#alianzas-registro');
+            if ($accionCifras === 'cifras_diapositiva') {
+                [$mensajeCifras, $anclaCifras] = cifras_diapositiva_accion($_POST, $_FILES);
+            } else {
+                $mensajeCifras = cifras_alianza_accion($pdo, $_POST, $_FILES);
+                $anclaCifras = 'alianzas-registro';
+            }
+            header('Location: index.php?view=cifras&anio=' . $anioCifras . '&msg=' . urlencode($mensajeCifras) . '#' . rawurlencode($anclaCifras));
             exit;
         } catch (Throwable $error) {
             $flashError = $error instanceof PDOException ? 'No se pudo guardar la alianza. Revisa los datos e inténtalo de nuevo.' : $error->getMessage();
@@ -2487,7 +2493,7 @@ $notificaciones = notif_obtener($pdo, $user);
                 <?php require __DIR__ . '/includes/estadisticas-vista.php'; ?>
 
             <?php elseif ($view === 'cifras'): ?>
-                <?php $cifras = cifras_datos($pdo, $anioCifras); $alianzasTodas = cifras_alianzas($pdo); require __DIR__ . '/includes/cifras-vista.php'; ?>
+                <?php $cifras = cifras_presentacion($pdo, $anioCifras, (bool) $puedeGestionarSeccionActual); $alianzasTodas = cifras_alianzas($pdo); require __DIR__ . '/includes/cifras-vista.php'; ?>
 
             <?php elseif ($view === 'notificaciones'): ?>
                 <?php require __DIR__ . '/includes/notificaciones-correo-vista.php'; ?>
