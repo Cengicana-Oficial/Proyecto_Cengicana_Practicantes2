@@ -35,6 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     try {
+        // Si el envio supera post_max_size, PHP descarta todo el formulario ($_POST vacio).
+        if (!$_POST && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > ini_bytes('post_max_size')) {
+            throw new RuntimeException('Los archivos superan el limite de ' . round(ini_bytes('post_max_size') / 1048576) . ' MB por envio. Adjunta menos archivos o envialos en varios seguimientos.');
+        }
         if (!csrf_valido()) {
             throw new RuntimeException('El formulario expiró o no es válido. Recarga la página e intenta de nuevo.');
         }
@@ -320,17 +324,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $adjuntosValidos = validar_adjuntos($_FILES['seguimiento_adjuntos'] ?? null);
 
-            $observation = trim($_POST['observacion'] ?? '');
+            $observation = trim(str_replace("\r\n", "\n", (string) ($_POST['observacion'] ?? '')));
+            if (mb_strlen($observation, 'UTF-8') > 4000) {
+                throw new RuntimeException('La observacion admite hasta 4000 caracteres.');
+            }
+            if ($status === 'rechazado' && $observation === '') {
+                throw new RuntimeException('Explica el motivo del rechazo; el solicitante lo vera en el seguimiento.');
+            }
+            $cambiaEstado = $status !== $request['estado'];
+            if (!$cambiaEstado && $observation === '' && !$adjuntosValidos) {
+                throw new RuntimeException('No hay nada que registrar: cambia el estado, escribe una observacion o adjunta un documento.');
+            }
+
+            // Estado, seguimiento y adjuntos se registran juntos o no se registra nada.
+            $pdo->beginTransaction();
             $pdo->prepare('UPDATE solicitudes SET estado = ? WHERE id = ?')->execute([$status, $requestId]);
             $pdo->prepare(
                 'INSERT INTO seguimientos (solicitud_id, usuario_id, estado, observacion) VALUES (?, ?, ?, ?)'
             )->execute([$requestId, (int) $user['id'], $status, $observation ?: null]);
-
             guardar_adjuntos($pdo, $requestId, $request['codigo'] . '_seguimiento', $adjuntosValidos);
+            $pdo->commit();
 
             notify_request_progress($pdo, $menuDbName, $user, $requestId, $status, $observation);
 
-            header('Location: index.php?view=detalle&id=' . $requestId . '&message=' . urlencode('Estado actualizado correctamente.'));
+            header('Location: index.php?view=detalle&id=' . $requestId . '&message=' . urlencode($cambiaEstado
+                ? 'Estado actualizado a ' . estado_label($status) . '.'
+                : 'Seguimiento registrado.'));
             exit;
         }
 
@@ -394,61 +413,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if ($action === 'guardar_revision_idea') {
-                $campos = array_keys(IDEA_REVISION_CAMPOS);
-                $valores = [];
-                foreach ($campos as $campo) {
-                    $valores[] = idea_texto_post($campo);
+                $nuevos = [];
+                foreach (array_keys(IDEA_REVISION_CAMPOS) as $campo) {
+                    $nuevos[$campo] = idea_texto_post($campo);
                 }
                 $costos = idea_costos_post();
-                $campos = array_merge($campos, ['costo_items', 'costo_estimado', 'costo_detalle', 'requiere_analisis', 'analisis_detalle', 'actualizado_por']);
-                $valores = array_merge($valores, [
-                    $costos['items'],
-                    $costos['total'],
-                    idea_texto_post('costo_detalle'),
-                    !empty($_POST['requiere_analisis']) ? 1 : 0,
-                    idea_texto_post('analisis_detalle'),
-                    $userId,
-                ]);
+                $nuevos += [
+                    'costo_items' => $costos['items'],
+                    'costo_estimado' => $costos['total'],
+                    'costo_detalle' => idea_texto_post('costo_detalle'),
+                    'requiere_analisis' => !empty($_POST['requiere_analisis']) ? 1 : 0,
+                    'analisis_detalle' => idea_texto_post('analisis_detalle'),
+                ];
+                if ($nuevos['requiere_analisis'] === 1 && $nuevos['analisis_detalle'] === null) {
+                    throw new RuntimeException('Indica que analisis adicional falta, quien lo hace y para cuando.');
+                }
 
-                $pdo->beginTransaction();
-                $pdo->prepare(
-                    'INSERT INTO idea_revisiones (idea_id, ' . implode(', ', $campos) . ')
-                     VALUES (?' . str_repeat(', ?', count($campos)) . ')
-                     ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(static fn(string $c): string => "{$c} = VALUES({$c})", $campos))
-                )->execute(array_merge([$ideaId], $valores));
-
-                // Responsables de seguimiento: solo quien gestiona el buzon los cambia.
-                if (can_manage_ideas($user) && isset($_POST['responsables_enviados'])) {
-                    $permitidos = [];
-                    foreach (fetch_module_users($menuPdo, $pdo, $user) as $moduleUser) {
-                        $permitidos[(int) $moduleUser['id']] = $moduleUser['nombre'];
-                    }
-                    $elegidos = array_values(array_unique(array_filter(
-                        array_map('intval', (array) ($_POST['responsables'] ?? [])),
-                        static fn(int $id): bool => isset($permitidos[$id])
-                    )));
-                    $anteriores = idea_responsable_ids($pdo, $ideaId);
-                    sort($anteriores);
-                    $ordenados = $elegidos;
-                    sort($ordenados);
-                    if ($ordenados !== $anteriores) {
-                        $pdo->prepare('DELETE FROM idea_responsables WHERE idea_id = ?')->execute([$ideaId]);
-                        $insert = $pdo->prepare('INSERT INTO idea_responsables (idea_id, usuario_id) VALUES (?, ?)');
-                        foreach ($elegidos as $responsableId) {
-                            $insert->execute([$ideaId, $responsableId]);
-                        }
-                        $nombres = array_map(static fn(int $id): string => $permitidos[$id], $elegidos);
-                        registrar_historial_idea($pdo, $ideaId, $userId, $nombres
-                            ? 'Responsables de seguimiento: ' . implode(', ', $nombres) . '.'
-                            : 'Quito a todos los responsables de seguimiento.');
+                // Solo se escribe (y se deja en el historial) lo que realmente cambio.
+                $anteriorStmt = $pdo->prepare('SELECT ' . implode(', ', array_keys($nuevos)) . ' FROM idea_revisiones WHERE idea_id = ?');
+                $anteriorStmt->execute([$ideaId]);
+                $anterior = $anteriorStmt->fetch() ?: [];
+                $etiquetas = array_map(static fn(array $c): string => $c[0], IDEA_REVISION_CAMPOS) + [
+                    'costo_items' => 'Costo', 'costo_estimado' => 'Costo', 'costo_detalle' => 'Costo',
+                    'requiere_analisis' => 'Conclusion', 'analisis_detalle' => 'Conclusion',
+                ];
+                $cambiados = [];
+                foreach ($nuevos as $campo => $valor) {
+                    $previo = $anterior[$campo] ?? null;
+                    $igual = $campo === 'costo_estimado'
+                        ? ($previo === null) === ($valor === null) && (float) $previo === (float) $valor
+                        : (string) $previo === (string) $valor;
+                    if (!$igual) {
+                        $cambiados[$etiquetas[$campo]] = true;
                     }
                 }
 
-                registrar_historial_idea($pdo, $ideaId, $userId, 'Actualizo el analisis.');
+                // Responsables de seguimiento: solo quien gestiona el buzon los cambia.
+                // La lista de usuarios del modulo solo se consulta si la seleccion cambio.
+                $nombresResponsables = null;
+                if (can_manage_ideas($user) && isset($_POST['responsables_enviados'])) {
+                    $solicitados = array_values(array_unique(array_filter(array_map('intval', (array) ($_POST['responsables'] ?? [])))));
+                    sort($solicitados);
+                    $anteriores = idea_responsable_ids($pdo, $ideaId);
+                    sort($anteriores);
+                    if ($solicitados !== $anteriores) {
+                        $permitidos = [];
+                        foreach (fetch_module_users($menuPdo, $pdo, $user) as $moduleUser) {
+                            $permitidos[(int) $moduleUser['id']] = $moduleUser['nombre'];
+                        }
+                        $elegidos = array_values(array_filter($solicitados, static fn(int $id): bool => isset($permitidos[$id])));
+                        if ($elegidos !== $anteriores) {
+                            $nombresResponsables = array_map(static fn(int $id): string => $permitidos[$id], $elegidos);
+                        }
+                    }
+                }
+
+                if (!$cambiados && $nombresResponsables === null) {
+                    header('Location: ' . $ideaUrl . '&message=' . urlencode('No habia cambios que guardar.') . '#paso-' . (isset($_POST['continuar']) ? 'ponderacion' : 'analisis'));
+                    exit;
+                }
+
+                $pdo->beginTransaction();
+                if ($cambiados) {
+                    $campos = array_merge(array_keys($nuevos), ['actualizado_por']);
+                    $pdo->prepare(
+                        'INSERT INTO idea_revisiones (idea_id, ' . implode(', ', $campos) . ')
+                         VALUES (?' . str_repeat(', ?', count($campos)) . ')
+                         ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(static fn(string $c): string => "{$c} = VALUES({$c})", $campos))
+                    )->execute(array_merge([$ideaId], array_values($nuevos), [$userId]));
+                    registrar_historial_idea($pdo, $ideaId, $userId, 'Actualizo el analisis: ' . implode(', ', array_keys($cambiados)) . '.');
+                }
+                if ($nombresResponsables !== null) {
+                    $pdo->prepare('DELETE FROM idea_responsables WHERE idea_id = ?')->execute([$ideaId]);
+                    $insert = $pdo->prepare('INSERT INTO idea_responsables (idea_id, usuario_id) VALUES (?, ?)');
+                    foreach ($elegidos as $responsableId) {
+                        $insert->execute([$ideaId, $responsableId]);
+                    }
+                    registrar_historial_idea($pdo, $ideaId, $userId, $nombresResponsables
+                        ? 'Responsables de seguimiento: ' . implode(', ', $nombresResponsables) . '.'
+                        : 'Quito a todos los responsables de seguimiento.');
+                }
                 $aviso = $ideaRow['estado'] === 'nueva' ? $cambiarEstado('en_analisis', null, true) : '';
                 $pdo->commit();
 
-                header('Location: ' . $ideaUrl . '&message=' . urlencode(trim('Analisis guardado. ' . $aviso)) . '#paso-analisis');
+                header('Location: ' . $ideaUrl . '&message=' . urlencode(trim('Analisis guardado. ' . $aviso)) . '#paso-' . (isset($_POST['continuar']) ? 'ponderacion' : 'analisis'));
                 exit;
             }
 
@@ -519,22 +567,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 [$sentWhere, $sentParams] = sent_scope_sql($user);
 [$receivedWhere, $receivedParams] = received_scope_sql($user);
 
-$statsStmt = $pdo->prepare(
-    "SELECT
-        COUNT(*) AS total,
-        SUM(estado = 'recibido') AS recibidas,
-        SUM(estado = 'proceso') AS proceso,
-        SUM(estado = 'completado') AS completadas,
-        SUM(estado = 'rechazado') AS rechazadas
-     FROM solicitudes s
-     WHERE {$visibleWhere}"
-);
-$statsStmt->execute($visibleParams);
-$stats = $statsStmt->fetch() ?: ['total' => 0, 'recibidas' => 0, 'proceso' => 0, 'completadas' => 0, 'rechazadas' => 0];
-
+// Cada consulta se ejecuta solo en la vista que la usa (antes corrian en todas las paginas).
+$stats = ['total' => 0, 'recibidas' => 0, 'proceso' => 0, 'completadas' => 0, 'rechazadas' => 0];
 $recentRequests = [];
 $urgentRequests = [];
 if ($view === 'panel') {
+    $statsStmt = $pdo->prepare(
+        "SELECT
+            COUNT(*) AS total,
+            SUM(estado = 'recibido') AS recibidas,
+            SUM(estado = 'proceso') AS proceso,
+            SUM(estado = 'completado') AS completadas,
+            SUM(estado = 'rechazado') AS rechazadas
+         FROM solicitudes s
+         WHERE {$visibleWhere}"
+    );
+    $statsStmt->execute($visibleParams);
+    $stats = $statsStmt->fetch() ?: $stats;
+
     $recentStmt = $pdo->prepare(
         "SELECT s.id, s.codigo, s.titulo, s.tipo, s.estado, s.creado_en,
                 po.nombre AS programa_origen, pd.nombre AS programa_destino
@@ -590,53 +640,72 @@ if ($view === 'programas' && can_view_programs($user)) {
     }
 }
 
-$programCardsSql = "
-    SELECT p.id, p.nombre, COUNT(s.id) AS total
-    FROM programas p
-    LEFT JOIN solicitudes s ON s.programa_destino_id = p.id
-";
-$programCardsWhere = [];
-$programCardsParams = [];
+$programCounts = [];
+if ($view === 'panel' && can_view_received_requests($user)) {
+    $programCardsSql = "
+        SELECT p.id, p.nombre, COUNT(s.id) AS total
+        FROM programas p
+        LEFT JOIN solicitudes s ON s.programa_destino_id = p.id
+    ";
+    $programCardsWhere = [];
+    $programCardsParams = [];
 
-if (!can_view_all_requests($user) && !empty($user['programa_id'])) {
-    $programCardsWhere[] = 'p.id = ?';
-    $programCardsParams[] = (int) $user['programa_id'];
+    if (!can_view_all_requests($user) && !empty($user['programa_id'])) {
+        $programCardsWhere[] = 'p.id = ?';
+        $programCardsParams[] = (int) $user['programa_id'];
+    }
+
+    $programCardsWhere[] = 'p.activo = 1';
+    $programCardsSql .= ' WHERE ' . implode(' AND ', $programCardsWhere);
+    $programCardsSql .= ' GROUP BY p.id, p.nombre ORDER BY p.nombre';
+    $programCardsStmt = $pdo->prepare($programCardsSql);
+    $programCardsStmt->execute($programCardsParams);
+    $programCounts = $programCardsStmt->fetchAll();
 }
 
-$programCardsWhere[] = 'p.activo = 1';
-$programCardsSql .= ' WHERE ' . implode(' AND ', $programCardsWhere);
-$programCardsSql .= ' GROUP BY p.id, p.nombre ORDER BY p.nombre';
-$programCardsStmt = $pdo->prepare($programCardsSql);
-$programCardsStmt->execute($programCardsParams);
-$programCounts = $programCardsStmt->fetchAll();
+// Columnas de las listas: sin la descripcion completa (TEXT), con un extracto para la
+// busqueda y la fecha de la ultima actividad (ultimo seguimiento).
+$requestListColumns = "s.id, s.codigo, s.titulo, s.tipo, s.prioridad, s.estado, s.fecha_requerida, s.creado_en,
+        s.solicitante_id, s.programa_destino_id, s.monto_estimado, LEFT(s.descripcion, 160) AS extracto,
+        po.nombre AS programa_origen, pd.nombre AS programa_destino,
+        (SELECT MAX(sg.creado_en) FROM seguimientos sg WHERE sg.solicitud_id = s.id) AS ultima_actividad";
 
-$myStmt = $pdo->prepare(
-    "SELECT s.*, po.nombre AS programa_origen, pd.nombre AS programa_destino
-     FROM solicitudes s
-     INNER JOIN programas po ON po.id = s.programa_origen_id
-     LEFT JOIN programas pd ON pd.id = s.programa_destino_id
-     WHERE {$sentWhere}
-     ORDER BY s.creado_en DESC"
-);
-$myStmt->execute($sentParams);
-$visibleRequests = $myStmt->fetchAll();
+$visibleRequests = [];
+if ($view === 'mis') {
+    $myStmt = $pdo->prepare(
+        "SELECT {$requestListColumns}
+         FROM solicitudes s
+         INNER JOIN programas po ON po.id = s.programa_origen_id
+         LEFT JOIN programas pd ON pd.id = s.programa_destino_id
+         WHERE {$sentWhere}
+         ORDER BY s.creado_en DESC"
+    );
+    $myStmt->execute($sentParams);
+    $visibleRequests = $myStmt->fetchAll();
+}
 
-$receivedListSql = "SELECT s.*, u.nombre AS solicitante, po.nombre AS programa_origen, pd.nombre AS programa_destino
-     FROM solicitudes s
-     INNER JOIN {$menuDbName}.usuarios u ON u.id = s.solicitante_id
-     INNER JOIN programas po ON po.id = s.programa_origen_id
-     LEFT JOIN programas pd ON pd.id = s.programa_destino_id
-     WHERE {$receivedWhere}";
-$receivedListParams = $receivedParams;
+$receivedRequests = [];
 $destinationFilter = isset($_GET['programa_destino']) ? (int) $_GET['programa_destino'] : 0;
-if ($destinationFilter > 0) {
-    $receivedListSql .= ' AND s.programa_destino_id = ?';
-    $receivedListParams[] = $destinationFilter;
+if ($view === 'recibidas' && can_view_received_requests($user)) {
+    $receivedListSql = "SELECT {$requestListColumns}, u.nombre AS solicitante
+         FROM solicitudes s
+         INNER JOIN {$menuDbName}.usuarios u ON u.id = s.solicitante_id
+         INNER JOIN programas po ON po.id = s.programa_origen_id
+         LEFT JOIN programas pd ON pd.id = s.programa_destino_id
+         WHERE {$receivedWhere}";
+    $receivedListParams = $receivedParams;
+    if ($destinationFilter > 0) {
+        $receivedListSql .= ' AND s.programa_destino_id = ?';
+        $receivedListParams[] = $destinationFilter;
+    }
+    $receivedListSql .= ' ORDER BY s.creado_en DESC';
+    $receivedListStmt = $pdo->prepare($receivedListSql);
+    $receivedListStmt->execute($receivedListParams);
+    $receivedRequests = $receivedListStmt->fetchAll();
 }
-$receivedListSql .= ' ORDER BY s.creado_en DESC';
-$receivedListStmt = $pdo->prepare($receivedListSql);
-$receivedListStmt->execute($receivedListParams);
-$receivedRequests = $receivedListStmt->fetchAll();
+
+// Solicitudes con novedades sin leer (para marcarlas en las listas).
+$unreadRequestIds = in_array($view, ['mis', 'recibidas'], true) ? unread_request_ids($pdo, $user) : [];
 
 $selectedDestination = null;
 foreach ($programs as $program) {
@@ -683,6 +752,8 @@ if (can_manage_users($user) && $moduleIds) {
 $detail = null;
 $followUps = [];
 $attachments = [];
+$requestAttachments = [];
+$attachmentsByFollowUp = [];
 if ($view === 'detalle' && isset($_GET['id'])) {
     $detailStmt = $pdo->prepare(
         "SELECT s.*, u.nombre AS solicitante, po.nombre AS programa_origen, pd.nombre AS programa_destino
@@ -717,6 +788,28 @@ if ($view === 'detalle' && isset($_GET['id'])) {
         $attachmentStmt = $pdo->prepare('SELECT * FROM adjuntos WHERE solicitud_id = ? ORDER BY subido_en DESC');
         $attachmentStmt->execute([(int) $_GET['id']]);
         $attachments = $attachmentStmt->fetchAll();
+
+        // Los adjuntos de un seguimiento se muestran junto a ese seguimiento (el que se
+        // registro en el mismo momento); los demas son los de la solicitud original.
+        $attachmentsByFollowUp = [];
+        $requestAttachments = [];
+        foreach ($attachments as $attachment) {
+            $uploadedAt = strtotime((string) $attachment['subido_en']);
+            $owner = null;
+            if (str_contains((string) $attachment['ruta'], '_seguimiento_')) {
+                foreach ($followUps as $followUp) {
+                    if (abs(strtotime((string) $followUp['creado_en']) - $uploadedAt) <= 10) {
+                        $owner = (int) $followUp['id'];
+                        break;
+                    }
+                }
+            }
+            if ($owner === null) {
+                $requestAttachments[] = $attachment;
+            } else {
+                $attachmentsByFollowUp[$owner][] = $attachment;
+            }
+        }
     }
 }
 
@@ -755,6 +848,7 @@ $ideaRevision = null;
 $ideaResponsables = [];
 $ideaAportes = [];
 $ideaCandidatos = [];
+$ideaRevisionNoGuardada = false;
 if ($view === 'idea' && can_view_ideas($user) && isset($_GET['id'])) {
     $ideaDetailStmt = $pdo->prepare('SELECT * FROM ideas WHERE id = ?');
     $ideaDetailStmt->execute([(int) $_GET['id']]);
@@ -772,6 +866,12 @@ if ($view === 'idea' && can_view_ideas($user) && isset($_GET['id'])) {
         );
         $revisionStmt->execute([$ideaDetailId]);
         $ideaRevision = $revisionStmt->fetch() ?: null;
+
+        // Si guardar el analisis fallo, se vuelve a mostrar lo que la persona escribio.
+        if ($error !== '' && ($_POST['action'] ?? '') === 'guardar_revision_idea' && (int) ($_POST['idea_id'] ?? 0) === $ideaDetailId) {
+            $ideaRevision = idea_revision_desde_post($ideaRevision);
+            $ideaRevisionNoGuardada = true;
+        }
 
         $responsablesStmt = $pdo->prepare(
             "SELECT u.id, u.nombre, u.correo
@@ -1169,14 +1269,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                     <a class="btn-primary" href="index.php?view=nueva"><i class="ti ti-plus"></i>Nueva solicitud</a>
                 <?php endif; ?>
             </div>
-            <div class="filters">
-                <div class="search-box"><input class="form-control" id="buscar-mis" oninput="filterRows('buscar-mis','tabla-mis')" placeholder="Buscar solicitud..."></div>
-                <button class="filter-chip active" onclick="setStatusFilter(this,'tabla-mis','todas')">Todas</button>
-                <button class="filter-chip" onclick="setStatusFilter(this,'tabla-mis','recibido')">Recibido</button>
-                <button class="filter-chip" onclick="setStatusFilter(this,'tabla-mis','proceso')">En proceso</button>
-                <button class="filter-chip" onclick="setStatusFilter(this,'tabla-mis','completado')">Completado</button>
-            </div>
-            <?php render_table($visibleRequests, 'tabla-mis', $user); ?>
+            <?php render_table($visibleRequests, 'tabla-mis', $user, false, $unreadRequestIds); ?>
         <?php endif; ?>
 
         <?php if ($view === 'recibidas' && !can_view_received_requests($user)): ?>
@@ -1199,14 +1292,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                     <a class="btn-outline" href="index.php?view=panel">Volver a programas</a>
                 <?php endif; ?>
             </div>
-            <div class="filters">
-                <div class="search-box"><input class="form-control" id="buscar-recibidas" oninput="filterRows('buscar-recibidas','tabla-recibidas')" placeholder="Buscar solicitud..."></div>
-                <button class="filter-chip active" onclick="setStatusFilter(this,'tabla-recibidas','todas')">Todas</button>
-                <button class="filter-chip" onclick="setStatusFilter(this,'tabla-recibidas','recibido')">Recibido</button>
-                <button class="filter-chip" onclick="setStatusFilter(this,'tabla-recibidas','proceso')">En proceso</button>
-                <button class="filter-chip" onclick="setStatusFilter(this,'tabla-recibidas','completado')">Completado</button>
-            </div>
-            <?php render_table($receivedRequests, 'tabla-recibidas', $user, true); ?>
+            <?php render_table($receivedRequests, 'tabla-recibidas', $user, true, $unreadRequestIds, 'abiertas'); ?>
         <?php endif; ?>
 
         <?php if ($view === 'usuarios'): ?>
@@ -1842,8 +1928,8 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                             <textarea class="form-control" id="descripcion" name="descripcion" required placeholder="Describe el requerimiento, contexto y justificacion."></textarea>
                         </div>
                         <div class="form-group form-full">
-                            <label class="form-label" for="adjuntos">Adjuntos</label>
-                            <input class="form-control" type="file" id="adjuntos" name="adjuntos[]" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+                            <label class="form-label" for="adjuntos">Adjuntos <small class="form-hint">(cotizaciones, especificaciones, fotos...)</small></label>
+                            <?php render_dropzone('adjuntos', 'adjuntos'); ?>
                         </div>
                     </div>
                     <div class="actions">
@@ -1863,33 +1949,66 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                         <div class="section-title"><?= e($detail['codigo']) ?> · <?= e($detail['titulo']) ?></div>
                         <div class="section-sub"><?= badge_tipo($detail['tipo']) ?> <?= badge_estado($detail['estado']) ?> <?= badge_prioridad($detail['prioridad']) ?></div>
                     </div>
-                    <a class="btn-outline" href="index.php?view=<?= (int) $detail['solicitante_id'] === (int) $user['id'] ? 'mis' : 'recibidas' ?>">Volver</a>
+                    <a class="btn-outline" data-back-to-list href="index.php?view=<?= (int) $detail['solicitante_id'] === (int) $user['id'] ? 'mis' : 'recibidas' ?>">Volver</a>
                 </div>
+                <?php
+                $estadoActual = (string) $detail['estado'];
+                $abierta = !in_array($estadoActual, ['completado', 'rechazado'], true);
+                $diasRestantes = $detail['fecha_requerida'] ? dias_hasta((string) $detail['fecha_requerida']) : null;
+                $plazo = match (true) {
+                    $diasRestantes === null || !$abierta => null,
+                    $diasRestantes < 0 => ['is-late', 'Vencida hace ' . -$diasRestantes . ' dia' . ($diasRestantes === -1 ? '' : 's')],
+                    $diasRestantes === 0 => ['is-soon', 'Vence hoy'],
+                    $diasRestantes <= 3 => ['is-soon', 'Faltan ' . $diasRestantes . ' dia' . ($diasRestantes === 1 ? '' : 's')],
+                    default => ['', 'Faltan ' . $diasRestantes . ' dias'],
+                };
+                $pasosEstado = ['recibido' => 'Recibido', 'proceso' => 'En proceso', $estadoActual === 'rechazado' ? 'rechazado' : 'completado' => $estadoActual === 'rechazado' ? 'Rechazado' : 'Completado'];
+                $indiceActual = array_search($estadoActual, array_keys($pasosEstado), true);
+                ?>
                 <section class="form-card">
+                    <ol class="request-progress" aria-label="Estado de la solicitud">
+                        <?php foreach (array_keys($pasosEstado) as $i => $clave): ?>
+                            <li class="<?= $i < $indiceActual || ($i === $indiceActual && !$abierta) ? 'is-done' : ($i === $indiceActual ? 'is-current' : '') ?> <?= $clave === 'rechazado' ? 'is-rejected' : '' ?>" <?= $i === $indiceActual ? 'aria-current="step"' : '' ?>>
+                                <span><?= $clave === 'rechazado' ? '<i class="ti ti-x"></i>' : ($i < $indiceActual || !$abierta ? '<i class="ti ti-check"></i>' : $i + 1) ?></span><?= e($pasosEstado[$clave]) ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ol>
+
                     <div class="detail-grid">
                         <div><div class="detail-label">Solicitante</div><div class="detail-value"><?= e($detail['solicitante']) ?></div></div>
-                        <div><div class="detail-label">Programa origen</div><div class="detail-value"><?= e($detail['programa_origen']) ?></div></div>
-                        <div><div class="detail-label">Programa destino</div><div class="detail-value"><?= e($detail['programa_destino'] ?: 'No aplica') ?></div></div>
-                        <div><div class="detail-label">Fecha requerida</div><div class="detail-value"><?= e($detail['fecha_requerida'] ?: 'Sin fecha') ?></div></div>
-                        <div class="form-full"><div class="detail-label">Descripcion</div><div class="detail-value"><?= nl2br(e($detail['descripcion'])) ?></div></div>
+                        <div><div class="detail-label">Programa origen → destino</div><div class="detail-value"><?= e($detail['programa_origen']) ?> → <?= e($detail['programa_destino'] ?: 'No aplica') ?></div></div>
+                        <div><div class="detail-label">Creada</div><div class="detail-value"><?= e(date('d/m/Y H:i', strtotime((string) $detail['creado_en']))) ?></div></div>
+                        <div>
+                            <div class="detail-label">Fecha requerida</div>
+                            <div class="detail-value">
+                                <?= $detail['fecha_requerida'] ? e(date('d/m/Y', strtotime((string) $detail['fecha_requerida']))) : 'Sin fecha' ?>
+                                <?php if ($plazo): ?><span class="due-chip <?= e($plazo[0]) ?>"><i class="ti ti-clock"></i><?= e($plazo[1]) ?></span><?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if ($detail['tipo'] === 'compra' || $detail['proveedor_sugerido'] || $detail['monto_estimado'] !== null): ?>
+                            <div><div class="detail-label">Proveedor sugerido</div><div class="detail-value"><?= e($detail['proveedor_sugerido'] ?: 'Sin proveedor sugerido') ?></div></div>
+                            <div><div class="detail-label">Monto estimado</div><div class="detail-value"><?= $detail['monto_estimado'] !== null ? '<strong>Q ' . e(number_format((float) $detail['monto_estimado'], 2)) . '</strong>' : 'Sin monto' ?></div></div>
+                        <?php endif; ?>
+                        <div class="form-full"><div class="detail-label">Descripcion</div><div class="detail-value detail-text"><?= nl2br(e($detail['descripcion'])) ?></div></div>
                     </div>
 
-                    <?php if ($attachments): ?>
-                        <div class="section-sub">Adjuntos</div>
-                        <div class="filters">
-                            <?php foreach ($attachments as $attachment): ?>
-                                <a class="btn-outline btn-sm" href="<?= e($attachment['ruta']) ?>" target="_blank"><i class="ti ti-paperclip"></i><?= e($attachment['nombre_original']) ?></a>
-                            <?php endforeach; ?>
+                    <?php if ($requestAttachments): ?>
+                        <div class="section-sub">Adjuntos de la solicitud (<?= count($requestAttachments) ?>)</div>
+                        <div class="attachment-list">
+                            <?php foreach ($requestAttachments as $attachment): ?><?= adjunto_link($attachment) ?><?php endforeach; ?>
                         </div>
                     <?php endif; ?>
 
-                    <div class="section-sub">Historial de seguimiento</div>
+                    <div class="section-sub">Historial de seguimiento (<?= count($followUps) ?>)</div>
                     <div class="timeline">
                         <?php foreach ($followUps as $followUp): ?>
-                            <div class="timeline-item">
-                                <div class="timeline-title"><?= e(estado_label($followUp['estado'])) ?> · <?= e($followUp['nombre']) ?></div>
+                            <div class="timeline-item is-<?= e($followUp['estado']) ?>">
+                                <div class="timeline-title"><?= badge_estado((string) $followUp['estado']) ?> <?= e($followUp['nombre']) ?></div>
                                 <div class="timeline-meta"><?= e(date('d/m/Y H:i', strtotime($followUp['creado_en']))) ?></div>
                                 <?php if ($followUp['observacion']): ?><div class="timeline-obs"><?= nl2br(e($followUp['observacion'])) ?></div><?php endif; ?>
+                                <?php if (!empty($attachmentsByFollowUp[(int) $followUp['id']])): ?>
+                                    <div class="attachment-list"><?php foreach ($attachmentsByFollowUp[(int) $followUp['id']] as $attachment): ?><?= adjunto_link($attachment) ?><?php endforeach; ?></div>
+                                <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -1899,32 +2018,41 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                     <?php endif; ?>
 
                     <?php if (can_manage_request($user, $detail) && $detail['estado'] !== 'completado'): ?>
-                        <form method="post" enctype="multipart/form-data" class="form-card" style="margin-top:18px"><?= csrf_field() ?>
+                        <?php
+                        // Si hubo error al guardar, se conserva lo que se habia escrito.
+                        $postSeguimiento = $error !== '' && ($_POST['action'] ?? '') === 'actualizar_estado';
+                        $estadoSugerido = $postSeguimiento ? (string) ($_POST['estado'] ?? $estadoActual) : ($estadoActual === 'recibido' ? 'proceso' : $estadoActual);
+                        ?>
+                        <form method="post" enctype="multipart/form-data" class="form-card request-update" style="margin-top:18px" data-request-update data-estado-actual="<?= e($estadoActual) ?>"><?= csrf_field() ?>
                             <input type="hidden" name="action" value="actualizar_estado">
                             <input type="hidden" name="solicitud_id" value="<?= (int) $detail['id'] ?>">
+                            <div class="section-sub" style="margin-top:0">Registrar seguimiento</div>
+                            <div class="status-choice" role="radiogroup" aria-label="Nuevo estado">
+                                <?php foreach (['recibido' => ['Recibido', 'ti-inbox'], 'proceso' => ['En proceso', 'ti-progress'], 'completado' => ['Completado', 'ti-circle-check'], 'rechazado' => ['Rechazado', 'ti-circle-x']] as $valor => [$etiqueta, $icono]): ?>
+                                    <label class="is-<?= $valor ?>">
+                                        <input type="radio" name="estado" value="<?= $valor ?>" <?= $estadoSugerido === $valor ? 'checked' : '' ?>>
+                                        <span><i class="ti <?= $icono ?>"></i><?= $etiqueta ?><?= $valor === $estadoActual ? ' <small>(actual)</small>' : '' ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <p class="form-hint" data-estado-hint></p>
                             <div class="form-grid">
-                                <div class="form-group">
-                                    <label class="form-label" for="estado">Cambiar estado</label>
-                                    <select class="form-control" id="estado" name="estado">
-                                        <option value="recibido" <?= $detail['estado'] === 'recibido' ? 'selected' : '' ?>>Recibido</option>
-                                        <option value="proceso" <?= $detail['estado'] === 'proceso' ? 'selected' : '' ?>>En proceso</option>
-                                        <option value="completado" <?= $detail['estado'] === 'completado' ? 'selected' : '' ?>>Completado</option>
-                                        <option value="rechazado" <?= $detail['estado'] === 'rechazado' ? 'selected' : '' ?>>Rechazado</option>
-                                    </select>
-                                </div>
                                 <div class="form-group form-full">
-                                    <label class="form-label" for="observacion">Observacion</label>
-                                    <textarea class="form-control" id="observacion" name="observacion" placeholder="Comentario visible para el solicitante."></textarea>
+                                    <label class="form-label" for="observacion">Observacion <span data-obs-required class="hidden">(obligatoria)</span></label>
+                                    <textarea class="form-control" id="observacion" name="observacion" rows="3" maxlength="4000" placeholder="Comentario visible para el solicitante."><?= $postSeguimiento ? e((string) ($_POST['observacion'] ?? '')) : '' ?></textarea>
                                 </div>
                                 <div class="form-group form-full">
                                     <label class="form-label" for="seguimiento_adjuntos">Documentos de respaldo</label>
-                                    <input class="form-control" type="file" id="seguimiento_adjuntos" name="seguimiento_adjuntos[]" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png">
+                                    <?php render_dropzone('seguimiento_adjuntos', 'seguimiento_adjuntos'); ?>
+                                    <?php if ($postSeguimiento): ?><small class="form-hint form-hint-error">Vuelve a seleccionar los archivos: no se conservan si hubo un error.</small><?php endif; ?>
                                 </div>
                             </div>
                             <div class="actions">
                                 <button class="btn-primary" type="submit"><i class="ti ti-device-floppy"></i>Guardar seguimiento</button>
                             </div>
                         </form>
+                    <?php elseif ($detail['estado'] === 'completado'): ?>
+                        <div class="readonly-note"><i class="ti ti-lock"></i>La solicitud esta completada y ya no admite cambios.</div>
                     <?php endif; ?>
                 </section>
             <?php endif; ?>

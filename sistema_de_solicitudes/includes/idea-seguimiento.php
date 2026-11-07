@@ -178,16 +178,19 @@ $abrirPaso = static function (string $clave) use ($pasos, $pasoActual, $numeroPa
 <?php /* ---------------- Paso 2: Analisis ---------------- */ ?>
 <?php $abrirPaso('analisis'); ?>
     <p class="idea-step-help">Responde cada bloque con lo que se sabe de la idea. Los bloques llenos se marcan en verde.</p>
-    <div class="idea-progress">
+    <?php if ($ideaRevisionNoGuardada): ?>
+        <div class="readonly-note idea-pendientes"><i class="ti ti-alert-triangle"></i><div>El analisis <strong>no se guardo</strong>. Se muestra lo que escribiste: corrige lo indicado y vuelve a guardar.</div></div>
+    <?php endif; ?>
+    <div class="idea-progress" data-analisis-progreso data-total="<?= $avanceTotal ?>">
         <span class="idea-progress-bar"><span style="width:<?= (int) round($avanceLleno * 100 / $avanceTotal) ?>%"></span></span>
-        <?= $avanceLleno ?> de <?= $avanceTotal ?> puntos completos
-        <?php if ($ideaRevision && $ideaRevision['actualizado_por_nombre']): ?>
+        <span data-analisis-llenos><?= $avanceLleno ?></span> de <?= $avanceTotal ?> puntos completos
+        <?php if ($ideaRevision && !empty($ideaRevision['actualizado_por_nombre'])): ?>
             <span class="timeline-meta">· ultima edicion: <?= e($ideaRevision['actualizado_por_nombre']) ?>, <?= e(date('d/m/Y H:i', strtotime((string) $ideaRevision['actualizado_en']))) ?></span>
         <?php endif; ?>
     </div>
 
     <?php if ($canEditReview): ?>
-        <form method="post" action="index.php?view=idea&id=<?= $ideaId ?>"><?= csrf_field() ?>
+        <form method="post" action="index.php?view=idea&id=<?= $ideaId ?>" id="form-analisis" data-analisis-form><?= csrf_field() ?>
             <input type="hidden" name="action" value="guardar_revision_idea">
             <input type="hidden" name="idea_id" value="<?= $ideaId ?>">
     <?php else: ?>
@@ -202,10 +205,10 @@ $abrirPaso = static function (string $clave) use ($pasos, $pasoActual, $numeroPa
             <div class="idea-group-fields">
                 <?php foreach ($grupoCampos as $campo): ?>
                     <?php [$titulo, $ayuda, $icono] = IDEA_REVISION_CAMPOS[$campo]; ?>
-                    <div class="form-group idea-field <?= $rev($campo) !== '' ? 'is-filled' : '' ?>">
+                    <div class="form-group idea-field <?= $rev($campo) !== '' ? 'is-filled' : '' ?>" data-punto>
                         <label class="form-label" for="rev-<?= e($campo) ?>"><i class="ti <?= e($icono) ?>"></i> <?= e($titulo) ?></label>
                         <?php if ($canEditReview): ?>
-                            <textarea class="form-control" id="rev-<?= e($campo) ?>" name="<?= e($campo) ?>" rows="3" maxlength="<?= IDEA_TEXTO_MAX ?>" placeholder="<?= e($ayuda) ?>"><?= e($rev($campo)) ?></textarea>
+                            <textarea class="form-control" id="rev-<?= e($campo) ?>" name="<?= e($campo) ?>" rows="3" maxlength="<?= IDEA_TEXTO_MAX ?>" placeholder="<?= e($ayuda) ?>" data-autogrow><?= e($rev($campo)) ?></textarea>
                         <?php else: ?>
                             <div class="detail-value"><?= $valorLectura($rev($campo)) ?></div>
                         <?php endif; ?>
@@ -213,32 +216,49 @@ $abrirPaso = static function (string $clave) use ($pasos, $pasoActual, $numeroPa
                 <?php endforeach; ?>
 
                 <?php if ($grupo === 'necesidades'): ?>
-                    <div class="form-group idea-field form-full <?= $rev('costo_estimado') !== '' || $rev('costo_detalle') !== '' ? 'is-filled' : '' ?>">
-                        <?php include __DIR__ . '/idea-costos.php'; ?>
+                    <div class="form-group idea-field form-full <?= $rev('costo_estimado') !== '' || $rev('costo_detalle') !== '' ? 'is-filled' : '' ?>" data-punto="costo">
                         <label class="form-label" for="rev-costo_estimado"><i class="ti ti-coin"></i> Costo de implementacion</label>
+                        <?php include __DIR__ . '/idea-costos.php'; ?>
                         <?php if ($canEditReview): ?>
-                            <div class="idea-money"><span>Q</span><input class="form-control" id="rev-costo_estimado" name="costo_estimado" inputmode="decimal" placeholder="0.00" value="<?= e($rev('costo_estimado')) ?>"></div>
-                            <textarea class="form-control" name="costo_detalle" rows="2" maxlength="<?= IDEA_TEXTO_MAX ?>" placeholder="Desglose: compras, horas de trabajo, servicios..."><?= e($rev('costo_detalle')) ?></textarea>
+                            <div class="idea-money">
+                                <span>Total Q</span><input class="form-control" id="rev-costo_estimado" name="costo_estimado" inputmode="decimal" placeholder="0.00" value="<?= e($rev('costo_estimado')) ?>" pattern="[Qq]?\s*[0-9][0-9,]*(\.[0-9]{1,2})?" title="Monto en quetzales, por ejemplo 1500.00">
+                                <small class="idea-money-hint" data-costo-hint>Estimacion general (sin desglose).</small>
+                            </div>
+                            <textarea class="form-control" name="costo_detalle" rows="2" maxlength="<?= IDEA_TEXTO_MAX ?>" placeholder="Notas del costo: supuestos, cotizaciones pendientes, fuente de financiamiento..." data-autogrow><?= e($rev('costo_detalle')) ?></textarea>
                         <?php else: ?>
                             <div class="detail-value">
-                                <?= $rev('costo_estimado') !== '' ? '<strong>Q ' . e(number_format((float) $rev('costo_estimado'), 2)) . '</strong>' : '<span class="idea-empty">Sin estimar</span>' ?>
+                                <?= $rev('costo_estimado') !== '' ? '<strong>Total: Q ' . e(number_format((float) $rev('costo_estimado'), 2)) . '</strong>' : '<span class="idea-empty">Sin estimar</span>' ?>
                                 <?php if ($rev('costo_detalle') !== ''): ?><br><?= nl2br(e($rev('costo_detalle'))) ?><?php endif; ?>
                             </div>
                         <?php endif; ?>
                     </div>
 
-                    <div class="form-group idea-field form-full <?= $ideaResponsables ? 'is-filled' : '' ?>">
+                    <?php
+                    $responsablesMarcados = $ideaRevisionNoGuardada && isset($_POST['responsables_enviados'])
+                        ? array_map('intval', (array) ($_POST['responsables'] ?? []))
+                        : $responsableIds;
+                    ?>
+                    <div class="form-group idea-field form-full <?= $responsablesMarcados ? 'is-filled' : '' ?>" data-punto="responsables">
                         <span class="form-label"><i class="ti ti-users"></i> Responsables de seguimiento</span>
                         <?php if ($canManageIdeas): ?>
+                            <?php
+                            // Los ya asignados primero, para verlos sin buscar.
+                            usort($ideaCandidatos, static fn(array $a, array $b): int => [!in_array((int) $a['id'], $responsablesMarcados, true), $a['nombre']]
+                                <=> [!in_array((int) $b['id'], $responsablesMarcados, true), $b['nombre']]);
+                            ?>
                             <input type="hidden" name="responsables_enviados" value="1">
-                            <input class="form-control" type="search" placeholder="Buscar usuario..." oninput="filterIdeaResponsables(this)" aria-label="Buscar usuario">
+                            <div class="idea-responsables-tools">
+                                <input class="form-control" type="search" placeholder="Buscar usuario o programa..." oninput="filterIdeaResponsables(this)" aria-label="Buscar usuario">
+                                <span class="idea-responsables-count" data-responsables-count><?= count($responsablesMarcados) ?> seleccionado(s)</span>
+                            </div>
                             <div class="idea-responsables-list">
                                 <?php foreach ($ideaCandidatos as $candidato): ?>
                                     <label class="permission-option">
-                                        <input type="checkbox" name="responsables[]" value="<?= (int) $candidato['id'] ?>" <?= in_array((int) $candidato['id'], $responsableIds, true) ? 'checked' : '' ?>>
+                                        <input type="checkbox" name="responsables[]" value="<?= (int) $candidato['id'] ?>" <?= in_array((int) $candidato['id'], $responsablesMarcados, true) ? 'checked' : '' ?>>
                                         <span><?= e($candidato['nombre']) ?><?php if ($candidato['programa']): ?> <small><?= e($candidato['programa']) ?></small><?php endif; ?></span>
                                     </label>
                                 <?php endforeach; ?>
+                                <p class="idea-empty hidden" data-responsables-vacio>Ningun usuario coincide con la busqueda.</p>
                             </div>
                         <?php elseif ($ideaResponsables): ?>
                             <div class="detail-value"><?= e(implode(', ', array_column($ideaResponsables, 'nombre'))) ?></div>
@@ -259,7 +279,7 @@ $abrirPaso = static function (string $clave) use ($pasos, $pasoActual, $numeroPa
                 <label><input type="radio" name="requiere_analisis" value="" <?= !$requiereAnalisis ? 'checked' : '' ?>> <span><i class="ti ti-circle-check"></i>Lista para ponderar</span></label>
                 <label><input type="radio" name="requiere_analisis" value="1" <?= $requiereAnalisis ? 'checked' : '' ?>> <span><i class="ti ti-microscope"></i>Requiere analisis adicional</span></label>
             </div>
-            <textarea class="form-control" name="analisis_detalle" rows="2" maxlength="<?= IDEA_TEXTO_MAX ?>" placeholder="Si falta algo: que analisis, quien lo hace y para cuando."><?= e($rev('analisis_detalle')) ?></textarea>
+            <textarea class="form-control" name="analisis_detalle" rows="2" maxlength="<?= IDEA_TEXTO_MAX ?>" placeholder="Si falta algo: que analisis, quien lo hace y para cuando." data-autogrow <?= $requiereAnalisis ? 'required' : '' ?>><?= e($rev('analisis_detalle')) ?></textarea>
         <?php else: ?>
             <div class="detail-value">
                 <strong><?= $requiereAnalisis ? 'Requiere analisis adicional' : 'Lista para ponderar' ?></strong>
@@ -269,8 +289,12 @@ $abrirPaso = static function (string $clave) use ($pasos, $pasoActual, $numeroPa
     </fieldset>
 
     <?php if ($canEditReview): ?>
-            <div class="actions">
-                <button class="btn-primary" type="submit"><i class="ti ti-device-floppy"></i>Guardar analisis</button>
+            <div class="actions idea-sticky-actions">
+                <span class="idea-dirty" data-dirty-status aria-live="polite"><?= $ideaRevisionNoGuardada ? 'Cambios sin guardar' : '' ?></span>
+                <?php if (!$cerrada): ?>
+                    <button class="btn-outline" type="submit" name="continuar" value="1"><i class="ti ti-arrow-right"></i>Guardar y pasar a ponderacion</button>
+                <?php endif; ?>
+                <button class="btn-primary" type="submit" title="Ctrl + S"><i class="ti ti-device-floppy"></i>Guardar analisis</button>
             </div>
         </form>
     <?php else: ?>
