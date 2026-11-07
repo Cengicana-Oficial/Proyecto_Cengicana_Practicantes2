@@ -132,10 +132,15 @@
       if (!response.ok) {
         throw new Error('No se pudo cargar la pagina');
       }
-      return response.text();
-    }).then(function (html) {
-      prefetchCache[url] = html;
-      return html;
+      // Si el servidor redirigió, la página mostrada corresponde a la URL final:
+      // los formularios sin "action" y los enlaces relativos dependen de ella.
+      var finalUrl = response.url || url;
+      return response.text().then(function (html) {
+        return { html: html, url: finalUrl };
+      });
+    }).then(function (page) {
+      prefetchCache[url] = page;
+      return page;
     });
   }
 
@@ -159,8 +164,8 @@
     setLoading(true);
 
     fetchPage(url, true)
-      .then(function (html) {
-        renderPage(html, url, replaceHistory);
+      .then(function (page) {
+        renderPage(page.html, page.url, replaceHistory);
       })
       .catch(function (error) {
         if (error && error.name === 'AbortError') {
