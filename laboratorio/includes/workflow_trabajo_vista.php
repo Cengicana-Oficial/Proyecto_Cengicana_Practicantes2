@@ -35,7 +35,7 @@ lab_shell_open($wfModo==='plan'?'kanban_view.php':'solicitudes_pendientes_tecnic
 ?>
 <?php if($wfModo==='plan'): ?>
 <section id="wf-app">
-<p class="wf-intro">Resumen por tipo de muestra: cada fila es un lote con su avance y seguimiento; las columnas de la derecha agrupan los análisis por hoja de trabajo (aprobados / solicitados). Haga clic en un lote (o en <b>Muestras</b>) para ver qué muestras faltan, asignar analistas y definir la prioridad; <b>Bitácora</b> muestra su historial.
+<p class="wf-intro">Resumen por tipo de muestra: cada fila es un lote con su avance y seguimiento; las columnas de la derecha agrupan los análisis por hoja de trabajo (aprobados / solicitados). Haga clic en un lote (o en <b>Muestras</b>) para ver qué muestras faltan, y asignar analistas; <b>Bitácora</b> muestra su historial.
 <?php $wfTablero=(string)(getenv('LAB_TABLERO_TOKEN')?:''); if($wfManager&&strlen($wfTablero)>=16): ?>
 <br><a href="tablero_laboratorio.php?k=<?= htmlspecialchars(rawurlencode($wfTablero),ENT_QUOTES,'UTF-8') ?>" target="_blank" rel="noopener noreferrer"><b>Abrir tablero para pantalla ↗</b></a> <span class="wf-plan-sub" style="display:inline">(enlace de solo lectura para una TV; no lo comparta fuera del laboratorio)</span>
 <?php endif; ?></p>
@@ -51,7 +51,7 @@ lab_shell_open($wfModo==='plan'?'kanban_view.php':'solicitudes_pendientes_tecnic
 <label>Tipo<select id="wf-type"><option value="">Todos los tipos</option></select></label>
 <label data-solo-curso>Etapa<select id="wf-state"><option value="">Todos en curso</option><option value="pendiente">Por iniciar</option><option value="proceso">En análisis</option><option value="validacion">En validación</option><option value="informe">Listos para informe</option></select></label>
 <label data-solo-final hidden>Periodo<select id="wf-period"><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="365">Último año</option><option value="">Todos</option></select></label>
-<label data-solo-final hidden>Entrega<select id="wf-entrega"><option value="">Todas</option><option value="pendiente">Pendientes de envío</option><option value="enviado">Enviados por correo</option></select></label>
+<label data-solo-final hidden>Entrega<select id="wf-entrega"><option value="">Todas</option><option value="pendiente">Pendientes de entrega</option><option value="enviado">Entregados al cliente</option></select></label>
 </div>
 <p class="wf-legend wf-plan-legend" data-solo-curso><span><i class="pendiente"></i>Pendiente</span><span><i class="proceso"></i>En análisis</span><span><i class="validacion"></i>En validación</span><span><i class="validado"></i>Aprobado</span><span><i class="rechazado"></i>Reanálisis</span><span><b>—</b> No solicitado</span></p>
 <p id="wf-count"></p><div id="wf-list"></div>
@@ -75,7 +75,7 @@ lab_shell_open($wfModo==='plan'?'kanban_view.php':'solicitudes_pendientes_tecnic
 <?php else: ?>
 <section id="wf-app" class="vt-wrap wf-bandeja">
 <div id="wf-list-view">
-<p class="vt-intro">Cada fila es una <b>hoja de trabajo</b> con el mismo formato que el laboratorio usa en papel: filas de <b>blanco y control</b>, campos de encabezado y, cuando aplica, <b>curva de calibración</b>. El analista solo captura lecturas; los cálculos los revisa el técnico en <b>Validación técnica</b>.<br><b>Orden:</b> primero los lotes de prioridad Alta, luego Media y Baja (la prioridad es del lote, para que todos sus análisis salgan juntos y se emita su informe). Como analista ves por defecto <b>tus análisis asignados</b>; cambia el filtro para ver los de todo el equipo.</p>
+<p class="vt-intro">Cada fila es una <b>hoja de trabajo</b> con el mismo formato que el laboratorio usa en papel: filas de <b>blanco y control</b>, campos de encabezado y, cuando aplica, <b>curva de calibración</b>. El analista solo captura lecturas; los cálculos los revisa el técnico en <b>Validación técnica</b>.<br><b>Orden:</b> primero las hojas con la fecha de entrega más próxima (o ya vencida); las que no tienen fecha van al final. Como analista ves por defecto <b>tus análisis asignados</b>; cambia el filtro para ver los de todo el equipo.</p>
 <div id="wf-kpis" class="bd-kpis"></div>
 <div class="vt-toolbar bd-toolbar">
 <input id="wf-search" type="search" aria-label="Buscar" placeholder="Buscar lote, cliente, muestra o análisis…">

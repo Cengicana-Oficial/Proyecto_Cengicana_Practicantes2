@@ -184,7 +184,7 @@ foreach ($panelDocumentos['documentos'] as $documento) {
                                     <td><?= docs_e($cliente) ?></td>
                                     <td class="documents-small"><?= docs_e($documento['generado_por'] ?: '—') ?></td>
                                     <td class="documents-muted"><?= docs_e(docs_fecha($documento['generado_en'] ?? null)) ?></td>
-                                    <td><?php if (!empty($documento['enviado_en'])): ?><span class="documents-envio is-sent" title="Último envío por correo">Enviado <?= docs_e(docs_fecha($documento['enviado_en'])) ?></span><?php else: ?><span class="documents-envio is-pending"><?= $version > 1 ? 'Pendiente (nueva versión)' : 'Pendiente' ?></span><?php endif; ?></td>
+                                    <td><?php if (!empty($documento['enviado_en'])): ?><span class="documents-envio is-sent" title="Último envío por correo o entrega registrada al cliente">Entregado <?=docs_e(docs_fecha($documento['enviado_en'])) ?></span><?php else: ?><span class="documents-envio is-pending"><?= $version > 1 ? 'Pendiente (nueva versión)' : 'Pendiente' ?></span><?php endif; ?></td>
                                     <td class="documents-actions">
                                         <details class="documents-menu">
                                             <summary class="documents-button is-ghost" aria-label="Acciones del informe del lote <?= docs_e($codigoLote) ?>">Acciones <span aria-hidden="true">▾</span></summary>
@@ -196,6 +196,7 @@ foreach ($panelDocumentos['documentos'] as $documento) {
                                                     <a role="menuitem" href="../controllers/informe_excel.php?lote=<?= (int) $documento['id_lote'] ?>" title="Informe firmado en Excel (.xlsx), con los valores aprobados"><?= docs_svg('excel') ?>Descargar Excel</a>
                                                 <?php endif; ?>
                                                 <button type="button" role="menuitem" data-send-document="<?= $idDocumento ?>"><?= docs_svg('correo') ?>Enviar por correo</button>
+                                                <button type="button" role="menuitem" data-deliver-document="<?= $idDocumento ?>" title="Registrar que el informe se entregó en persona, por WhatsApp u otro medio"><?= docs_svg('historial') ?>Marcar como entregado</button>
                                                 <span class="documents-menu-title">Trazabilidad</span>
                                                 <?php if (!empty($documento['total_cambios'])): ?>
                                                     <button type="button" role="menuitem" data-view-history="<?= $idDocumento ?>"><?= docs_svg('historial') ?>Historial (<?= (int) $documento['total_cambios'] ?>)</button>
@@ -265,6 +266,38 @@ foreach ($panelDocumentos['documentos'] as $documento) {
             <footer class="documents-modal-foot">
                 <button type="button" class="documents-button is-ghost" data-close-modal>Cancelar</button>
                 <button type="submit" class="documents-button is-primary" id="sendSubmit"><?= docs_svg('correo') ?> Enviar</button>
+            </footer>
+        </form>
+    </div>
+
+    <div class="documents-modal" id="deliverModal" hidden>
+        <form class="documents-modal-dialog documents-send-dialog" id="deliverForm" role="dialog" aria-modal="true" aria-labelledby="deliverModalTitle" novalidate>
+            <header class="documents-modal-head">
+                <h2 id="deliverModalTitle">Marcar informe como entregado</h2>
+                <button type="button" class="documents-modal-close" data-close-modal aria-label="Cerrar"><?= docs_svg('cerrar') ?></button>
+            </header>
+            <div class="documents-send-body">
+                <p class="documents-send-summary" id="deliverSummary"></p>
+                <label class="documents-send-field">
+                    <span>Medio de entrega</span>
+                    <select id="deliverMedio" required>
+                        <option value="">Seleccione…</option>
+                        <option>En persona (impreso)</option>
+                        <option>WhatsApp</option>
+                        <option>Correo electrónico personal</option>
+                        <option>Otro medio</option>
+                    </select>
+                </label>
+                <label class="documents-send-field">
+                    <span>Quién lo recibió / detalle</span>
+                    <input type="text" id="deliverDetalle" maxlength="300" placeholder="Ej. Recibido por Juan Pérez (Ingenio La Unión)" required>
+                    <small>Queda en el historial del informe con su usuario y la fecha. Use esta opción solo si el informe no se envió con "Enviar por correo".</small>
+                </label>
+                <p class="documents-send-status" id="deliverStatus" role="status" aria-live="polite"></p>
+            </div>
+            <footer class="documents-modal-foot">
+                <button type="button" class="documents-button is-ghost" data-close-modal>Cancelar</button>
+                <button type="submit" class="documents-button is-primary" id="deliverSubmit"><?= docs_svg('historial') ?> Registrar entrega</button>
             </footer>
         </form>
     </div>
@@ -388,8 +421,56 @@ foreach ($panelDocumentos['documentos'] as $documento) {
             frame.src = 'about:blank';
         }
         if (sendModal) sendModal.hidden = true;
+        if (deliverModal) deliverModal.hidden = true;
         document.body.classList.remove('documents-modal-open');
     }
+
+    // Entrega por otro medio (en persona, WhatsApp…): queda en el historial y cuenta como entregado.
+    var deliverModal = document.getElementById('deliverModal');
+    var deliverForm = document.getElementById('deliverForm');
+    var deliverMedio = document.getElementById('deliverMedio');
+    var deliverDetalle = document.getElementById('deliverDetalle');
+    var deliverStatus = document.getElementById('deliverStatus');
+    var deliverSubmit = document.getElementById('deliverSubmit');
+    var deliverId = null;
+    function setDeliverStatus(text, kind) {
+        deliverStatus.textContent = text;
+        deliverStatus.className = 'documents-send-status' + (kind ? ' is-' + kind : '');
+    }
+    function openDeliver(id) {
+        var doc = documents[id];
+        if (!doc || !deliverModal) return;
+        deliverId = id;
+        document.getElementById('deliverSummary').textContent = 'Informe del lote ' + doc.lote + (doc.tipo ? ' (' + doc.tipo + ')' : '') + ' · ' + doc.cliente + ' · v' + doc.version;
+        deliverMedio.value = '';
+        deliverDetalle.value = '';
+        setDeliverStatus('', '');
+        deliverSubmit.disabled = false;
+        deliverModal.hidden = false;
+        document.body.classList.add('documents-modal-open');
+        deliverMedio.focus();
+    }
+    if (deliverForm) deliverForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!deliverMedio.value) { setDeliverStatus('Seleccione el medio de entrega.', 'error'); deliverMedio.focus(); return; }
+        if (!deliverDetalle.value.trim()) { setDeliverStatus('Indique quién recibió el informe o el detalle de la entrega.', 'error'); deliverDetalle.focus(); return; }
+        deliverSubmit.disabled = true;
+        setDeliverStatus('Registrando…', '');
+        fetch('../controllers/marcar_entregado.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+            body: JSON.stringify({id_documento: Number(deliverId), medio: deliverMedio.value, detalle: deliverDetalle.value.trim(), csrf: csrf})
+        }).then(function (response) {
+            return response.json().catch(function () { return {ok: false, message: 'Respuesta no válida del servidor (' + response.status + ').'}; });
+        }).then(function (data) {
+            setDeliverStatus(data.message || (data.ok ? 'Entrega registrada.' : 'No se pudo registrar.'), data.ok ? 'ok' : 'error');
+            if (data.ok) setTimeout(function () { location.reload(); }, 900); // refleja "Entregado" en la tabla
+            else deliverSubmit.disabled = false;
+        }).catch(function () {
+            setDeliverStatus('No se pudo conectar con el servidor.', 'error');
+            deliverSubmit.disabled = false;
+        });
+    });
 
     function openSend(id) {
         var doc = documents[id];
@@ -466,11 +547,13 @@ foreach ($panelDocumentos['documentos'] as $documento) {
         if (viewButton) openModal(viewButton.dataset.viewDocument, false);
         if (historyButton) openModal(historyButton.dataset.viewHistory, true);
         if (sendButton) openSend(sendButton.dataset.sendDocument);
-        if (event.target.closest('[data-close-modal]') || event.target === modal || event.target === sendModal) closeModal();
+        var deliverButton = event.target.closest('[data-deliver-document]');
+        if (deliverButton) openDeliver(deliverButton.dataset.deliverDocument);
+        if (event.target.closest('[data-close-modal]') || event.target === modal || event.target === sendModal || event.target === deliverModal) closeModal();
     });
     document.addEventListener('keydown', function (event) {
         if (event.key !== 'Escape') return;
-        if ((modal && !modal.hidden) || (sendModal && !sendModal.hidden)) closeModal();
+        if ((modal && !modal.hidden) || (sendModal && !sendModal.hidden) || (deliverModal && !deliverModal.hidden)) closeModal();
         else closeMenus(null);
     });
 })();

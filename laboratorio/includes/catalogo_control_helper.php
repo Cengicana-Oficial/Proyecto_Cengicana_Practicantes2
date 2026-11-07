@@ -360,7 +360,7 @@ function labCatalogoAuditoria(PDO $pdo, int $limite = 400): array
         LEFT JOIN lote l ON l.id_lote = lr.id_lote LEFT JOIN tipo_analisis ta ON ta.id_tipo = f.id_tipo_analisis ORDER BY hf.fecha DESC");
     $leer("SELECT h.fecha, h.usuario, CONCAT('Informe · ', h.accion) AS accion, {$loteSql} AS referencia, h.detalle, 'Informes' AS modulo
         FROM lab_informe_historial h LEFT JOIN lote l ON l.id_lote = h.id_lote ORDER BY h.fecha DESC");
-    $leer("SELECT h.fecha, h.usuario, IF(h.cambios LIKE 'Enviado por correo%', 'Envío por correo', CONCAT('Nueva versión de ', d.tipo_documento)) AS accion,
+    $leer("SELECT h.fecha, h.usuario, IF(h.cambios LIKE 'Enviado por correo%', 'Envío por correo', IF(h.cambios LIKE 'Entregado al cliente%', 'Entrega al cliente', CONCAT('Nueva versión de ', d.tipo_documento))) AS accion,
         CONCAT({$loteSql}, ' · ', d.tipo_documento, ' v', h.version) AS referencia, h.cambios AS detalle, 'Informes emitidos' AS modulo
         FROM lab_documento_historial h JOIN lab_documento d ON d.id_documento = h.id_documento LEFT JOIN lote l ON l.id_lote = d.id_lote ORDER BY h.fecha DESC");
     usort($ev, static fn($a, $b) => strcmp($b['fecha'], $a['fecha']));

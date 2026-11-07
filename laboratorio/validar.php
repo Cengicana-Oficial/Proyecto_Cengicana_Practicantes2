@@ -1,12 +1,15 @@
 <?php
 /**
- * Página pública de verificación de documentos del Laboratorio Agroindustrial (enlace del QR de la
- * boleta de recepción y del informe de resultados), con el mismo modelo que validar_diploma.php.
- * ?c=<código>: indica si el documento es auténtico y vigente y muestra solo los datos ya impresos en él.
+ * Página pública del Laboratorio Agroindustrial a la que llevan los QR (?c=<código>):
+ * - QR del INFORME de resultados: verificación de autenticidad (mismo modelo que validar_diploma.php):
+ *   si es auténtico y vigente, quién lo firmó y cuándo, y la huella del documento.
+ * - QR de la BOLETA de recepción: estado del análisis para el cliente (etapas, avance por análisis y
+ *   fecha estimada), sin valores de resultados; cuando el informe se firma, enlaza a su verificación.
  * No requiere sesión. Los códigos llevan una parte aleatoria, así que no se pueden recorrer.
  */
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/includes/verificacion_documentos_helper.php';
+require_once __DIR__ . '/includes/workflow_trabajo_helper.php';
 
 header('X-Robots-Tag: noindex, nofollow');
 header('Referrer-Policy: no-referrer');
@@ -17,10 +20,20 @@ $e = static fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $codigo = strtoupper(preg_replace('/[^A-Za-z0-9-]/', '', (string) ($_GET['c'] ?? '')));
 $codigo = substr($codigo, 0, 32);
 $doc = null;
+$avance = null;
 $error = null;
 if ($codigo !== '') {
     try {
-        $doc = lab_verif_buscar(Conexion::conectar(), $codigo);
+        $pdo = Conexion::conectar();
+        $doc = lab_verif_buscar($pdo, $codigo);
+        if ($doc && $doc['tipo'] === 'boleta' && !empty($doc['id_solicitud'])) {
+            try {
+                $avance = wfEstadoPublicoSolicitud($pdo, (int) $doc['id_solicitud']);
+            } catch (Throwable $ex) {
+                error_log('[laboratorio][validar] avance: ' . $ex->getMessage());
+                $avance = null;
+            }
+        }
     } catch (Throwable $ex) {
         error_log('[laboratorio][validar] ' . $ex->getMessage());
         $error = 'No se pudo consultar el código en este momento. Intente de nuevo más tarde.';
@@ -73,12 +86,45 @@ dt{color:var(--muted);font-weight:600}dd{margin:0;font-weight:600;word-break:bre
 .chips{display:flex;flex-wrap:wrap;gap:5px}.chips span{padding:2px 9px;border-radius:999px;background:#E3F1D3;color:#3A6312;font-size:12.5px;font-weight:600}
 .nota{margin-top:14px;font-size:12.5px;color:var(--muted);line-height:1.5}
 footer{text-align:center;color:var(--muted);font-size:12px}
+/* Seguimiento del análisis (QR de la boleta) */
+.seg-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.seg-head small{display:block;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.seg-head h2{margin:2px 0 4px;font-size:22px}.seg-head p{margin:0;color:var(--muted);font-size:14px}
+.seg-pct{text-align:right;flex:none}.seg-pct b{display:block;font-size:32px;line-height:1;color:var(--deep)}.seg-pct span{font-size:12px;color:var(--muted)}
+.barra{height:10px;margin:16px 0 4px;border-radius:999px;background:#E9ECE6;overflow:hidden}.barra i{display:block;height:100%;background:linear-gradient(90deg,var(--verde),var(--verde2));border-radius:999px}
+.etapas{list-style:none;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin:18px 0 6px;padding:0;counter-reset:e}
+.etapas li{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:3px;font-size:12px}
+.etapas li::before{content:"";position:absolute;top:15px;left:-50%;width:100%;height:3px;background:#DDE2D8;z-index:0}
+.etapas li:first-child::before{display:none}.etapas li.ok::before,.etapas li.act::before{background:var(--verde)}
+.etapas span{position:relative;z-index:1;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:#EEF0EC;color:#7A857C;border:2px solid #DDE2D8}
+.etapas .ok span{background:var(--verde);border-color:var(--verde);color:#fff}
+.etapas .act span{background:#fff;border-color:var(--verde);color:var(--deep)}
+.etapas .cur span{box-shadow:0 0 0 5px rgba(115,188,37,.22)}
+.etapas b{font-size:12.5px}.etapas small{color:var(--muted);line-height:1.3}
+.etapas .pend b{color:#7A857C}
+dd.tarde{color:var(--bad)}
+.sub{margin:0 0 10px;font-size:15px}
+.analisis{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px}
+.analisis li{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;background:#F6F8F4;font-size:13.5px}
+.analisis li span{flex:1;font-weight:600}.analisis li small{color:var(--muted);font-weight:600;white-space:nowrap}
+.analisis i{font-style:normal;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
+.analisis .concluido i{background:var(--verde);color:#fff}.analisis .concluido small{color:var(--ok)}
+.analisis .proceso i{background:#FFF3CD;color:#7A5600}.analisis .proceso small{color:#7A5600}
+.analisis .pendiente i{background:#EEF0EC;color:#7A857C}
+@media (max-width:620px){
+  .etapas{grid-template-columns:1fr;gap:0}
+  .etapas li{flex-direction:row;align-items:center;text-align:left;gap:10px;padding:6px 0}
+  .etapas li::before{top:-50%;left:15px;width:3px;height:100%}
+  .etapas small{margin-left:auto;text-align:right}
+  .analisis{grid-template-columns:1fr}
+  .seg-head{flex-direction:column}.seg-pct{text-align:left}
+}
 @media (max-width:520px){dl{grid-template-columns:1fr}dt{margin-top:6px}}
 </style>
 </head>
 <body>
 <div class="franja"></div>
-<header class="top"><h1>Verificación de documentos<span>Laboratorio Agroindustrial · CENGICAÑA</span></h1></header>
+<header class="top"><h1><?= $doc && !$esInforme ? 'Seguimiento de su análisis' : 'Verificación de documentos' ?><span>Laboratorio Agroindustrial · CENGICAÑA</span></h1></header>
 <main>
   <section class="card">
     <form method="get" action="">
@@ -93,6 +139,49 @@ footer{text-align:center;color:var(--muted);font-size:12px}
 <?php elseif ($codigo !== '' && !$doc): ?>
   <section class="card estado bad"><div class="ico">✕</div><div><h2>Documento no encontrado</h2>
     <p>El código <b class="mono"><?= $e($codigo) ?></b> no corresponde a ningún documento emitido por el laboratorio. Revise que esté escrito igual que en el documento; si persiste, el documento no es auténtico.</p></div></section>
+<?php elseif ($doc && !$esInforme): ?>
+  <?php if ($estado === 'anulado'): ?>
+  <section class="card estado bad"><div class="ico">✕</div><div><h2>Recepción anulada</h2><p>Esta recepción fue anulada por el laboratorio. Comuníquese con el laboratorio para más información.</p></div></section>
+  <?php else: ?>
+  <section class="card">
+    <div class="seg-head">
+      <div><small>Estado de su análisis</small><h2><?= $e(preg_match('/^lote\b/i', (string) ($d['lote'] ?? '')) ? $d['lote'] : 'Lote ' . ($d['lote'] ?? '—')) ?></h2>
+        <p><?= $e($d['tipo_muestra'] ?? '') ?> · <?= (int) ($d['muestras'] ?? 0) ?> muestra<?= (int) ($d['muestras'] ?? 0) === 1 ? '' : 's' ?><?= !empty($d['rango']) ? ' · ' . $e($d['rango']) : '' ?><?= ($d['cliente'] ?? '') !== '' ? ' · ' . $e($d['cliente']) : '' ?></p></div>
+      <?php if ($avance): ?><div class="seg-pct"><b><?= $avance['pct'] ?>%</b><span>análisis aprobados</span></div><?php endif; ?>
+    </div>
+    <?php if (!$avance): ?>
+      <p class="nota">Sus muestras fueron recibidas el <?= $e($fecha($d['fecha_ingreso'] ?? '')) ?>. El avance de los análisis se mostrará aquí en cuanto el laboratorio los registre.</p>
+    <?php else: ?>
+      <div class="barra" role="img" aria-label="<?= $avance['aprobados'] ?> de <?= $avance['total'] ?> análisis aprobados"><i style="width:<?= $avance['pct'] ?>%"></i></div>
+      <ol class="etapas">
+        <?php foreach ($avance['etapas'] as $i => [$nombre, $st, $detalle]): ?>
+          <li class="<?= $st ?><?= $i === $avance['actual'] ? ' cur' : '' ?>"><span aria-hidden="true"><?= $st === 'ok' ? '✓' : $i + 1 ?></span><b><?= $e($nombre) ?></b><small><?= $e($detalle) ?></small></li>
+        <?php endforeach; ?>
+      </ol>
+      <dl>
+        <dt>Fecha de ingreso</dt><dd><?= $e($fecha($d['fecha_ingreso'] ?? '')) ?></dd>
+        <?php if ($avance['vence'] !== ''): ?><dt>Entrega estimada</dt><dd<?= $avance['atrasado'] ? ' class="tarde"' : '' ?>><?= $e($fecha($avance['vence'])) ?><?= $avance['atrasado'] ? ' · con retraso' : '' ?></dd><?php endif; ?>
+      </dl>
+    <?php endif; ?>
+  </section>
+
+  <?php if ($avance && $avance['firmado']): ?>
+  <section class="card estado ok"><div class="ico">✓</div><div><h2>Su informe de resultados está listo</h2>
+    <p>El laboratorio emitió el informe de este lote. Los resultados se entregan únicamente en el informe firmado<?= $avance['codigo_informe'] ? '; puede comprobar su autenticidad con el QR impreso en él o aquí: <a class="mono" href="?c=' . $e(rawurlencode($avance['codigo_informe'])) . '">' . $e($avance['codigo_informe']) . '</a>' : '' ?>.</p></div></section>
+  <?php endif; ?>
+
+  <?php if ($avance): ?>
+  <section class="card">
+    <h3 class="sub">Análisis solicitados</h3>
+    <ul class="analisis">
+      <?php foreach ($avance['analisis'] as $a): ?>
+        <li class="<?= $a['estado'] ?>"><i aria-hidden="true"><?= ['concluido' => '✓', 'proceso' => '◐', 'pendiente' => '○'][$a['estado']] ?></i><span><?= $e($a['nombre']) ?></span><small><?= ['concluido' => 'Concluido', 'proceso' => 'En proceso', 'pendiente' => 'Pendiente'][$a['estado']] ?><?= $a['total'] > 1 && $a['estado'] === 'proceso' ? ' · ' . $a['ok'] . '/' . $a['total'] : '' ?></small></li>
+      <?php endforeach; ?>
+    </ul>
+    <p class="nota">Esta página muestra solo el avance. Los resultados se entregan en el informe firmado por el laboratorio, que lleva su propio código QR para comprobar su autenticidad. Código de esta recepción: <span class="mono"><?= $e($doc['codigo']) ?></span>.</p>
+  </section>
+  <?php endif; ?>
+  <?php endif; ?>
 <?php elseif ($doc): ?>
   <?php if ($estado === 'vigente'): ?>
   <section class="card estado ok"><div class="ico">✓</div><div><h2>Documento auténtico y vigente</h2>
@@ -109,7 +198,7 @@ footer{text-align:center;color:var(--muted);font-size:12px}
       <dt>Código de verificación</dt><dd class="mono"><?= $e($doc['codigo']) ?></dd>
       <dt>Documento</dt><dd><?= $e($d['documento'] ?? '') ?><?= $esInforme && !empty($d['informe']) ? ' ' . $e($d['informe']) : '' ?><?= $esInforme ? ' · versión ' . (int) ($d['version'] ?? $doc['version']) : '' ?></dd>
       <dt>Lote</dt><dd><?= $e($d['lote'] ?? '—') ?></dd>
-      <dt>Tipo de muestra</dt><dd><?= $e($d['tipo_muestra'] ?? '—') ?></dd>
+      <dt>Tipo de muestra</dt><dd><?= $e(($t = (string) ($d['tipo_muestra'] ?? '')) !== '' ? mb_strtoupper(mb_substr($t, 0, 1)) . mb_substr($t, 1) : '—') ?></dd>
       <dt>Cliente / institución</dt><dd><?= $e(($d['cliente'] ?? '') !== '' ? $d['cliente'] : '—') ?></dd>
       <dt>Muestras</dt><dd><?= (int) ($d['muestras'] ?? 0) ?><?= !empty($d['rango']) ? ' · ' . $e($d['rango']) : '' ?></dd>
       <?php if (!empty($d['analisis'])): ?><dt>Análisis</dt><dd class="chips"><?php foreach ((array) $d['analisis'] as $a): ?><span><?= $e($a) ?></span><?php endforeach; ?></dd><?php endif; ?>

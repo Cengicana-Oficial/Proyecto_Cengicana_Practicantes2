@@ -37,8 +37,9 @@ function wfUsuarios(): array {
     return $users=$db->query("SELECT DISTINCT u.id,u.nombre FROM usuarios u JOIN usuario_modulo um ON um.usuario_id=u.id JOIN modulos m ON m.id=um.modulo_id WHERE LOWER(m.nombre)='laboratorio' ORDER BY u.nombre")->fetchAll(PDO::FETCH_ASSOC);
 }
 function wfAudit(PDO $pdo,array $user,string $action,string $ref,array $data):void {$pdo->prepare('INSERT INTO lab_workflow_auditoria(usuario,accion,referencia,datos) VALUES(?,?,?,?)')->execute([(string)($user['nombre']??'Usuario'),$action,$ref,json_encode($data,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)]);}
-function wfTareas(PDO $pdo):array {
-    $tasks=lab_planificacion_tareas($pdo);$plans=$pdo->query('SELECT * FROM lab_plan_lote')->fetchAll(PDO::FETCH_UNIQUE|PDO::FETCH_ASSOC);
+/** $soloEnCurso=true omite los lotes finalizados (informe firmado); por defecto trae todo, como antes. */
+function wfTareas(PDO $pdo,bool $soloEnCurso=false,?int $idSolicitud=null):array {
+    $tasks=lab_planificacion_tareas($pdo,$soloEnCurso,$idSolicitud);$plans=$pdo->query('SELECT * FROM lab_plan_lote')->fetchAll(PDO::FETCH_UNIQUE|PDO::FETCH_ASSOC);
     $started=[];foreach($pdo->query('SELECT usuario_key,hoja,datos FROM lab_hoja_borrador') as $saved){$cap=json_decode($saved['datos'],true);foreach($cap['seleccion']??[] as $id)if(array_filter($cap['filas'][$id]??[],fn($v)=>is_scalar($v)&&trim((string)$v)!==''))$started[$id.':'.$saved['hoja']][]=$saved['usuario_key'];}
     $assign=[];foreach($pdo->query('SELECT * FROM lab_plan_asignacion') as $a)$assign[$a['id_muestra'].':'.$a['id_tipo_analisis']]=$a;
     foreach($tasks as &$t){
@@ -276,7 +277,7 @@ function wfSeguimientoLotes(PDO $pdo):array {
     }catch(Throwable $e){}
     try{
         foreach($pdo->query("SELECT d.id_lote, MAX(h.fecha) AS enviado FROM lab_documento_historial h JOIN lab_documento d ON d.id_documento=h.id_documento
-            WHERE d.tipo_documento='informe' AND h.cambios LIKE 'Enviado por correo%' GROUP BY d.id_lote") as $r)
+            WHERE d.tipo_documento='informe' AND (h.cambios LIKE 'Enviado por correo%' OR h.cambios LIKE 'Entregado al cliente%') GROUP BY d.id_lote") as $r)
             $out[(int)$r['id_lote']]['enviado']=$r['enviado'];
     }catch(Throwable $e){}
     return $out;
@@ -310,7 +311,62 @@ function wfSeguimientoEventos(PDO $pdo,int $idLote):array {
     try{$q=$pdo->prepare('SELECT accion,detalle,usuario,fecha FROM lab_informe_historial WHERE id_lote=?');$q->execute([$idLote]);
         foreach($q as $r)$add('informe',$r['fecha'],'Informe · '.$r['accion'],$r['usuario'],(string)($r['detalle']??''));}catch(Throwable $e){}
     try{$q=$pdo->prepare("SELECT h.cambios,h.usuario,h.fecha FROM lab_documento_historial h JOIN lab_documento d ON d.id_documento=h.id_documento WHERE d.id_lote=? AND d.tipo_documento='informe'");$q->execute([$idLote]);
-        foreach($q as $r){$envio=str_starts_with((string)$r['cambios'],'Enviado por correo');$add($envio?'entrega':'informe',$r['fecha'],$envio?'Informe enviado por correo':'Informe corregido',$r['usuario'],$envio?substr((string)$r['cambios'],strlen('Enviado por correo a: ')):(string)$r['cambios']);}}catch(Throwable $e){}
+        foreach($q as $r){$c=(string)$r['cambios'];$envio=str_starts_with($c,'Enviado por correo');$entrega=str_starts_with($c,'Entregado al cliente');
+            if($entrega){$add('entrega',$r['fecha'],'Informe entregado al cliente (otro medio)',$r['usuario'],substr($c,strlen('Entregado al cliente · ')));continue;}
+            $add($envio?'entrega':'informe',$r['fecha'],$envio?'Informe enviado por correo':'Informe corregido',$r['usuario'],$envio?substr($c,strlen('Enviado por correo a: ')):$c);}}catch(Throwable $e){}
     usort($ev,fn($a,$b)=>strcmp($b['fecha'],$a['fecha']));
     return $ev;
+}
+
+/**
+ * Estado de una recepción para el cliente (página pública del QR de la boleta).
+ * Mismas etapas que Planificación, en lenguaje para el cliente y SIN valores de resultados:
+ * los resultados solo se entregan en el informe firmado (que tiene su propio QR de autenticidad).
+ * Devuelve null si la recepción no tiene análisis registrados.
+ */
+function wfEstadoPublicoSolicitud(PDO $pdo,int $idSolicitud):?array {
+    $ts=wfTareas($pdo,false,$idSolicitud);
+    if(!$ts)return null;
+    $idLote=(int)$ts[0]['id_lote'];
+    $seg=wfSeguimientoLotes($pdo)[$idLote]??['recepcion'=>null,'informe'=>null,'enviado'=>null];
+    $ident=null;
+    try{require_once __DIR__.'/identificacion_lote_helper.php';foreach(labIdentificacionLotes($pdo,$idSolicitud) as $l){$ident=$l;break;}}catch(Throwable $e){}
+    $identPend=$ident?count(array_filter($ident['muestras']??[],fn($m)=>($m['estado']??'')==='pendiente')):null;
+
+    $total=count($ts);$aprob=count(array_filter($ts,fn($t)=>$t['estado']['key']==='validado'));
+    $pend=count(array_filter($ts,'wfPendiente'));$iniciado=(bool)array_filter($ts,fn($t)=>$t['estado']['key']!=='pendiente');
+    $enVal=(bool)array_filter($ts,fn($t)=>$t['estado']['key']==='validacion');
+    $inf=$seg['informe'];$firmado=($inf['estado']??'')==='FIRMADO';$todo=$aprob===$total;
+    $f=static fn($v)=>$v?date('d/m/Y',strtotime((string)$v)):'';
+    $identOk=$ident&&!empty($ident['version'])&&!$identPend;$identPar=$ident&&!empty($ident['version']);
+    $etapas=[
+        ['Recepción','ok',$seg['recepcion']?'Recibidas el '.$f($seg['recepcion']):'Recibidas'],
+        ['Identificación',$identOk?'ok':($identPar?'act':'pend'),$identOk?'Completa':($identPar?'En proceso':'Pendiente')],
+        ['Análisis',!$pend?'ok':($iniciado?'act':'pend'),!$pend?'Concluidos':($iniciado?'En proceso':'Por iniciar')],
+        ['Validación',$todo?'ok':(($enVal||!$pend||$aprob)?'act':'pend'),$aprob.' de '.$total.' aprobados'],
+        ['Informe',$firmado?'ok':($todo?'act':'pend'),$firmado?'Emitido el '.$f($inf['fecha_firma']??''):($todo?'En aprobación':'Pendiente')],
+        ['Entrega',$seg['enviado']?'ok':($firmado?'act':'pend'),$seg['enviado']?'Entregado el '.$f($seg['enviado']):($firmado?'Disponible':'Pendiente')],
+    ];
+    // Etapa a destacar: la más avanzada en curso (p. ej. Validación aunque la identificación siga parcial).
+    $actual=null;foreach($etapas as $i=>$e)if($e[1]==='act')$actual=$i;
+    if($actual===null)foreach($etapas as $i=>$e)if($e[1]!=='ok'){$actual=$i;break;}
+
+    // Por análisis: concluido (aprobado), en proceso (captura, validación o repetición) o pendiente.
+    $porAnalisis=[];
+    foreach($ts as $t){$n=$t['analisis_nombre'];$porAnalisis[$n]??=['total'=>0,'ok'=>0,'inicio'=>0];$porAnalisis[$n]['total']++;
+        if($t['estado']['key']==='validado')$porAnalisis[$n]['ok']++;elseif($t['estado']['key']!=='pendiente')$porAnalisis[$n]['inicio']++;}
+    $analisis=[];
+    foreach($porAnalisis as $n=>$c)$analisis[]=['nombre'=>$n,'estado'=>$c['ok']===$c['total']?'concluido':(($c['ok']||$c['inicio'])?'proceso':'pendiente'),'ok'=>$c['ok'],'total'=>$c['total']];
+    usort($analisis,fn($a,$b)=>[['concluido'=>2,'proceso'=>0,'pendiente'=>1][$a['estado']],$a['nombre']]<=>[['concluido'=>2,'proceso'=>0,'pendiente'=>1][$b['estado']],$b['nombre']]);
+
+    // QR de autenticidad del informe vigente del lote (si ya se firmó con código de verificación).
+    $codigoInforme=null;
+    if($firmado){try{$q=$pdo->prepare("SELECT codigo FROM lab_documento_verificacion WHERE tipo='informe' AND id_lote=? AND estado='vigente' ORDER BY id DESC LIMIT 1");$q->execute([$idLote]);$codigoInforme=$q->fetchColumn()?:null;}catch(Throwable $e){}}
+
+    $vence=substr((string)($ts[0]['fecha_estimada']??''),0,10);
+    return [
+        'etapas'=>$etapas,'actual'=>$actual,'pct'=>(int)floor($aprob*100/max(1,$total)),'aprobados'=>$aprob,'total'=>$total,
+        'analisis'=>$analisis,'vence'=>$vence,'atrasado'=>!$firmado&&$vence!==''&&$vence<date('Y-m-d'),
+        'firmado'=>$firmado,'codigo_informe'=>$codigoInforme,
+    ];
 }

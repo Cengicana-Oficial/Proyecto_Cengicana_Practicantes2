@@ -42,7 +42,7 @@
     return '<article class="recepcion-boleta">' +
       '<header class="bol-head"><div class="bol-marca"><img src="../assets/logo.png" alt="CENGICAÑA"><div><strong>CENGICAÑA</strong><span>Laboratorio Agroindustrial</span></div></div>' +
       '<dl class="bol-meta">' + campo("Código", "CG-R-SLA-001") + campo("Versión", "001") + campo("Fecha", fecha(d.fechaIngreso)) + '</dl>' + qrBoleta(d) + '</header>' +
-      '<div class="bol-titulo"><h2>Registro de recepción de muestras</h2><span>' + (preview ? "Vista previa · cambios sin guardar" : "Recepción registrada · solicitud #" + esc(d.idSolicitud)) + '</span></div>' +
+      '<div class="bol-titulo"><h2>Registro de recepción de muestras</h2><span>' + (preview ? "Vista previa · cambios sin guardar" : "Recepción registrada") + '</span></div>' +
       '<dl class="bol-claves">' + campo("Número de lote", d.lote) + campo("Tipo de muestra", d.tipo) + campo("Muestras", d.numeroMuestras) + campo("Número de laboratorio", rango) + '</dl>' +
       '<section class="bol-sec"><h3>Datos del muestreo</h3><dl class="bol-grid">' +
       campo("Cliente / institución", d.institucion) + campo("Responsable del envío", d.responsableEnvio) +

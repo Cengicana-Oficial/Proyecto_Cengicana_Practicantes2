@@ -167,7 +167,7 @@ if (!function_exists('lab_documentos_panel')) {
         $enviosPorDocumento = [];
         if ($tablaHistorialDisponible) {
             try {
-                $stmt = $pdo->query("SELECT id_documento, MAX(fecha) AS enviado FROM lab_documento_historial WHERE cambios LIKE 'Enviado por correo%' GROUP BY id_documento");
+                $stmt = $pdo->query("SELECT id_documento, MAX(fecha) AS enviado FROM lab_documento_historial WHERE (cambios LIKE 'Enviado por correo%' OR cambios LIKE 'Entregado al cliente%') GROUP BY id_documento");
                 foreach ($stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [] as $fila) {
                     $enviosPorDocumento[(int) $fila['id_documento']] = (string) $fila['enviado'];
                 }

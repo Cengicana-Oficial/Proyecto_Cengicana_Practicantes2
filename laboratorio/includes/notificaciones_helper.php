@@ -115,7 +115,7 @@ function lab_notificaciones(PDO $pdo, bool $fresco = false): array
                 SELECT COUNT(*) FROM lab_documento d
                 WHERE d.tipo_documento = 'informe'
                   AND NOT EXISTS (SELECT 1 FROM lab_documento_historial h
-                                  WHERE h.id_documento = d.id_documento AND h.cambios LIKE 'Enviado por correo%')
+                                  WHERE h.id_documento = d.id_documento AND (h.cambios LIKE 'Enviado por correo%' OR h.cambios LIKE 'Entregado al cliente%'))
             ")->fetchColumn();
             $agregar('reportes', 'Reportes firmados por enviar', 'Informes aprobados que aún no se envían al cliente', $porEnviar, 'view/documentos_view.php');
         } catch (Throwable $e) {
