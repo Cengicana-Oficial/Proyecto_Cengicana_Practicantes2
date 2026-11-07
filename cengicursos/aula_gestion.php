@@ -158,7 +158,9 @@ if($_SERVER['REQUEST_METHOD']==='POST') {
             } else throw new InvalidArgumentException('Selecciona el PDF del diploma o pega su enlace.');
             if($dip){$db->prepare('UPDATE diplomas SET pdf_path=?,emitido_en=NOW() WHERE id=?')->execute([$ruta,$dip['id']]);$codigo=$dip['codigo_unico'];}
             else{
-                do{$codigo='CEN-DIP-'.str_pad((string)random_int(0,999999),6,'0',STR_PAD_LEFT);}while(aula_rows($db,'SELECT 1 FROM diplomas WHERE codigo_unico=?',[$codigo]));
+                // Mismo formato que el diseñador de diplomas: CEN-CU-<año>-0001-XXXX (se reinicia cada año).
+                require_once __DIR__.'/diplomas_helpers.php';
+                $codigo=cengi_dip_codigo_nuevo($db,false);
                 $db->prepare("INSERT INTO diplomas(tipo,asignacion_id,codigo_unico,pdf_path,emitido_en,creado_por) VALUES('curso',?,?,?,NOW(),?)")->execute([$aid,$codigo,$ruta,cengi_usuario_actual_id()]);
             }
             $db->prepare("INSERT INTO control_cursos(asignacion_id,diploma) VALUES(?,?) ON DUPLICATE KEY UPDATE diploma=VALUES(diploma)")->execute([$aid,$ruta]);
