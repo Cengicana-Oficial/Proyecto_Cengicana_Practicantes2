@@ -50,6 +50,11 @@
 #wf-app .wf-plan-tabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:transparent;padding:10px 14px;font-size:13px;color:#636A6F}
 #wf-app .wf-plan-tabs button[aria-selected="true"]{border-bottom-color:#73bc25;color:#30353A;font-weight:700}
 #wf-app .wf-plan-tabs span{color:#636A6F;font-weight:600}
+#wf-app .wf-tipo-tabs{margin:14px 0 0;border-bottom:0;flex-wrap:wrap;gap:8px}
+#wf-app .wf-tipo-tabs button{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:#fff}
+#wf-app .wf-tipo-tabs button[aria-selected="true"]{background:#73bc25;border-color:#73bc25;color:#fff}
+#wf-app .wf-tipo-tabs button[aria-selected="true"] span{color:#fff}
+#wf-app .wf-tipo-tabs + .wf-plan-block{margin-top:10px}
 #wf-app .wf-modal-tabs{position:sticky;top:61px;z-index:3;background:#F7F8F8;margin:0;padding:0 14px}
 #wf-app .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 #wf-app .wf-steps{display:flex;gap:3px;margin:0;padding:0;list-style:none}

@@ -19,6 +19,11 @@
 .bd-section-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
 
 /* ---------- cola agrupada por tipo de muestra ---------- */
+.bd-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;}
+.bd-tabs button{border:1px solid var(--cengi-border);border-radius:999px;padding:7px 14px;background:#fff;color:var(--cengi-muted);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;}
+.bd-tabs button span{font-weight:600;}
+.bd-tabs button[aria-selected="true"]{background:var(--cengi-primary);border-color:var(--cengi-primary);color:#fff;}
+.bd-tabs button:focus-visible{outline:2px solid var(--cengi-primary-deep);outline-offset:2px;}
 .cube-block{margin-bottom:24px;}
 .cube-head{display:flex;align-items:center;gap:11px;padding:4px 2px 12px;}
 .cube-ico{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:var(--cengi-shadow);}

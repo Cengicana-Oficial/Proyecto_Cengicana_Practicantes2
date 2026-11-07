@@ -14,10 +14,9 @@ const pending=t=>['pendiente','proceso','rechazado','repetido'].includes(t.estad
 const can=t=>data.manager||(data.user.id&&Number(t.usuario_id)===Number(data.user.id))||(!t.usuario_id&&data.user.nombre&&t.analista===data.user.nombre);
 const message=t=>$('status').textContent=t;
 const group=(list,key)=>{const o={};list.forEach(t=>(o[key(t)]??=[]).push(t));return o;};
-const priority=t=>t.prioridad.rank;
-const sortTasks=(a,b)=>priority(b)-priority(a)||String(a.fecha_estimada||'9999').localeCompare(String(b.fecha_estimada||'9999'))||String(a.codigo_muestra).localeCompare(String(b.codigo_muestra),undefined,{numeric:true});
+// Sin prioridad de lote: el orden es por fecha de entrega (los sin fecha al final) y luego por código.
+const sortTasks=(a,b)=>String(a.fecha_estimada||'9999').localeCompare(String(b.fecha_estimada||'9999'))||String(a.codigo_muestra).localeCompare(String(b.codigo_muestra),undefined,{numeric:true});
 const badge=t=>'<span class="wf-state '+t.estado.key+'" title="'+esc(labels[t.estado.key]+' · '+(t.analista||'Sin asignar'))+'">'+icon[t.estado.key]+' '+esc(labels[t.estado.key])+'</span>';
-const prio=t=>'<span class="wf-priority '+t.prioridad.key+'">'+esc(t.prioridad.label)+'</span>';
 function lotState(ts){if(ts.every(t=>t.estado.key==='validado'))return 'validado';if(ts.every(t=>t.estado.key==='pendiente'))return 'pendiente';if(!ts.some(pending))return 'validacion';return 'proceso';}
 function progress(ts){const groups=group(ts,t=>t.estado.key);return '<div class="wf-progress" aria-label="'+ts.filter(t=>t.estado.key==='validado').length+' de '+ts.length+' aprobados">'+Object.entries(groups).map(([key,v])=>'<span class="'+key+'" style="width:'+v.length/ts.length*100+'%" title="'+esc(labels[key])+': '+v.length+'"></span>').join('')+'</div>';}
 function users(selected='',attrs=''){return '<select '+attrs+'><option value="">Elegir analista…</option>'+data.usuarios.map(u=>'<option value="'+u.id+'"'+(String(u.id)===String(selected)?' selected':'')+'>'+esc(u.nombre)+'</option>').join('')+'</select>';}
@@ -53,15 +52,16 @@ function renderPlan(filtered){
  const lots=Object.entries(all).filter(([id,ts])=>visible.has(id)&&!finalizado(id)&&(!filter||(filter==='informe'?ts.every(t=>t.estado.key==='validado'):lotState(ts)===filter))).sort((a,b)=>sortTasks(a[1][0],b[1][0]));
  $('count').textContent=lots.length+' lote'+(lots.length===1?'':'s')+' en curso · '+lots.reduce((n,[,ts])=>n+new Set(ts.map(x=>x.id_muestra)).size,0)+' muestras · Los lotes con informe firmado pasan a Finalizados.';
  // Un bloque por tipo de muestra; dentro, las columnas de análisis son las mismas para todos sus lotes.
- const bloques=group(lots,([,ts])=>tipoGrupo(ts[0].tipo_muestra));
- $('list').innerHTML=Object.entries(bloques).sort((a,b)=>tipoRank(a[0])-tipoRank(b[0])||a[0].localeCompare(b[0],'es')).map(([tipo,ls])=>{
+ // Cada tipo va en su propia pestaña, para que muchos lotes de un tipo no entierren a los demás.
+ const bloques=Object.entries(group(lots,([,ts])=>tipoGrupo(ts[0].tipo_muestra))).sort((a,b)=>tipoRank(a[0])-tipoRank(b[0])||a[0].localeCompare(b[0],'es'));
+ $('list').innerHTML=tipoTabs(bloques,'wf-plan-tabs')+bloques.filter(([tipo])=>tipo===tipoTab).map(([tipo,ls])=>{
   // Columnas por hoja de trabajo (análisis que se capturan juntos): menos columnas y sin barra horizontal.
   const hojas=hojasDelLote(ls.flatMap(([,ts])=>ts)),nAn=hojas.reduce((n,h)=>n+h.an.length,0);
   const nMuestras=ls.reduce((n,[,ts])=>n+new Set(ts.map(x=>x.id_muestra)).size,0);
   const filas=ls.map(([id,ts])=>{const t=ts[0],muestras=samplesSorted(ts),approved=ts.filter(x=>x.estado.key==='validado').length,e=etapas(id,ts);
    const rango=muestras.length?muestras[0]+(muestras.length>1?' → '+muestras[muestras.length-1]:''):'—';
    const vence=t.fecha_estimada?String(t.fecha_estimada).slice(0,10):'',atrasado=vence&&vence<today;
-   return '<tr class="wf-plan-row" data-open-lote="'+id+'" tabindex="0" title="Abrir lote '+esc(t.codigo_lote)+'"><th class="wf-plan-lote wf-plan-sticky"><b>'+esc(t.codigo_lote)+'</b>'+prio(t)+'<small class="wf-plan-sub">'+esc(t.cliente||'Sin cliente')+'</small></th>'
+   return '<tr class="wf-plan-row" data-open-lote="'+id+'" tabindex="0" title="Abrir lote '+esc(t.codigo_lote)+'"><th class="wf-plan-lote wf-plan-sticky"><b>'+esc(t.codigo_lote)+'</b><small class="wf-plan-sub">'+esc(t.cliente||'Sin cliente')+'</small></th>'
     +'<td class="wf-plan-rango"><span>'+esc(rango)+'</span><small class="wf-plan-sub">'+muestras.length+' muestra'+(muestras.length===1?'':'s')+'</small></td>'
     +'<td class="wf-plan-total"><b>'+Math.round(approved/ts.length*100)+'%</b>'+progress(ts)+'<small class="wf-plan-sub">'+approved+'/'+ts.length+' análisis</small></td>'
     +'<td class="wf-plan-seg">'+stepper(e)+'<small class="wf-plan-sub wf-plan-etapa">'+esc(e.etiqueta)+'</small><small class="wf-plan-sub'+(atrasado?' wf-late':'')+'">'+(vence?(atrasado?'Atrasado · entrega ':'Entrega ')+esc(fdate(vence)):'Sin fecha estimada')+'</small></td>'
@@ -77,7 +77,13 @@ function renderPlan(filtered){
  if(modalLot)renderModal();
 }
 /* ---------- Seguimiento del lote: Recepción → Identificación → Análisis → Validación → Informe → Entrega ---------- */
-let planTab='curso',modalTab='muestras',eventos={};
+let planTab='curso',tipoTab='',modalTab='muestras',eventos={};
+/* Pestañas por tipo de muestra (Planificación y Bandeja). bloques: [[clave,[...]],...] ya ordenados;
+   la etiqueta usa el nombre agrupado y el número es la cantidad de filas del bloque. */
+function tipoTabs(bloques,cls){
+ if(!bloques.some(([tipo])=>tipo===tipoTab))tipoTab=bloques[0]?.[0]||'';
+ return bloques.length?'<div class="'+cls+' wf-tipo-tabs" role="tablist" aria-label="Tipo de muestra">'+bloques.map(([tipo,ls])=>'<button type="button" role="tab" aria-selected="'+(tipo===tipoTab)+'" tabindex="'+(tipo===tipoTab?0:-1)+'" data-tipo-tab="'+esc(tipo)+'">'+esc(tipoGrupo(tipo))+' <span>('+ls.length+')</span></button>').join('')+'</div>':'';
+}
 const ETAPAS=[['recepcion','Recepción'],['identificacion','Identificación'],['analisis','Análisis'],['validacion','Validación'],['informe','Informe'],['entrega','Entrega']];
 const seg=id=>(data.seguimiento||{})[id]||{};
 const finalizado=id=>seg(id).informe?.estado==='FIRMADO';
@@ -95,7 +101,7 @@ function etapas(id,ts){
   analisis:[!pend?'ok':iniciado?'act':'pend',!pend?'Capturados':iniciado?pend+' por capturar':'Por iniciar'],
   validacion:[todo?'ok':(enVal||!pend||aprob)?'act':'pend',aprob+'/'+ts.length+' aprobados'],
   informe:[firmado?'ok':todo?'act':'pend',firmado?'Firmado '+fdate(inf.fecha_firma)+(inf.codigo?' · '+inf.codigo:''):inf?.estado==='DEVUELTO'?'Devuelto al técnico':todo?'Listo para aprobación':'En preparación'],
-  entrega:[s.enviado?'ok':firmado?'act':'pend',s.enviado?'Enviado '+fdate(s.enviado):firmado?'Pendiente de envío':'—'],
+  entrega:[s.enviado?'ok':firmado?'act':'pend',s.enviado?'Entregado '+fdate(s.enviado):firmado?'Pendiente de entrega':'—'],
  };
  const actual=ETAPAS.find(([k])=>st[k][0]!=='ok');
  return {st,actual:actual?actual[0]:'',etiqueta:actual?actual[1]+': '+st[actual[0]][1]:'Entregado al cliente'};
@@ -115,7 +121,7 @@ function renderFinalizados(ids,all){
    return '<tr><th class="wf-plan-lote"><b>'+esc(t.codigo_lote)+'</b></th><td>'+esc(tipoGrupo(t.tipo_muestra))+'</td><td>'+esc(t.cliente||'Sin cliente')+'</td><td class="wf-plan-rango">'+esc(m.length?m[0]+(m.length>1?' → '+m[m.length-1]:''):'—')+'</td><td class="wf-plan-num">'+m.length+'</td><td>'+esc(fdate(s.recepcion)||'—')+'</td>'
     +'<td><b>'+esc(inf.codigo||'—')+'</b>'+(inf.version>1?' <span class="wf-priority media">v'+inf.version+'</span>':'')+'<small class="wf-plan-sub">Firmado '+esc(fdt(inf.fecha_firma))+(inf.firmado_por?' · '+esc(inf.firmado_por):'')+'</small></td>'
     +'<td>'+(dur===null?'—':dur+' día'+(dur===1?'':'s'))+'</td>'
-    +'<td>'+(s.enviado?'<span class="wf-state validado">✓ Enviado</span><small class="wf-plan-sub">'+esc(fdt(s.enviado))+'</small>':'<span class="wf-state proceso">Pendiente de envío</span>')+'</td>'
+    +'<td>'+(s.enviado?'<span class="wf-state validado">✓ Entregado</span><small class="wf-plan-sub">'+esc(fdt(s.enviado))+'</small>':'<span class="wf-state proceso">Pendiente de entrega</span>')+'</td>'
     +'<td class="wf-plan-acc"><button type="button" data-seguimiento="'+id+'">Seguimiento</button><a href="documentos_view.php" title="Ver, descargar o enviar el informe firmado">Informe emitido</a></td></tr>';}).join('')+'</tbody></table></div></section>'
   :'<p class="wf-empty">No hay lotes finalizados con estos filtros.</p>';
 }/* Tipos de muestra en el orden del laboratorio */
@@ -126,7 +132,7 @@ const tipoRank=g=>{const i=TIPO_ORDEN.findIndex(x=>x[1]===g);return i<0?99:i;};
 const samplesSorted=ts=>[...new Set(ts.map(x=>x.codigo_muestra))].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
 function planHead(tipo,sub){const k=(TIPO_ORDEN.find(x=>x[1]===tipo)||[])[2],t=TIPOS[k]||['#858C91','<circle cx="12" cy="12" r="9"/>'];
  return '<div class="wf-plan-head"><span class="wf-plan-ico" style="background:'+t[0]+'"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+t[1]+'</svg></span><div><h3>'+esc(tipo)+'</h3><small>'+esc(sub)+'</small></div></div>';}
-/* Ver muestras: detalle por muestra del lote en una ventana (asignación y prioridad incluidas) */
+/* Ver muestras: detalle por muestra del lote en una ventana (asignación incluida) */
 let modalLot=null;
 async function cargarEventos(id){
  try{const r=await api(null,'?modo=plan&seguimiento='+encodeURIComponent(id));eventos[id]=r.eventos||[];}
@@ -170,7 +176,7 @@ function analistaActual(pend){
  if(n.length===1&&!n[0])return '<span class="wf-sin-asignar">Sin asignar</span>';
  return n.map(x=>x?'<span class="wf-analista" title="'+esc(x)+'"><i>'+esc(initials(x.split('@')[0].replace(/[._-]+/g,' ')))+'</i>'+esc(x)+'</span>':'<span class="wf-sin-asignar">Sin asignar</span>').join('');
 }
-function lotDetail(id,ts){const t=ts[0],hojas=hojasDelLote(ts),samples=group(ts,x=>x.id_muestra),dis=data.manager?'':' disabled';
+function lotDetail(id,ts){const t=ts[0],hojas=hojasDelLote(ts),samples=group(ts,x=>x.id_muestra);
  const cols=hojas.flatMap(h=>h.an.map((a,i)=>({h,a,ini:i===0})));
  const agrupar=hojas.some(h=>h.an.length>1);
  const head=agrupar
@@ -194,7 +200,7 @@ function lotDetail(id,ts){const t=ts[0],hojas=hojasDelLote(ts),samples=group(ts,
     +'<td>'+analistaActual(pend)+(!pend.length?'<small class="wf-muted">'+esc([...new Set(h.tasks.map(x=>x.analista||''))].filter(Boolean).join(', ')||'')+'</small>':'')+'</td>'
     +(data.manager?'<td>'+(pend.length?users(uids.length===1?uids[0]:'','data-assign="'+id+'" data-analyses="'+idsAn+'" aria-label="Analista para '+esc(h.titulo)+'"'):'<span class="wf-muted">Nada pendiente</span>')+'</td>':'')+'</tr>';}).join('')
   +'</tbody></table></div>';
- return '<div class="wf-lot-detail"><div class="wf-toolbar"><label>Prioridad del lote<select data-priority="'+id+'"'+dis+'>'+['alta','media','baja'].map(p=>'<option value="'+p+'"'+(p===t.prioridad.key?' selected':'')+'>'+p[0].toUpperCase()+p.slice(1)+'</option>').join('')+'</select></label>'+identChip(t.id_solicitud)+'<a href="listar_lotes.php?id_solicitud='+t.id_solicitud+'">Identificación</a><a href="solicitud_formulario.php?id_solicitud='+t.id_solicitud+'" target="_blank" rel="noopener">Recepción / boleta</a><label class="wf-check"><input type="checkbox" data-solo-pend'+(soloPend?' checked':'')+'> Solo muestras con análisis por aprobar</label></div>'
+ return '<div class="wf-lot-detail"><div class="wf-toolbar">'+identChip(t.id_solicitud)+'<a href="listar_lotes.php?id_solicitud='+t.id_solicitud+'">Identificación</a><a href="solicitud_formulario.php?id_solicitud='+t.id_solicitud+'" target="_blank" rel="noopener">Recepción / boleta</a><label class="wf-check"><input type="checkbox" data-solo-pend'+(soloPend?' checked':'')+'> Solo muestras con análisis por aprobar</label></div>'
   +asignacion
   +'<div class="wf-assign-head"><h3>Estado por muestra</h3><p class="wf-legend">○ Pendiente · ◐ En análisis · ● En validación · ✓ Aprobado · ↻ Reanálisis · NS No solicitado <span class="wf-muted">(pasa el cursor sobre un ícono para ver el analista)</span></p></div>'
   +'<div class="wf-table-wrap wf-matrix"><table><thead>'+head+thAn+(agrupar?'':'<th>Aprob.</th>')+'</tr></thead><tbody>'+filas+'</tbody></table></div></div>';
@@ -210,36 +216,39 @@ const filled=(h,filas,id,ts)=>h.cols.filter(c=>!c.auto&&!c.opc&&(!c.analisis||ts
 function renderTray(filtered){
  const a=$('analyst').value;
  const pendingTasks=filtered.filter(t=>pending(t)&&(!a||(a==='sin'?!t.usuario_id&&!t.analista:String(t.usuario_id)===a||(!t.usuario_id&&t.analista===data.usuarios.find(u=>String(u.id)===a)?.nombre))));
- const top=ts=>Math.max(...ts.map(priority)),soon=ts=>ts.map(t=>String(t.fecha_estimada||'9999')).sort()[0];
- const sheets=Object.entries(group(pendingTasks,t=>t.hoja||('legacy:'+t.id_tipo_analisis))).sort((x,y)=>top(y[1])-top(x[1])||soon(x[1]).localeCompare(soon(y[1]))||x[0].localeCompare(y[0]));
+ const soon=ts=>ts.map(t=>String(t.fecha_estimada||'9999').slice(0,10)).sort()[0],today=localDate();
+ const sheets=Object.entries(group(pendingTasks,t=>t.hoja||('legacy:'+t.id_tipo_analisis))).sort((x,y)=>soon(x[1]).localeCompare(soon(y[1]))||x[0].localeCompare(y[0]));
  const hoy=data.capturadas_hoy||{},nombre=a&&a!=='sin'?data.usuarios.find(u=>String(u.id)===a)?.nombre:null;
  const capHoy=a==='sin'?0:nombre?(hoy[nombre]||0):Object.values(hoy).reduce((x,y)=>x+y,0);
- $('kpis').innerHTML=[['Análisis pendientes (colas)',sheets.length,''],['Con prioridad alta',sheets.filter(([,ts])=>ts.some(t=>t.prioridad.key==='alta')).length,'is-alta'],['Muestras capturadas hoy',capHoy,'is-hoy']].map(([label,n,cls])=>'<article class="'+cls+'"><small>'+label+'</small><strong>'+n+'</strong></article>').join('');
- $('count').textContent=sheets.length+' hojas de trabajo · Alta → Media → Baja';
- const porTipo=group(sheets,([,ts])=>ts[0].tipo_muestra);
- $('list').innerHTML=Object.entries(porTipo).map(([tipo,bs])=>{
+ $('kpis').innerHTML=[['Análisis pendientes (colas)',sheets.length,''],['Con entrega atrasada',sheets.filter(([,ts])=>soon(ts)<today).length,'is-alta'],['Muestras capturadas hoy',capHoy,'is-hoy']].map(([label,n,cls])=>'<article class="'+cls+'"><small>'+label+'</small><strong>'+n+'</strong></article>').join('');
+ $('count').textContent=sheets.length+' hojas de trabajo · por fecha de entrega';
+ // Una pestaña por tipo de muestra, en el orden del laboratorio.
+ const porTipo=Object.entries(group(sheets,([,ts])=>ts[0].tipo_muestra)).sort((x,y)=>tipoRank(tipoGrupo(x[0]))-tipoRank(tipoGrupo(y[0]))||x[0].localeCompare(y[0],'es'));
+ $('list').innerHTML=tipoTabs(porTipo,'bd-tabs')+porTipo.filter(([tipo])=>tipo===tipoTab).map(([tipo,bs])=>{
   const filas=bs.map(([key,ts])=>{
    const h=defs.hojas[key],allowed=ts.some(can),samples=Object.values(group(ts,t=>t.id_muestra)),ids=new Set(samples.map(s=>Number(s[0].id_muestra)));
    const draft=(data.borradores||{})[key],enHoja=draft?draft.seleccion.filter(id=>ids.has(Number(id))):[],listas=h?enHoja.filter(id=>filled(h,draft.filas,id,ts)).length:0;
    const lots=Object.values(group(ts,t=>t.id_lote)).sort((x,y)=>sortTasks(x[0],y[0]));
-   const chips=lots.map(lt=>{const n=new Set(lt.map(t=>t.id_muestra)).size,p=lt[0].prioridad;return '<span class="lm-chip" title="'+esc(lt[0].cliente+' · prioridad del lote '+p.label)+'">'+esc(lt[0].codigo_lote)+'<span class="lm-lote">'+n+' muestra'+(n===1?'':'s')+' · <b class="lm-pr lm-'+p.key+'">'+esc(p.label)+'</b></span></span>';}).join('');
+   const chips=lots.map(lt=>{const n=new Set(lt.map(t=>t.id_muestra)).size,v=String(lt[0].fecha_estimada||'').slice(0,10);return '<span class="lm-chip" title="'+esc(lt[0].cliente||'')+'">'+esc(lt[0].codigo_lote)+'<span class="lm-lote">'+n+' muestra'+(n===1?'':'s')+(v?' · <b'+(v<today?' class="lm-pr lm-alta" title="Entrega atrasada"':'')+'>entrega '+esc(fdate(v))+'</b>':'')+'</span></span>';}).join('');
    const extras=[];if(h?.controles.length)extras.push(h.controles.map(c=>c.label).join(' + '));if(h?.curva)extras.push('curva de calibración');
    const sub=!h?'Formato de captura no configurado':(h.analisis.length>1?'Incluye: '+h.analisis.join(', ')+' · ':'')+(extras.length?extras.join(' · '):(h.generico?'captura directa del resultado':h.cols.length+' datos por muestra, sin filas de control'));
-   const prioKey=ts.some(t=>t.prioridad.key==='alta')?'alta':ts.some(t=>t.prioridad.key==='media')?'media':'baja';
    const rea=ts.filter(isRea).length;
    const analistas=[...new Set(ts.map(t=>t.analista||'Sin asignar'))];
    return '<tr><td><b>'+esc(h?.titulo||ts[0].analisis_nombre)+'</b>'+(rea?' <span class="vt-chip is-rea" title="Devueltas por el técnico revisor">↻ '+new Set(ts.filter(isRea).map(t=>t.id_muestra)).size+' reanálisis</span>':'')+'<div class="cell-sub">'+esc(sub)+'</div></td>'
-    +'<td>'+chips+'</td><td>'+analistas.map(n=>'<span class="bd-ini" title="'+esc(n)+'">'+esc(n==='Sin asignar'?'—':initials(n))+'</span>').join('')+'</td><td>'+prioChip(prioKey)+'</td>'
+    +'<td>'+chips+'</td><td>'+analistas.map(n=>'<span class="bd-ini" title="'+esc(n)+'">'+esc(n==='Sin asignar'?'—':initials(n))+'</span>').join('')+'</td>'
     +'<td class="small muted" style="white-space:nowrap">'+samples.length+' muestra'+(samples.length===1?'':'s')+' pendiente'+(samples.length===1?'':'s')+'<div class="cell-sub">'+enHoja.length+' en hoja abierta · '+listas+' completas</div><div class="bd-pbar"><span style="width:'+Math.round(listas/samples.length*100)+'%"></span></div></td>'
     +'<td style="text-align:right"><button type="button" class="cengi-btn cengi-btn-sm '+(h&&allowed?'cengi-btn-primary':'cengi-btn-ghost')+'" data-sheet="'+esc(key)+'"'+(!h||!allowed?' disabled':'')+'>'+(!h?'Formato no disponible':!allowed?'Asignado a otro analista':enHoja.length?'Continuar →':'Capturar resultados →')+'</button></td></tr>';
   }).join('');
-  return '<div class="cube-block">'+cubeHead(tipo,bs.length+' hoja'+(bs.length===1?'':'s')+' de trabajo pendiente'+(bs.length===1?'':'s'))+'<div class="cengi-table-wrap"><table class="bd-queue"><thead><tr><th>Hoja de trabajo</th><th>Lotes pendientes</th><th>Analista(s)</th><th>Prioridad</th><th>Avance</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
+  return '<div class="cube-block">'+cubeHead(tipo,bs.length+' hoja'+(bs.length===1?'':'s')+' de trabajo pendiente'+(bs.length===1?'':'s'))+'<div class="cengi-table-wrap"><table class="bd-queue"><thead><tr><th>Hoja de trabajo</th><th>Lotes pendientes</th><th>Analista(s)</th><th>Avance</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
  }).join('')||'<div class="cengi-empty vt-empty-ok"><span class="material-symbols-outlined">task_alt</span>Sin hojas de trabajo pendientes con los filtros actuales.</div>';
 }
-$('list').addEventListener('click',e=>{const t=e.target.closest('[data-toggle]'),s=e.target.closest('[data-sheet]');const sg=e.target.closest('[data-seguimiento]');if(t)openModal(t.dataset.toggle);if(sg)openModal(sg.dataset.seguimiento,'seguimiento');if(s)openSheet(s.dataset.sheet);
+$('list').addEventListener('click',e=>{const tt=e.target.closest('[data-tipo-tab]');if(tt){tipoTab=tt.dataset.tipoTab;renderList();$('list').querySelector('[data-tipo-tab][aria-selected="true"]')?.focus();return;}
+ const t=e.target.closest('[data-toggle]'),s=e.target.closest('[data-sheet]');const sg=e.target.closest('[data-seguimiento]');if(t)openModal(t.dataset.toggle);if(sg)openModal(sg.dataset.seguimiento,'seguimiento');if(s)openSheet(s.dataset.sheet);
  // Clic en cualquier parte de la fila del lote (fuera de botones y enlaces) abre su detalle.
  const fila=!t&&!sg&&!s&&!e.target.closest("a,button,select,input")&&e.target.closest("[data-open-lote]");if(fila)openModal(fila.dataset.openLote);});
-$('list').addEventListener('keydown',e=>{const fila=e.target.matches&&e.target.matches("[data-open-lote]")?e.target:null;if(fila&&(e.key==="Enter"||e.key===" ")){e.preventDefault();openModal(fila.dataset.openLote);}});
+$('list').addEventListener('keydown',e=>{const tt=e.target.closest&&e.target.closest('[data-tipo-tab]');
+ if(tt&&(e.key==='ArrowRight'||e.key==='ArrowLeft')){const bs=[...$('list').querySelectorAll('[data-tipo-tab]')],i=bs.indexOf(tt);bs[(i+(e.key==='ArrowRight'?1:-1)+bs.length)%bs.length].click();e.preventDefault();return;}
+const fila=e.target.matches&&e.target.matches("[data-open-lote]")?e.target:null;if(fila&&(e.key==="Enter"||e.key===" ")){e.preventDefault();openModal(fila.dataset.openLote);}});
 app.querySelectorAll('[data-plan-tab]').forEach(b=>b.addEventListener('click',()=>{planTab=b.dataset.planTab;renderList();}));
 app.querySelectorAll('[data-modal-tab]').forEach(b=>b.addEventListener('click',()=>{modalTab=b.dataset.modalTab;renderModal();}));
 if($('modal')){
@@ -248,7 +257,7 @@ if($('modal')){
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('modal').hidden)closeModal();});
  $('modal-body').addEventListener('change',e=>{if(e.target.matches('[data-solo-pend]')){soloPend=e.target.checked;renderModal();return;}planChange(e);});
 }
-async function planChange(e){const el=e.target;if(busy||(!el.dataset.priority&&!el.dataset.assign)||!el.value)return;const id=Number(el.dataset.priority||el.dataset.assign),t=tasks.find(t=>Number(t.id_lote)===id);busy=true;el.disabled=true;try{await api({id_lote:id,version:t.plan_version,...(el.dataset.priority?{prioridad:el.value}:{usuario_id:Number(el.value),...(el.dataset.analyses?{ids_tipo_analisis:el.dataset.analyses.split(",").map(Number)}:{id_tipo_analisis:Number(el.dataset.analysis||0)})})},'?modo=plan');await refresh();message('Planificación guardada. La bandeja refleja la nueva asignación y prioridad.');}catch(error){message(error.message);renderList();}finally{busy=false;}}
+async function planChange(e){const el=e.target;if(busy||!el.dataset.assign||!el.value)return;const id=Number(el.dataset.assign),t=tasks.find(t=>Number(t.id_lote)===id);busy=true;el.disabled=true;try{await api({id_lote:id,version:t.plan_version,usuario_id:Number(el.value),...(el.dataset.analyses?{ids_tipo_analisis:el.dataset.analyses.split(",").map(Number)}:{id_tipo_analisis:Number(el.dataset.analysis||0)})},'?modo=plan');await refresh();message('Planificación guardada. La bandeja refleja la nueva asignación.');}catch(error){message(error.message);renderList();}finally{busy=false;}}
 $('list').addEventListener('change',planChange);function newCap(key){const h=defs.hojas[key];return {hoja:key,encabezado:Object.fromEntries((h.encabezado?.campos||[]).map(c=>[c.k,c.def||''])),controles:Object.fromEntries(h.controles.map(c=>[c.id,{...(c.def||{})}])),ctrlExtra:[],filas:{},seleccion:[],curva:(h.curva?.def||[]).map(c=>({c:String(c),a:''})),fecha:localDate(),analista:data.user.nombre||data.user.correo||'',equipo:(data.equiposHoja||{})[key]||defs.catalogo.find(c=>c.tipoMuestra===key.split('|')[0]&&h.analisis.includes(c.analisis))?.equipoDefault||'',obs:''};}
 /* Campo "Equipo": lista de equipos activos del Catálogo de análisis (pestaña Equipos) con su estado
    de calibración. Si el catálogo no está disponible, queda el campo de texto con sugerencias. */
@@ -344,7 +353,7 @@ function renderSheet(){
   const chips=libres.map((s,i)=>{const rea=s.some(isRea),extra=i>=CHIPS_VISIBLES;return '<button type="button" class="ws-chip" data-add="'+s[0].id_muestra+'" data-code="'+esc(norm(s[0].codigo_muestra))+'"'+(extra?' data-extra="1"'+(abierto?'':' hidden'):'')+' title="Agregar a la hoja'+(rea?' — reanálisis':'')+'">+ '+esc(s[0].codigo_muestra)+(rea?' ↻':'')+'</button>';}).join('');
   const opciones=libres.map(s=>'<option value="'+s[0].id_muestra+'">'+esc(s[0].codigo_muestra)+'</option>').join('');
   const resumen=libres.length+' por agregar'+(enHoja?' · '+enHoja+' en la hoja':'')+(hechas?' · '+hechas+' ya analizada'+(hechas===1?'':'s'):'');
-  return '<div class="ws-pend-lote'+(libres.length?'':' is-done')+'" data-pend-lot="'+lot+'"><div class="ws-pend-head"><div><b class="vt-mono">'+esc(etiquetaLote(lt[0].codigo_lote))+'</b> <span class="small muted">'+esc(lt[0].cliente||'')+'</span> '+prioChip(lt[0].prioridad.key)+'<div class="small muted">'+resumen+'</div></div>'
+  return '<div class="ws-pend-lote'+(libres.length?'':' is-done')+'" data-pend-lot="'+lot+'"><div class="ws-pend-head"><div><b class="vt-mono">'+esc(etiquetaLote(lt[0].codigo_lote))+'</b> <span class="small muted">'+esc(lt[0].cliente||'')+'</span><div class="small muted">'+resumen+'</div></div>'
    +(libres.length?'<div class="ws-chips"><button type="button" class="cengi-btn cengi-btn-ghost cengi-btn-sm" data-add-lot="'+lot+'">+ Agregar lote</button></div>':'<span class="vt-chip is-approved">✓ Todo en la hoja</span>')+'</div>'
    +(libres.length>1?'<div class="ws-range"><span class="small muted">Rango</span><select class="ws-in ws-sel" id="wf-rng-a-'+lot+'" aria-label="Desde">'+opciones+'</select><span class="small muted">a</span><select class="ws-in ws-sel" id="wf-rng-b-'+lot+'" aria-label="Hasta">'+opciones.replace(/(<option value="[^"]*")(>[^<]*<\/option>)$/,'$1 selected$2')+'</select><button type="button" class="cengi-btn cengi-btn-ghost cengi-btn-sm" data-add-range="'+lot+'">+ Agregar rango</button></div>':'')
    +(libres.length?'<div class="ws-chips ws-pend-chips">'+chips+'</div>'+(libres.length>CHIPS_VISIBLES?'<button type="button" class="bd-more" data-expand-lot="'+lot+'">'+(abierto?'Ver menos':'Ver '+(libres.length-CHIPS_VISIBLES)+' más')+'</button>':''):'')+'</div>';
