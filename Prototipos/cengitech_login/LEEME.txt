@@ -1,0 +1,12 @@
+CENGITECH — PANTALLA DE INICIO DE SESIÓN
+
+1. Descomprime el archivo ZIP completo en una carpeta pública de tu servidor web.
+2. Abre index.html en un navegador. Conserva la carpeta assets junto a index.html.
+3. El formulario es una maqueta visual; NO autentica usuarios por sí solo.
+4. Para conectarlo a tu sistema, cambia action="" por tu ruta HTTPS de inicio de sesión y conserva el método POST. Adapta name="email" y name="password" a los campos que espera tu servidor. Añade el token CSRF que genere tu backend, y respeta sus sesiones y validaciones.
+5. Cambia href="#" del enlace de recuperación por la ruta real de recuperación.
+6. Para integrar en PHP, Laravel u otro framework, reutiliza el marcado y estilos de index.html, y conecta el formulario a tu controlador de autenticación. Nunca valides contraseñas solo en JavaScript.
+7. Logo institucional: assets/logo-cengicana.png (derivado del archivo proporcionado).
+8. Fotografía: assets/campo-cana.jpg (derivada de la fotografía proporcionada).
+9. Logo Cengitech: assets/logo-cengitech.svg (propuesta vectorial editable, lupa, caña de azúcar y nodos de tecnología).
+10. Los módulos son informativos; se accede a ellos después de autenticar al usuario.
