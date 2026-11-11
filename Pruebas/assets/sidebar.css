@@ -54,3 +54,42 @@
   body.tech-menu-open { overflow: hidden; }
 }
 @media (prefers-reduced-motion: reduce) { .tech-sidebar, .tech-sidebar .nav-tab, .tech-nav-link { transition: none; } }
+
+/* =============================================================
+   Identidad CengiST (familia Cengitech, igual que CengiLabs y CengiSalas):
+   velo verde transparente sobre la foto de cañaverales, logo y nombre en dos tonos.
+   ============================================================= */
+.tech-sidebar {
+  color: #fff;
+  background-color: #04330f;
+  background-image:
+    linear-gradient(180deg, rgba(4,51,15,1) 0%, rgba(10,74,28,.97) 55%, rgba(13,90,34,.80) 100%),
+    url('img/campo-cana.jpg');
+  background-size: cover, cover;
+  background-position: center, center bottom;
+  scrollbar-color: rgba(188,243,46,.35) transparent;
+}
+.tech-brand-row { position: relative; background: transparent; border-bottom: 0; }
+.tech-brand-row::after { content: ""; position: absolute; left: 16px; right: 16px; bottom: 0; height: 3px; border-radius: 3px; background: linear-gradient(90deg, #73BC25, #A3D300, #FFCC00, #FF6B00); }
+.tech-brand { gap: 12px; padding: 18px 16px; }
+.tech-brand:hover, .tech-brand:focus { background: rgba(255,255,255,.05); }
+.cst-logo { width: 60px; height: auto; flex: none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+.tech-brand:hover .cst-logo { transform: rotate(-6deg) scale(1.06); }
+.tech-brand-copy { line-height: 1; }
+.tech-brand-copy strong { color: #fff; font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 24px; font-weight: 850; letter-spacing: -.055em; }
+.tech-brand-copy strong b { color: #bcf32e; font-weight: 850; }
+.tech-brand-copy small { margin-top: 6px; color: rgba(255,255,255,.66); font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+.tech-nav-group + .tech-nav-group { border-top: 1px solid rgba(188,243,46,.14); }
+.tech-nav-label { color: rgba(220,255,152,.62); }
+.tech-sidebar .nav-tab, .tech-nav-link { color: rgba(255,255,255,.86); transition: background-color .18s, color .18s, transform .18s, border-color .18s; }
+.tech-sidebar .nav-tab .tech-icon, .tech-nav-link .tech-icon { color: #dcfa51; }
+.tech-sidebar .nav-tab:hover, .tech-nav-link:hover { background: rgba(255,255,255,.09); border-left-color: #A3D300; color: #fff; transform: translateX(2px); }
+.tech-sidebar .nav-tab.active { background: rgba(188,243,46,.16); border-left-color: #bcf32e; color: #e6ff9e; }
+.tech-sidebar .nav-tab.active .tech-icon { color: #e6ff9e; }
+.tech-sidebar-foot { border-top: 1px solid rgba(188,243,46,.2); background: rgba(0,0,0,.18); }
+.tech-logout, .tech-logout .tech-icon { color: #ffb4a6; }
+.tech-logout:hover { background: rgba(255,107,0,.16); border-left-color: #FF6B00; color: #ffd2c9; }
+.tech-sidebar-version { color: rgba(255,255,255,.55); }
+.tech-sidebar :focus-visible { outline: 2px solid #bcf32e; outline-offset: 2px; }
+.tech-menu-close { color: #fff; }
+@media (prefers-reduced-motion: reduce) { .cst-logo, .tech-sidebar .nav-tab, .tech-nav-link { transition: none; } }

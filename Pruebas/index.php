@@ -6,20 +6,21 @@ require_page_user();
 <html lang="es" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<title>Registro de Encuestas - Cengicaña</title>
+<title>CengiST · Servicios Técnicos</title>
+<link rel="icon" type="image/svg+xml" href="assets/img/logo-cengist.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="assets/vendor/chart.umd.min.js"></script>
 <script src="assets/vendor/jspdf.umd.min.js"></script>
 <link rel="stylesheet" href="assets/app.css">
-<link rel="stylesheet" href="assets/sidebar.css">
+<link rel="stylesheet" href="assets/sidebar.css?v=20261109-1">
 </head>
 <body>
 <div class="app-layout">
   <aside class="tech-sidebar" id="techSidebar" aria-label="Servicios Técnicos">
     <div class="tech-brand-row">
-      <a class="tech-brand" href="index.php" aria-label="Inicio de Servicios Técnicos">
-        <span class="tech-brand-mark"><svg class="tech-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a5 5 0 0 0-6.4 6.4L3 18a2.1 2.1 0 0 0 3 3l5.3-5.3a5 5 0 0 0 6.4-6.4l-3 3-3-3z"/></svg></span>
-        <span class="tech-brand-copy"><strong>CENGICAÑA</strong><small>Servicios Técnicos</small></span>
+      <a class="tech-brand" href="index.php" aria-label="Inicio de CengiST, Servicios Técnicos">
+        <img class="cst-logo" src="assets/img/logo-cengist.svg" alt="" aria-hidden="true">
+        <span class="tech-brand-copy"><strong>Cengi<b>ST</b></strong><small>Servicios Técnicos</small></span>
       </a>
       <button class="tech-menu-close" type="button" aria-label="Cerrar menú" onclick="setSidebarOpen(false)"><svg class="tech-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
     </div>
@@ -41,7 +42,7 @@ require_page_user();
     <div class="tech-sidebar-foot">
       <a class="tech-nav-link" href="../login/Menu.php"><svg class="tech-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9"/></svg><span>Menú principal</span></a>
       <button class="tech-nav-link tech-logout" type="button" onclick="logout()"><svg class="tech-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v16h5m-1-8h13m-4-4 4 4-4 4"/></svg><span>Cerrar sesión</span></button>
-      <div class="tech-sidebar-version">Servicios Técnicos · CENGICAÑA</div>
+      <div class="tech-sidebar-version">CengiST · Servicios Técnicos · Cengicaña</div>
     </div>
   </aside>
   <div class="tech-sidebar-backdrop" id="techSidebarBackdrop" hidden></div>
