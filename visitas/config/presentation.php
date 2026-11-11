@@ -8,7 +8,8 @@ function visitas_ui_head(): void { ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/visitas/assets/module-theme.css?v=20261008-1">
+<link rel="icon" type="image/svg+xml" href="/visitas/assets/img/logo-cengivisitas.svg">
+<link rel="stylesheet" href="/visitas/assets/module-theme.css?v=20261109-3">
 <script src="/visitas/assets/module-shell.js?v=20261008-1" defer></script>
 <?php }
 function visitas_ui_shell(string $title, string $subtitle, string $active = 'solicitudes', bool $dynamic = false): void {
@@ -18,19 +19,22 @@ function visitas_ui_shell(string $title, string $subtitle, string $active = 'sol
     $roleLabel = cengisalas_roles()['visitas'][$role] ?? 'Visitas';
     $canRequests = in_array('ver_solicitudes', $permissions, true);
     $canAreas = in_array('gestionar_areas', $permissions, true);
+    // "Áreas y contactos" reúne el catálogo de áreas y las personas que reciben
+    // los avisos de cada área (antes eran dos secciones: Contactos y Áreas).
     $links = $canRequests ? [
         ['Solicitudes', 'solicitudes', 'Solicitudes', 'list'],
         ['Reportes', 'reportes', 'Reportes', 'chart'],
-        ['Contactos', 'contactos', 'Contactos', 'users'],
     ] : [['Reportes', 'reportes', 'Reportes', 'chart']];
-    if ($canAreas) $links[] = ['Areas', 'areas', 'Áreas de visita', 'pin'];
+    if ($canRequests || $canAreas) $links[] = ['Areas', 'areas', 'Áreas y contactos', 'pin'];
     if ($canRequests) $links[] = ['BaseDatos', 'basedatos', 'Directorio de solicitantes', 'database'];
     if ($dynamic && in_array('gestionar_roles_visitas', $permissions, true)) $links[] = ['Roles', 'roles', 'Roles y permisos', 'shield'];
     ?>
 <a class="visits-skip" href="#visits-content">Saltar al contenido</a>
 <aside class="visits-sidebar" id="visits-sidebar" aria-label="Navegación de Visitas">
-    <a class="visits-shell-brand" href="/login/Menu.php" aria-label="Menú principal de CENGICAÑA"><img src="/login/assets/img/logo.png" alt="CENGICAÑA"></a>
-    <div class="visits-module-name"><span>GESTIÓN INSTITUCIONAL</span><strong>Visitas</strong></div>
+    <a class="visits-shell-brand cv-brand" href="/visitas/public/admin/dashboard_unificado.php?modulo=solicitudes" aria-label="Inicio de CengiVisitas">
+        <img class="cv-logo" src="/visitas/assets/img/logo-cengivisitas.svg" alt="" aria-hidden="true">
+        <span class="cv-brand-copy"><strong>Cengi<b>Visitas</b></strong><small>Gestión institucional</small></span>
+    </a>
     <nav class="visits-shell-nav" aria-label="Secciones del módulo">
         <span class="visits-nav-label">Gestión de visitas</span>
         <?php foreach ($links as [$id, $key, $label, $icon]): ?>
@@ -46,14 +50,14 @@ function visitas_ui_shell(string $title, string $subtitle, string $active = 'sol
     <div class="visits-sidebar-footer">
         <a class="visits-nav-link" href="/login/Menu.php"><?= visitas_ui_icon('grid') ?><span>Menú de módulos</span></a>
         <a class="visits-nav-link visits-logout" href="/visitas/public/admin/logout.php"><?= visitas_ui_icon('logout') ?><span>Cerrar sesión</span></a>
-        <small>CENGICAÑA · Solicitudes de visitas</small>
+        <small>CengiVisitas · Solicitudes de visitas · Cengicaña</small>
     </div>
 </aside>
 <button class="visits-nav-backdrop" id="visits-nav-backdrop" type="button" aria-label="Cerrar navegación" hidden></button>
 <header class="visits-topbar">
     <button class="visits-menu-toggle" id="visits-menu-toggle" type="button" aria-label="Abrir navegación" aria-controls="visits-sidebar" aria-expanded="false"><?= visitas_ui_icon('menu') ?></button>
     <div class="visits-topbar-titles"><strong id="visits-page-title"><?= visitas_ui_escape($title) ?></strong><span><?= visitas_ui_escape($subtitle) ?></span></div>
-    <span class="visits-module-pill">Visitas</span>
+    <span class="visits-module-pill">CengiVisitas</span>
     <div class="visits-user"><span class="visits-avatar"><?= visitas_ui_escape(mb_strtoupper(mb_substr($name, 0, 1))) ?></span><div><strong><?= visitas_ui_escape($name) ?></strong><small><?= visitas_ui_escape($roleLabel) ?></small></div></div>
 </header>
 <?php }

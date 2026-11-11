@@ -41,6 +41,8 @@ En un proyecto nuevo de Supabase, abre **SQL Editor** y ejecuta cada archivo com
 33. `34_visit_guest_forms.sql`
 34. `35_superadmin_permission_matrix.sql`
 35. `36_visit_payment_receipts.sql`
+36. `40_visit_payment_details.sql`
+37. `41_visit_contacts.sql`
 
 `08_reference_queries.sql` contiene ejemplos y comprobaciones; no es una migración obligatoria.
 

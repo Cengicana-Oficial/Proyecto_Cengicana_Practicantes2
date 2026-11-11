@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../config/auth.php';
 require_login();
+require_once __DIR__ . '/../../config/visit_contacts.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -128,6 +129,39 @@ try {
         }
         log_visit_event($conn, $requestId, 'notificado', 'Confirmación preparada para la institución solicitante.');
     } elseif ($action === 'save_contact') {
+        // Guarda al solicitante en el directorio (contactos_visita) si aún no está.
+        if (visitas_contacts_available($conn)) {
+            $stmt = $conn->prepare(
+                'SELECT so.nombre_solicitante, so.nombre_institucion, so.correo, so.telefono
+                 FROM solicitudes s INNER JOIN solicitantes so ON so.id_solicitante = s.id_solicitante
+                 WHERE s.id_solicitud = ?'
+            );
+            $stmt->execute([$requestId]);
+            $requester = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            $email = mb_strtolower(trim((string) ($requester['correo'] ?? '')));
+            $phone = trim((string) ($requester['telefono'] ?? ''));
+            if ($email !== '' || $phone !== '') {
+                $exists = $conn->prepare(
+                    "SELECT COUNT(*) FROM contactos_visita WHERE tipo = 'externo' AND estado = 1
+                     AND ((? <> '' AND lower(correo) = ?) OR (? = '' AND telefono = ?))"
+                );
+                $exists->execute([$email, $email, $email, $phone]);
+                if ((int) $exists->fetchColumn() === 0) {
+                    $insert = $conn->prepare(
+                        "INSERT INTO contactos_visita (tipo, nombre, correo, telefono, institucion, notas, creado_por)
+                         VALUES ('externo', ?, ?, ?, ?, ?, ?)"
+                    );
+                    $insert->execute([
+                        mb_substr(trim((string) ($requester['nombre_solicitante'] ?? '')) ?: 'Solicitante', 0, 150),
+                        $email ?: null,
+                        $phone ? mb_substr($phone, 0, 30) : null,
+                        mb_substr(trim((string) ($requester['nombre_institucion'] ?? '')), 0, 200) ?: null,
+                        "Guardado desde la solicitud #{$requestId}.",
+                        mb_substr((string) ($_SESSION['nombre'] ?? 'Usuario'), 0, 150),
+                    ]);
+                }
+            }
+        }
         ensure_management_row($conn, $requestId);
         $stmt = $conn->prepare('UPDATE solicitud_gestion_visita SET contacto_guardado_at = CURRENT_TIMESTAMP WHERE id_solicitud = ?');
         $stmt->execute([$requestId]);

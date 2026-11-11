@@ -189,3 +189,68 @@ body.visits-public > .container .public-visits-heading h1 { font-family: 'Space 
 .visits-admin .visits-reservation .btn-primary { background: var(--visits-deep); border-color: var(--visits-deep); }
 @media (max-width: 1024px) { .visits-admin .visits-reservation { margin-left: 0; } }
 @media (max-width: 640px) { .visits-admin .visits-reservation { padding: 20px 16px; } }
+
+/* =============================================================
+   Identidad CengiVisitas (familia Cengitech, igual que CengiLabs,
+   CengiSalas y CengiST): velo verde transparente sobre la foto de
+   cañaverales, logo y nombre en dos tonos.
+   ============================================================= */
+.visits-admin .visits-sidebar {
+  color: #fff;
+  background-color: #04330f;
+  background-image:
+    linear-gradient(180deg, rgba(4,51,15,1) 0%, rgba(10,74,28,.97) 55%, rgba(13,90,34,.80) 100%),
+    url('img/campo-cana.jpg');
+  background-size: cover, cover;
+  background-position: center, center bottom;
+  scrollbar-color: rgba(188,243,46,.35) transparent;
+}
+.visits-shell-brand.cv-brand { position: relative; justify-content: flex-start; align-items: center; gap: 12px; padding: 18px 16px; background: transparent; border-bottom: 0; text-decoration: none; transition: background-color .18s; }
+.visits-shell-brand.cv-brand::after { content: ""; position: absolute; left: 16px; right: 16px; bottom: 0; height: 3px; border-radius: 3px; background: linear-gradient(90deg, #73BC25, #A3D300, #FFCC00, #FF6B00); }
+.visits-shell-brand.cv-brand:hover, .visits-shell-brand.cv-brand:focus { background: rgba(255,255,255,.05); }
+.visits-shell-brand .cv-logo { width: 62px; height: auto; flex: none; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+.visits-shell-brand.cv-brand:hover .cv-logo { transform: rotate(-6deg) scale(1.06); }
+.cv-brand-copy { display: flex; flex-direction: column; line-height: 1; min-width: 0; }
+.cv-brand-copy strong { color: #fff; font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 22px; font-weight: 850; letter-spacing: -.055em; }
+.cv-brand-copy strong b { color: #bcf32e; font-weight: 850; }
+.cv-brand-copy small { margin-top: 6px; color: rgba(255,255,255,.66); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.visits-nav-label { color: rgba(220,255,152,.62); }
+.visits-admin .visits-nav-link { color: rgba(255,255,255,.86); transition: background-color .18s, color .18s, transform .18s, border-color .18s; }
+.visits-admin .visits-nav-link .visits-icon { color: #dcfa51; }
+.visits-admin .visits-nav-link:hover { background: rgba(255,255,255,.09); border-left-color: #A3D300; color: #fff; transform: translateX(2px); }
+.visits-admin .visits-nav-link.active { background: rgba(188,243,46,.16); border-left-color: #bcf32e; color: #e6ff9e; }
+.visits-admin .visits-nav-link.active .visits-icon { color: #e6ff9e; }
+.visits-admin .visits-sidebar-footer { border-top: 1px solid rgba(188,243,46,.2); background: rgba(0,0,0,.18); }
+.visits-sidebar-footer small { color: rgba(255,255,255,.55); }
+.visits-logout, .visits-admin .visits-logout .visits-icon { color: #ffb4a6; }
+.visits-admin .visits-logout:hover { background: rgba(255,107,0,.16); border-left-color: #FF6B00; color: #ffd2c9; }
+.visits-sidebar :focus-visible { outline: 2px solid #bcf32e; outline-offset: 2px; }
+.visits-module-pill { border-color: #D3EBB8; background: #EEF7E4; color: #1F5632; }
+
+/* Encabezado de cada vista sobre la foto (bienvenida Cengitech) */
+.visits-admin .page-head {
+  position: relative; isolation: isolate; overflow: hidden;
+  padding: 22px 26px 26px; border: 1px solid rgba(171,235,63,.45); border-radius: 18px; color: #fff;
+  background: linear-gradient(110deg, rgba(4,48,17,.95) 0%, rgba(8,70,26,.87) 55%, rgba(17,96,34,.70) 100%), url('img/campo-cana.jpg') center 60% / cover;
+  box-shadow: 0 16px 36px rgba(7,60,24,.18);
+}
+.visits-admin .page-head::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #73BC25 0 25%, #A3D300 25% 50%, #FFCC00 50% 75%, #FF6B00 75% 100%); }
+.visits-admin .page-head h1 { color: #fff !important; }
+.visits-admin .page-head p { color: rgba(255,255,255,.86) !important; }
+.visits-admin .page-head .btn { border-color: #A3D300 !important; background: #A3D300 !important; color: #0b3a17 !important; font-weight: 700; }
+.visits-admin .page-head .btn:hover { background: #bcf32e !important; }
+@media (prefers-reduced-motion: reduce) { .visits-shell-brand .cv-logo, .visits-admin .visits-nav-link { transition: none; } }
+/* Mismo encabezado con foto en las vistas con .dashboard-header (Pagos, Panel) */
+.visits-admin .dashboard-header {
+  position: relative; isolation: isolate; overflow: hidden;
+  padding: 22px 26px 26px !important; border: 1px solid rgba(171,235,63,.45) !important; border-radius: 18px; color: rgba(255,255,255,.86);
+  background: linear-gradient(110deg, rgba(4,48,17,.95) 0%, rgba(8,70,26,.87) 55%, rgba(17,96,34,.70) 100%), url('img/campo-cana.jpg') center 60% / cover !important;
+  box-shadow: 0 16px 36px rgba(7,60,24,.18);
+}
+.visits-admin .dashboard-header::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #73BC25 0 25%, #A3D300 25% 50%, #FFCC00 50% 75%, #FF6B00 75% 100%); }
+.visits-admin .dashboard-header h2 { color: #fff !important; }
+.visits-admin .dashboard-header p, .visits-admin .dashboard-header span, .visits-admin .dashboard-header small { color: rgba(255,255,255,.86) !important; }
+/* Pagos: estados legibles con la paleta y tabla desplazable si no cabe */
+.visits-admin .status-paid, .visits-admin .status-approved { display: inline-block; padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 800; letter-spacing: .04em; background: #EEF7E4 !important; color: #3D6B12 !important; box-shadow: inset 0 0 0 1px #D3EBB8; }
+.visits-admin .status-approved { background: #F4F9DC !important; color: #4D6300 !important; box-shadow: inset 0 0 0 1px #E1EFA6; }
+.visits-admin .table-scroll { overflow-x: auto; scrollbar-width: thin; }
