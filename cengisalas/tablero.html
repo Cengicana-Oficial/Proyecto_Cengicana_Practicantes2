@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#2E7D32">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-cengisalas.svg">
+  <meta name="theme-color" content="#1F5632">
   <title>Tablero de salones | CengiSalas</title>
-  <link rel="stylesheet" href="modules/salas/css/tablero.css?v=20260816-9">
+  <link rel="stylesheet" href="modules/salas/css/tablero.css?v=20261110-4">
 </head>
 <body>
   <header class="board-header">
-    <div class="board-brand"><span class="brand-mark"><img src="assets/cengicana-mark.png" alt="Logo de Cengicaña"></span><div><b>CengiSalas</b></div></div>
+    <div class="board-brand"><span class="brand-mark cs-logo"><img src="assets/logo-cengisalas.svg" alt="Logo de CengiSalas"></span><div><b>Cengi<span class="brand-accent">Salas</span></b></div></div>
     <div class="board-date"><strong id="boardDate"></strong><span id="boardClock"></span></div>
     <div class="board-actions">
       <span id="liveIndicator" class="live-indicator"><i></i> Conectando…</span>
@@ -18,8 +19,125 @@
     </div>
   </header>
 
-  <main>
+  <main class="board-layout">
+   <div class="board-main">
+    <section id="boardSummary" class="board-summary" aria-label="Resumen de salones" aria-live="polite"></section>
     <section id="roomBoard" class="room-board" aria-label="Estado de los ocho salones"></section>
+    <footer class="board-legend">
+      <span><i class="l-free"></i> Disponible</span>
+      <span><i class="l-busy"></i> Ocupado</span>
+      <span><i class="l-maintenance"></i> Mantenimiento</span>
+      <span><i class="l-next"></i> Próximo evento</span>
+      <p>Se actualiza automáticamente</p>
+    </footer>
+   </div>
+
+   <aside class="map-side" aria-label="Ubicación de salones">
+      <figure class="map-figure">
+        <svg class="campus-map" viewBox="0 0 1375 940" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="mapTitle mapDesc">
+          <title id="mapTitle">Ubicación de salones de capacitación</title>
+          <desc id="mapDesc">Vista aérea del campus. Edificio 1: nivel 1 salones 1, 2, 3 y salón 8 en recepción; nivel 2 salones 4 y 5. Edificio 2: salones 6 y 7. También se señalan el Auditorio, el Museo del Azúcar y el Edificio 3.</desc>
+          <defs>
+            <filter id="mShadow" x="-15%" y="-15%" width="130%" height="150%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#0B2414" flood-opacity=".38"/></filter>
+            <linearGradient id="mVeil" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#06210F" stop-opacity=".18"/><stop offset=".35" stop-color="#06210F" stop-opacity="0"/><stop offset=".8" stop-color="#06210F" stop-opacity="0"/><stop offset="1" stop-color="#06210F" stop-opacity=".22"/></linearGradient>
+            <clipPath id="mHeadClip"><path d="M0 0H600V116Q600 138 578 138H0Z"/></clipPath>
+          </defs>
+
+          <image class="map-photo" href="assets/mapa-salones.jpg" width="1375" height="1144"/>
+          <rect width="1375" height="940" fill="url(#mVeil)"/>
+
+          <!-- Líneas guía: siguen el trazo original para cubrirlo -->
+          <g class="m-lines" fill="none" stroke-linecap="round">
+            <path class="halo" d="M199 298L224 248M470 368L510 340M723 453L836 343M784 476L872 452M293 475L253 576M959 785L1030 721"/>
+            <path stroke="#5D6A64" d="M199 298L224 248M470 368L510 340"/>
+            <path stroke="#A3D300" d="M293 475L253 576"/>
+            <path stroke="#73BC25" d="M723 453L836 343"/>
+            <path stroke="#FF6B00" d="M784 476L872 452"/>
+            <path stroke="#E0A800" d="M959 785L1030 721"/>
+          </g>
+
+          <!-- Puntos -->
+          <g class="m-dots">
+            <circle cx="199" cy="298" r="17" fill="#fff"/><circle cx="199" cy="298" r="10" fill="#5D6A64"/>
+            <circle cx="470" cy="368" r="17" fill="#fff"/><circle cx="470" cy="368" r="10" fill="#5D6A64"/>
+            <circle cx="293" cy="475" r="17" fill="#fff"/><circle cx="293" cy="475" r="10" fill="#A3D300"/>
+            <circle cx="723" cy="453" r="18" fill="#fff"/><circle cx="723" cy="453" r="11" fill="#73BC25"/>
+            <circle cx="959" cy="785" r="18" fill="#fff"/><circle cx="959" cy="785" r="11" fill="#FFCC00"/>
+            <circle class="m-pulse" cx="784" cy="476" r="17" fill="none" stroke="#FF6B00" stroke-width="4"/>
+            <circle cx="784" cy="476" r="17" fill="#fff"/><circle cx="784" cy="476" r="10" fill="#FF6B00"/>
+          </g>
+
+          <!-- Encabezado -->
+          <g filter="url(#mShadow)">
+            <path d="M0 0H600V116Q600 138 578 138H0Z" fill="#173F25"/>
+            <g clip-path="url(#mHeadClip)">
+              <rect y="132" width="150" height="6" fill="#73BC25"/><rect x="150" y="132" width="150" height="6" fill="#A3D300"/><rect x="300" y="132" width="150" height="6" fill="#FFCC00"/><rect x="450" y="132" width="150" height="6" fill="#FF6B00"/>
+            </g>
+            <circle cx="66" cy="66" r="34" fill="#A3D300"/>
+            <path d="M66 44c-10 0-17 7-17 16 0 12 17 28 17 28s17-16 17-28c0-9-7-16-17-16Z" fill="#173F25"/>
+            <circle cx="66" cy="60" r="6" fill="#A3D300"/>
+            <text x="122" y="70" class="m-h1">Ubicación de salones</text>
+            <text x="124" y="106" class="m-h2">SALONES DE CAPACITACIÓN · CENGICAÑA</text>
+          </g>
+
+          <!-- Puntos de referencia -->
+          <g filter="url(#mShadow)">
+            <rect x="132" y="186" width="284" height="68" rx="34" fill="#fff"/>
+            <text x="274" y="230" class="m-pill" text-anchor="middle">Museo del Azúcar</text>
+            <rect x="462" y="276" width="214" height="72" rx="36" fill="#fff"/>
+            <text x="569" y="322" class="m-pill" text-anchor="middle">Auditorio</text>
+            <rect x="150" y="566" width="220" height="76" rx="38" fill="#fff" stroke="#A3D300" stroke-width="4"/>
+            <text x="260" y="614" class="m-pill" text-anchor="middle">Edificio 3</text>
+          </g>
+
+          <!-- Edificio 1 -->
+          <g filter="url(#mShadow)">
+            <rect x="806" y="196" width="468" height="226" rx="22" fill="#fff"/>
+            <path d="M828 196H1252A22 22 0 0 1 1274 218V252H806V218A22 22 0 0 1 828 196Z" fill="#1F5632"/>
+            <rect x="806" y="246" width="468" height="6" fill="#73BC25"/>
+            <text x="838" y="235" class="m-card-title">EDIFICIO 1</text>
+            <text x="1250" y="233" class="m-card-tag" text-anchor="end">Salones 1 – 5 y 8</text>
+
+            <text x="838" y="292" class="m-level">NIVEL 1</text>
+            <text x="838" y="314" class="m-level-sub">Planta baja</text>
+            <g class="m-chip"><rect x="950" y="268" width="52" height="54" rx="12"/><text x="976" y="305">1</text></g>
+            <g class="m-chip"><rect x="1010" y="268" width="52" height="54" rx="12"/><text x="1036" y="305">2</text></g>
+            <g class="m-chip"><rect x="1070" y="268" width="52" height="54" rx="12"/><text x="1096" y="305">3</text></g>
+            <g class="m-chip m-chip-hl"><rect x="1130" y="268" width="134" height="54" rx="12"/><text x="1144" y="305">8</text><text x="1172" y="301" class="m-chip-note">Recepción</text></g>
+
+            <line x1="838" y1="337" x2="1250" y2="337" stroke="#E2E5E7" stroke-width="2"/>
+
+            <text x="838" y="374" class="m-level">NIVEL 2</text>
+            <text x="838" y="396" class="m-level-sub">Segundo piso</text>
+            <g class="m-chip"><rect x="950" y="352" width="52" height="54" rx="12"/><text x="976" y="389">4</text></g>
+            <g class="m-chip"><rect x="1010" y="352" width="52" height="54" rx="12"/><text x="1036" y="389">5</text></g>
+          </g>
+
+          <!-- Usted está aquí -->
+          <g filter="url(#mShadow)">
+            <rect x="856" y="426" width="270" height="60" rx="30" fill="#FF6B00"/>
+            <text x="991" y="465" class="m-here" text-anchor="middle">Usted está aquí</text>
+          </g>
+
+          <!-- Edificio 2 -->
+          <g filter="url(#mShadow)">
+            <rect x="1006" y="650" width="290" height="134" rx="22" fill="#fff"/>
+            <path d="M1028 650H1274A22 22 0 0 1 1296 672V704H1006V672A22 22 0 0 1 1028 650Z" fill="#1F5632"/>
+            <rect x="1006" y="698" width="290" height="6" fill="#FFCC00"/>
+            <text x="1030" y="687" class="m-card-title">EDIFICIO 2</text>
+            <text x="1030" y="752" class="m-level">SALONES</text>
+            <g class="m-chip"><rect x="1158" y="718" width="52" height="54" rx="12"/><text x="1184" y="755">6</text></g>
+            <g class="m-chip"><rect x="1218" y="718" width="52" height="54" rx="12"/><text x="1244" y="755">7</text></g>
+          </g>
+        </svg>
+      </figure>
+
+      <section class="map-panel" aria-labelledby="mapDirectoryTitle">
+        <h2 id="mapDirectoryTitle" class="map-panel-title">¿Dónde está su salón?</h2>
+        <div id="mapDirectory" class="map-directory"></div>
+        <p class="map-tip"><b>Salón 8:</b> se encuentra en la recepción, en el primer nivel del Edificio 1.</p>
+      </section>
+   </aside>
   </main>
 
   <template id="emptySchedule">
@@ -28,6 +146,6 @@
   <div id="announcement" class="announcement" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=20260815-1"></script>
-  <script src="modules/salas/js/tablero.js?v=20260816-6"></script>
+  <script src="modules/salas/js/tablero.js?v=20261110-3"></script>
 </body>
 </html>

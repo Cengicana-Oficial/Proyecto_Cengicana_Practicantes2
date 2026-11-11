@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" role="img" aria-label="Símbolo CengiSalas: llave de salón, calendario de reservas y caña de azúcar">
+  <defs>
+    <linearGradient id="cs-anillo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#bcf32e"/>
+      <stop offset="1" stop-color="#5aa816"/>
+    </linearGradient>
+    <radialGradient id="cs-fondo" cx=".45" cy=".4" r=".7">
+      <stop offset="0" stop-color="#0d5a22"/>
+      <stop offset="1" stop-color="#03300f"/>
+    </radialGradient>
+    <linearGradient id="cs-cana" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f4ffe0"/>
+      <stop offset="1" stop-color="#a9dc4c"/>
+    </linearGradient>
+    <linearGradient id="cs-hoja" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#7cc62a"/>
+      <stop offset="1" stop-color="#e9ffb8"/>
+    </linearGradient>
+    <clipPath id="cs-dentro"><circle cx="290" cy="250" r="156"/></clipPath>
+  </defs>
+
+  <!-- Llave del salón (equivale al mango de la lupa de Cengitech) -->
+  <g transform="translate(178 362) rotate(-45)">
+    <rect x="-150" y="-13" width="152" height="26" rx="13" fill="#f4ffe0" stroke="url(#cs-anillo)" stroke-width="8"/>
+    <path d="M-140 13 v24 h20 v-12 h14 v18 h20 v-30" fill="#FFCC00" stroke="#c99a00" stroke-width="4" stroke-linejoin="round"/>
+    <circle cx="-40" cy="0" r="6" fill="#5aa816"/>
+  </g>
+
+  <!-- Reserva: ruta punteada y calendario con confirmación (equivale a los nodos de Cengitech) -->
+  <g>
+    <path d="M446 190 C 486 216, 532 214, 560 186" fill="none" stroke="#FFCC00" stroke-width="10" stroke-linecap="round" stroke-dasharray="3 22"/>
+    <rect x="556" y="58" width="128" height="118" rx="20" fill="url(#cs-anillo)"/>
+    <rect x="556" y="58" width="128" height="34" rx="17" fill="#3f8a12"/>
+    <rect x="556" y="76" width="128" height="16" fill="#3f8a12"/>
+    <rect x="582" y="42" width="14" height="34" rx="7" fill="#f4ffe0" stroke="#3f8a12" stroke-width="4"/>
+    <rect x="644" y="42" width="14" height="34" rx="7" fill="#f4ffe0" stroke="#3f8a12" stroke-width="4"/>
+    <rect x="572" y="102" width="96" height="62" rx="10" fill="#f4ffe0"/>
+    <path d="M596 133 l16 15 l32 -32" fill="none" stroke="#0b4a1f" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="620" cy="190" rx="40" ry="8" fill="#bcf32e" opacity=".45"/>
+  </g>
+
+  <!-- Anillo -->
+  <circle cx="290" cy="250" r="178" fill="url(#cs-fondo)" stroke="url(#cs-anillo)" stroke-width="44"/>
+
+  <!-- Interior: caña y hojas -->
+  <g clip-path="url(#cs-dentro)">
+    <g transform="rotate(-8 262 260)">
+      <rect x="240" y="128" width="44" height="74" rx="12" fill="url(#cs-cana)"/>
+      <rect x="240" y="208" width="44" height="80" rx="12" fill="url(#cs-cana)"/>
+      <rect x="240" y="294" width="44" height="80" rx="12" fill="url(#cs-cana)"/>
+      <rect x="240" y="380" width="44" height="60" rx="12" fill="url(#cs-cana)"/>
+    </g>
+    <g transform="rotate(22 330 330)">
+      <rect x="312" y="270" width="36" height="62" rx="10" fill="url(#cs-cana)" opacity=".95"/>
+      <rect x="312" y="338" width="36" height="70" rx="10" fill="url(#cs-cana)" opacity=".95"/>
+    </g>
+    <path d="M268 236 C 276 160, 330 112, 404 104 C 372 146, 330 196, 268 236 Z" fill="url(#cs-hoja)"/>
+    <path d="M276 196 C 300 176, 340 156, 380 150" fill="none" stroke="#0d5a22" stroke-width="4" stroke-linecap="round" opacity=".35"/>
+    <path d="M256 290 C 222 236, 186 214, 150 214 C 178 246, 206 280, 256 290 Z" fill="url(#cs-hoja)" opacity=".9"/>
+    <path d="M300 268 C 344 236, 392 232, 430 248 C 392 262, 350 278, 300 268 Z" fill="url(#cs-hoja)" opacity=".8"/>
+  </g>
+</svg>

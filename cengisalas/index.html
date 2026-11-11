@@ -3,22 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-cengisalas.svg">
   <meta name="theme-color" content="#2E7D32">
   <title>CengiSalas</title>
   <style>html.private-entry #publicLanding{display:none!important}</style>
   <script>if(new URLSearchParams(location.search).get('panel')==='1')document.documentElement.classList.add('private-entry')</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Material+Symbols+Outlined:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="modules/salas/css/styles.css?v=20261008-2">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&family=Material+Symbols+Outlined:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="modules/salas/css/styles.css?v=20261109-14">
 </head>
 <body class="auth-checking">
-  <div id="appLoading" class="app-loading" aria-live="polite"><div class="loading-mark"><img src="assets/cengicana-mark.png" alt="Cengicaña"></div><b>CengiSalas</b><span>Preparando tu espacio de trabajo…</span></div>
-  <section id="publicLanding" class="public-landing auth-checking"><header class="public-landing-header"><a class="public-brand" href="index.html"><span><img src="assets/cengicana-mark.png" alt="Logo de Cengicaña"></span><div><b>CengiSalas</b></div></a><a class="button primary" href="login.html">Iniciar sesión →</a></header><div class="public-landing-grid"><div class="public-form-frame"><iframe data-src="solicitud-externa.html?v=20260826-8" title="Solicitud de salón"></iframe></div><section class="public-calendar-frame"><div class="public-calendar-head"><div><p class="overline blue">DISPONIBILIDAD</p><h1>Agenda de salones</h1><p>Selecciona una fecha para iniciar tu solicitud.</p></div><div class="public-calendar-nav"><button id="publicPrevMonth">‹</button><b id="publicMonthLabel"></b><button id="publicNextMonth">›</button></div></div><div id="publicCalendar" class="public-calendar"></div><div id="publicDayAgenda" class="public-day-agenda"></div></section></div></section>
+  <div id="appLoading" class="app-loading" aria-live="polite"><div class="loading-mark"><img src="assets/cengicana-mark.png" alt="Cengicaña"></div><b>Cengi<span class="brand-accent">Salas</span></b><span>Preparando tu espacio de trabajo…</span></div>
+  <section id="publicLanding" class="public-landing auth-checking"><header class="public-landing-header"><a class="public-brand" href="index.html"><span><img src="assets/cengicana-mark.png" alt="Logo de Cengicaña"></span><div><b>Cengi<span class="brand-accent">Salas</span></b></div></a><a class="button primary" href="login.html">Iniciar sesión →</a></header><div class="public-landing-grid"><div class="public-form-frame"><iframe data-src="solicitud-externa.html?v=20260826-8" title="Solicitud de salón"></iframe></div><section class="public-calendar-frame"><div class="public-calendar-head"><div><p class="overline blue">DISPONIBILIDAD</p><h1>Agenda de salones</h1><p>Selecciona una fecha para iniciar tu solicitud.</p></div><div class="public-calendar-nav"><button id="publicPrevMonth">‹</button><b id="publicMonthLabel"></b><button id="publicNextMonth">›</button></div></div><div id="publicCalendar" class="public-calendar"></div><div id="publicDayAgenda" class="public-day-agenda"></div></section></div></section>
 
   <div id="app" class="app hidden">
     <aside id="sidebar">
-      <a class="brand dark" href="#" aria-label="Inicio de CengiSalas"><span class="brand-mark"><img src="assets/cengicana-mark.png" alt=""></span><span class="brand-copy"><b>CengiSalas</b></span></a>
+      <a class="brand dark" href="#" aria-label="Inicio de CengiSalas"><span class="brand-mark cs-logo"><img src="assets/logo-cengisalas.svg" alt="Logo de CengiSalas"></span><span class="brand-copy"><b>Cengi<span class="brand-accent">Salas</span></b></span></a>
       <nav>
         <small>PRINCIPAL</small>
         <button class="active" data-view="agenda"><span class="nav-icon material-symbols-outlined" aria-hidden="true">calendar_month</span><span>Agenda de hoy</span></button>
@@ -41,10 +42,10 @@
     </aside>
 
     <main>
-      <header><button id="menu">☰</button><div class="topbar-brand"><span class="brand-mark"><img src="assets/cengicana-mark.png" alt=""></span><div><b>CengiSalas</b></div></div><span></span><div class="header-user"><span class="avatar user-initials"></span><div><b class="user-name"></b><small class="user-role"></small></div></div></header>
+      <header><button id="menu">☰</button><div class="topbar-brand"><span class="brand-mark cs-logo"><img src="assets/logo-cengisalas.svg" alt="Logo de CengiSalas"></span><div><b>Cengi<span class="brand-accent">Salas</span></b></div></div><span></span><div class="header-user"><span class="avatar user-initials"></span><div><b class="user-name"></b><small class="user-role"></small></div></div></header>
 
       <section id="agendaView" class="view active">
-        <div class="heading"><div><p class="overline blue">PANEL PRINCIPAL</p><h2>Buenos días, <span id="firstName"></span> 👋</h2><p>Este es el panorama de los salones para hoy.</p></div><button class="button primary" data-go="request">＋ Nueva solicitud</button></div>
+        <div class="heading"><div><p class="overline blue">PANEL PRINCIPAL</p><h2><span id="greeting">Buenos días</span>, <span id="firstName"></span> 👋</h2><p>Este es el panorama de los salones para hoy.</p></div><button class="button primary" data-go="request">＋ Nueva solicitud</button></div>
         <div class="stats">
           <article><span class="stat-icon">◇</span><div><small>SALONES DISPONIBLES</small><b id="availableStat">8 <em>de 8</em></b></div></article>
           <article><span class="stat-icon green">✓</span><div><small>REUNIONES HOY</small><b id="meetingsStat">0</b></div></article>
@@ -145,7 +146,10 @@
       <section id="incidentsView" class="view admin-only">
         <div class="heading"><div><p class="overline blue">CONTROL DE SALONES</p><h2>Incidencias</h2><p>Consulta las incidencias detectadas al finalizar las reuniones y su detalle.</p></div></div>
         <div id="incidentsAdminView" class="admin-only">
-          <article class="panel incidents-panel"><div class="incidents-panel-head"><div><h3>Reuniones para revisar</h3><p>Registra una o varias incidencias por sesión aprobada.</p></div><span id="incidentAdminCount">0 reuniones</span></div><div class="table-wrap"><table class="incidents-table"><thead><tr><th>REUNIÓN</th><th>SOLICITANTE</th><th>SALÓN</th><th>FECHA Y HORA</th><th>ESTADO</th><th>INCIDENCIAS</th><th></th></tr></thead><tbody id="incidentAdminRows"></tbody></table></div></article>
+          <div id="incidentStats" class="incident-stats" aria-live="polite"></div>
+          <div id="incidentBreakdown" class="incident-breakdown"></div>
+          <article class="panel incidents-panel"><div class="incidents-panel-head"><div><h3>Reuniones para revisar</h3><p>Registra una o varias incidencias por sesión aprobada.</p></div><span id="incidentAdminCount">0 reuniones</span></div>
+          <div class="incidents-toolbar"><div class="tabs incident-tabs" role="tablist" aria-label="Filtrar por incidencias"><button type="button" role="tab" class="active" data-incident-tab="all">Todas <span>0</span></button><button type="button" role="tab" data-incident-tab="pending" hidden>Por revisar <span>0</span></button><button type="button" role="tab" data-incident-tab="with">Con incidencias <span>0</span></button><button type="button" role="tab" data-incident-tab="open" hidden>Abiertas <span>0</span></button><button type="button" role="tab" data-incident-tab="without"><em>Sin incidencias</em> <span>0</span></button></div><div class="incident-filters"><label class="incident-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input id="incidentSearch" type="search" placeholder="Buscar reunión, solicitante o equipo" aria-label="Buscar incidencias"></label><select id="incidentRoom" aria-label="Filtrar por salón"><option value="">Todos los salones</option></select><input id="incidentMonth" type="month" aria-label="Filtrar por mes"><button type="button" id="incidentClear" class="button secondary">Limpiar</button></div></div><div class="table-wrap"><table class="incidents-table"><thead><tr><th>REUNIÓN</th><th>SOLICITANTE</th><th>SALÓN</th><th>FECHA Y HORA</th><th>ESTADO</th><th>INCIDENCIAS</th><th></th></tr></thead><tbody id="incidentAdminRows"></tbody></table></div></article>
         </div>
         <div id="incidentsUserView">
           <div id="incidentCards" class="incident-cards"></div>
@@ -161,17 +165,21 @@
               <button data-request-status="approved">Aprobadas <span id="requestApprovedCount">0</span></button>
               <button data-request-status="rejected">Rechazadas <span id="requestRejectedCount">0</span></button>
               <button data-request-status="cancelled">Canceladas <span id="requestCancelledCount">0</span></button>
+              <button data-request-status="expired" title="Pendientes cuya fecha ya pasó sin aprobarse">Vencidas <span id="requestExpiredCount">0</span></button>
               <button data-request-status="all">Todas <span id="requestAllCount">0</span></button>
             </div>
             <div class="request-date-filter">
-              <label for="adminRequestDate">Filtrar por fecha</label>
+              <label class="request-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input id="adminRequestSearch" type="search" placeholder="Buscar solicitud, persona o código" aria-label="Buscar solicitudes"></label>
+              <select id="adminRequestRoom" aria-label="Filtrar por salón"><option value="">Todos los salones</option></select>
+              <label for="adminRequestDate" class="sr-only">Filtrar por fecha</label>
               <input id="adminRequestDate" type="date">
               <button id="clearRequestDate" class="mini" type="button">Limpiar</button>
+              <span id="adminRequestResultCount" class="request-result-count" aria-live="polite"></span>
             </div>
           </div>
           <div class="table-wrap">
             <table id="adminRequestTable" class="admin-request-table">
-              <thead><tr><th>SOLICITUD</th><th>SOLICITANTE</th><th>RESPONSABLE DEL SALÓN</th><th>FECHA Y HORA</th><th>ESPACIO</th><th>REFACCIÓN</th><th>APROBACIÓN</th><th>ESTADO</th><th id="requestAuditHeader">FECHA DE SOLICITUD</th><th id="requestCancelActorHeader" class="hidden-col">CANCELADA POR</th><th></th></tr></thead>
+              <thead><tr><th>SOLICITUD</th><th>SOLICITANTE</th><th>RESPONSABLE DEL SALÓN</th><th>FECHA Y HORA</th><th>ESPACIO</th><th>REFACCIÓN</th><th>ESTADO</th><th id="requestAuditHeader">FECHA DE SOLICITUD</th><th id="requestCancelActorHeader" class="hidden-col">CANCELADA POR</th><th></th></tr></thead>
               <tbody id="adminRequestRows"></tbody>
             </table>
           </div>
@@ -187,12 +195,15 @@
               <button data-paid-request-status="approved">Aprobadas <span id="paidApprovedCount">0</span></button>
               <button data-paid-request-status="rejected">Rechazadas <span id="paidRejectedCount">0</span></button>
               <button data-paid-request-status="cancelled">Canceladas <span id="paidCancelledCount">0</span></button>
+              <button data-paid-request-status="expired" title="Pendientes cuya fecha ya pasó sin aprobarse">Vencidas <span id="paidExpiredCount">0</span></button>
               <button data-paid-request-status="all">Todas <span id="paidAllCount">0</span></button>
             </div>
             <div class="request-date-filter">
-              <label for="paidRequestDate">Filtrar por fecha</label>
+              <label class="request-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input id="paidRequestSearch" type="search" placeholder="Buscar solicitud, empresa, responsable o código" aria-label="Buscar solicitudes de pago"></label>
+              <label for="paidRequestDate" class="sr-only">Filtrar por fecha</label>
               <input id="paidRequestDate" type="date">
               <button id="clearPaidRequestDate" class="mini" type="button">Limpiar</button>
+              <span id="paidRequestResultCount" class="request-result-count" aria-live="polite"></span>
             </div>
           </div>
           <div class="table-wrap">
@@ -256,6 +267,6 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="supabase-config.js?v=20261007-3"></script>
   <script src="modules/salas/js/public-landing.js?v=20261001-1"></script>
-  <script src="modules/salas/js/app.js?v=20261015-2"></script>
+  <script src="modules/salas/js/app.js?v=20261110-1"></script>
 </body>
 </html>
