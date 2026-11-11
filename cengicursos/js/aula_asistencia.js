@@ -30,6 +30,7 @@
         document.querySelectorAll('[data-asis-celda]' + sel).forEach(function (b) {
             b.className = b.className.replace(/\bis-(presente|ausente|vacio)\b/, 'is-' + dato.estado);
             b.setAttribute('data-estado', dato.estado);
+            b.classList.remove('is-grabacion'); // el cambio de coordinación reemplaza la asistencia por grabación
             var compacto = b.classList.contains('is-compacto');
             b.textContent = { presente: compacto ? '✓' : '✓ Presente', ausente: compacto ? '✗' : '✗ Ausente', vacio: compacto ? '·' : 'Sin registro' }[dato.estado];
             b.title = (dato.detalle || 'Sin registro') + ' — clic para cambiar';

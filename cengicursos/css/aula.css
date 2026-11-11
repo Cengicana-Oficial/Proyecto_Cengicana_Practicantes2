@@ -545,3 +545,5 @@ body.aula-visor-activo { overflow:hidden; }
 .aula-async-mini span { display:block; height:100%; background:var(--cg-verde); }
 .aula-modalidad-tabla tr.is-async td { background:var(--cg-verde2-soft); }
 .aula-modalidad-tabla td, .aula-modalidad-tabla th { font-size:12px; vertical-align:middle !important; }
+.aula-asis-btn.is-presente.is-grabacion { background:var(--cg-verde2-soft); color:var(--cg-verde2-text); border-color:var(--cg-verde-2); }
+.aula-async-previa { margin-top:6px; padding:4px 8px; border-radius:6px; background:var(--cg-amarillo-soft); color:var(--cg-amarillo-text) !important; font-weight:600; }

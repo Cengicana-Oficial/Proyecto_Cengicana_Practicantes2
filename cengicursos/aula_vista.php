@@ -269,9 +269,12 @@ function aula_asistencia_oficial(PDO $db, $courseId) {
 /** Boton de estado de asistencia (Presente / Ausente / sin registro) que usa js/aula_asistencia.js. */
 function aula_asistencia_boton($sesionId, $asignacionId, $registro, $futura, $compacto = false) {
     $estado = $registro ? ((int) $registro['presente'] ? 'presente' : 'ausente') : 'vacio';
-    $texto = ['presente' => $compacto ? '✓' : '✓ Presente', 'ausente' => $compacto ? '✗' : '✗ Ausente', 'vacio' => $compacto ? '·' : 'Sin registro'][$estado];
-    $titulo = $futura ? 'Sesión futura' : ($registro ? (((int) $registro['presente'] ? 'Presente' : 'Ausente') . ' · ' . date('d/m H:i', strtotime($registro['registrado'])) . ($registro['origen'] === 'coordinacion' ? ' · por coordinación' : ' · confirmó el estudiante')) : 'Sin registro') . ($futura ? '' : ' — clic para cambiar');
-    return '<button type="button" class="aula-asis-btn is-' . $estado . ($compacto ? ' is-compacto' : '') . '" data-asis-celda data-sesion="' . (int) $sesionId . '" data-asignacion="' . (int) $asignacionId . '" data-estado="' . $estado . '"'
+    // Modalidad asincronica: la sesion completada al ver sus grabaciones se distingue con ▶.
+    $grabacion = $registro && $estado === 'presente' && ($registro['origen'] ?? '') === 'grabacion';
+    $texto = ['presente' => $grabacion ? ($compacto ? '▶' : '▶ Grabación') : ($compacto ? '✓' : '✓ Presente'), 'ausente' => $compacto ? '✗' : '✗ Ausente', 'vacio' => $compacto ? '·' : 'Sin registro'][$estado];
+    $origen = ['coordinacion' => ' · por coordinación', 'grabacion' => ' · vio la grabación (asincrónico)'][$registro['origen'] ?? ''] ?? ' · confirmó el estudiante';
+    $titulo = $futura ? 'Sesión futura' : ($registro ? (((int) $registro['presente'] ? 'Presente' : 'Ausente') . ' · ' . date('d/m H:i', strtotime($registro['registrado'])) . $origen) : 'Sin registro') . ($futura ? '' : ' — clic para cambiar');
+    return '<button type="button" class="aula-asis-btn is-' . $estado . ($grabacion ? ' is-grabacion' : '') . ($compacto ? ' is-compacto' : '') . '" data-asis-celda data-sesion="' . (int) $sesionId . '" data-asignacion="' . (int) $asignacionId . '" data-estado="' . $estado . '"'
         . ($futura ? ' disabled' : '') . ' title="' . aula_h($titulo) . '" aria-label="' . aula_h($titulo) . '">' . $texto . '</button>';
 }
 

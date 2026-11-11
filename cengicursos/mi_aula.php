@@ -65,7 +65,9 @@ $ahora = date('Y-m-d H:i:s'); $hoy = date('Y-m-d');
 $evVisibles = array_values(array_filter($evaluations, static function ($e) use ($ver) { return $e['habilitada'] && $ver($e['tipo_actividad'] === 'evaluacion' ? 'evaluaciones' : 'tareas'); }));
 $entregadas = $assignment && $ready ? array_column(aula_rows($db, 'SELECT evaluacion_id, MAX(entregado IS NOT NULL AND entrega_usuario=1) hecha FROM aula_intentos WHERE asignacion_id=? GROUP BY evaluacion_id', [$assignment['id']]), 'hecha', 'evaluacion_id') : [];
 // Modalidad asincronica: avance por grabaciones y evaluaciones habilitadas al verlas (aula_asincronica.php).
-$async = $assignment && $ready && !$preview && aula_async_ready($db) && aula_es_async($db, $assignment['id']);
+$async = $assignment && $ready && aula_async_ready($db) && aula_es_async($db, $assignment['id']);
+// En la vista previa se muestra lo mismo que ve el estudiante, pero el avance no se registra (solo consulta).
+$asyncMedir = $async && !$preview;
 $asyncCtx = $async ? aula_async_contexto($db, $assignment) : null;
 $evDisponible = static function ($e) use ($async, $db, $assignment, $ahora) { return $async ? aula_async_eval($db, $assignment, $e)['ok'] : ($e['abre'] <= $ahora && $e['cierra'] > $ahora); };
 $porHacer = count(array_filter($evVisibles, static function ($e) use ($entregadas, $evDisponible) { return $evDisponible($e) && empty($entregadas[$e['id']]); }));
@@ -100,7 +102,8 @@ if (!isset($tabs[$tab])) $tab = 'resumen';
 <section class="aula-async-banda" aria-label="Avance en modalidad asincrónica">
     <div><span class="aula-badge is-tipo">Modalidad asincrónica</span>
         <strong>Has visto <?= (int)$asyncRes['vistas'] ?> de <?= (int)$asyncRes['total'] ?> grabaciones</strong>
-        <small>Mira al menos el <?= AULA_VIDEO_MINIMO ?> % de cada grabación y márcala como vista: cuenta como tu asistencia y habilita las evaluaciones de cada módulo.<?= $asyncCtx['plazo'] ? ' Fecha límite: ' . aula_h(aula_fecha_larga($asyncCtx['plazo'])) . '.' : '' ?></small></div>
+        <small>Mira al menos el <?= AULA_VIDEO_MINIMO ?> % de cada grabación y márcala como vista: cuenta como tu asistencia y habilita las evaluaciones de cada módulo.<?= $asyncCtx['plazo'] ? ' Fecha límite: ' . aula_h(aula_fecha_larga($asyncCtx['plazo'])) . '.' : '' ?></small>
+        <?php if ($preview): ?><small class="aula-async-previa">Vista previa: aquí no se registra el avance ni se marcan grabaciones. Para probarlo, el estudiante debe entrar con su propia cuenta.</small><?php endif; ?></div>
     <div class="aula-async-barra" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= (int)$asyncRes['porcentaje'] ?>"><span style="width:<?= (int)$asyncRes['porcentaje'] ?>%"></span><b><?= (int)$asyncRes['porcentaje'] ?> %</b></div>
     <?php if ($tab !== 'sesiones' && isset($tabs['sesiones'])): ?><a class="btn btn-primary btn-sm" href="mi_aula.php?curso=<?= $courseId ?>&amp;seccion=sesiones">Ver grabaciones</a><?php endif; ?>
 </section>
@@ -128,5 +131,5 @@ window.setInterval(async function(){
     }catch(e){status.textContent='No se pudo autoguardar. Usa Guardar respuestas.';}finally{busy=false;}
 },30000);
 })();
-</script><script src="js/aula_video.js?v=<?= (int) @filemtime(__DIR__.'/js/aula_video.js') ?>"></script><?php if($async): ?><script src="js/aula_avance.js?v=<?= (int) @filemtime(__DIR__.'/js/aula_avance.js') ?>"></script><?php endif; ?><script src="js/mi_aula.js?v=<?= (int) @filemtime(__DIR__.'/js/mi_aula.js') ?>"></script></body></html>
+</script><script src="js/aula_video.js?v=<?= (int) @filemtime(__DIR__.'/js/aula_video.js') ?>"></script><?php if($asyncMedir): ?><script src="js/aula_avance.js?v=<?= (int) @filemtime(__DIR__.'/js/aula_avance.js') ?>"></script><?php endif; ?><script src="js/mi_aula.js?v=<?= (int) @filemtime(__DIR__.'/js/mi_aula.js') ?>"></script></body></html>
 <?php if($preview)ob_end_flush(); ?>
