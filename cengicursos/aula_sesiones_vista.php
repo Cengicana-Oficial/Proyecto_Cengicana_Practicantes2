@@ -2,6 +2,8 @@
 // Ruta de aprendizaje: sesiones con grabaciones, materiales, actividades y docente, mas el material general del curso.
 // Con muchas sesiones se filtra en el navegador (js/mi_aula.js) y se abre la de hoy o la proxima.
 $resources=$ready?aula_resources($db,$courseId):[];
+if(!empty($async))aula_csrf(); // token del aula para el avance de grabaciones (js/aula_avance.js)
+$async=!empty($async);
 $links=aula_instructor_links($db,$courseId);
 $anunciosSesion=[];foreach(aula_anuncios($db,$courseId,true) as $an)if($an['sesion_id'])$anunciosSesion[(int)$an['sesion_id']][]=$an;
 $recSesion=[];foreach($resources as $r)if($r['sesion_id']&&aula_recurso_visible($r))$recSesion[(int)$r['sesion_id']][]=$r;
@@ -39,10 +41,17 @@ if(!$abrir&&$sessions)$abrir=(int)end($sessions)['id'];
 <?php foreach(array_keys($docSesion[$sid]??[]) as $docente): ?><span class="aula-muted">Docente: <strong><?= aula_h($docente) ?></strong></span><?php endforeach; ?>
 </div>
 <?php foreach($anunciosSesion[$sid]??[] as $anuncioSes)echo aula_anuncio_html($anuncioSes); ?>
-<?php if($recs): ?><div class="aula-courses aula-recursos-sesion"><?php foreach($recs as $r): $reproductor=aula_video_html($r['titulo'],$r['url'],$r['archivo_id'],$r['mime']??''); ?><article class="aula-resource-card<?= $reproductor?' is-video':'' ?>"><span class="aula-badge"><?= $r['tipo']==='video'?'Grabación':'Material' ?></span><h3><?= aula_h($r['titulo']) ?></h3>
-<?php if($reproductor): echo $reproductor; elseif($r['archivo_id']): ?><a href="aula_archivo.php?id=<?= (int)$r['archivo_id'] ?>">Abrir <?= $r['tipo']==='video'?'video':'documento' ?></a><?php elseif(aula_url($r['url'])): ?><a href="<?= aula_h($r['url']) ?>" target="_blank" rel="noopener noreferrer">Abrir recurso ↗</a><?php endif; ?></article><?php endforeach; ?></div><?php endif; ?>
-<?php foreach($evs as $e): $done=!empty($entregadas[$e['id']]); ?>
-<div class="aula-row"><div><strong><?= aula_h($e['titulo']) ?></strong><p><?= ($e['tipo_actividad']==='evaluacion'?'Evaluación':'Tarea').' · Cierre: '.aula_h(aula_fecha_larga($e['cierra'],true).' '.substr($e['cierra'],11,5)) ?></p></div><span class="aula-badge <?= $done?'is-complete':'is-pending' ?>"><?= $done?'✓ Entregada':($e['cierra']<=$ahora?'Cerrada':'Pendiente') ?></span><?php if(isset($tabs['actividades'])): ?><a href="mi_aula.php?curso=<?= $courseId ?>&amp;seccion=actividades#act-<?= (int)$e['id'] ?>">Ver actividad →</a><?php endif; ?></div><?php endforeach; ?>
+<?php if($recs): ?><div class="aula-courses aula-recursos-sesion"><?php foreach($recs as $r): $medir=$async&&$r['tipo']==='video'&&isset($asyncCtx['videos'][(int)$r['id']]); $reproductor=aula_video_html($r['titulo'],$r['url'],$r['archivo_id'],$r['mime']??'',$medir); ?><article class="aula-resource-card<?= $reproductor?' is-video':'' ?>"><span class="aula-badge"><?= $r['tipo']==='video'?'Grabación':'Material' ?></span><h3><?= aula_h($r['titulo']) ?></h3>
+<?php if($reproductor): echo $reproductor; elseif($r['archivo_id']): ?><a href="aula_archivo.php?id=<?= (int)$r['archivo_id'] ?>">Abrir <?= $r['tipo']==='video'?'video':'documento' ?></a><?php elseif(aula_url($r['url'])): ?><a href="<?= aula_h($r['url']) ?>" target="_blank" rel="noopener noreferrer">Abrir recurso ↗</a><?php endif; ?>
+<?php if($medir&&$reproductor): $vid=$asyncCtx['videos'][(int)$r['id']];$av=$asyncCtx['avances'][(int)$r['id']]??null;$pctAv=$av?(float)$av['porcentaje']:0;$vista=$av&&$av['visto_en']; ?>
+<div class="aula-avance<?= $vista?' is-visto':'' ?>" data-avance data-recurso="<?= (int)$r['id'] ?>" data-fuente="<?= aula_h($vid['fuente']) ?>" data-segmentos="<?= aula_h($av['segmentos']??'') ?>" data-duracion="<?= (int)($av['duracion']??0) ?>" data-porcentaje="<?= aula_h($pctAv) ?>" data-visto="<?= $vista?1:0 ?>" data-minimo="<?= AULA_VIDEO_MINIMO ?>" data-tramo="<?= AULA_VIDEO_TRAMO ?>" data-csrf="<?= aula_h($_SESSION['aula_csrf']??'') ?>">
+    <div class="aula-avance-barra" aria-hidden="true"><span style="width:<?= min(100,(int)$pctAv) ?>%"></span><i style="left:<?= AULA_VIDEO_MINIMO ?>%"></i></div>
+    <span class="aula-avance-texto" data-avance-texto role="status"><?= $vista?'✓ Vista':('Visto '.(int)$pctAv.' % · necesitas '.AULA_VIDEO_MINIMO.' %') ?></span>
+    <?php if(!$vista): ?><button type="button" class="btn btn-primary btn-sm" data-avance-marcar <?= $pctAv>=AULA_VIDEO_MINIMO?'':'disabled' ?>>Ya lo vi</button><?php endif; ?>
+    <?php if($vid['fuente']==='otro'): ?><small class="aula-muted">Esta plataforma no informa el avance: se cuenta el tiempo con el video abierto en esta página<?= $vid['duracion_min']?' (duración: '.(int)$vid['duracion_min'].' min)':'' ?>.</small><?php endif; ?>
+</div><?php endif; ?></article><?php endforeach; ?></div><?php endif; ?>
+<?php foreach($evs as $e): $done=!empty($entregadas[$e['id']]); $evAsync=$async?aula_async_eval($db,$assignment,$e):null; ?>
+<div class="aula-row"><div><strong><?= aula_h($e['titulo']) ?></strong><p><?= ($e['tipo_actividad']==='evaluacion'?'Evaluación':'Tarea').($evAsync?($evAsync['ok']?' · Disponible':' · '.aula_h($evAsync['motivo'])):' · Cierre: '.aula_h(aula_fecha_larga($e['cierra'],true).' '.substr($e['cierra'],11,5))) ?></p></div><span class="aula-badge <?= $done?'is-complete':'is-pending' ?>"><?= $done?'✓ Entregada':($evAsync?($evAsync['ok']?'Disponible':'🔒 Bloqueada'):($e['cierra']<=$ahora?'Cerrada':'Pendiente')) ?></span><?php if(isset($tabs['actividades'])): ?><a href="mi_aula.php?curso=<?= $courseId ?>&amp;seccion=actividades#act-<?= (int)$e['id'] ?>">Ver actividad →</a><?php endif; ?></div><?php endforeach; ?>
 <?php if(!$recs&&!$evs): ?><p class="aula-muted"><?= $estado==='proxima'?'Las grabaciones y materiales se publican después de la sesión.':'Todavía no hay recursos o actividades publicados para esta sesión.' ?></p><?php endif; ?>
 </div></details><?php endforeach; ?></div><?php if(!$sessions): ?><p>Las sesiones todavía no se han programado.</p><?php endif; ?>
 </section>

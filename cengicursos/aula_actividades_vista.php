@@ -54,9 +54,12 @@ $fechaHora=static function($v){return aula_fecha_larga($v,true).' '.substr($v,11
 $orden=['hacer'=>0,'proxima'=>1,'entregada'=>2,'cerrada'=>3];$filas=[];
 foreach($evVisibles as $e){
     $history=aula_rows($db,'SELECT id,numero,entregado,nota,entrega_usuario FROM aula_intentos WHERE evaluacion_id=? AND asignacion_id=? ORDER BY numero DESC',[$e['id'],$assignment['id']]);
-    $completed=!empty($entregadas[$e['id']]);$available=$e['abre']<=$ahora&&$e['cierra']>$ahora;
-    $estado=$completed?'entregada':($available?'hacer':($e['abre']>$ahora?'proxima':'cerrada'));
-    $filas[]=[$orden[$estado],$e['cierra'],$e,$history,$estado,$available];
+    $completed=!empty($entregadas[$e['id']]);
+    // Modalidad asincronica: se habilita al ver las grabaciones (aula_async_eval), no por las fechas del grupo.
+    $evAsync=!empty($async)?aula_async_eval($db,$assignment,$e):null;
+    $available=$evAsync?$evAsync['ok']:($e['abre']<=$ahora&&$e['cierra']>$ahora);
+    $estado=$completed?'entregada':($available?'hacer':($evAsync?'proxima':($e['abre']>$ahora?'proxima':'cerrada')));
+    $filas[]=[$orden[$estado],$e['cierra'],$e+['_async'=>$evAsync],$history,$estado,$available];
 }
 usort($filas,static function($a,$b){return [$a[0],$a[1]]<=>[$b[0],$b[1]];});
 $sesionPorId=array_column($sessions,null,'id');
@@ -74,11 +77,12 @@ $sesionPorId=array_column($sessions,null,'id');
 <p class="aula-muted" data-filtro-vacio hidden>No hay actividades en este filtro.</p>
 <div class="aula-actividades">
 <?php foreach($filas as [$o,$c,$e,$history,$estado,$available]): $sesion=$sesionPorId[$e['sesion_id']]??null;
-    [$texto,$clase]=['hacer'=>['Pendiente · disponible ahora','is-pending'],'proxima'=>['Se abre '.aula_fecha_larga($e['abre'],true).' '.substr($e['abre'],11,5),''],'entregada'=>['✓ Completada / entregada','is-complete'],'cerrada'=>['Vencida sin entrega','is-ausente']][$estado]; ?>
+    [$texto,$clase]=['hacer'=>['Pendiente · disponible ahora','is-pending'],'proxima'=>[$e['_async']?'🔒 Bloqueada':'Se abre '.aula_fecha_larga($e['abre'],true).' '.substr($e['abre'],11,5),''],'entregada'=>['✓ Completada / entregada','is-complete'],'cerrada'=>['Vencida sin entrega','is-ausente']][$estado]; ?>
 <div class="aula-row aula-actividad is-<?= $estado ?>" id="act-<?= (int)$e['id'] ?>" data-tags="<?= $estado ?>"><div>
     <span class="aula-badge is-tipo"><?= $e['tipo_actividad']==='evaluacion'?'Evaluación':'Tarea' ?></span> <strong><?= aula_h($e['titulo']) ?></strong> <span class="aula-badge <?= $clase ?>"><?= aula_h($texto) ?></span>
     <?php if($sesion): ?><p>Sesión: <?= aula_h(aula_fecha_larga($sesion['fecha'],true).' · '.$sesion['tema']) ?></p><?php endif; ?>
-    <p><?= aula_h('Disponible del '.aula_fecha_larga($e['abre'],true).' '.substr($e['abre'],11,5).' al '.aula_fecha_larga($e['cierra'],true).' '.substr($e['cierra'],11,5)) ?> · Tiempo para realizarla: <?= aula_h(aula_duracion_texto($e['minutos'])) ?> · <?= (int)$e['intentos'] ?> intento(s)<?= (int)$e['intentos']>1?' · cuenta '.(($e['calificacion']??'mayor')==='ultimo'?'el último intento':'la nota más alta'):'' ?></p>
+    <?php if($e['_async']&&!$e['_async']['ok']&&$estado!=='entregada'): ?><p class="aula-async-motivo"><?= aula_h($e['_async']['motivo']) ?> <a href="mi_aula.php?curso=<?= $courseId ?>&amp;seccion=sesiones">Ir a las grabaciones →</a></p><?php endif; ?>
+    <p><?= $e['_async']?'Modalidad asincrónica: se habilita al ver las grabaciones'.($e['_async']['total']?' ('.(int)$e['_async']['vistas'].' de '.(int)$e['_async']['total'].' vistas)':''):aula_h('Disponible del '.aula_fecha_larga($e['abre'],true).' '.substr($e['abre'],11,5).' al '.aula_fecha_larga($e['cierra'],true).' '.substr($e['cierra'],11,5)) ?> · Tiempo para realizarla: <?= aula_h(aula_duracion_texto($e['minutos'])) ?> · <?= (int)$e['intentos'] ?> intento(s)<?= (int)$e['intentos']>1?' · cuenta '.(($e['calificacion']??'mayor')==='ultimo'?'el último intento':'la nota más alta'):'' ?></p>
     <?php foreach($history as $h): ?><a class="aula-history" href="mi_aula.php?curso=<?= $courseId ?>&amp;seccion=actividades&amp;intento=<?= (int)$h['id'] ?>">Intento <?= (int)$h['numero'] ?> · <?= !$h['entregado']?'En curso':(!aula_nota_visible($e)?'Entregado':($h['nota']===null?'Por revisar':aula_h($h['nota']).' / 100')) ?></a><?php endforeach; ?></div>
 <?php if($available && (count($history)<(int)$e['intentos'] || ($history&&!$history[0]['entregado']))): ?><form method="post"><?= aula_csrf() ?><input type="hidden" name="accion" value="iniciar"><input type="hidden" name="evaluacion" value="<?= (int)$e['id'] ?>"><button class="btn btn-primary"><?= $history&&!$history[0]['entregado']?'Continuar':'Iniciar' ?></button></form><?php endif; ?></div>
 <?php endforeach; ?>

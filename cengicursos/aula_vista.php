@@ -216,7 +216,7 @@ function aula_video_embed($url) {
  * guardado en el aula. Si el enlace no se puede insertar devuelve '' y se muestra el enlace normal.
  * Requiere js/aula_video.js en la pagina.
  */
-function aula_video_html($titulo, $url, $archivoId = null, $mime = '') {
+function aula_video_html($titulo, $url, $archivoId = null, $mime = '', $medir = false) {
     $titulo = (string) $titulo;
     if ($archivoId && $mime === 'video/mp4') {
         $src = 'aula_archivo.php?id=' . (int) $archivoId;
@@ -231,6 +231,8 @@ function aula_video_html($titulo, $url, $archivoId = null, $mime = '') {
     }
     $v = aula_video_embed($url);
     if (!$v) return '';
+    // Modalidad asincronica (js/aula_avance.js): YouTube solo informa el avance con su API de mensajes habilitada.
+    if ($medir && $v['fuente'] === 'YouTube') $v['embed'] .= '&enablejsapi=1';
     ob_start(); ?>
     <div class="aula-player" data-embed="<?= aula_h($v['embed']) ?>" data-titulo="<?= aula_h($titulo) ?>">
         <button type="button" class="aula-player-portada<?= $v['miniatura'] ? '' : ' is-sin-miniatura' ?>" data-aula-play aria-label="Reproducir: <?= aula_h($titulo) ?>"<?= $v['miniatura'] ? ' style="background-image:url(\'' . aula_h($v['miniatura']) . '\')"' : '' ?>>

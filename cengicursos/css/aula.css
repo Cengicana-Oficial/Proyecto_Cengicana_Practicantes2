@@ -524,3 +524,24 @@ body.aula-visor-activo { overflow:hidden; }
 }
 /* Los campos que el JS oculta (hidden) no deben reaparecer por reglas de display de las etiquetas. */
 .aula-page [hidden] { display:none !important; }
+
+/* Modalidad asincronica (aula_asincronica.php) */
+.aula-async-banda { display:flex; flex-wrap:wrap; align-items:center; gap:10px 18px; margin:0 0 16px; padding:12px 16px; border:1px solid var(--cg-line); border-left:5px solid var(--cg-verde-2); border-radius:10px; background:#fff; }
+.aula-async-banda > div:first-child { flex:1 1 320px; min-width:0; }
+.aula-async-banda strong { display:block; margin-top:6px; color:var(--cg-deep); font-size:14px; }
+.aula-async-banda small { display:block; color:var(--cg-gris-text); font-size:12px; }
+.aula-async-barra { position:relative; flex:0 1 220px; height:18px; border-radius:9px; background:var(--cg-gris-soft); overflow:hidden; }
+.aula-async-barra span { position:absolute; inset:0 auto 0 0; background:var(--cg-verde); }
+.aula-async-barra b { position:relative; display:block; text-align:center; font-size:11px; line-height:18px; color:var(--cg-deep); }
+.aula-avance { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-top:10px; padding:8px 10px; border-radius:8px; background:var(--cg-gris-soft); }
+.aula-avance.is-visto { background:var(--cg-verde-soft); }
+.aula-avance-barra { position:relative; flex:1 1 100%; height:8px; border-radius:4px; background:#fff; overflow:hidden; }
+.aula-avance-barra span { position:absolute; inset:0 auto 0 0; background:var(--cg-verde); transition:width .4s; }
+.aula-avance-barra i { position:absolute; top:0; bottom:0; width:2px; background:var(--cg-naranja); }
+.aula-avance-texto { flex:1 1 auto; font-size:12px; font-weight:600; color:var(--cg-deep); }
+.aula-avance small { flex-basis:100%; }
+.aula-async-motivo { color:var(--cg-amarillo-text); font-weight:600; }
+.aula-async-mini { display:inline-block; width:70px; height:6px; margin-left:6px; border-radius:3px; background:var(--cg-gris-soft); overflow:hidden; vertical-align:middle; }
+.aula-async-mini span { display:block; height:100%; background:var(--cg-verde); }
+.aula-modalidad-tabla tr.is-async td { background:var(--cg-verde2-soft); }
+.aula-modalidad-tabla td, .aula-modalidad-tabla th { font-size:12px; vertical-align:middle !important; }

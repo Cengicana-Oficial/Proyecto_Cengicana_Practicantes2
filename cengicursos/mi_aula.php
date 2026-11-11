@@ -37,15 +37,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try { aula_attend($db,$assignment,(int)($_POST['sesion']??0),(string)($_POST['codigo']??'')); }
             catch(RuntimeException $e){$throttle['total']++;$_SESSION['aula_asistencia_fallos']=$throttle;throw $e;}
             $message='Asistencia registrada y actualizada en Seguimiento del curso.';
+        } elseif ($action === 'video_avance') {
+            // Modalidad asincronica: avance del reproductor (js/aula_avance.js).
+            $videoResp = aula_video_registrar($db,$assignment,(int)($_POST['recurso']??0),$_POST);
+        } elseif ($action === 'video_visto') {
+            $message = aula_video_marcar_visto($db,$assignment,(int)($_POST['recurso']??0));
+            $videoResp = ['visto'=>true];
         } else { throw new RuntimeException('Acción no válida.'); }
     } catch (Throwable $e) {
         if ($e instanceof PDOException) { error_log('Aula: '.$e->getMessage()); $error='No se pudo guardar. Intenta nuevamente.'; }
         else $error=$e->getMessage();
     }
-    if (($_POST['accion'] ?? '') === 'autoguardar') {
+    if (in_array($_POST['accion'] ?? '', ['autoguardar','video_avance','video_visto'], true)) {
         header('Content-Type: application/json; charset=utf-8');
         if ($error) http_response_code(400);
-        echo aula_json(['ok'=>$error==='','mensaje'=>$error ?: $message]); exit;
+        echo aula_json(array_merge(['ok'=>$error==='','mensaje'=>$error ?: $message], $error ? [] : ($videoResp ?? []))); exit;
     }
 }
 if ($ready && $assignment && !$preview) { aula_expire($db,$courseId,$assignment['id']); aula_sync_course($db,$courseId,$assignment['id']); }
@@ -58,7 +64,11 @@ $ahora = date('Y-m-d H:i:s'); $hoy = date('Y-m-d');
 // Actividades que el estudiante puede ver (coordinacion puede ocultar evaluaciones o tareas) y cuales ya entrego.
 $evVisibles = array_values(array_filter($evaluations, static function ($e) use ($ver) { return $e['habilitada'] && $ver($e['tipo_actividad'] === 'evaluacion' ? 'evaluaciones' : 'tareas'); }));
 $entregadas = $assignment && $ready ? array_column(aula_rows($db, 'SELECT evaluacion_id, MAX(entregado IS NOT NULL AND entrega_usuario=1) hecha FROM aula_intentos WHERE asignacion_id=? GROUP BY evaluacion_id', [$assignment['id']]), 'hecha', 'evaluacion_id') : [];
-$porHacer = count(array_filter($evVisibles, static function ($e) use ($entregadas, $ahora) { return $e['abre'] <= $ahora && $e['cierra'] > $ahora && empty($entregadas[$e['id']]); }));
+// Modalidad asincronica: avance por grabaciones y evaluaciones habilitadas al verlas (aula_asincronica.php).
+$async = $assignment && $ready && !$preview && aula_async_ready($db) && aula_es_async($db, $assignment['id']);
+$asyncCtx = $async ? aula_async_contexto($db, $assignment) : null;
+$evDisponible = static function ($e) use ($async, $db, $assignment, $ahora) { return $async ? aula_async_eval($db, $assignment, $e)['ok'] : ($e['abre'] <= $ahora && $e['cierra'] > $ahora); };
+$porHacer = count(array_filter($evVisibles, static function ($e) use ($entregadas, $evDisponible) { return $evDisponible($e) && empty($entregadas[$e['id']]); }));
 $abiertas = $ready ? array_values(array_filter($sessions, static function ($s) use ($windows, $registered) { return !isset($registered[$s['id']]) && aula_session_window($s, $windows[$s['id']] ?? null); })) : [];
 $surveys = $course ? aula_instructor_surveys($db, $courseId, $assignment['id']) : [];
 // Seis pestanas, solo las que tienen algo que mostrar. Los nombres anteriores siguen funcionando en enlaces y correos.
@@ -86,6 +96,15 @@ if (!isset($tabs[$tab])) $tab = 'resumen';
 <?php else: ?>
 <a class="aula-back" href="mi_aula.php">← Mis cursos</a><nav class="aula-tabs aula-tabs-estudiante" aria-label="Secciones del curso"><?php foreach ($tabs as $key=>$title): $aviso=$key==='actividades'&&$porHacer?$porHacer:($key==='asistencia'&&$abiertas?'Abierta':''); ?><a <?= $tab===$key ? 'aria-current="page"' : '' ?> href="mi_aula.php?curso=<?= $courseId ?>&amp;seccion=<?= $key ?>"><?= $title ?><?php if ($aviso!==''): ?> <b class="aula-tab-aviso"><?= $aviso ?></b><?php endif; ?></a><?php endforeach; ?></nav>
 <?php if (!$ready): ?><p class="alert alert-info">Las evaluaciones y el registro de asistencia estarán disponibles cuando coordinación habilite el aula.</p><?php endif; ?>
+<?php if ($async): $asyncRes = aula_async_resumen($asyncCtx['videos'], $asyncCtx['avances']); ?>
+<section class="aula-async-banda" aria-label="Avance en modalidad asincrónica">
+    <div><span class="aula-badge is-tipo">Modalidad asincrónica</span>
+        <strong>Has visto <?= (int)$asyncRes['vistas'] ?> de <?= (int)$asyncRes['total'] ?> grabaciones</strong>
+        <small>Mira al menos el <?= AULA_VIDEO_MINIMO ?> % de cada grabación y márcala como vista: cuenta como tu asistencia y habilita las evaluaciones de cada módulo.<?= $asyncCtx['plazo'] ? ' Fecha límite: ' . aula_h(aula_fecha_larga($asyncCtx['plazo'])) . '.' : '' ?></small></div>
+    <div class="aula-async-barra" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= (int)$asyncRes['porcentaje'] ?>"><span style="width:<?= (int)$asyncRes['porcentaje'] ?>%"></span><b><?= (int)$asyncRes['porcentaje'] ?> %</b></div>
+    <?php if ($tab !== 'sesiones' && isset($tabs['sesiones'])): ?><a class="btn btn-primary btn-sm" href="mi_aula.php?curso=<?= $courseId ?>&amp;seccion=sesiones">Ver grabaciones</a><?php endif; ?>
+</section>
+<?php endif; ?>
 <?php if ($tab==='resumen'): include __DIR__.'/aula_resumen_vista.php';
 elseif ($tab==='asistencia'): include __DIR__.'/aula_asistencia_vista.php';
 elseif ($tab==='sesiones'): include __DIR__.'/aula_sesiones_vista.php';
@@ -109,5 +128,5 @@ window.setInterval(async function(){
     }catch(e){status.textContent='No se pudo autoguardar. Usa Guardar respuestas.';}finally{busy=false;}
 },30000);
 })();
-</script><script src="js/aula_video.js?v=<?= (int) @filemtime(__DIR__.'/js/aula_video.js') ?>"></script><script src="js/mi_aula.js?v=<?= (int) @filemtime(__DIR__.'/js/mi_aula.js') ?>"></script></body></html>
+</script><script src="js/aula_video.js?v=<?= (int) @filemtime(__DIR__.'/js/aula_video.js') ?>"></script><?php if($async): ?><script src="js/aula_avance.js?v=<?= (int) @filemtime(__DIR__.'/js/aula_avance.js') ?>"></script><?php endif; ?><script src="js/mi_aula.js?v=<?= (int) @filemtime(__DIR__.'/js/mi_aula.js') ?>"></script></body></html>
 <?php if($preview)ob_end_flush(); ?>

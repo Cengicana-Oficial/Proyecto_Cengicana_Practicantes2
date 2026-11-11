@@ -41,10 +41,16 @@ function aula_sesiones_impartidas(PDO $db,$courseId,$assignmentId=null) {
 // las realizadas tiene 100%. Una sesion en curso cuenta solo si el estudiante ya registro su asistencia.
 function aula_attendance_sync(PDO $db,$assignmentId,$courseId) {
     $valid=aula_control_ready($db)?' AND r.presente=1 AND (r.origen=\'coordinacion\' OR r.validada=1 OR (r.registrado>=TIMESTAMP(s.fecha,s.hora_inicio) AND r.registrado<DATE_ADD(TIMESTAMP(s.fecha,s.hora_fin),INTERVAL IF(s.hora_fin<=s.hora_inicio,1,0) DAY)))':' AND r.registrado>=TIMESTAMP(s.fecha,s.hora_inicio) AND r.registrado<DATE_ADD(TIMESTAMP(s.fecha,s.hora_fin),INTERVAL IF(s.hora_fin<=s.hora_inicio,1,0) DAY)';
-    $row=aula_rows($db,'SELECT COUNT(DISTINCT IF('.AULA_SESION_IMPARTIDA.' OR r.sesion_id IS NOT NULL,s.id,NULL)) total, COUNT(DISTINCT r.sesion_id) asistidas
+    // Modalidad asincronica (aula_asincronica.php): la base son las sesiones que ya tienen grabacion visible para el
+    // estudiante (mas las que haya asistido en vivo); una sesion cuenta al ver todas sus grabaciones.
+    $base=AULA_SESION_IMPARTIDA;$baseParams=[date('Y-m-d H:i:s')];
+    if(function_exists('aula_es_async')&&aula_es_async($db,$assignmentId)){
+        $base='EXISTS(SELECT 1 FROM aula_recursos v WHERE v.sesion_id=s.id AND v.tipo=\'video\''.(aula_vista_ready($db)?' AND NOT '.aula_recurso_oculto_sql('v'):'').')';$baseParams=[];
+    }
+    $row=aula_rows($db,'SELECT COUNT(DISTINCT IF('.$base.' OR r.sesion_id IS NOT NULL,s.id,NULL)) total, COUNT(DISTINCT r.sesion_id) asistidas
         FROM curso_sesiones s JOIN planificacion_cursos pc ON pc.id=s.planificacion_id
         LEFT JOIN aula_asistencias r ON r.sesion_id=s.id AND r.asignacion_id=?'.$valid.'
-        WHERE pc.curso_id=? AND s.estado<>\'cancelada\'',[date('Y-m-d H:i:s'),$assignmentId,$courseId])[0];
+        WHERE pc.curso_id=? AND s.estado<>\'cancelada\'',array_merge($baseParams,[$assignmentId,$courseId]))[0];
     // Una cuenta sin registros del aula conserva la asistencia historica importada.
     $had=aula_rows($db,'SELECT 1 FROM aula_asistencias r JOIN asignaciones a ON a.id=r.asignacion_id WHERE a.id=? AND a.cursos_id=? LIMIT 1',[$assignmentId,$courseId]);
     if(!$had)return;

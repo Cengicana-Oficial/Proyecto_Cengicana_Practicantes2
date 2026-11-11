@@ -74,6 +74,21 @@ check(!aula_nota_visible(['nota_visible'=>'manual']+$evBase,'2026-12-01 00:00:00
 check(!aula_retro_visible(['retro'=>'no']+$evBase,'2027-01-01 00:00:00'),'Sin retroalimentacion');
 check(aula_retro_visible(['retro_momento'=>'fecha','retro_desde'=>'2026-11-16 08:00:00']+$evBase,'2026-11-16 08:00:00')&&!aula_retro_visible(['retro_momento'=>'fecha','retro_desde'=>'2026-11-16 08:00:00']+$evBase,'2026-11-16 07:59:00'),'Retroalimentacion desde una fecha');
 check(aula_retro_visible(['retro_momento'=>'nota']+$evBase,'2026-11-15 10:00:00'),'Retroalimentacion junto con la nota');
+// Modalidad asincronica: avance de grabaciones y desbloqueo de evaluaciones por modulo.
+check(aula_bits_contar("\xFF\x01",10)===9&&aula_bits_contar("\xFF\xFF",10)===10,'Conteo de tramos vistos');
+$vidYt=['fuente'=>'youtube','duracion_min'=>null];
+check(aula_video_porcentaje($vidYt,['duracion'=>100,'segmentos'=>base64_encode("\xFF\x3F"),'segundos'=>0])===70.0,'14 de 20 tramos = 70 %');
+check(aula_video_porcentaje(['fuente'=>'otro','duracion_min'=>10],['duracion'=>0,'segmentos'=>'','segundos'=>420])===70.0,'Drive: 7 de 10 minutos');
+check(aula_video_porcentaje(['fuente'=>'otro','duracion_min'=>null],['duracion'=>0,'segmentos'=>'','segundos'=>900])===70.0,'Sin duracion: 15 minutos habilitan');
+$mods=[['id'=>1,'nombre'=>'Suelos'],['id'=>2,'nombre'=>'Riego']];
+$ses=[['id'=>10,'modulo'=>'Suelos','fecha'=>'2026-10-01','estado'=>'impartida'],['id'=>11,'modulo'=>'Suelos','fecha'=>'2026-10-02','estado'=>'programada'],['id'=>12,'modulo'=>'Riego','fecha'=>'2026-12-01','estado'=>'programada']];
+$vids=[100=>['id'=>100,'sesion_id'=>10],101=>['id'=>101,'sesion_id'=>11]];
+$evMod=['curso_modulo_id'=>1,'sesion_id'=>null];
+check(!aula_async_eval_estado($evMod,$vids,[100=>['visto_en'=>'x']],$mods,$ses,null,'2026-11-11')['ok'],'Modulo bloqueado con una grabacion pendiente');
+check(aula_async_eval_estado($evMod,$vids,[100=>['visto_en'=>'x'],101=>['visto_en'=>'y']],$mods,$ses,null,'2026-11-11')['ok'],'Modulo habilitado al ver todas sus grabaciones');
+check(!aula_async_eval_estado(['curso_modulo_id'=>2,'sesion_id'=>null],$vids,[],$mods,$ses,null,'2026-11-11')['ok'],'Modulo con sesiones futuras sigue bloqueado');
+check(!aula_async_eval_estado($evMod,$vids,[100=>['visto_en'=>'x'],101=>['visto_en'=>'y']],$mods,$ses,'2026-11-10','2026-11-11')['ok'],'Plazo vencido bloquea');
+check(aula_async_resumen($vids,[100=>['visto_en'=>'x']])===['vistas'=>1,'total'=>2,'porcentaje'=>50.0],'Resumen de avance');
 check(aula_url('javascript:alert(1)')===null,'Esquema inseguro');
 check(aula_vimeo('https://vimeo.com/123456/abc123')==='https://player.vimeo.com/video/123456?h=abc123','Privacidad Vimeo');
 check(aula_vimeo('https://vimeo.com.evil.test/123')===null,'Host falso Vimeo');
