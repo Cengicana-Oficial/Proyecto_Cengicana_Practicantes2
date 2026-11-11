@@ -186,7 +186,7 @@ if($edSolo===null): ?>
                     <span class="aula-ed-recurso-txt"><strong><?= aula_h($e['titulo']) ?></strong>
                         <small><?= aula_h(['evaluacion'=>'Evaluación','tarea'=>'Tarea','actividad'=>'Actividad'][$e['tipo_actividad']]??$e['tipo_actividad']) ?> · <?= date('d/m H:i',strtotime($e['abre'])) ?> → <?= date('d/m H:i',strtotime($e['cierra'])) ?> · <?= (int)$e['intentos'] ?> intento(s)</small></span>
                     <span class="aula-badge <?= $abierta?'is-complete':($e['habilitada']?'is-programado':'is-oculto') ?>"><?= $abierta?'Abierta':($e['habilitada']?($e['cierra']<=$edAhora?'Cerrada':'Programada'):'Deshabilitada') ?></span>
-                    <?php if($e['publicar']): ?><span class="aula-badge is-complete">Notas publicadas</span><?php endif; ?>
+                    <?php if(aula_nota_visible($e)): ?><span class="aula-badge is-complete"><?= ($e['nota_visible']??'manual')==='manual'?'Notas publicadas':'Autocalificada' ?></span><?php endif; ?>
                 </div>
                 <div class="aula-ed-linea">
                     <span><?= $ent?(int)$ent['personas'].' de '.count($edAlumnos).' entregaron':'Sin entregas' ?><?= $ent&&(int)$ent['por_revisar']?' · <b>'.(int)$ent['por_revisar'].' por revisar</b>':'' ?></span>

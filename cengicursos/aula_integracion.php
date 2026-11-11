@@ -99,9 +99,12 @@ function aula_grade_sync(PDO $db,$assignmentId,$courseId) {
         WHERE e.curso_id=? AND e.sincronizar=1 GROUP BY e.id',[$assignmentId,$courseId]);
     $groups=[];
     foreach($evals as $e) {
+        // Metodo de calificacion (migracion 20261111): la nota del ultimo intento entregado en lugar de la mas alta.
+        if(($e['calificacion']??'mayor')==='ultimo')$e['mejor']=aula_rows($db,'SELECT nota FROM aula_intentos WHERE evaluacion_id=? AND asignacion_id=? AND entregado IS NOT NULL ORDER BY numero DESC LIMIT 1',[$e['id'],$assignmentId])[0]['nota']??null;
         $key=(int)$e['curso_modulo_id'].'/'.$e['campo_nota'];
         if(!isset($groups[$key]))$groups[$key]=['modulo'=>(int)$e['curso_modulo_id'],'campo'=>$e['campo_nota'],'suma'=>0,'peso'=>0];
-        if($e['publicar'] && $e['mejor']!==null) {$groups[$key]['suma']+=(float)$e['mejor']*(float)$e['peso'];$groups[$key]['peso']+=(float)$e['peso'];}
+        // Publicada por el docente o autocalificada (al entregar / al cerrar la evaluacion).
+        if(aula_nota_visible($e) && $e['mejor']!==null) {$groups[$key]['suma']+=(float)$e['mejor']*(float)$e['peso'];$groups[$key]['peso']+=(float)$e['peso'];}
     }
     $sources=aula_rows($db,'SELECT * FROM aula_notas_fuente WHERE asignacion_id=?',[$assignmentId]);
     foreach($sources as $s) {

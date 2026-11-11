@@ -3,6 +3,7 @@ require_once __DIR__.'/aula_integracion.php';
 require_once __DIR__.'/estudiantes_acceso_helpers.php';
 require_once __DIR__.'/aula_control.php';
 require_once __DIR__.'/aula_vista.php';
+require_once __DIR__.'/aula_banco_helpers.php';
 // Sesiones, ventanas de asistencia y porcentajes se calculan en hora de Guatemala (el servidor puede estar en UTC).
 date_default_timezone_set('America/Guatemala');
 // Las funciones de calculo pueden probarse sin iniciar sesion ni conectar a MySQL.
@@ -67,19 +68,24 @@ function aula_teacher_course(PDO $db, $id) {
 }
 function aula_grade(array $questions, array $answers, array $review = []) {
     if (!$questions) throw new InvalidArgumentException('La evaluación no contiene preguntas.');
-    $earned = 0; $pending = false;
+    // Cada pregunta aporta su valor en puntos (1 si no se definio). La nota se expresa sobre 100.
+    // La revision docente guarda la fraccion obtenida (0 a 1) de cada pregunta abierta o tarea.
+    $earned = 0; $total = 0; $pending = false;
     foreach ($questions as $p) {
-        $id = (string) $p['id'];
+        $id = (string) $p['id']; $w = aula_valor_pregunta($p); $total += $w;
         if ($p['tipo'] === 'seleccion') {
             $answer = $answers[$id] ?? '';
-            if ($answer !== '' && (string) $answer === (string) $p['correcta']) $earned++;
+            if ($answer !== '' && (string) $answer === (string) $p['correcta']) $earned += $w;
+        } elseif ($p['tipo'] === 'multiple') {
+            // Puntaje parcial: 2 correctas y marca 1 de ellas = la mitad del valor.
+            $earned += $w * aula_puntaje_multiple(aula_correctas_de($p), aula_respuesta_lista($answers[$id] ?? ''));
         } elseif (isset($review[$id]['puntos']) && is_numeric($review[$id]['puntos'])) {
             $points = (float) $review[$id]['puntos'];
             if ($points < 0 || $points > 1) throw new InvalidArgumentException('Los puntos deben estar entre 0 y 1.');
-            $earned += $points;
+            $earned += $w * $points;
         } else { $pending = true; }
     }
-    return $pending ? null : round(100 * $earned / count($questions), 2);
+    return $pending ? null : round(100 * $earned / $total, 2);
 }
 function aula_url($url) {
     $url = trim((string) $url);
@@ -127,7 +133,8 @@ function aula_start(PDO $db, $evalId, array $assignment) {
         $attempts = aula_rows($db, 'SELECT * FROM aula_intentos WHERE evaluacion_id=? AND asignacion_id=? ORDER BY numero DESC', [$evalId,$assignment['id']]);
         if ($attempts && !$attempts[0]['entregado']) { $db->commit(); return (int) $attempts[0]['id']; }
         if (count($attempts) >= (int) $e['intentos']) throw new RuntimeException('Ya utilizaste los intentos disponibles.');
-        $questions = aula_rows($db, 'SELECT p.* FROM aula_preguntas p JOIN aula_evaluacion_preguntas ep ON ep.pregunta_id=p.id WHERE ep.evaluacion_id=? AND p.curso_id=?', [$evalId,$assignment['cursos_id']]);
+        // El valor de la pregunta en esta evaluacion queda en la copia del intento.
+        $questions = aula_rows($db, 'SELECT p.*'.(aula_banco_ready($db)?',ep.puntos AS puntos':'').' FROM aula_preguntas p JOIN aula_evaluacion_preguntas ep ON ep.pregunta_id=p.id WHERE ep.evaluacion_id=? AND p.curso_id=?', [$evalId,$assignment['cursos_id']]);
         if (!$questions) throw new RuntimeException('La evaluación todavía no contiene preguntas.');
         shuffle($questions); // Snapshot conserva enunciados, opciones y claves de este intento.
         $expires = min($e['cierra'], date('Y-m-d H:i:s', time() + (int) $e['minutos'] * 60));
@@ -169,6 +176,13 @@ function aula_save(PDO $db, $attemptId, array $assignment, $submit) {
             if (!is_array($input)) throw new InvalidArgumentException('Respuestas no válidas.');
             foreach ($questions as $p) {
                 $v = $input[$p['id']] ?? '';
+                if ($p['tipo'] === 'multiple') {
+                    // Casillas: se guarda como "0,2". Solo se aceptan opciones existentes.
+                    $options = json_decode($p['opciones'],true);
+                    if (!is_array($v)) $v = $v === '' ? [] : [$v];
+                    foreach ($v as $i) if (!is_string($i) || !ctype_digit($i) || !isset($options[(int) $i])) throw new InvalidArgumentException('Opción no válida.');
+                    $v = implode(',', aula_respuesta_lista($v));
+                }
                 if (!is_string($v) || mb_strlen($v) > 20000) throw new InvalidArgumentException('Respuesta demasiado extensa.');
                 if ($p['tipo'] === 'seleccion' && $v !== '') {
                     $options = json_decode($p['opciones'],true);
