@@ -20,8 +20,9 @@ class UsuariosController extends Controller
     {
         Gate::authorize('admin_only');
 
-        $ids = $portal->asegurarRoles();
-        $roles = collect(config('sso.roles_portal'))->map(fn ($r, $nombre) => [
+        // Solo lectura: los roles los crea "php artisan experimentos:asegurar-roles" al desplegar.
+        $ids = $portal->idsRoles();
+        $roles = collect(config('sso.roles_portal'))->filter(fn ($r, $nombre) => isset($ids[$nombre]))->map(fn ($r, $nombre) => [
             'id' => $ids[$nombre], 'nombre' => $nombre, 'descripcion' => $r['descripcion'], 'color' => $r['color'], 'rol' => $r['rol'],
         ])->values();
 

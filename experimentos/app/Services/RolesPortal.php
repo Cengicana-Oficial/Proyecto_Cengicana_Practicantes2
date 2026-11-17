@@ -58,8 +58,27 @@ class RolesPortal
     }
 
     /**
+     * Ids de los roles de Experimentos que ya existen en el portal: [nombre => id]. Solo lectura;
+     * los roles se crean al desplegar con "php artisan experimentos:asegurar-roles".
+     */
+    public function idsRoles(): array
+    {
+        $nombres = array_keys(config('sso.roles_portal'));
+        $existentes = $this->portal()->table('roles')->whereIn('nombre_rol', $nombres)->pluck('id', 'nombre_rol');
+        $ids = [];
+        foreach ($nombres as $nombre) {
+            if (isset($existentes[$nombre])) {
+                $ids[$nombre] = (int) $existentes[$nombre];
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
      * Crea en el portal los roles de Experimentos que falten, los liga al modulo y les da el
-     * permiso de acceso. Idempotente. Devuelve [nombre => id].
+     * permiso de acceso. Idempotente. Devuelve [nombre => id]. ESCRIBE en la base del portal:
+     * no llamarlo desde peticiones web; lo ejecuta el comando experimentos:asegurar-roles en el despliegue.
      */
     public function asegurarRoles(): array
     {
@@ -139,8 +158,7 @@ class RolesPortal
     public function asignar(User $actor, int $portalId, int $rolId, array $programas): array
     {
         $usuario = $this->usuarioPortal($portalId, $actor);
-        $roles = $this->asegurarRoles();
-        $nombreRol = array_search($rolId, $roles, true);
+        $nombreRol = array_search($rolId, $this->idsRoles(), true);
         if ($nombreRol === false) {
             throw ValidationException::withMessages(['rol_id' => 'Seleccione un rol de Experimentos.']);
         }
@@ -149,14 +167,20 @@ class RolesPortal
             throw ValidationException::withMessages(['rol_id' => 'No existe el módulo Experimentos en el portal.']);
         }
 
+        // Dos conexiones, dos transacciones: la local (sigec) envuelve a la del portal y esta se
+        // confirma al final del bloque local. Si falla la parte local, nada se escribe en el portal;
+        // si falla la escritura del portal, se revierte lo local. La unica ventana sin cubrir es un
+        // fallo del COMMIT local justo despues del COMMIT del portal.
         DB::transaction(function () use ($usuario, $modulo, $rolId, $nombreRol, $programas) {
-            $this->portal()->statement(
-                'INSERT INTO usuario_modulo (usuario_id, modulo_id, rol_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE rol_id = VALUES(rol_id)',
-                [$usuario->id, $modulo, $rolId]
-            );
             $local = $this->usuarioLocal($usuario);
             $local->syncRoles([config('sso.roles_portal')[$nombreRol]['rol']]);
             $local->programas()->sync($programas);
+            $this->portal()->transaction(function () use ($usuario, $modulo, $rolId) {
+                $this->portal()->statement(
+                    'INSERT INTO usuario_modulo (usuario_id, modulo_id, rol_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE rol_id = VALUES(rol_id)',
+                    [$usuario->id, $modulo, $rolId]
+                );
+            });
         });
 
         return ['mensaje' => "{$usuario->nombre} tiene el rol {$nombreRol} en Experimentos."];
@@ -166,10 +190,16 @@ class RolesPortal
     public function quitar(User $actor, int $portalId): array
     {
         $usuario = $this->usuarioPortal($portalId, $actor);
-        $this->portal()->table('usuario_modulo')->where('usuario_id', $usuario->id)->where('modulo_id', $this->moduloId())->delete();
-        if ($local = User::where('email', mb_strtolower(trim($usuario->correo)))->first()) {
-            $local->syncRoles([]);
-        }
+        $modulo = $this->moduloId();
+        // Misma estrategia que asignar(): transaccion local que envuelve a la del portal.
+        DB::transaction(function () use ($usuario, $modulo) {
+            if ($local = User::where('email', mb_strtolower(trim($usuario->correo)))->first()) {
+                $local->syncRoles([]);
+            }
+            $this->portal()->transaction(function () use ($usuario, $modulo) {
+                $this->portal()->table('usuario_modulo')->where('usuario_id', $usuario->id)->where('modulo_id', $modulo)->delete();
+            });
+        });
 
         return ['mensaje' => "{$usuario->nombre} ya no tiene acceso a Experimentos."];
     }
