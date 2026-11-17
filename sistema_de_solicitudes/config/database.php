@@ -310,6 +310,18 @@ function app_esquema_database(PDO $pdo): void
             INDEX idx_correo_registro_creado (creado_en)
         ) ENGINE=InnoDB"
     );
+
+    // Limite persistente del buzon publico (por IP y por correo destinatario del acuse).
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS buzon_envios (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ip VARCHAR(45) NOT NULL,
+            correo VARCHAR(190) NULL,
+            creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_buzon_envios_ip (ip, creado_en),
+            INDEX idx_buzon_envios_correo (correo, creado_en)
+        ) ENGINE=InnoDB"
+    );
 }
 
 function app_bootstrap_database(PDO $pdo): void

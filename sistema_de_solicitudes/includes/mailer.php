@@ -425,16 +425,18 @@ function notify_idea_submitter(PDO $pdo, array $idea, string $evento, string $mo
         [$asunto, $intro] = IDEA_AVISOS[$evento];
         $subject = sprintf($asunto, $ideaId);
         $name = trim((string) ($idea['nombre'] ?? '')) ?: 'colaborador(a)';
-        $propuesta = (string) $idea['propuesta'];
-        if (mb_strlen($propuesta, 'UTF-8') > 300) {
-            $propuesta = mb_substr($propuesta, 0, 300, 'UTF-8') . '…';
+        // El acuse de recibo no repite texto libre de quien envia (el buzon es publico).
+        $filas = ['Idea' => '#' . $ideaId];
+        if ($evento !== 'recibida') {
+            $propuesta = (string) $idea['propuesta'];
+            if (mb_strlen($propuesta, 'UTF-8') > 300) {
+                $propuesta = mb_substr($propuesta, 0, 300, 'UTF-8') . '…';
+            }
+            $filas['Área'] = $idea['area'] . ($idea['area_otra'] ? ': ' . $idea['area_otra'] : '');
+            $filas['Tu propuesta'] = $propuesta;
         }
-        $html = mail_idea_layout($name, $intro, [
-            'Idea' => '#' . $ideaId,
-            'Área' => $idea['area'] . ($idea['area_otra'] ? ': ' . $idea['area_otra'] : ''),
-            'Tu propuesta' => $propuesta,
-            'Estado' => BUZON_ESTADOS[$evento] ?? ($evento === 'recibida' ? 'Recibida' : $evento),
-        ], $motivo !== '' ? 'Comentario del equipo: ' . $motivo : '');
+        $filas['Estado'] = BUZON_ESTADOS[$evento] ?? ($evento === 'recibida' ? 'Recibida' : $evento);
+        $html = mail_idea_layout($name, $intro, $filas, $motivo !== '' ? 'Comentario del equipo: ' . $motivo : '');
 
         $error = send_request_mail($pdo, 'idea', 'IDEA-' . $ideaId, $to, $name, $subject, $html);
 

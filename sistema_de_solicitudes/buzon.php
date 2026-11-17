@@ -33,6 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $idea = validar_idea($_POST);
+        $ipCliente = buzon_ip_cliente();
+        $correoAcuse = mb_strtolower($idea['anonimo'] ? '' : idea_correo_remitente($idea), 'UTF-8');
+        buzon_verificar_limite($pdo, $ipCliente, $correoAcuse);
         $foto = guardar_foto_idea($_FILES['foto'] ?? null);
 
         $pdo->prepare(
@@ -50,6 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $idea['nombre'],
             $idea['correo'],
         ]);
+
+        buzon_registrar_envio($pdo, $ipCliente, $correoAcuse);
 
         // Acuse de recibo a quien la envio (solo si dejo correo y no es anonima).
         // Un fallo de correo nunca impide guardar la idea.
