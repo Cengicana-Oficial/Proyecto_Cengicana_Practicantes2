@@ -101,7 +101,7 @@ if (!function_exists('lab_verif_tabla_existe')) {
     }
 }
 
-if (!function_exists('lab_verif_nuevo_codigo')) {
+if (!function_exists('lab_verif_correlativo_siguiente')) {
     /**
      * Siguiente correlativo de la serie (p. ej. 'LAB-I-2026') sin carrera entre pedidos: un
      * UPSERT atómico sobre lab_verif_contador. Si esa tabla aún no existe (migración pendiente)

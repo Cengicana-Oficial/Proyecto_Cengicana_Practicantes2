@@ -353,7 +353,7 @@ if (!function_exists('lab_informe_firmar')) {
             require_once __DIR__ . '/../includes/verificacion_documentos_helper.php';
             $verificacion = null;
             if (lab_verif_url_base() !== '' && lab_verif_tabla_existe($pdo)) { // sin URL pública no hay QR
-                $codigoVerif =lab_verif_nuevo_codigo($pdo, 'informe');
+                $codigoVerif = lab_verif_nuevo_codigo($pdo, 'informe');
                 $urlVerif = lab_verif_url($codigoVerif);
                 $verificacion = ['codigo' => $codigoVerif, 'url' => $urlVerif, 'qr' => lab_verif_qr_png($urlVerif)];
             }
