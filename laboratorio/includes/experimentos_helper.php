@@ -63,7 +63,10 @@ function labExpMuestras(PDO $pdo, array $ids): array
     $ids = array_slice($ids, 0, 500);
     $b = labExpBase();
     $marcas = implode(',', array_fill(0, count($ids), '?'));
-    $stmt = $pdo->prepare("SELECT ml.id_muestra, ml.tipo, ml.fecha, ml.finca AS m_finca, ml.lote AS m_lote, ml.repeticion AS m_rep,
+    // id_muestra_anterior: ID con que se imprimio la etiqueta si la muestra se recodifico despues
+    // (AUD-2026-003/M-4). Si la base de Experimentos aun no tiene la columna, solo se busca por id_muestra.
+    $conAnterior = labExpTieneIdAnterior($pdo);
+    $stmt = $pdo->prepare("SELECT ml.id_muestra, " . ($conAnterior ? 'ml.id_muestra_anterior' : 'NULL') . " AS id_muestra_anterior, ml.tipo, ml.fecha, ml.finca AS m_finca, ml.lote AS m_lote, ml.repeticion AS m_rep,
             ml.obs, ml.datos, ml.estado,
             e.codigo AS ensayo, e.nombre AS ensayo_nombre, e.finca AS e_finca, e.lote AS e_lote, e.variedad, e.estrato,
             pr.codigo AS proyecto, pr.nombre AS proyecto_nombre, pg.sigla AS programa_sigla, pg.nombre AS programa,
@@ -74,15 +77,15 @@ function labExpMuestras(PDO $pdo, array $ids): array
         LEFT JOIN {$b}.programas pg ON pg.id = pr.programa_id
         LEFT JOIN {$b}.parcelas pa ON pa.id = ml.parcela_id
         LEFT JOIN {$b}.tratamientos t ON t.id = ml.tratamiento_id
-        WHERE UPPER(ml.id_muestra) IN ({$marcas})");
-    $stmt->execute($ids);
+        WHERE UPPER(ml.id_muestra) IN ({$marcas})" . ($conAnterior ? " OR UPPER(ml.id_muestra_anterior) IN ({$marcas})" : ''));
+    $stmt->execute($conAnterior ? array_merge($ids, $ids) : $ids);
 
     $out = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $datos = json_decode((string) ($r['datos'] ?? ''), true) ?: [];
         $rep = $r['m_rep'] ?? $r['p_rep'];
         $trat = $r['trat_codigo'] ? trim($r['trat_codigo'] . ($r['trat_desc'] ? ' - ' . $r['trat_desc'] : '')) : null;
-        $out[mb_strtoupper($r['id_muestra'])] = [
+        $ficha = [
             'id' => $r['id_muestra'],
             'tipo' => $r['tipo'],
             'fecha_muestreo' => $r['fecha'] ? substr($r['fecha'], 0, 10) : null,
@@ -103,8 +106,29 @@ function labExpMuestras(PDO $pdo, array $ids): array
                 'observaciones' => $r['obs'],
             ],
         ];
+        $actual = mb_strtoupper($r['id_muestra']);
+        $anterior = mb_strtoupper((string) ($r['id_muestra_anterior'] ?? ''));
+        // Se indexa por el ID actual y, si se leyo una etiqueta con el ID anterior, tambien por este,
+        // para que quien llama encuentre la muestra con el ID que escaneo.
+        $out[$actual] = $ficha;
+        if ($anterior !== '' && $anterior !== $actual && in_array($anterior, $ids, true) && !isset($out[$anterior])) {
+            $out[$anterior] = $ficha;
+        }
     }
     return $out;
+}
+
+/** ¿La base de Experimentos ya tiene muestras_lab.id_muestra_anterior? (columna de una migracion posterior) */
+function labExpTieneIdAnterior(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $pdo->query('SELECT id_muestra_anterior FROM ' . labExpBase() . '.muestras_lab LIMIT 0');
+        return $ok = true;
+    } catch (Throwable $e) {
+        return $ok = false;
+    }
 }
 
 /** Texto corto para mostrar al escanear: "COS-26-01-E01 · P-01 · T1 · Rep. 1". */
