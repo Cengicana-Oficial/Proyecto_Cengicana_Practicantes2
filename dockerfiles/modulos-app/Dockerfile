@@ -53,6 +53,12 @@ COPY dockerfiles/modulos-app/timezone.ini /usr/local/etc/php/conf.d/zz-timezone.
 WORKDIR /var/www/html
 COPY . /var/www/html
 
+# experimentos/ (SIGEC, Laravel) corre en su propio contenedor y aqui solo se
+# llega a el por el proxy de /sigec/. No puede ir en .dockerignore porque
+# sigec-app usa el mismo contexto de build; si se quedara en esta imagen,
+# Apache serviria su codigo fuente, storage/ y logs bajo /experimentos/.
+RUN rm -rf /var/www/html/experimentos
+
 RUN if [ -f login/composer.json ]; then \
         cd login && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \
     fi
