@@ -63,9 +63,10 @@ return [
             ]) : [],
         ],
 
-        // Modulo Laboratorio del portal: SIGEC solo LEE resultados (usuario con SELECT unicamente).
         // Base central del portal (usuarios_menu): catalogo de ingenios y usuarios con acceso a
-        // Experimentos. Solo lectura (App\Services\CatalogosPortal); mismo usuario que la base principal.
+        // Experimentos. NO es solo lectura: App\Services\RolesPortal escribe en roles, rol_modulo,
+        // rol_permiso (comando experimentos:asegurar-roles) y usuario_modulo (asignar/quitar acceso
+        // desde Administracion > Usuarios). Usa el mismo usuario MySQL que la base principal.
         'portal' => [
             'driver' => 'mysql',
             'host' => env('PORTAL_DB_HOST', env('DB_HOST', '127.0.0.1')),
@@ -80,6 +81,7 @@ return [
             'engine' => null,
         ],
 
+        // Modulo Laboratorio del portal: SIGEC solo LEE resultados (usuario con SELECT unicamente).
         'laboratorio' => [
             'driver' => 'mysql',
             'host' => env('LAB_DB_HOST', env('DB_HOST', '127.0.0.1')),

@@ -8,6 +8,7 @@ use App\Models\Programa;
 use App\Models\Proyecto;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -137,7 +138,9 @@ class Codificacion
             $nuevo = static::codigoProyecto($proyecto->programa, static::anioProyecto($proyecto->inicio, $proyecto->created_at), $proyecto);
             if ($nuevo !== $proyecto->codigo) {
                 $cambios[$proyecto->codigo] = $nuevo;
+                $anteriorProyecto = $proyecto->codigo;
                 $proyecto->forceFill(['codigo' => $nuevo])->save();
+                static::registrarEquivalencia('proyecto', $proyecto->id, $anteriorProyecto, $nuevo);
             }
         }
 
@@ -168,13 +171,25 @@ class Codificacion
 
         DB::transaction(function () use ($ensayo, $anterior, $nuevo) {
             $ensayo->forceFill(['codigo' => $nuevo])->save();
+            static::registrarEquivalencia('ensayo', $ensayo->id, $anterior, $nuevo);
             // Solo cambia el tramo del ensayo, en el formato actual {ensayo}-{tipo}{n}
             // y en el anterior SIGEC-{ensayo}-{tipo}-{n}-{aa}.
             $prefijos = ["SIGEC-{$anterior}-" => "SIGEC-{$nuevo}-", "{$anterior}-" => "{$nuevo}-"];
-            MuestraLab::where('ensayo_id', $ensayo->id)->get(['id', 'id_muestra'])->each(function ($m) use ($prefijos) {
+            $conAnterior = static::columnaMuestraAnterior();
+            $columnas = $conAnterior ? ['id', 'id_muestra', 'id_muestra_anterior'] : ['id', 'id_muestra'];
+            MuestraLab::where('ensayo_id', $ensayo->id)->get($columnas)->each(function ($m) use ($prefijos, $conAnterior) {
                 foreach ($prefijos as $viejo => $nuevoPrefijo) {
                     if (Str::startsWith($m->id_muestra, $viejo)) {
-                        $m->forceFill(['id_muestra' => $nuevoPrefijo . substr($m->id_muestra, strlen($viejo))])->save();
+                        $idViejo = $m->id_muestra;
+                        $cambio = ['id_muestra' => $nuevoPrefijo . substr($idViejo, strlen($viejo))];
+                        // La etiqueta impresa con el ID viejo debe seguir leyendose: se conserva el
+                        // primer ID de la muestra (el que llego a imprimirse); la tabla de
+                        // equivalencias guarda cada cambio.
+                        if ($conAnterior && $m->id_muestra_anterior === null) {
+                            $cambio['id_muestra_anterior'] = $idViejo;
+                        }
+                        $m->forceFill($cambio)->save();
+                        static::registrarEquivalencia('muestra', $m->id, $idViejo, $cambio['id_muestra']);
                         break;
                     }
                 }
@@ -182,5 +197,27 @@ class Codificacion
         });
 
         return [$anterior => $nuevo];
+    }
+
+    /** ¿Existe muestras_lab.id_muestra_anterior? (la crea una migracion posterior a la recodificacion original) */
+    public static function columnaMuestraAnterior(): bool
+    {
+        return Schema::hasColumn('muestras_lab', 'id_muestra_anterior');
+    }
+
+    /** Guarda en BD la equivalencia codigo anterior -> nuevo (no solo en el log). */
+    protected static function registrarEquivalencia(string $tipo, int $registroId, string $anterior, string $nuevo): void
+    {
+        if (! Schema::hasTable('codificacion_equivalencias')) {
+            return;
+        }
+        DB::table('codificacion_equivalencias')->insert([
+            'tipo' => $tipo,
+            'registro_id' => $registroId,
+            'codigo_anterior' => $anterior,
+            'codigo_nuevo' => $nuevo,
+            'origen' => 'recodificacion',
+            'created_at' => now(),
+        ]);
     }
 }
