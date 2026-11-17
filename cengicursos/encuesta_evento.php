@@ -81,17 +81,37 @@ $v = [];
 // se piden los datos de quien responde para registrar su asistencia.
 $formato = $tipo === 'percep' && isset(CENGI_EVT_ENCUESTA_FORMATOS[$evento['encuesta_formato'] ?? '']) ? $evento['encuesta_formato'] : 'general';
 $identifica = $tipo === 'percep' && $formato !== 'general' && !$participante;
-// Busqueda del correo mientras se llena la encuesta: solo primer nombre e institucion.
+// Enlace general (QR) con registro de asistencia (AUD-2026-003/A-1): solo en una ventana alrededor de la
+// fecha del evento y con limite de intentos por IP + evento (429 al exceder).
+$fueraDeVentana = $identifica && !cengi_evento_encuesta_en_ventana($evento['fecha'] ?? null);
+$bloqueado = false;
+if ($identifica && !$fueraDeVentana && (isset($_GET['correo']) || $_SERVER['REQUEST_METHOD'] === 'POST')) {
+    $bloqueado = cengi_evento_encuesta_limite_excedido($db, (int) $evento['id']);
+}
+// Busqueda del correo mientras se llena la encuesta: solo indica si esta inscrito en ESTE evento,
+// sin devolver nombre ni institucion.
 if ($identifica && isset($_GET['correo'])) {
-    $conocido = cengi_evento_buscar_por_correo($db, (int) $evento['id'], (string) $_GET['correo']);
     header('Content-Type: application/json; charset=UTF-8');
-    echo json_encode($conocido ? ['encontrado' => true, 'nombre' => explode(' ', $conocido['nombre'])[0], 'institucion' => $conocido['institucion']] : ['encontrado' => false], JSON_UNESCAPED_UNICODE);
+    if ($fueraDeVentana) {
+        http_response_code(403);
+        echo json_encode(['error' => 'La encuesta no está disponible en esta fecha.'], JSON_UNESCAPED_UNICODE);
+    } elseif ($bloqueado) {
+        http_response_code(429);
+        header('Retry-After: ' . CENGI_ENCUESTA_VENTANA_SEG);
+        echo json_encode(['error' => 'Demasiados intentos. Espera unos minutos.'], JSON_UNESCAPED_UNICODE);
+    } else {
+        echo json_encode(['registrado' => cengi_evento_buscar_por_correo($db, (int) $evento['id'], (string) $_GET['correo']) !== null]);
+    }
     exit;
+}
+if ($bloqueado && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    http_response_code(429);
+    header('Retry-After: ' . CENGI_ENCUESTA_VENTANA_SEG);
 }
 $preguntaGeneral = $formato === 'investigacion' ? '¿Cómo califica los resultados de investigación presentados?'
     : ($formato === 'transferencia' ? '¿Cómo califica el evento?' : 'En general, ¿cómo calificas el evento?');
 
-if ($tipo !== null && !$yaRespondida && $_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($tipo !== null && !$yaRespondida && !$fueraDeVentana && !$bloqueado && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $texto = static function ($campo, $max) {
         $valor = trim((string) ($_POST[$campo] ?? ''));
         // Un cliente que no envie UTF-8 (p. ej. Windows-1252) no debe hacer fallar el INSERT.
@@ -291,6 +311,10 @@ function cengi_enc_opciones($clave, $etiqueta, array $opciones, $valor)
     <div class="ep-card">
         <?php if ($tipo === null): ?>
             <div class="ep-ok"><h2 class="ep-h2">Encuesta no disponible</h2><p>El enlace no es válido o la encuesta ya no está disponible.</p></div>
+        <?php elseif ($fueraDeVentana): ?>
+            <div class="ep-ok"><h2 class="ep-h2">Encuesta no disponible</h2><p>Esta encuesta recibe respuestas desde el día anterior al evento y hasta 7 días después. Si necesita ayuda, escriba a capacitacion@cengicana.org.</p></div>
+        <?php elseif ($bloqueado): ?>
+            <div class="ep-ok"><h2 class="ep-h2">Demasiados intentos</h2><p>Se recibieron demasiadas solicitudes desde su conexión. Espere unos minutos e intente nuevamente.</p></div>
         <?php elseif ($enviado): ?>
             <div class="ep-ok"><div class="ep-ok-i">✓</div><h2 class="ep-h2">¡Gracias por su respuesta!</h2>
                 <p><?php echo $tipo === 'colab' ? 'Su opinión nos ayuda a mejorar nuestras alianzas y el apoyo que brindamos en cada evento.' : 'Tu opinión nos ayuda a mejorar la experiencia en próximos eventos.'; ?></p></div>
@@ -310,7 +334,7 @@ function cengi_enc_opciones($clave, $etiqueta, array $opciones, $valor)
                         <p class="es-hola" id="esConocido" role="status" style="margin-top:10px;" hidden></p>
                         <p class="ep-legal" id="esAyudaCorreo" style="text-align:left;margin:6px 0 14px;">Con tu correo registramos tu asistencia. <button type="button" id="esSinCorreo" style="border:0;background:none;padding:0;color:#3E7A12;font:inherit;text-decoration:underline;cursor:pointer;">No tengo correo</button></p>
                         <div id="esDatos"<?php echo trim((string) ($v['nombre'] ?? '')) !== '' || ($errores && ($v['correo'] ?? '') === '') ? '' : ' hidden'; ?>>
-                            <p class="es-hola" id="esNoEncontrado" hidden>No encontramos tu correo. Completa tus datos, por favor.</p>
+                            <p class="es-hola" id="esNoEncontrado" hidden>No encontramos tu correo entre los inscritos. Completa tus datos, por favor.</p>
                             <div class="ep-grid2">
                                 <div class="ep-f"><label for="esNombre">Nombre y apellido</label><input id="esNombre" name="nombre" maxlength="255" autocomplete="name" value="<?php echo cengi_enc_html($v['nombre'] ?? ''); ?>"></div>
                                 <div class="ep-f"><label for="esInstitucion"><?php echo $formato === 'investigacion' ? 'Institución' : 'Ingenio o institución'; ?></label><input id="esInstitucion" name="institucion" maxlength="255" list="esIngenios" autocomplete="organization" value="<?php echo cengi_enc_html($v['institucion'] ?? ''); ?>">
@@ -399,19 +423,26 @@ function cengi_enc_opciones($clave, $etiqueta, array $opciones, $valor)
             var correo = campoCorreo.value.trim();
             if (!correo || !campoCorreo.checkValidity()) { campoCorreo.focus(); return; }
             fetch('?t=' + encodeURIComponent(form.querySelector('[name="t"]').value) + '&correo=' + encodeURIComponent(correo), {credentials: 'same-origin'})
-                .then(function (r) { return r.json(); })
+                .then(function (resp) {
+                    if (resp.status === 429 || resp.status === 403) return resp.json().then(function (e) { throw new Error(e.error || 'No disponible'); });
+                    return resp.json();
+                })
                 .then(function (r) {
-                    conocido = !!r.encontrado;
+                    // El servidor solo dice si el correo esta inscrito en este evento; no devuelve datos personales.
+                    conocido = !!r.registrado;
                     saludo.hidden = !conocido;
                     if (conocido) {
-                        saludo.innerHTML = '';
-                        saludo.append('Hola, ', Object.assign(document.createElement('b'), {textContent: r.nombre}), (r.institucion ? ' · ' + r.institucion : '') + '. Ya tenemos tus datos.');
+                        saludo.textContent = 'Tu correo está inscrito en este evento. Registraremos tu asistencia al enviar la encuesta.';
                         datos.hidden = true;
                         document.getElementById('esNombre').value = '';
                         document.getElementById('esInstitucion').value = '';
                     } else mostrarDatos(true);
                 })
-                .catch(function () { mostrarDatos(false); });
+                .catch(function (err) {
+                    mostrarDatos(false);
+                    var msg = document.getElementById('esMsg');
+                    if (msg && err && err.message && err.message !== 'Failed to fetch') { msg.className = 'pp-form-msg err'; msg.textContent = err.message; }
+                });
         };
         document.getElementById('esBuscar').addEventListener('click', buscar);
         campoCorreo.addEventListener('change', buscar);

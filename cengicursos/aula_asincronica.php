@@ -13,6 +13,7 @@
 
 const AULA_VIDEO_MINIMO = 70;          // % de la grabación para poder marcarla como vista
 const AULA_VIDEO_TRAMO = 5;            // segundos por tramo medido
+const AULA_VIDEO_MARGEN = 2;           // tramos de holgura por envío (latencia entre envíos)
 const AULA_VIDEO_SIN_DURACION = 900;   // segundos de reproducción exigidos si no se conoce la duración (15 min)
 
 function aula_async_ready(PDO $db) {
@@ -98,6 +99,23 @@ function aula_bits_contar($bin, $limite) {
     return $n;
 }
 
+/**
+ * Suma a lo ya visto los tramos nuevos que informa el navegador, sin pasar de $maxNuevos tramos nuevos por envío
+ * ni de $tramos en total (los de menor posición se aceptan primero). Devuelve el mapa de bits binario.
+ */
+function aula_bits_mezclar($previo, $nuevo, $tramos, $maxNuevos) {
+    $bytes = (int) ceil($tramos / 8);
+    $previo = str_pad(substr($previo, 0, $bytes), $bytes, "\0");
+    $mezcla = $previo; $aceptados = 0;
+    for ($t = 0, $max = min($tramos, strlen($nuevo) * 8); $t < $max; $t++) {
+        $i = $t >> 3; $m = 1 << ($t & 7);
+        if (!(ord($nuevo[$i]) & $m) || (ord($previo[$i]) & $m)) continue;
+        if ($aceptados >= $maxNuevos) break;
+        $mezcla[$i] = chr(ord($mezcla[$i]) | $m); $aceptados++;
+    }
+    return $mezcla;
+}
+
 /** Porcentaje visto con los datos guardados de una grabación. */
 function aula_video_porcentaje(array $video, array $av) {
     if ($video['fuente'] !== 'otro') {
@@ -121,7 +139,9 @@ function aula_video_del_estudiante(PDO $db, array $assignment, $recursoId) {
 
 /**
  * Guarda el avance enviado por el reproductor (js/aula_avance.js).
- * Medible: 'segmentos' (base64, se combina con lo ya visto, nunca se pierde) y 'duracion' en segundos.
+ * Medible: 'segmentos' (base64, se combina con lo ya visto, nunca se pierde; se aceptan como mucho tantos tramos nuevos
+ * como tiempo pasó desde el envío anterior) y 'duracion' en segundos (solo se usa si coordinación no la indicó ni hay
+ * una medición guardada; el servidor la conserva y no deja que baje).
  * Sin medición: 'segundos' reproducidos desde el último envío (limitado al tiempo real transcurrido).
  */
 function aula_video_registrar(PDO $db, array $assignment, $recursoId, array $in) {
@@ -131,19 +151,27 @@ function aula_video_registrar(PDO $db, array $assignment, $recursoId, array $in)
         $now = date('Y-m-d H:i:s');
         $av = aula_rows($db, 'SELECT * FROM aula_video_avance WHERE asignacion_id=? AND recurso_id=? FOR UPDATE', [$assignment['id'], $recursoId])[0]
             ?? ['segmentos' => '', 'segundos' => 0, 'duracion' => 0, 'visto_en' => null, 'actualizado' => null];
+        // No se acepta más avance del que realmente pasó desde el envío anterior (como en la rama "otro").
+        $transcurrido = $av['actualizado'] ? max(0, time() - strtotime($av['actualizado'])) + 5 : 120;
+        $transcurrido = min($transcurrido, 120);
         if ($video['fuente'] !== 'otro') {
-            $dur = (int) ($in['duracion'] ?? 0);
-            if ($dur < 1 || $dur > 6 * 3600) throw new InvalidArgumentException('Duración no válida.');
+            // La duración la fija el servidor: la indicada por coordinación o, si no hay, la primera medición guardada
+            // (el navegador solo la informa la primera vez) y nunca baja después.
+            $dur = (int) ($video['duracion_min'] ?? 0) * 60;
+            if ($dur < 1) $dur = (int) $av['duracion'];
+            if ($dur < 1) {
+                $dur = (int) ($in['duracion'] ?? 0);
+                if ($dur < 1 || $dur > 6 * 3600) throw new InvalidArgumentException('Duración no válida.');
+            }
+            $dur = max($dur, (int) $av['duracion']);
+            $tramos = (int) ceil($dur / AULA_VIDEO_TRAMO);
             $nuevo = base64_decode((string) ($in['segmentos'] ?? ''), true);
-            if ($nuevo === false || strlen($nuevo) > (int) ceil($dur / AULA_VIDEO_TRAMO / 8) + 1) throw new InvalidArgumentException('Avance no válido.');
+            if ($nuevo === false || strlen($nuevo) > (int) ceil(6 * 3600 / AULA_VIDEO_TRAMO / 8) + 1) throw new InvalidArgumentException('Avance no válido.');
             $previo = base64_decode((string) $av['segmentos']) ?: '';
-            $len = max(strlen($nuevo), strlen($previo)); $mezcla = '';
-            for ($i = 0; $i < $len; $i++) $mezcla .= chr(ord($nuevo[$i] ?? "\0") | ord($previo[$i] ?? "\0"));
-            $av['segmentos'] = base64_encode($mezcla); $av['duracion'] = max((int) $av['duracion'], $dur);
+            $av['segmentos'] = base64_encode(aula_bits_mezclar($previo, $nuevo, $tramos, intdiv($transcurrido, AULA_VIDEO_TRAMO) + AULA_VIDEO_MARGEN));
+            $av['duracion'] = $dur;
         } else {
-            // No se acepta más tiempo del que realmente pasó desde el envío anterior.
-            $transcurrido = $av['actualizado'] ? max(0, time() - strtotime($av['actualizado'])) + 5 : 120;
-            $av['segundos'] = (int) $av['segundos'] + max(0, min((int) ($in['segundos'] ?? 0), 120, $transcurrido));
+            $av['segundos'] = (int) $av['segundos'] + max(0, min((int) ($in['segundos'] ?? 0), $transcurrido));
         }
         $pct = aula_video_porcentaje($video, $av);
         $db->prepare('INSERT INTO aula_video_avance(asignacion_id,recurso_id,segmentos,segundos,duracion,porcentaje,actualizado) VALUES(?,?,?,?,?,?,?)
