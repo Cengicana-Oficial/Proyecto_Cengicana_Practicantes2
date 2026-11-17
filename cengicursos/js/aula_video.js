@@ -74,6 +74,7 @@
                 nodo = iframe(conAutoplay(player.getAttribute('data-embed')), titulo);
             }
             abrir(nodo, titulo);
+            avisar(player, nodo);
             return;
         }
         // Reproducir en el lugar: la miniatura se cambia por el reproductor.
@@ -82,5 +83,10 @@
         var f = iframe(conAutoplay(player.getAttribute('data-embed')), titulo);
         f.className = 'aula-player-iframe';
         if (p) { p.hidden = true; p.parentNode.insertBefore(f, p); } else player.insertBefore(f, player.firstChild);
+        avisar(player, f);
     });
+    // Avance de grabaciones (js/aula_avance.js, modalidad asincrónica): informa qué reproductor se abrió.
+    function avisar(player, nodo) {
+        try { document.dispatchEvent(new CustomEvent('aula:reproductor', { detail: { player: player, nodo: nodo } })); } catch (e) {}
+    }
 })();

@@ -420,6 +420,33 @@ function app_esquema_database(PDO $pdo): void
     app_ensure_column($pdo, 'publicaciones', 'origen', "origen VARCHAR(20) NOT NULL DEFAULT 'manual' AFTER destinos");
     // ID de la publicacion en Meta/LinkedIn para actualizarla en cada sincronizacion por API.
     app_ensure_column($pdo, 'publicaciones', 'externo_id', 'externo_id VARCHAR(120) NULL AFTER origen');
+    // Pilar de contenido (capacitacion, investigacion, efemerides...) y pauta pagada de cada publicacion,
+    // para comparar que temas funcionan y separar el rendimiento organico del pagado.
+    app_ensure_column($pdo, 'publicaciones', 'pilar', 'pilar VARCHAR(60) NULL AFTER tipo');
+    app_ensure_column($pdo, 'publicaciones', 'pautada', 'pautada TINYINT(1) NOT NULL DEFAULT 0 AFTER pilar');
+    app_ensure_column($pdo, 'publicaciones', 'inversion', 'inversion DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER pautada');
+    // Metricas mensuales de cada cuenta (no por publicacion): alcance total, organico y pagado,
+    // seguidores y pauta. Es lo que reportan los informes ejecutivos mensuales.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS redes_cuenta_mensual (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            plataforma VARCHAR(40) NOT NULL,
+            periodo CHAR(7) NOT NULL,
+            alcance_total INT NOT NULL DEFAULT 0,
+            alcance_organico INT NOT NULL DEFAULT 0,
+            alcance_pagado INT NOT NULL DEFAULT 0,
+            impresiones INT NOT NULL DEFAULT 0,
+            seguidores_total INT NOT NULL DEFAULT 0,
+            seguidores_nuevos INT NOT NULL DEFAULT 0,
+            visitas_perfil INT NOT NULL DEFAULT 0,
+            inversion_q DECIMAL(10,2) NOT NULL DEFAULT 0,
+            inversion_usd DECIMAL(10,2) NOT NULL DEFAULT 0,
+            notas TEXT NULL,
+            fuente VARCHAR(60) NULL,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY cuenta_mes (plataforma, periodo)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
     // Campanita: avisos que cada usuario ya leyo (la clave identifica el aviso y su estado).
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS notificaciones_leidas (
@@ -499,6 +526,25 @@ function app_esquema_database(PDO $pdo): void
             notas TEXT NULL,
             fuente VARCHAR(60) NULL,
             actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    // Audiencia por pais, ciudad, edad o genero (seguidores de cada red o visitantes del
+    // sitio). Una fila por plataforma, dimension, clave y mes: los seguidores son una
+    // foto del mes en que se leyeron; el sitio web guarda el total de cada mes.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS redes_audiencia (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            plataforma VARCHAR(40) NOT NULL,
+            dimension VARCHAR(20) NOT NULL,
+            clave VARCHAR(120) NOT NULL,
+            etiqueta VARCHAR(160) NULL,
+            valor INT NOT NULL DEFAULT 0,
+            metrica VARCHAR(40) NOT NULL DEFAULT 'seguidores',
+            periodo CHAR(7) NOT NULL,
+            fuente VARCHAR(60) NULL,
+            actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY audiencia_unica (plataforma, dimension, clave, periodo),
+            KEY idx_audiencia_periodo (periodo)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
     app_ensure_foreign_key(

@@ -2,6 +2,37 @@
 declare(strict_types=1);
 const AGENDA_MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const AGENDA_FIJOS=[['nombre'=>'Análisis del primer tercio de zafra','mes'=>1],['nombre'=>'Análisis del segundo tercio de zafra','mes'=>3],['nombre'=>'Presentación de resultados de investigación','mes'=>7],['nombre'=>'Simposio de análisis de la zafra','mes'=>8]];
+/** Clasificación de cada comentario de la evaluación de un evento, para darle seguimiento. */
+const AGENDA_CATEGORIAS_COMENTARIO=['queja'=>'Queja','solicitud'=>'Solicitud','seguimiento'=>'Requiere seguimiento','sugerencia'=>'Sugerencia','sin_accion'=>'Sin acción'];
+const AGENDA_SEGUIMIENTO=['pendiente'=>'Pendiente','en_proceso'=>'En proceso','atendido'=>'Atendido'];
+/** Clasificaciones que requieren seguimiento: sin estado registrado cuentan como pendientes. */
+const AGENDA_REQUIEREN_SEGUIMIENTO=['queja','solicitud','seguimiento'];
+/**
+ * Clasificación automática de un comentario por palabras clave y calificación, en orden de
+ * prioridad. Se marca como "Automático" para que una persona la confirme o la cambie.
+ */
+const AGENDA_REGLAS_COMENTARIO=[
+    // Palabras completas o frases con verbo: "malezas", "por la tarde" o "excelente presentación" no cuentan.
+    'queja'=>'/\b(?:mal[oa]?s?\b|muy mal|p[eé]sim|deficient|no (?:funcion|se (?:escuch|ve[ií]a|ve\b|entend)|hubo|hab[ií]a|alcanz|me gust)|(?:comenz|empez|inici|lleg)\w* tarde|retras|desorganiz|molest|inc[oó]mod|fr[ií]o\b|calor\b|falt[oó]\b|queja|lamentabl|ruido|mal sonido|impuntual|aburrid)/iu',
+    'solicitud'=>'/\b(?:(?:env[ií]|compart|mand|facilit|proporcion)\w*\s+(?:\w+\s+){0,3}(?:presentaci|material|diapositiva|informaci|archivo|grabaci|contacto)|quisiera|me gustar[ií]a (?:recibir|tener|obtener)|solicit|necesit|copia de|acceso a)/iu',
+    'sugerencia'=>'/\b(suger|recomend|mejorar|ser[ií]a (bueno|mejor|interesante)|deber[ií]an|propon|propuest|incluir|m[aá]s (tiempo|pr[aá]ctic|ejemplos|espacio)|pr[oó]xim)/iu',
+    'sin_accion'=>'/^\s*(n\/?a|no|nada|ningun[oa]?|todo (bien|excelente)|excelente|muy bien|bien|bueno|gracias|felicidades|ok)[\s.!]*$|\b(excelente|felicit|gracias|muy (buen[oa]s?|bien|interesante|[uú]til))\b/iu',
+];
+function agenda_clasificar_comentario(string $comentario,int $estrellas): ?string
+{
+    $texto=trim($comentario);
+    if($texto==='')return null;
+    foreach(AGENDA_REGLAS_COMENTARIO as $categoria=>$regla) if(preg_match($regla,$texto)) return $categoria==='sin_accion' && $estrellas<=2 ? 'queja' : $categoria;
+    return $estrellas<=2 ? 'queja' : null;
+}
+/** Clasifica los comentarios aún sin clasificar de un evento. Devuelve cuántos se clasificaron. */
+function agenda_autoclasificar(PDO $pdo,int $eventoId): int
+{
+    $q=$pdo->prepare("SELECT id,comentario,calificacion FROM evento_encuestas WHERE evento_id=? AND categoria IS NULL AND oculto=0 AND TRIM(COALESCE(comentario,''))<>''");$q->execute([$eventoId]);
+    $u=$pdo->prepare("UPDATE evento_encuestas SET categoria=?,categoria_por='Automático',categoria_en=NOW() WHERE id=? AND categoria IS NULL");$n=0;
+    foreach($q->fetchAll() as $c) if($cat=agenda_clasificar_comentario((string)$c['comentario'],(int)$c['calificacion'])){$u->execute([$cat,(int)$c['id']]);$n+=$u->rowCount();}
+    return $n;
+}
 const AGENDA_ESTADOS=['planificada'=>'Planificada','reprogramada'=>'Reprogramada','realizada'=>'Realizada','sin_registrar'=>'Sin registrar','cancelada'=>'Cancelada'];
 
 function agenda_preparar(PDO $pdo): void
@@ -33,6 +64,11 @@ function agenda_preparar(PDO $pdo): void
       id INT AUTO_INCREMENT PRIMARY KEY, evento_id INT NOT NULL, calificacion TINYINT NOT NULL, comentario TEXT NULL,
       FOREIGN KEY(evento_id) REFERENCES eventos_transferencia(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    // Respuestas sincronizadas desde la encuesta de Cengicursos (origen_id) y clasificación del comentario.
+    foreach (['origen_id'=>'INT NULL','nombre'=>'VARCHAR(255) NULL','institucion'=>'VARCHAR(255) NULL','email'=>'VARCHAR(255) NULL','telefono'=>'VARCHAR(40) NULL',
+        'detalle'=>'VARCHAR(255) NULL','categoria'=>'VARCHAR(20) NULL','categoria_por'=>'VARCHAR(180) NULL','categoria_en'=>'DATETIME NULL',
+        'seguimiento_estado'=>'VARCHAR(20) NULL','seguimiento_nota'=>'TEXT NULL','seguimiento_por'=>'VARCHAR(180) NULL','seguimiento_en'=>'DATETIME NULL','oculto'=>'TINYINT(1) NOT NULL DEFAULT 0'] as $col=>$tipo) app_ensure_column($pdo,'evento_encuestas',$col,"{$col} {$tipo}");
+    if(!$pdo->query("SHOW INDEX FROM evento_encuestas WHERE Key_name='evento_origen'")->fetch())$pdo->exec('ALTER TABLE evento_encuestas ADD UNIQUE KEY evento_origen(evento_id,origen_id)');
 }
 
 function agenda_fecha(string $fecha,bool $opcional=true): ?string
@@ -74,27 +110,151 @@ function agenda_puede(PDO $pdo,array $user,string $tipo,?string $comite=null): b
     if ($tipo==='eventos' || !$comite || !can_view_resource($user,'reuniones') || empty($user['correo'])) return false;
     $q=$pdo->prepare("SELECT COUNT(*) FROM comites c JOIN contactos ct ON ct.id=c.lider_id WHERE c.id=? AND LOWER(ct.email)=LOWER(?) AND ct.estado='Activo'");$q->execute([$comite,$user['correo']]); return (bool)$q->fetchColumn();
 }
+/**
+ * Asistencia desde el Control QR de Cengicursos (misma instancia MySQL, lectura directa).
+ * Cengicursos guarda el vínculo en eventos.transferencia_id; solo se copian los participantes
+ * con ingreso registrado. Devuelve el evento de Cengicursos vinculado por evento de transferencia.
+ */
+function agenda_sincronizar_cursos(PDO $pdo,?int $soloEvento=null): array
+{
+    if (defined('AGENDA_SIN_CURSOS')) return []; // pruebas con tablas temporales
+    $base='`'.str_replace('`','``',app_env_value('CENGICURSOS_DB_NAME','cengi_cursos')).'`';
+    try {
+        $q=$pdo->prepare("SELECT e.id,e.nombre,e.fecha,e.transferencia_id,COALESCE(SUM(ep.ingreso_en IS NOT NULL),0) ingresos
+            FROM {$base}.eventos e LEFT JOIN {$base}.evento_participantes ep ON ep.evento_id=e.id
+            WHERE e.transferencia_id IS NOT NULL".($soloEvento?' AND e.transferencia_id=?':'').' GROUP BY e.id');
+        $q->execute($soloEvento?[$soloEvento]:[]);$vinculos=$q->fetchAll();
+    } catch(PDOException $e) { error_log('Sincronización con Cengicursos: '.$e->getMessage());return []; }
+    $out=[];
+    $personas=$pdo->prepare("SELECT COALESCE(NULLIF(p.nombre_participantes,''),ep.nombre_invitado) nombre,COALESCE(NULLIF(p.correo_participantes,''),ep.correo_invitado,'') email,
+        COALESCE(NULLIF(p.telefono_participantes,''),ep.telefono_invitado,'') telefono,COALESCE(NULLIF(p.puesto_participantes,''),ep.cargo_invitado,'') cargo,
+        COALESCE(ip.nombre_ingenios,ie.nombre_ingenios,NULLIF(ep.institucion_invitado,''),'') empresa
+        FROM {$base}.evento_participantes ep LEFT JOIN {$base}.participantes p ON p.id=ep.participante_id
+        LEFT JOIN {$base}.ingenios ip ON ip.id=p.ingenio_id LEFT JOIN {$base}.ingenios ie ON ie.id=ep.ingenio_id
+        WHERE ep.evento_id=? AND ep.ingreso_en IS NOT NULL");
+    $existe=$pdo->prepare('SELECT id FROM eventos_transferencia WHERE id=?');
+    $contacto=$pdo->prepare('SELECT id FROM contactos WHERE LOWER(TRIM(email))=? AND email<>? LIMIT 1');
+    $insertar=$pdo->prepare('INSERT IGNORE INTO evento_asistentes(evento_id,contacto_id,nombre,email,telefono,empresa,cargo,estado,clave) VALUES (?,?,?,?,?,?,?,?,?)');
+    $totales=$pdo->prepare("SELECT COUNT(*) participantes,COUNT(DISTINCT NULLIF(empresa,'')) ingenios FROM evento_asistentes WHERE evento_id=?");
+    foreach($vinculos as $v) {
+        $id=(int)$v['transferencia_id'];$existe->execute([$id]);if(!$existe->fetchColumn())continue;
+        $nuevos=0;$personas->execute([$v['id']]);
+        foreach($personas->fetchAll() as $p) {
+            $d=['nombre'=>mb_substr((string)$p['nombre'],0,180),'email'=>mb_substr($p['email'],0,180),'cargo'=>mb_substr($p['cargo'],0,180),'empresa'=>mb_substr($p['empresa'],0,180),'telefono'=>mb_substr($p['telefono'],0,40)];
+            // Un correo mal escrito en la inscripción no impide registrar la asistencia.
+            try{$c=directorio_validar($d);}catch(RuntimeException $e){try{$c=directorio_validar(['email'=>'']+$d);}catch(RuntimeException $e){continue;}}
+            $contacto->execute([$c['email'],'']);$cid=$contacto->fetchColumn() ?: null;
+            $insertar->execute([$id,$cid,$c['nombre'],$c['email'],$c['telefono'],$c['empresa'],$c['cargo'],$cid?'existente':'nuevo',hash('sha256',$c['email'] ?: normalize_text($c['nombre']))]);$nuevos+=$insertar->rowCount();
+        }
+        $respuestas=agenda_sincronizar_encuestas($pdo,$base,(int)$v['id'],$id);
+        $totales->execute([$id]);$t=$totales->fetch();
+        $pdo->prepare('UPDATE eventos_transferencia SET sincronizado=NOW(),fuente_asistentes=?,participantes=GREATEST(participantes,?),ingenios=GREATEST(ingenios,?) WHERE id=?')
+            ->execute([mb_substr('Control QR de Cengicursos: '.$v['nombre'],0,255),$t['participantes'],$t['ingenios'],$id]);
+        $out[$id]=['id'=>(int)$v['id'],'nombre'=>$v['nombre'],'fecha'=>$v['fecha'],'ingresos'=>(int)$v['ingresos'],'nuevos'=>$nuevos,'respuestas'=>$respuestas];
+    }
+    return $out;
+}
+/**
+ * Respuestas de la encuesta de percepción de Cengicursos con los datos de contacto de quien
+ * responde (correo y teléfono del registro). La clasificación del comentario es de Comités y no
+ * se sobrescribe. Devuelve cuántas respuestas nuevas se copiaron.
+ */
+function agenda_sincronizar_encuestas(PDO $pdo,string $base,int $cursosId,int $eventoId): int
+{
+    try {
+        $q=$pdo->prepare("SELECT r.id,r.estrellas,r.mejora,r.logistica,r.permanencia,
+                COALESCE(NULLIF(r.nombre,''),NULLIF(p.nombre_participantes,''),ep.nombre_invitado) nombre,
+                COALESCE(NULLIF(r.institucion,''),ip.nombre_ingenios,ie.nombre_ingenios,NULLIF(ep.institucion_invitado,'')) institucion,
+                COALESCE(NULLIF(r.correo,''),NULLIF(p.correo_participantes,''),NULLIF(ep.correo_invitado,'')) email,
+                COALESCE(NULLIF(p.telefono_participantes,''),NULLIF(ep.telefono_invitado,'')) telefono
+            FROM {$base}.evento_encuesta_percep r LEFT JOIN {$base}.evento_participantes ep ON ep.id=r.evento_participante_id
+            LEFT JOIN {$base}.participantes p ON p.id=ep.participante_id
+            LEFT JOIN {$base}.ingenios ip ON ip.id=p.ingenio_id LEFT JOIN {$base}.ingenios ie ON ie.id=ep.ingenio_id
+            WHERE r.evento_id=?");
+        $q->execute([$cursosId]);$filas=$q->fetchAll();
+    } catch(PDOException $e) { error_log('Encuestas desde Cengicursos: '.$e->getMessage());return 0; }
+    $permanencia=['completo'=>'Todo el evento','mitad'=>'Más de la mitad','parcial'=>'Menos de la mitad'];
+    $guardar=$pdo->prepare('INSERT INTO evento_encuestas(evento_id,origen_id,calificacion,comentario,nombre,institucion,email,telefono,detalle) VALUES (?,?,?,?,?,?,?,?,?)
+        ON DUPLICATE KEY UPDATE calificacion=VALUES(calificacion),comentario=VALUES(comentario),nombre=VALUES(nombre),institucion=VALUES(institucion),email=VALUES(email),telefono=VALUES(telefono),detalle=VALUES(detalle)');
+    $nuevas=0;
+    foreach($filas as $r) {
+        $detalle=array_filter([$r['logistica']!==null?'Logística: '.(int)$r['logistica'].' ★':'',isset($permanencia[$r['permanencia']])?'Permanencia: '.$permanencia[$r['permanencia']]:'']);
+        $guardar->execute([$eventoId,(int)$r['id'],(int)$r['estrellas'],trim((string)$r['mejora']),
+            $r['nombre']?mb_substr($r['nombre'],0,255):null,$r['institucion']?mb_substr($r['institucion'],0,255):null,$r['email']?mb_substr(strtolower($r['email']),0,255):null,
+            $r['telefono']?mb_substr($r['telefono'],0,40):null,$detalle?implode(' · ',$detalle):null]);
+        $nuevas+=$guardar->rowCount()===1?1:0;
+    }
+    if($nuevas)agenda_autoclasificar($pdo,$eventoId); // las nuevas llegan con una clasificación propuesta
+    return $nuevas;
+}
+/**
+ * Contacto del directorio que probablemente es el mismo asistente aunque tenga otro correo:
+ * nombre completo igual, o primer nombre y un apellido iguales. El teléfono no se usa porque
+ * suele ser el PBX de la institución y lo comparten varios contactos.
+ */
+function agenda_coincidencia(string $nombre,array $indice): ?array
+{
+    $tokens=array_values(array_filter(explode(' ',normalize_text($nombre)),static fn($t)=>mb_strlen($t)>2));
+    if (count($tokens)<2) return null;
+    $completo=implode(' ',$tokens);$mejor=null;
+    foreach ($indice as [$contacto,$otros]) {
+        if (implode(' ',$otros)===$completo) return $contacto+['motivo'=>'Mismo nombre'];
+        if (!$mejor && $otros && $otros[0]===$tokens[0] && array_intersect(array_slice($tokens,1),array_slice($otros,1))) $mejor=$contacto+['motivo'=>'Mismo nombre y apellido'];
+    }
+    return $mejor;
+}
+const AGENDA_CAMPOS_CONTACTO=['email'=>'correo','telefono'=>'teléfono','cargo'=>'cargo','empresa'=>'institución'];
+/** Completa los campos vacíos del contacto con los del asistente, sin sobrescribir. Devuelve los campos completados. */
+function agenda_completar_contacto(PDO $pdo,int $contacto,array $a): array
+{
+    $q=$pdo->prepare('SELECT email,telefono,cargo,empresa,area,nivel FROM contactos WHERE id=?');$q->execute([$contacto]);$c=$q->fetch();
+    if(!$c)throw new RuntimeException('El contacto ya no existe.');
+    $cambios=[];
+    foreach(array_keys(AGENDA_CAMPOS_CONTACTO) as $campo) if(trim((string)$c[$campo])==='' && trim((string)($a[$campo] ?? ''))!=='') $cambios[$campo]=trim((string)$a[$campo]);
+    if(isset($cambios['email'])){$q=$pdo->prepare('SELECT COUNT(*) FROM contactos WHERE LOWER(TRIM(email))=? AND id<>?');$q->execute([strtolower($cambios['email']),$contacto]);if($q->fetchColumn())unset($cambios['email']);}
+    $completados=array_values(array_intersect_key(AGENDA_CAMPOS_CONTACTO,$cambios));
+    if(isset($cambios['cargo'])){[$area,$nivel]=directorio_clasificar($cambios['cargo']);if(!$c['area']&&$area)$cambios['area']=$area;if(!$c['nivel']&&$nivel)$cambios['nivel']=$nivel;}
+    if($cambios)$pdo->prepare('UPDATE contactos SET '.implode(',',array_map(static fn($k)=>"{$k}=?",array_keys($cambios))).' WHERE id=?')->execute([...array_values($cambios),$contacto]);
+    return $completados;
+}
 function agenda_datos(PDO $pdo,array $user,string $tipo): array
 {
+    $cursos=$tipo==='eventos'?agenda_sincronizar_cursos($pdo):[];
     $rows=$pdo->query('SELECT * FROM '.agenda_tabla($tipo).' ORDER BY COALESCE(plan_mes,LEFT(fecha,7)),id')->fetchAll();
     $comites=$pdo->query('SELECT id,nombre,activo,logo FROM comites ORDER BY nombre')->fetchAll();
     foreach ($comites as &$c) $c['gestionar']=agenda_puede($pdo,$user,'reuniones',$c['id']); unset($c);
     $asistentes=[];$extras=[];
     $consulta=$tipo==='eventos'?'SELECT * FROM evento_asistentes ORDER BY nombre':'SELECT * FROM reunion_asistentes';
     foreach ($pdo->query($consulta) as $a) $asistentes[$a[$tipo==='eventos'?'evento_id':'reunion_id']][]=$tipo==='eventos'?$a:(int)$a['contacto_id'];
-    foreach ($pdo->query($tipo==='eventos'?'SELECT * FROM evento_encuestas ORDER BY id':'SELECT * FROM acuerdos WHERE reunion_id IS NOT NULL ORDER BY id') as $a) $extras[$a[$tipo==='eventos'?'evento_id':'reunion_id']][]=$a;
+    // Los comentarios ocultos no cuentan en promedios, conteos ni informes; se listan aparte para restaurarlos.
+    $ocultos=[];
+    foreach ($pdo->query($tipo==='eventos'?'SELECT * FROM evento_encuestas ORDER BY id':'SELECT * FROM acuerdos WHERE reunion_id IS NOT NULL ORDER BY id') as $a) {
+        if ($tipo==='eventos' && !empty($a['oculto'])) $ocultos[$a['evento_id']][]=$a; else $extras[$a[$tipo==='eventos'?'evento_id':'reunion_id']][]=$a;
+    }
     $contactos=$pdo->query('SELECT id,nombre,email,cargo,empresa,telefono,estado FROM contactos ORDER BY nombre')->fetchAll();
     $porEmail=[]; foreach ($contactos as $c) if ($c['email']) $porEmail[strtolower(trim($c['email']))]=(int)$c['id'];
+    $porId=array_column($contactos,null,'id');
+    $indiceNombres=[]; if ($tipo==='eventos') foreach ($contactos as $c) $indiceNombres[]=[['id'=>(int)$c['id'],'nombre'=>$c['nombre'],'email'=>$c['email'],'empresa'=>$c['empresa']],array_values(array_filter(explode(' ',normalize_text((string)$c['nombre'])),static fn($t)=>mb_strlen($t)>2))];
     foreach ($rows as &$r) {
         $r['id']=(int)$r['id'];$r['estado']=agenda_estado($r);$r['historial']=json_decode((string)$r['reprogramaciones'],true) ?: [];
         $r['asistentes']=$asistentes[$r['id']] ?? []; $r[$tipo==='eventos'?'encuesta':'acuerdos']=$extras[$r['id']] ?? [];
+        if ($tipo==='eventos') { $r['cursos']=$cursos[$r['id']] ?? null; $r['encuesta_ocultos']=$ocultos[$r['id']] ?? []; }
         if ($tipo==='eventos') foreach ($r['asistentes'] as &$a) {
             $a['id']=(int)$a['id'];
             if ($a['estado']==='nuevo' && isset($porEmail[strtolower(trim((string)$a['email']))])) { $a['estado']='existente';$a['contacto_id']=$porEmail[strtolower(trim((string)$a['email']))]; }
+            // Búsqueda previa en el directorio para decidir si se vincula o se crea al integrar.
+            $a['coincidencia']=$a['estado']==='nuevo'?agenda_coincidencia((string)$a['nombre'],$indiceNombres):null;
+            // Ya en el directorio: qué datos trae el asistente que al contacto le faltan.
+            $c=$a['contacto_id']?($porId[(int)$a['contacto_id']] ?? null):null;$a['contacto']=null;
+            if ($c && in_array($a['estado'],['existente','integrado'],true)) {
+                $faltan=[];foreach(AGENDA_CAMPOS_CONTACTO as $campo=>$label) if(trim((string)$c[$campo])==='' && trim((string)$a[$campo])!=='') $faltan[]=['campo'=>$label,'valor'=>$a[$campo]];
+                $a['contacto']=['id'=>(int)$c['id'],'nombre'=>$c['nombre'],'email'=>$c['email'],'empresa'=>$c['empresa'],'faltan'=>$faltan,
+                    'otro_correo'=>trim((string)$a['email'])!=='' && trim((string)$c['email'])!=='' && strtolower(trim((string)$a['email']))!==strtolower(trim((string)$c['email']))];
+            }
         } unset($a);
         $r['gestionar']=agenda_puede($pdo,$user,$tipo,$r['comite_id'] ?? null);
     } unset($r);
-    return ['tipo'=>$tipo,'registros'=>$rows,'comites'=>$comites,'contactos'=>$contactos,'estados'=>AGENDA_ESTADOS,'meses'=>AGENDA_MESES,'fijos'=>AGENDA_FIJOS,'hoy'=>date('Y-m-d'),'gestionar'=>agenda_puede($pdo,$user,$tipo),'gestionar_contactos'=>can_manage_resource($user,'contactos'),'enviar'=>can_manage_resource($user,'correos'),'csrf'=>$_SESSION['agenda_csrf']];
+    return ['tipo'=>$tipo,'registros'=>$rows,'comites'=>$comites,'contactos'=>$contactos,'estados'=>AGENDA_ESTADOS,'categorias'=>AGENDA_CATEGORIAS_COMENTARIO,'seguimientos'=>AGENDA_SEGUIMIENTO,'requieren_seguimiento'=>AGENDA_REQUIEREN_SEGUIMIENTO,'meses'=>AGENDA_MESES,'fijos'=>AGENDA_FIJOS,'hoy'=>date('Y-m-d'),'gestionar'=>agenda_puede($pdo,$user,$tipo),'gestionar_contactos'=>can_manage_resource($user,'contactos'),'enviar'=>can_manage_resource($user,'correos'),'csrf'=>$_SESSION['agenda_csrf']];
 }
 
 function agenda_archivo(array $file,string $carpeta): array
@@ -274,24 +434,85 @@ function agenda_evento_mutar(PDO $pdo,array $user,string $accion,array $d,array 
         $q=$pdo->prepare("SELECT COUNT(*) participantes,COUNT(DISTINCT NULLIF(empresa,'')) ingenios FROM evento_asistentes WHERE evento_id=?");$q->execute([$id]);$totales=$q->fetch();
         $pdo->prepare('UPDATE eventos_transferencia SET sincronizado=NOW(),fuente_asistentes=?,sync_url=?,participantes=GREATEST(participantes,?),ingenios=GREATEST(ingenios,?) WHERE id=?')->execute([mb_substr($fuente,0,255),$url ?: $r['sync_url'],$totales['participantes'],$totales['ingenios'],$id]);
         return "{$n} asistentes agregados; {$duplicados} repetidos y {$invalidos} inválidos omitidos.";
+    } elseif($accion==='cursos_sincronizar') {
+        $v=agenda_sincronizar_cursos($pdo,$id)[$id] ?? null;
+        if(!$v)throw new RuntimeException('Este evento no está vinculado con un evento del Control QR de Cengicursos.');
+        return "{$v['nuevos']} asistentes y {$v['respuestas']} respuestas de evaluación nuevas desde Cengicursos ({$v['ingresos']} con ingreso registrado).";
+    } elseif($accion==='encuesta_categoria') {
+        // Una o varias respuestas (acción en lote); confirmar una clasificación automática la vuelve manual.
+        $categoria=(string)($d['categoria'] ?? '');if($categoria!=='' && !isset(AGENDA_CATEGORIAS_COMENTARIO[$categoria]))throw new RuntimeException('Clasificación no válida.');
+        $ids=array_unique(array_map('intval',(array)($d['respuestas'] ?? [$d['respuesta'] ?? 0])));$n=0;
+        $q=$pdo->prepare('UPDATE evento_encuestas SET categoria=?,categoria_por=?,categoria_en=? WHERE id=? AND evento_id=?');
+        foreach($ids as $rid){$q->execute([$categoria ?: null,$categoria?mb_substr((string)$user['nombre'],0,180):null,$categoria?date('Y-m-d H:i:s'):null,$rid,$id]);$n+=$q->rowCount();}
+        return $n===1?'Comentario clasificado.':"{$n} comentarios clasificados.";
+    } elseif($accion==='encuesta_seguimiento') {
+        // Estado del seguimiento y nota de retroalimentación (la nota solo cambia si se envía).
+        $estado=(string)($d['estado'] ?? '');if(!isset(AGENDA_SEGUIMIENTO[$estado]))throw new RuntimeException('Estado de seguimiento no válido.');
+        $ids=array_unique(array_map('intval',(array)($d['respuestas'] ?? [$d['respuesta'] ?? 0])));$n=0;
+        $nota=array_key_exists('nota',$d)?mb_substr(trim((string)$d['nota']),0,2000):null;
+        $q=$pdo->prepare('UPDATE evento_encuestas SET seguimiento_estado=?,seguimiento_nota=IF(?,?,seguimiento_nota),seguimiento_por=?,seguimiento_en=NOW() WHERE id=? AND evento_id=?');
+        foreach($ids as $rid){$q->execute([$estado,$nota!==null?1:0,$nota!==null&&$nota!==''?$nota:null,mb_substr((string)$user['nombre'],0,180),$rid,$id]);$n+=$q->rowCount();}
+        return $n===1?'Seguimiento guardado.':"Seguimiento actualizado en {$n} comentarios.";
+    } elseif($accion==='encuesta_ocultar') {
+        // Ocultar es reversible y sirve para todas las respuestas (las de Cengicursos no se borran: volverían al sincronizar).
+        $ocultar=!empty($d['ocultar'])?1:0;$n=0;
+        $q=$pdo->prepare('UPDATE evento_encuestas SET oculto=? WHERE id=? AND evento_id=?');
+        foreach(array_unique(array_map('intval',(array)($d['respuestas'] ?? []))) as $rid){$q->execute([$ocultar,$rid,$id]);$n+=$q->rowCount();}
+        return $ocultar?"{$n} comentario(s) ocultos: ya no cuentan en el promedio ni en el informe.":"{$n} comentario(s) restaurados.";
+    } elseif($accion==='encuesta_eliminar') {
+        // Solo las importadas por archivo; las de la encuesta de Cengicursos se ocultan.
+        $ids=array_unique(array_map('intval',(array)($d['respuestas'] ?? [])));$n=0;$sincronizadas=0;
+        $q=$pdo->prepare('DELETE FROM evento_encuestas WHERE id=? AND evento_id=? AND origen_id IS NULL');
+        foreach($ids as $rid){$q->execute([$rid,$id]);$q->rowCount()?$n++:$sincronizadas++;}
+        return "{$n} comentario(s) eliminados.".($sincronizadas?" {$sincronizadas} vienen de la encuesta de Cengicursos y no se pueden eliminar: ocúltalos.":'');
+    } elseif($accion==='encuesta_autoclasificar') {
+        $n=agenda_autoclasificar($pdo,$id);
+        return $n?"{$n} comentarios clasificados automáticamente. Revísalos y confírmalos.":'No había comentarios que se pudieran clasificar automáticamente.';
     } elseif(in_array($accion,['integrar','descartar'],true)) {
         if(!can_manage_resource($user,'contactos'))throw new RuntimeException('Necesitas permiso para gestionar contactos.');
         $cid=(string)($d['comite_id'] ?? '');if($cid!=='')catalogo_fila($pdo,$cid);
-        foreach(array_unique(array_map('intval',(array)($d['ids'] ?? []))) as $aid) {
+        // Cada fila revisada trae su acción y los datos corregidos en pantalla; "ids" es el formato anterior.
+        $filas=isset($d['filas'])?(array)$d['filas']:array_map(static fn($aid)=>['id'=>$aid,'accion'=>$accion==='descartar'?'descartar':'crear'],(array)($d['ids'] ?? []));
+        $hechos=['crear'=>0,'vincular'=>0,'descartar'=>0,'omitir'=>0];
+        foreach($filas as $f) {
+            $f=(array)$f;$aid=(int)($f['id'] ?? 0);$op=(string)($f['accion'] ?? '');if(!isset($hechos[$op]))continue;
             $q=$pdo->prepare("SELECT * FROM evento_asistentes WHERE id=? AND evento_id=? AND estado='nuevo'");$q->execute([$aid,$id]);$a=$q->fetch();if(!$a)continue;
-            if($accion==='descartar'){$pdo->prepare("UPDATE evento_asistentes SET estado='descartado' WHERE id=?")->execute([$aid]);continue;}
+            if($op==='descartar'){$pdo->prepare("UPDATE evento_asistentes SET estado='descartado' WHERE id=?")->execute([$aid]);$hechos[$op]++;continue;}
+            $editado=[];foreach(['nombre','email','telefono','cargo','empresa'] as $campo)$editado[$campo]=array_key_exists($campo,$f)?(string)$f[$campo]:(string)$a[$campo];
+            try{$v=directorio_validar($editado);}catch(RuntimeException $e){throw new RuntimeException($a['nombre'].': '.$e->getMessage());}
+            $pdo->prepare('UPDATE evento_asistentes SET nombre=?,email=?,telefono=?,cargo=?,empresa=? WHERE id=?')->execute([$v['nombre'],$v['email'],$v['telefono'],$v['cargo'],$v['empresa'],$aid]);
+            $a=array_merge($a,array_intersect_key($v,$editado));$hechos[$op]++;
+            if($op==='omitir')continue;
             $q=$pdo->prepare('SELECT id FROM contactos WHERE LOWER(TRIM(email))=? AND email<>? LIMIT 1');$q->execute([strtolower(trim((string)$a['email'])),'']);$contacto=$q->fetchColumn();
+            // Posible coincidencia confirmada en pantalla: se vincula al contacto existente en lugar de duplicarlo.
+            $vincular=$op==='vincular'?(int)($f['contacto_id'] ?? 0):(int)(((array)($d['vincular'] ?? []))[$aid] ?? 0);
+            if($vincular){$q=$pdo->prepare('SELECT id FROM contactos WHERE id=?');$q->execute([$vincular]);$contacto=$q->fetchColumn();if(!$contacto)throw new RuntimeException('El contacto elegido para vincular ya no existe.');}
+            if($contacto)agenda_completar_contacto($pdo,(int)$contacto,$a);
             if(!$contacto){$contacto=directorio_guardar($pdo,array_intersect_key($a,array_flip(['nombre','email','telefono','cargo','empresa']))+['comites'=>$cid?[$cid]:[]],(string)$user['nombre']);$pdo->prepare("UPDATE contactos SET origen_tipo='evento',origen_detalle=? WHERE id=?")->execute([mb_substr($r['nombre'].' · '.($r['fecha'] ?: $r['plan_mes']),0,255),$contacto]);}
             elseif($cid)$pdo->prepare('INSERT IGNORE INTO contacto_comite VALUES (?,?)')->execute([$contacto,$cid]);
             $pdo->prepare("UPDATE evento_asistentes SET contacto_id=?,estado='integrado' WHERE id=?")->execute([$contacto,$aid]);
         }
+        $partes=array_filter(["{$hechos['crear']} creados en el directorio","{$hechos['vincular']} vinculados a contactos existentes","{$hechos['descartar']} descartados","{$hechos['omitir']} guardados como pendientes"],static fn($t)=>$t[0]!=='0');
+        return $partes?ucfirst(implode(' · ',$partes)).'.':'No había asistentes por integrar.';
+    } elseif($accion==='completar_contacto') {
+        if(!can_manage_resource($user,'contactos'))throw new RuntimeException('Necesitas permiso para gestionar contactos.');
+        $completados=0;$sinVinculo=0;
+        foreach(array_unique(array_map('intval',(array)($d['asistentes'] ?? [$d['asistente'] ?? 0]))) as $aid) {
+            $q=$pdo->prepare('SELECT * FROM evento_asistentes WHERE id=? AND evento_id=?');$q->execute([$aid,$id]);$a=$q->fetch();if(!$a)continue;
+            $contacto=(int)$a['contacto_id'];
+            if(!$contacto && trim((string)$a['email'])!==''){$q=$pdo->prepare('SELECT id FROM contactos WHERE LOWER(TRIM(email))=? LIMIT 1');$q->execute([strtolower(trim((string)$a['email']))]);$contacto=(int)$q->fetchColumn();}
+            if(!$contacto){$sinVinculo++;continue;}
+            $completados+=agenda_completar_contacto($pdo,$contacto,$a)?1:0;
+            $pdo->prepare('UPDATE evento_asistentes SET contacto_id=? WHERE id=?')->execute([$contacto,(int)$a['id']]);
+        }
+        return ($completados?"{$completados} contacto(s) completado(s).":'Los contactos ya tenían esos datos.').($sinVinculo?" {$sinVinculo} sin contacto vinculado.":'');
     } elseif($accion==='encuesta_cargar') {
         $n=0;$invalidos=0;foreach(agenda_leer($files['lista'] ?? []) as $row) {
             $valor=$row['calificacion 1 a 5'] ?? $row['calificacion'] ?? $row['puntuacion'] ?? '';
             if(!preg_match('/^[1-5]$/',(string)$valor)){$invalidos++;continue;}
             $pdo->prepare('INSERT INTO evento_encuestas(evento_id,calificacion,comentario) VALUES (?,?,?)')->execute([$id,(int)$valor,trim((string)($row['comentario'] ?? ''))]);$n++;
-        }return "{$n} respuestas agregadas; {$invalidos} calificaciones inválidas omitidas.";
-    } elseif($accion==='encuesta_quitar')$pdo->prepare('DELETE FROM evento_encuestas WHERE evento_id=?')->execute([$id]);
+        }agenda_autoclasificar($pdo,$id);return "{$n} respuestas agregadas; {$invalidos} calificaciones inválidas omitidas.";
+    } elseif($accion==='encuesta_quitar')$pdo->prepare('DELETE FROM evento_encuestas WHERE evento_id=? AND origen_id IS NULL')->execute([$id]); // las de Cengicursos se conservan con su clasificación
     else throw new RuntimeException('Acción no válida.');
     return 'Cambios guardados.';
 }

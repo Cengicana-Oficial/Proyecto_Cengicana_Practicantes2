@@ -330,13 +330,19 @@ return [
             'can' => 'menu_general',
         ],
         [
+            'text' => 'Clima',
+            'route' => 'investigacion.clima.index',
+            'icon' => 'fas fa-fw fa-cloud-sun-rain',
+            'can' => 'menu_general',
+        ],
+        [
             'text' => 'Variables',
             'route' => 'investigacion.variables.index',
             'icon' => 'fas fa-fw fa-chart-line',
             'can' => 'menu_general',
         ],
         [
-            'text' => 'Evaluaciones',
+            'text' => 'Evaluaciones y Análisis',
             'route' => 'investigacion.evaluaciones.index',
             'icon' => 'fas fa-fw fa-clipboard-check',
             'can' => 'menu_general',
@@ -400,7 +406,7 @@ return [
 
         ['header' => 'Datos masivos & IA', 'can' => 'run_analysis'],
         [
-            'text' => 'Importar y Analizar',
+            'text' => 'Importación de datos',
             'route' => 'analisis.index',
             'icon' => 'fas fa-fw fa-file-arrow-up',
             'can' => 'run_analysis',

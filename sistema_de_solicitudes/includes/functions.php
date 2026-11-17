@@ -535,47 +535,141 @@ function fetch_module_users(PDO $menuPdo, PDO $pdo, array $user): array
     return $rows;
 }
 
-function render_table(array $rows, string $id, array $user, bool $management = false): void
+/**
+ * Lista de solicitudes con filtros (estado, tipo, prioridad), busqueda, orden por columna
+ * y marca de novedades sin leer. La comparten "Enviadas" y "Recibidas".
+ * $management = vista de quien recibe (muestra solicitante). $defaultFilter: estado inicial.
+ */
+function render_table(array $rows, string $id, array $user, bool $management = false, array $unreadIds = [], string $defaultFilter = 'todas'): void
 {
+    $abiertos = ['recibido', 'proceso'];
+    $conteo = ['todas' => count($rows), 'abiertas' => 0, 'vencidas' => 0, 'recibido' => 0, 'proceso' => 0, 'completado' => 0, 'rechazado' => 0];
+    $prioridadOrden = ['alta' => 3, 'media' => 2, 'baja' => 1];
+    $preparadas = [];
+    foreach ($rows as $row) {
+        $abierta = in_array($row['estado'], $abiertos, true);
+        $dias = $row['fecha_requerida'] ? dias_hasta((string) $row['fecha_requerida']) : null;
+        $vencida = $abierta && $dias !== null && $dias < 0;
+        $conteo[$row['estado']] = ($conteo[$row['estado']] ?? 0) + 1;
+        $conteo['abiertas'] += $abierta ? 1 : 0;
+        $conteo['vencidas'] += $vencida ? 1 : 0;
+        $preparadas[] = [$row, $abierta, $dias, $vencida];
+    }
+    $chips = [
+        'abiertas' => 'Abiertas', 'vencidas' => 'Vencidas', 'recibido' => 'Recibido', 'proceso' => 'En proceso',
+        'completado' => 'Completado', 'rechazado' => 'Rechazado', 'todas' => 'Todas',
+    ];
+    if (!isset($chips[$defaultFilter])) {
+        $defaultFilter = 'todas';
+    }
+    $tipos = ['compra' => 'Compra', 'ti' => 'Soporte TI', 'apoyo' => 'Apoyo'];
     ?>
-    <div class="table-card">
-        <div class="table-wrap">
-            <table id="<?= e($id) ?>">
-                <thead>
-                <tr>
-                    <th>Codigo</th>
-                    <?php if ($management): ?><th>Solicitante</th><?php endif; ?>
-                    <th>Tipo</th>
-                    <th>Origen</th>
-                    <th>Destino</th>
-                    <th>Titulo</th>
-                    <th>Fecha</th>
-                    <th>Estado</th>
-                    <th>Accion</th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php if (!$rows): ?>
-                    <tr><td colspan="<?= $management ? 9 : 8 ?>">No hay solicitudes para mostrar.</td></tr>
-                <?php endif; ?>
-                <?php foreach ($rows as $row): ?>
-                    <tr data-estado="<?= e($row['estado']) ?>">
-                        <td><strong><?= e($row['codigo']) ?></strong></td>
-                        <?php if ($management): ?><td><?= e($row['solicitante']) ?></td><?php endif; ?>
-                        <td><?= badge_tipo($row['tipo']) ?></td>
-                        <td><?= e($row['programa_origen']) ?></td>
-                        <td><?= e($row['programa_destino'] ?: 'No aplica') ?></td>
-                        <td><?= e($row['titulo']) ?></td>
-                        <td><?= e(date('d/m/Y', strtotime($row['creado_en']))) ?></td>
-                        <td><?= badge_estado($row['estado']) ?></td>
-                        <td><a class="btn-outline btn-sm" href="index.php?view=detalle&id=<?= (int) $row['id'] ?>">Ver detalle</a></td>
+    <div class="request-list" data-request-list="<?= e($id) ?>" data-default="<?= e($defaultFilter) ?>">
+        <div class="request-toolbar">
+            <div class="search-box"><i class="ti ti-search"></i><input class="form-control" type="search" data-list-search placeholder="Buscar por codigo, titulo, solicitante, programa..." aria-label="Buscar solicitud"></div>
+            <select class="form-control" data-list-tipo aria-label="Tipo">
+                <option value="">Todos los tipos</option>
+                <?php foreach ($tipos as $valor => $etiqueta): ?><option value="<?= $valor ?>"><?= $etiqueta ?></option><?php endforeach; ?>
+            </select>
+            <select class="form-control" data-list-prioridad aria-label="Prioridad">
+                <option value="">Toda prioridad</option>
+                <option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option>
+            </select>
+        </div>
+        <div class="filters request-chips" role="group" aria-label="Filtrar por estado">
+            <?php foreach ($chips as $clave => $etiqueta): ?>
+                <?php if ($clave === 'vencidas' && $conteo['vencidas'] === 0) continue; ?>
+                <button type="button" class="filter-chip<?= $clave === $defaultFilter ? ' active' : '' ?><?= $clave === 'vencidas' ? ' is-alert' : '' ?>" data-list-estado="<?= $clave ?>" aria-pressed="<?= $clave === $defaultFilter ? 'true' : 'false' ?>">
+                    <?= e($etiqueta) ?> <span class="chip-count"><?= (int) $conteo[$clave] ?></span>
+                </button>
+            <?php endforeach; ?>
+            <span class="request-count" data-list-count aria-live="polite"></span>
+        </div>
+        <div class="table-card">
+            <div class="table-wrap">
+                <table id="<?= e($id) ?>" class="request-table">
+                    <thead>
+                    <tr>
+                        <th><button type="button" data-sort="codigo">Codigo</button></th>
+                        <th><button type="button" data-sort="titulo">Solicitud</button></th>
+                        <th><button type="button" data-sort="prioridad">Prioridad</button></th>
+                        <th><button type="button" data-sort="requerida">Requerida</button></th>
+                        <th><button type="button" data-sort="estado">Estado</button></th>
+                        <th><button type="button" data-sort="actividad">Actividad</button></th>
+                        <th><span class="sr-only">Accion</span></th>
                     </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($preparadas as [$row, $abierta, $dias, $vencida]): ?>
+                        <?php
+                        $nuevo = isset($unreadIds[(int) $row['id']]);
+                        $actividad = (string) ($row['ultima_actividad'] ?: $row['creado_en']);
+                        $sinMovimiento = $abierta ? (int) floor((time() - strtotime($actividad)) / 86400) : 0;
+                        $busqueda = normalize_text(implode(' ', [$row['codigo'], $row['titulo'], $row['extracto'] ?? '', $row['solicitante'] ?? '', $row['programa_origen'], $row['programa_destino'] ?? '']));
+                        ?>
+                        <tr data-estado="<?= e($row['estado']) ?>" data-tipo="<?= e($row['tipo']) ?>" data-prioridad="<?= e($row['prioridad']) ?>"
+                            data-abierta="<?= $abierta ? '1' : '0' ?>" data-vencida="<?= $vencida ? '1' : '0' ?>" data-buscar="<?= e($busqueda) ?>"
+                            data-k-codigo="<?= e($row['codigo']) ?>" data-k-titulo="<?= e(normalize_text((string) $row['titulo'])) ?>"
+                            data-k-prioridad="<?= $prioridadOrden[$row['prioridad']] ?? 0 ?>" data-k-requerida="<?= e((string) ($row['fecha_requerida'] ?: '9999-12-31')) ?>"
+                            data-k-estado="<?= (int) array_search($row['estado'], ['recibido', 'proceso', 'completado', 'rechazado'], true) ?>" data-k-actividad="<?= e($actividad) ?>"
+                            class="<?= $nuevo ? 'is-unread' : '' ?><?= $vencida ? ' is-late' : '' ?>">
+                            <td data-label="Codigo">
+                                <a class="request-code" href="index.php?view=detalle&id=<?= (int) $row['id'] ?>"><?= $nuevo ? '<span class="unread-dot" title="Tiene novedades sin leer"></span>' : '' ?><?= e($row['codigo']) ?></a>
+                                <small><?= e(date('d/m/Y', strtotime((string) $row['creado_en']))) ?></small>
+                            </td>
+                            <td data-label="Solicitud" class="request-main">
+                                <strong><?= e($row['titulo']) ?></strong>
+                                <small>
+                                    <?= badge_tipo((string) $row['tipo']) ?>
+                                    <?php if ($management && !empty($row['solicitante'])): ?><span><i class="ti ti-user"></i><?= e($row['solicitante']) ?></span><?php endif; ?>
+                                    <span><i class="ti ti-arrows-right"></i><?= e($row['programa_origen']) ?> → <?= e($row['programa_destino'] ?: 'No aplica') ?></span>
+                                    <?php if ($row['monto_estimado'] !== null): ?><span><i class="ti ti-coin"></i>Q <?= e(number_format((float) $row['monto_estimado'], 2)) ?></span><?php endif; ?>
+                                </small>
+                            </td>
+                            <td data-label="Prioridad"><?= badge_prioridad((string) $row['prioridad']) ?></td>
+                            <td data-label="Requerida">
+                                <?php if ($row['fecha_requerida']): ?>
+                                    <?= e(date('d/m/Y', strtotime((string) $row['fecha_requerida']))) ?>
+                                    <?php if ($abierta && $dias !== null && $dias <= 3): ?>
+                                        <span class="due-chip <?= $dias < 0 ? 'is-late' : 'is-soon' ?>"><?= $dias < 0 ? 'Vencida ' . -$dias . ' d' : ($dias === 0 ? 'Hoy' : 'En ' . $dias . ' d') ?></span>
+                                    <?php endif; ?>
+                                <?php else: ?><span class="muted">—</span><?php endif; ?>
+                            </td>
+                            <td data-label="Estado"><?= badge_estado((string) $row['estado']) ?></td>
+                            <td data-label="Actividad">
+                                <?= e(date('d/m/Y', strtotime($actividad))) ?>
+                                <?php if ($sinMovimiento >= 7): ?><small class="stale" title="Sin seguimiento desde hace <?= $sinMovimiento ?> dias">Sin movimiento <?= $sinMovimiento ?> d</small><?php endif; ?>
+                            </td>
+                            <td class="request-action"><a class="btn-outline btn-sm" href="index.php?view=detalle&id=<?= (int) $row['id'] ?>" aria-label="Ver detalle de <?= e($row['codigo']) ?>">Ver detalle</a></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <div class="request-empty<?= $rows ? ' hidden' : '' ?>" data-list-empty>
+                <i class="ti ti-inbox-off"></i>
+                <strong><?= $rows ? 'Ninguna solicitud coincide con los filtros.' : 'No hay solicitudes para mostrar.' ?></strong>
+                <?php if ($rows): ?><button type="button" class="btn-outline btn-sm" data-list-reset>Limpiar filtros</button><?php endif; ?>
+            </div>
         </div>
     </div>
     <?php
+}
+
+/** Ids de solicitudes con notificaciones sin leer del usuario: [id => true]. */
+function unread_request_ids(PDO $pdo, array $user): array
+{
+    [$where, $params] = notification_scope_sql($user);
+    $stmt = $pdo->prepare(
+        "SELECT DISTINCT sg.solicitud_id
+         FROM seguimientos sg
+         INNER JOIN solicitudes s ON s.id = sg.solicitud_id
+         WHERE {$where}
+           AND NOT EXISTS (SELECT 1 FROM notificaciones_leidas nl WHERE nl.usuario_id = ? AND nl.seguimiento_id = sg.id)"
+    );
+    $stmt->execute(array_merge($params, [(int) $user['id']]));
+
+    return array_fill_keys(array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN)), true);
 }
 
 /*
@@ -791,6 +885,75 @@ function guardar_adjuntos(PDO $pdo, int $requestId, string $prefijo, array $adju
     }
 }
 
+/** Bytes de una directiva de php.ini como "25M". */
+function ini_bytes(string $directiva): int
+{
+    $valor = trim((string) ini_get($directiva));
+    $numero = (int) $valor;
+
+    return match (strtolower(substr($valor, -1))) {
+        'g' => $numero * 1073741824,
+        'm' => $numero * 1048576,
+        'k' => $numero * 1024,
+        default => $numero,
+    };
+}
+
+/**
+ * Zona para adjuntar archivos (arrastrar y soltar o seleccionar). Es un <input type="file">
+ * real: sin JavaScript funciona como el selector normal; app.js agrega la lista de archivos,
+ * quitar uno a uno, vista previa de imagenes y validacion de tamano por archivo y total.
+ */
+function render_dropzone(string $id, string $name, string $hint = ''): void
+{
+    $extensiones = array_keys(ADJUNTOS_TIPOS);
+    // Margen de 512 KB para el resto del formulario dentro de post_max_size.
+    $maxTotal = max(ADJUNTOS_MAX_BYTES, ini_bytes('post_max_size') - 524288);
+    $maxArchivos = max(1, (int) ini_get('max_file_uploads') ?: 20);
+    ?>
+    <div class="dropzone" data-dropzone data-max-bytes="<?= ADJUNTOS_MAX_BYTES ?>" data-max-total="<?= $maxTotal ?>" data-max-files="<?= $maxArchivos ?>" data-ext="<?= e(implode(',', $extensiones)) ?>">
+        <input class="dropzone-input" type="file" id="<?= e($id) ?>" name="<?= e($name) ?>[]" multiple accept=".<?= e(implode(',.', $extensiones)) ?>">
+        <label class="dropzone-area" for="<?= e($id) ?>">
+            <span class="dropzone-icon"><i class="ti ti-cloud-upload"></i></span>
+            <span class="dropzone-text"><strong>Arrastra archivos aqui</strong> o <span class="dropzone-link">selecciona desde tu equipo</span></span>
+            <small><?= e($hint !== '' ? $hint : 'PDF, Word, Excel, JPG o PNG · hasta ' . round(ADJUNTOS_MAX_BYTES / 1048576) . ' MB por archivo y ' . floor($maxTotal / 1048576) . ' MB en total') ?></small>
+        </label>
+        <ul class="dropzone-files" data-dropzone-files aria-live="polite"></ul>
+        <p class="dropzone-error hidden" data-dropzone-error role="alert"></p>
+    </div>
+    <?php
+}
+
+/** Enlace protegido a un adjunto (adjunto.php valida que el usuario pueda ver la solicitud). */
+function adjunto_link(array $adjunto): string
+{
+    $extension = strtolower(pathinfo((string) $adjunto['nombre_original'], PATHINFO_EXTENSION));
+    $icono = match ($extension) {
+        'pdf' => 'ti-file-type-pdf',
+        'jpg', 'jpeg', 'png' => 'ti-photo',
+        'doc', 'docx' => 'ti-file-type-doc',
+        'xls', 'xlsx' => 'ti-file-spreadsheet',
+        default => 'ti-paperclip',
+    };
+    $bytes = (int) ($adjunto['tamano_bytes'] ?? 0);
+    $tamano = $bytes >= 1048576 ? number_format($bytes / 1048576, 1) . ' MB' : max(1, (int) round($bytes / 1024)) . ' KB';
+
+    return '<a class="attachment-chip" href="adjunto.php?id=' . (int) $adjunto['id'] . '" target="_blank" rel="noopener" title="'
+        . e((string) $adjunto['nombre_original']) . '"><i class="ti ' . $icono . '"></i><span>' . e((string) $adjunto['nombre_original'])
+        . '</span>' . ($bytes > 0 ? '<small>' . e($tamano) . '</small>' : '') . '</a>';
+}
+
+/** Dias que faltan (negativo = vencida) para una fecha Y-m-d, contando desde hoy. */
+function dias_hasta(string $fecha): ?int
+{
+    $objetivo = DateTimeImmutable::createFromFormat('!Y-m-d', $fecha);
+    if (!$objetivo) {
+        return null;
+    }
+
+    return (int) (new DateTimeImmutable('today'))->diff($objetivo)->format('%r%a');
+}
+
 /*
  * Buzon de ideas
  * --------------
@@ -806,15 +969,95 @@ const BUZON_AREAS = [
     'Comunicación y trabajo en equipo',
     'Otra',
 ];
-const BUZON_ESTADOS = ['nueva' => 'Nueva', 'revisada' => 'Revisada', 'archivada' => 'Archivada'];
+const BUZON_ESTADOS = [
+    'nueva' => 'Nueva',
+    'en_analisis' => 'En análisis',
+    'aprobada' => 'Aprobada',
+    'rechazada' => 'Rechazada',
+    'archivada' => 'Archivada',
+];
+
+/**
+ * Ficha de revision de la idea (tabla idea_revisiones): campos de texto libre.
+ * Clave => [titulo, ayuda, icono]. El costo y "requiere analisis" se manejan aparte.
+ */
+const IDEA_REVISION_CAMPOS = [
+    'recursos' => ['Recursos necesarios', 'Personas, equipo, materiales, tiempo o servicios que se necesitan.', 'ti-tools'],
+    'implicaciones_legales' => ['Implicaciones legales', 'Leyes, contratos, permisos o licencias que se deben cumplir.', 'ti-scale'],
+    'implicaciones_reglamentarias' => ['Implicaciones reglamentarias', 'Normas, certificaciones, politicas de seguridad, ambientales o de calidad.', 'ti-clipboard-check'],
+    'implicaciones_organizacionales' => ['Implicaciones organizacionales', 'Areas o procesos afectados, cambios de funciones, capacitacion, comunicacion.', 'ti-building'],
+    'riesgos' => ['Riesgos', 'Que puede salir mal y como se mitigaria.', 'ti-alert-triangle'],
+    'oportunidades' => ['Oportunidades', 'Beneficios adicionales, ahorros o mejoras que abre la idea.', 'ti-trending-up'],
+    'requisitos' => ['Requisitos a cumplir', 'Condiciones que deben cumplirse antes o durante la implementacion.', 'ti-list-check'],
+];
+
+/**
+ * Ponderacion de la idea: cada criterio se califica de 1 a 5 y pesa un % del puntaje
+ * final (0-100). Costo y riesgo van invertidos: 5 = costo/riesgo muy bajo.
+ * Clave => [titulo, pregunta, peso %, etiquetas de 1 a 5]. Columna: pond_<clave>.
+ */
+const IDEA_CRITERIOS = [
+    'impacto' => ['Impacto y beneficio', '¿Cuanto mejora el proceso, la seguridad, la calidad o la productividad?', 30, ['Muy bajo', 'Bajo', 'Medio', 'Alto', 'Muy alto']],
+    'viabilidad' => ['Viabilidad', '¿Que tan facil es implementarla con la capacidad y los recursos actuales?', 20, ['Muy dificil', 'Dificil', 'Posible', 'Facil', 'Muy facil']],
+    'costo' => ['Costo', 'Mientras menor sea el costo, mayor puntaje.', 20, ['Muy alto', 'Alto', 'Medio', 'Bajo', 'Muy bajo']],
+    'riesgo' => ['Riesgo', 'Mientras menor sea el riesgo, mayor puntaje.', 15, ['Muy alto', 'Alto', 'Medio', 'Bajo', 'Muy bajo']],
+    'alineacion' => ['Alineacion institucional', '¿Apoya los objetivos y prioridades de CENGICAÑA?', 15, ['Ninguna', 'Baja', 'Media', 'Alta', 'Total']],
+];
+/** Puntaje minimo para recomendar la implementacion, y para "con reservas". */
+const IDEA_PUNTAJE_RECOMENDADA = 70;
+const IDEA_PUNTAJE_RESERVAS = 50;
+const IDEA_TEXTO_MAX = 4000;
 const BUZON_FOTO_TIPOS = ['image/jpeg' => 'jpg', 'image/png' => 'png'];
 const BUZON_FOTO_MAX_BYTES = 5 * 1024 * 1024;
 /** Segundos minimos entre dos envios desde la misma sesion (freno basico contra spam). */
 const BUZON_ESPERA_SEGUNDOS = 30;
+/** Limites persistentes del buzon publico (no dependen de la cookie de sesion). */
+const BUZON_MAX_POR_IP_HORA = 5;
+const BUZON_MAX_ACUSES_POR_CORREO_DIA = 3;
+
+/** IP del cliente tal como la ve el servidor (no se confia en cabeceras reenviadas). */
+function buzon_ip_cliente(): string
+{
+    return substr((string) ($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
+}
+
+/** Lanza RuntimeException si la IP o el correo superaron el limite del buzon. */
+function buzon_verificar_limite(PDO $pdo, string $ip, string $correo): void
+{
+    $porIp = $pdo->prepare('SELECT COUNT(*) FROM buzon_envios WHERE ip = ? AND creado_en > (NOW() - INTERVAL 1 HOUR)');
+    $porIp->execute([$ip]);
+    if ((int) $porIp->fetchColumn() >= BUZON_MAX_POR_IP_HORA) {
+        throw new RuntimeException('Recibimos varias ideas desde tu conexion en poco tiempo. Intenta de nuevo mas tarde.');
+    }
+    if ($correo !== '') {
+        $porCorreo = $pdo->prepare('SELECT COUNT(*) FROM buzon_envios WHERE correo = ? AND creado_en > (NOW() - INTERVAL 1 DAY)');
+        $porCorreo->execute([$correo]);
+        if ((int) $porCorreo->fetchColumn() >= BUZON_MAX_ACUSES_POR_CORREO_DIA) {
+            throw new RuntimeException('Ese correo ya recibio varios acuses hoy. Intenta de nuevo manana o envia la idea sin correo.');
+        }
+    }
+}
+
+function buzon_registrar_envio(PDO $pdo, string $ip, string $correo): void
+{
+    $pdo->prepare('INSERT INTO buzon_envios (ip, correo) VALUES (?, ?)')->execute([$ip, $correo !== '' ? $correo : null]);
+    // Depuracion de registros viejos; un fallo aqui no debe afectar el envio.
+    try {
+        $pdo->exec('DELETE FROM buzon_envios WHERE creado_en < (NOW() - INTERVAL 2 DAY)');
+    } catch (Throwable $e) {
+        error_log('[buzon] depuracion de envios: ' . $e->getMessage());
+    }
+}
 
 function can_view_ideas(array $user): bool
 {
-    return has_permission($user, 'solicitudes_internas.buzon.ver') || has_permission($user, 'solicitudes_internas.buzon.gestionar');
+    return can_approve_ideas($user) || has_permission($user, 'solicitudes_internas.buzon.ver') || has_permission($user, 'solicitudes_internas.buzon.gestionar');
+}
+
+/** Direccion general decide; superadmin conserva acceso administrativo. */
+function can_approve_ideas(array $user): bool
+{
+    return in_array(module_role($user), ['director', 'superadmin'], true);
 }
 
 function can_manage_ideas(array $user): bool
@@ -824,9 +1067,150 @@ function can_manage_ideas(array $user): bool
 
 function badge_idea_estado(string $estado): string
 {
-    $clases = ['nueva' => 'recibido', 'revisada' => 'completado', 'archivada' => 'rechazado'];
+    $clases = [
+        'nueva' => 'recibido',
+        'en_analisis' => 'proceso',
+        'aprobada' => 'completado',
+        'rechazada' => 'rechazado',
+        'archivada' => 'programa',
+    ];
 
     return '<span class="badge badge-' . e($clases[$estado] ?? 'recibido') . '">' . e(BUZON_ESTADOS[$estado] ?? $estado) . '</span>';
+}
+
+/**
+ * Puede llenar la ficha de revision: quien gestiona el buzon o un responsable
+ * asignado a la idea. Aprobar/rechazar sigue siendo solo de can_manage_ideas().
+ */
+function can_edit_idea_review(array $user, array $responsableIds): bool
+{
+    return can_manage_ideas($user) || (can_view_ideas($user) && in_array((int) $user['id'], $responsableIds, true));
+}
+
+/** @return int[] */
+function idea_responsable_ids(PDO $pdo, int $ideaId): array
+{
+    $stmt = $pdo->prepare('SELECT usuario_id FROM idea_responsables WHERE idea_id = ?');
+    $stmt->execute([$ideaId]);
+
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/** Avance de la ficha: [puntos llenos, total] (campos de texto + costo + responsables). */
+function idea_revision_avance(?array $revision, bool $tieneResponsables = false): array
+{
+    $total = count(IDEA_REVISION_CAMPOS) + 2;
+    $llenos = $tieneResponsables ? 1 : 0;
+    if (!$revision) {
+        return [$llenos, $total];
+    }
+
+    foreach (array_keys(IDEA_REVISION_CAMPOS) as $campo) {
+        if (trim((string) ($revision[$campo] ?? '')) !== '') {
+            $llenos++;
+        }
+    }
+    if ($revision['costo_estimado'] !== null || trim((string) ($revision['costo_detalle'] ?? '')) !== '') {
+        $llenos++;
+    }
+
+    return [$llenos, $total];
+}
+
+/** Texto de un campo de la revision: recortado, con limite y null si viene vacio. */
+function idea_texto_post(string $campo): ?string
+{
+    $valor = trim(str_replace("\r\n", "\n", (string) ($_POST[$campo] ?? '')));
+    if ($valor === '') {
+        return null;
+    }
+    if (mb_strlen($valor, 'UTF-8') > IDEA_TEXTO_MAX) {
+        throw new RuntimeException('Un campo supera los ' . IDEA_TEXTO_MAX . ' caracteres permitidos.');
+    }
+
+    return $valor;
+}
+
+/** Monto en quetzales: acepta "1,500.50"; vacio = null. */
+function idea_costo_post(string $campo): ?string
+{
+    $valor = str_replace([',', ' ', 'Q'], '', trim((string) ($_POST[$campo] ?? '')));
+    if ($valor === '') {
+        return null;
+    }
+    if (!preg_match('/^\d{1,10}(\.\d{1,2})?$/', $valor)) {
+        throw new RuntimeException('El costo estimado debe ser un monto valido (ej. 1500.00).');
+    }
+
+    return $valor;
+}
+
+/** Bitacora de la idea (tabla idea_aportes, tipo 'sistema'). usuario_id 0 = formulario publico. */
+function registrar_historial_idea(PDO $pdo, int $ideaId, int $userId, string $texto): void
+{
+    $pdo->prepare("INSERT INTO idea_aportes (idea_id, usuario_id, tipo, texto) VALUES (?, ?, 'sistema', ?)")
+        ->execute([$ideaId, $userId, $texto]);
+}
+
+/** Calificaciones de la ponderacion [criterio => 1..5|null] tomadas de idea_revisiones. */
+function idea_ponderacion_notas(?array $revision): array
+{
+    $notas = [];
+    foreach (array_keys(IDEA_CRITERIOS) as $criterio) {
+        $valor = $revision['pond_' . $criterio] ?? null;
+        $notas[$criterio] = $valor !== null ? (int) $valor : null;
+    }
+
+    return $notas;
+}
+
+/** Puntaje 0-100 de la ponderacion, o null si falta calificar algun criterio. */
+function idea_puntaje(array $notas): ?float
+{
+    $suma = 0.0;
+    foreach (IDEA_CRITERIOS as $criterio => [, , $peso]) {
+        if (($notas[$criterio] ?? null) === null) {
+            return null;
+        }
+        $suma += $notas[$criterio] / 5 * $peso;
+    }
+
+    return round($suma, 1);
+}
+
+/** [clave css, etiqueta] de la recomendacion segun el puntaje. */
+function idea_recomendacion(?float $puntaje): array
+{
+    if ($puntaje === null) {
+        return ['pendiente', 'Sin ponderar'];
+    }
+    if ($puntaje >= IDEA_PUNTAJE_RECOMENDADA) {
+        return ['alta', 'Recomendada para implementacion'];
+    }
+    if ($puntaje >= IDEA_PUNTAJE_RESERVAS) {
+        return ['media', 'Con reservas'];
+    }
+
+    return ['baja', 'No recomendada'];
+}
+
+function badge_idea_puntaje(?float $puntaje): string
+{
+    [$clave, $etiqueta] = idea_recomendacion($puntaje);
+    if ($puntaje === null) {
+        return '<span class="idea-score is-pendiente">' . e($etiqueta) . '</span>';
+    }
+
+    return '<span class="idea-score is-' . e($clave) . '" title="' . e($etiqueta) . '"><strong>'
+        . e(rtrim(rtrim(number_format($puntaje, 1), '0'), '.')) . '</strong>/100 · ' . e($etiqueta) . '</span>';
+}
+
+/** ¿Se puede avisar por correo a quien envio la idea? Devuelve el correo o ''. */
+function idea_correo_remitente(array $idea): string
+{
+    $correo = trim((string) ($idea['correo'] ?? ''));
+
+    return (int) ($idea['anonimo'] ?? 0) !== 1 && filter_var($correo, FILTER_VALIDATE_EMAIL) ? $correo : '';
 }
 
 /** Texto de un textarea con saltos de linea normalizados (el navegador cuenta \r\n como 1). */
@@ -905,4 +1289,69 @@ function guardar_foto_idea(?array $file): ?array
     }
 
     return ['ruta' => 'uploads/ideas/' . $nombre, 'mime' => $mime];
+}
+
+/**
+ * Revision con los valores enviados en el formulario de analisis (sin validar),
+ * para volver a mostrarlos cuando el guardado falla y no perder lo escrito.
+ */
+function idea_revision_desde_post(?array $revision): array
+{
+    $revision = $revision ?? [];
+    $texto = static fn(string $campo): string => mb_substr(trim(str_replace("\r\n", "\n", (string) ($_POST[$campo] ?? ''))), 0, IDEA_TEXTO_MAX, 'UTF-8');
+    foreach (array_merge(array_keys(IDEA_REVISION_CAMPOS), ['costo_detalle', 'analisis_detalle']) as $campo) {
+        $revision[$campo] = $texto($campo);
+    }
+    $revision['requiere_analisis'] = !empty($_POST['requiere_analisis']) ? 1 : 0;
+    $revision['costo_estimado'] = $texto('costo_estimado') !== '' ? $texto('costo_estimado') : null;
+    if (isset($_POST['costo_items_enviados'])) {
+        $items = [];
+        foreach (array_slice((array) ($_POST['costo_items'] ?? []), 0, 100) as $fila) {
+            if (!is_array($fila)) {
+                continue;
+            }
+            $item = [];
+            foreach (['categoria', 'descripcion', 'cantidad', 'unidad', 'precio'] as $campo) {
+                $item[$campo] = is_scalar($fila[$campo] ?? null) ? mb_substr(trim((string) $fila[$campo]), 0, 250, 'UTF-8') : '';
+            }
+            $item['subtotal'] = number_format((float) $item['cantidad'] * (float) $item['precio'], 2, '.', '');
+            $items[] = $item;
+        }
+        $revision['costo_items'] = $items ? json_encode($items, JSON_UNESCAPED_UNICODE) : null;
+    }
+
+    return $revision;
+}
+
+/** Categorias generales para el presupuesto de implementacion. */
+const IDEA_COSTO_CATEGORIAS = ['Materiales e insumos', 'Equipos', 'Mano de obra', 'Servicios', 'Transporte', 'Capacitacion', 'Otros'];
+
+function idea_costos_post(): array
+{
+    if (!isset($_POST['costo_items_enviados'])) {
+        return ['items' => null, 'total' => idea_costo_post('costo_estimado')];
+    }
+    $filas = $_POST['costo_items'] ?? [];
+    if (!is_array($filas) || count($filas) > 100) throw new RuntimeException('El desglose admite hasta 100 items.');
+    $items = [];
+    $total = 0;
+    foreach ($filas as $fila) {
+        if (!is_array($fila)) throw new RuntimeException('Item de costo invalido.');
+        foreach (['categoria', 'descripcion', 'cantidad', 'unidad', 'precio'] as $campo) {
+            if (!isset($fila[$campo]) || !is_scalar($fila[$campo])) throw new RuntimeException('Item de costo incompleto.');
+            $fila[$campo] = trim((string) $fila[$campo]);
+        }
+        if (!in_array($fila['categoria'], IDEA_COSTO_CATEGORIAS, true) || $fila['descripcion'] === '' || mb_strlen($fila['descripcion']) > 250 || mb_strlen($fila['unidad']) > 40
+            || !preg_match('/^\d{1,7}(\.\d{1,2})?$/', $fila['cantidad']) || (float) $fila['cantidad'] <= 0
+            || !preg_match('/^\d{1,10}(\.\d{1,2})?$/', $fila['precio'])) {
+            throw new RuntimeException('Revise los items: descripcion, cantidad positiva y costo unitario con hasta dos decimales.');
+        }
+        $subtotal = (int) round((float) $fila['cantidad'] * (float) $fila['precio'] * 100);
+        $total += $subtotal;
+        if ($total > 999999999999) throw new RuntimeException('El costo total excede el monto permitido.');
+        $items[] = ['categoria' => $fila['categoria'], 'descripcion' => $fila['descripcion'], 'cantidad' => $fila['cantidad'], 'unidad' => $fila['unidad'],
+            'precio' => number_format((float) $fila['precio'], 2, '.', ''), 'subtotal' => number_format($subtotal / 100, 2, '.', '')];
+    }
+    return ['items' => $items ? json_encode($items, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) : null,
+        'total' => $items ? number_format($total / 100, 2, '.', '') : idea_costo_post('costo_estimado')];
 }

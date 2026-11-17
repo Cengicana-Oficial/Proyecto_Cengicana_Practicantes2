@@ -12,15 +12,10 @@ $mensaje = '';
 $mensajeTipo = 'success';
 $avisos = [];
 
+/** Código de la carga de PDF: mismo formato que el diseñador (CEN-CU|EV-año-0001-XXXX, ver diplomas_helpers.php). */
 function cengi_dip_codigo(PDO $db, $prefijo)
 {
-    do {
-        $codigo = $prefijo . '-' . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $stmt = $db->prepare("SELECT COUNT(*) FROM diplomas WHERE codigo_unico = ?");
-        $stmt->execute([$codigo]);
-    } while ((int) $stmt->fetchColumn() > 0);
-
-    return $codigo;
+    return cengi_dip_codigo_nuevo($db, $prefijo === 'CEN-EVT');
 }
 
 function cengi_dip_html($valor)

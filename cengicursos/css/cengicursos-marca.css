@@ -1,0 +1,107 @@
+/* =============================================================
+   Identidad CengiCursos (familia Cengitech).
+   Lo carga menu_render() en menu.php, después de proyecto.css y
+   cengi-tema.css: solo sobrescribe, no reemplaza estilos.
+   ============================================================= */
+
+/* ---------- Barra lateral oscura ---------- */
+.cengi-sidebar {
+    border-right: 0;
+    color: #fff;
+    background-color: #04330f;
+    background-image:
+        linear-gradient(180deg, rgba(4,51,15,1) 0%, rgba(10,74,28,.97) 55%, rgba(13,90,34,.86) 100%),
+        url('../img/campo-cana.jpg');
+    background-size: cover, cover;
+    background-position: center, center bottom;
+    box-shadow: none;
+    scrollbar-color: rgba(188,243,46,.35) transparent;
+}
+.cengi-brand {
+    position: relative; justify-content: flex-start; gap: 12px;
+    padding: 18px 16px; background: transparent; border-bottom: 0;
+}
+.cengi-brand::after {
+    content: ""; position: absolute; left: 16px; right: 16px; bottom: 0; height: 3px; border-radius: 3px;
+    background: linear-gradient(90deg, #73BC25, #A3D300, #FFCC00, #FF6B00);
+}
+.cengi-brand:hover, .cengi-brand:focus { background: rgba(255,255,255,.05); }
+.cengi-brand .cgc-logo { width: 56px; height: auto; flex: none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+.cengi-brand:hover .cgc-logo { transform: rotate(-6deg) scale(1.06); }
+.cengi-brand .cgc-copy { display: flex; flex-direction: column; line-height: 1; }
+.cengi-brand .cgc-copy strong { font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 24px; font-weight: 850; letter-spacing: -.055em; color: #fff; }
+.cengi-brand .cgc-copy strong b { color: #bcf32e; font-weight: 850; }
+.cengi-brand .cgc-copy small { margin-top: 6px; font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: rgba(255,255,255,.66); }
+
+.cengi-nav-label { color: rgba(220,255,152,.62); }
+.cengi-nav-item { color: rgba(255,255,255,.86); transition: background-color .18s, color .18s, transform .18s; }
+.cengi-nav-item .glyphicon { color: #dcfa51; opacity: 1; }
+.cengi-nav-item:hover, .cengi-nav-item:focus { background: rgba(255,255,255,.09); color: #fff; transform: translateX(2px); }
+.cengi-nav-item.is-active { background: rgba(188,243,46,.16); border-left-color: #bcf32e; color: #e6ff9e; }
+.cengi-nav-item.is-active .glyphicon { color: #e6ff9e; }
+.cengi-nav-dropdown > summary:hover, .cengi-nav-subgroup > summary:hover { background: rgba(255,255,255,.08); }
+.cengi-nav-dropdown.is-current > summary { color: #e6ff9e; }
+.cengi-nav-dropdown.is-current > summary::before { background: #bcf32e; }
+.cengi-nav-subtitle { color: #dcff98; }
+.cengi-brand { margin: 0; border-radius: 0; box-shadow: none; }
+.cengi-nav-group + .cengi-nav-group { border-top-color: rgba(188,243,46,.14); }
+.cengi-nav-sep { background: rgba(188,243,46,.14); }
+.cengi-nav-item:hover .glyphicon { color: #fff; }
+.cengi-nav-item.is-active { box-shadow: none; font-weight: 700; }
+.cengi-sidebar-foot { border-top: 1px solid rgba(188,243,46,.2); background: rgba(0,0,0,.18); }
+.cengi-menu-link { color: rgba(255,255,255,.86); }
+.cengi-menu-link:hover, .cengi-menu-link:focus { background: rgba(255,255,255,.09); color: #fff; }
+.cengi-logout-link, .cengi-logout-link .glyphicon { color: #ffb4a6; }
+.cengi-logout-link:hover, .cengi-logout-link:focus { background: rgba(255,107,0,.16); color: #ffd2c9; }
+.cengi-sidebar-version { color: rgba(255,255,255,.55); }
+.cgc-comite { display: flex; align-items: center; gap: 10px; margin: 12px 10px 0; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,.94); }
+.cgc-comite img { height: 34px; width: auto; }
+.cgc-comite span { font-size: 10.5px; font-weight: 700; line-height: 1.25; color: #1f5632; }
+.cengi-sidebar :focus-visible { outline: 2px solid #bcf32e; outline-offset: 2px; }
+
+/* ---------- Banners de página (cengi_banner y .cengi-hero) y encabezado del dashboard ---------- */
+.cengi-banner,
+.cengi-canvas .cengi-hero,
+.dash-heading {
+    isolation: isolate;
+    border: 1px solid rgba(171,235,63,.4);
+    border-radius: 18px;
+    background:
+        linear-gradient(110deg, rgba(4,48,17,.95) 0%, rgba(8,70,26,.87) 55%, rgba(17,96,34,.72) 100%),
+        url('../img/campo-cana.jpg') center 60% / cover;
+    box-shadow: 0 16px 36px rgba(7,60,24,.18);
+    animation: cgc-entrar .55s cubic-bezier(.2,.8,.2,1) backwards;
+}
+.cengi-banner::before,
+.cengi-canvas .cengi-hero::before,
+.dash-heading::before { /* destello periódico */
+    content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; z-index: -1; pointer-events: none;
+    background: linear-gradient(100deg, transparent, rgba(188,243,46,.12), transparent); transform: skewX(-18deg);
+    animation: cgc-barrido 9s 1.2s ease-in-out infinite;
+}
+.cengi-banner h1,
+.cengi-canvas .cengi-hero h2 { font-family: Inter, "Segoe UI", Arial, sans-serif; font-weight: 850; letter-spacing: -.035em; }
+.cengi-banner-k { color: #e6ff9e; font-weight: 700; }
+
+/* Encabezados propios de cada página que usan la banda verde (--cg-banda): misma foto de fondo. */
+body.cg-tema .ing-hero, .ing-hero,
+body.cg-tema .sol-hero, .sol-hero,
+body.cg-tema .inst-hero, .inst-hero,
+.cg-tema .dir-hero, .dir-hero,
+.org-hero, .aula-hero, .dbi-hero, .ig-head, .ins-process-header {
+    background:
+        linear-gradient(110deg, rgba(4,48,17,.95) 0%, rgba(8,70,26,.87) 55%, rgba(17,96,34,.72) 100%),
+        url('../img/campo-cana.jpg') center 60% / cover;
+}
+
+@keyframes cgc-entrar { from { opacity: 0; transform: translateY(14px); } }
+@keyframes cgc-barrido { 0% { left: -40%; } 22%, 100% { left: 130%; } }
+
+@media print {
+    .cengi-banner, .cengi-canvas .cengi-hero, .dash-heading { background: #1f5632; box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cengi-banner, .cengi-canvas .cengi-hero, .dash-heading,
+    .cengi-banner::before, .cengi-canvas .cengi-hero::before, .dash-heading::before { animation: none !important; }
+    .cengi-nav-item, .cengi-brand .cgc-logo { transition: none !important; }
+}

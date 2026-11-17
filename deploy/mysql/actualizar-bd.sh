@@ -103,6 +103,7 @@ if [ "$LISTAR" = 1 ]; then
   echo "  (permisos)  <-  deploy/mysql/init/62-permisos-modulos.sh"
   for m in "${MODULOS_PHP[@]}"; do echo "  (php)       <-  deploy/mysql/migrar-esquema.php $m"; done
   echo "  sigec       <-  php artisan migrate"
+  echo "  sigec       <-  php artisan experimentos:asegurar-roles"
   exit 0
 fi
 
@@ -142,4 +143,7 @@ for m in "${MODULOS_PHP[@]}"; do
 done
 echo "[sigec] php artisan migrate"
 DB_USERNAME=modulos_migrador DB_PASSWORD="$MIGRADOR_PASS" en_sigec php artisan migrate --force || { echo "ERROR en las migraciones de SIGEC." >&2; exit 1; }
+# Roles de Experimentos en el portal (usuarios_menu). Antes se creaban en cada GET de Administracion > Usuarios (AUD-2026-003/M-5).
+echo "[sigec] php artisan experimentos:asegurar-roles"
+DB_USERNAME=modulos_migrador DB_PASSWORD="$MIGRADOR_PASS" en_sigec php artisan experimentos:asegurar-roles || { echo "ERROR al asegurar los roles de Experimentos en el portal." >&2; exit 1; }
 echo "Listo: $total archivos, permisos, esquema PHP y SIGEC aplicados."

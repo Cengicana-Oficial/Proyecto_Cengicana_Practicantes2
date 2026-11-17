@@ -4,9 +4,9 @@
  * ver docker-compose.prod.yml servicio "sigec"). SIGEC no puede leer la
  * sesion PHP nativa compartida por el resto del compendio (login/config/
  * session.php), asi que este script arma un token de corta duracion
- * firmado con HMAC-SHA256 y redirige a sigec/routes/web.php "/sso/entrar"
+ * firmado con HMAC-SHA256 y redirige a experimentos/routes/web.php "/sso/entrar"
  * (App\Http\Controllers\Auth\SsoController), que lo valida y abre una
- * sesion Laravel normal. Ver tambien sigec/config/sso.php.
+ * sesion Laravel normal. Ver tambien experimentos/config/sso.php.
  *
  * Formato del token: base64url(json_payload) . '.' . base64url(hmac_sha256(json_payload, secret)).
  * Ventana de expiracion corta (60s) es la unica proteccion contra replay —
@@ -69,6 +69,8 @@ $payload = [
     'correo' => $_SESSION['correo'],
     'nombre' => $_SESSION['usuario'],
     'rol_id' => (int) ($_SESSION['rol_id'] ?? 0),
+    // Nombre del rol en Experimentos: SIGEC lo traduce a su rol (config/sso.php roles_portal).
+    'rol' => (string) ($_SESSION['nombre_rol'] ?? ''),
     'es_superadmin' => $esSuperadmin,
     'ingenio_id' => $_SESSION['ingenio_id'] ?? null,
     'exp' => time() + 60,

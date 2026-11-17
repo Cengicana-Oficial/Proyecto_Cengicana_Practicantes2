@@ -91,32 +91,31 @@ foreach ($panelDocumentos['documentos'] as $documento) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reportes</title>
+    <title>Informes emitidos</title>
     <link rel="stylesheet" href="../styles/documentos_template.css?v=<?= filemtime(__DIR__ . '/../styles/documentos_template.css') ?>">
     <link rel="stylesheet" href="../css/lab_shell.css?v=20261006">
     <link rel="stylesheet" href="../css/lab_pager.css?v=<?= filemtime(__DIR__ . '/../css/lab_pager.css') ?>">
 </head>
 <body class="cengi-canvas">
-<?php lab_shell_open('documentos_view.php', 'Reportes', 'Informes de resultados por lote'); ?>
+<?php lab_shell_open('documentos_view.php', 'Informes emitidos', 'Informes firmados · PDF, Excel y envío al cliente'); ?>
     <div class="documents-page">
         <p class="documents-intro">
-            Informes de resultados aprobados y firmados, identificados por <strong>número de lote</strong>: véalos o descárguelos en PDF o Excel y envíelos por correo al cliente.
-            Los datos analíticos firmados <strong>no se editan aquí</strong>; cada corrección y cada envío quedan en el historial con usuario y fecha.
-            Las boletas de recepción se consultan en <a href="solicitud_formulario.php">Recepción</a>.
+            Informes de resultados ya <strong>aprobados y firmados</strong> en <a href="informes_view.php">Aprobación de informes</a>: descárguelos en PDF o Excel y envíelos al cliente.
+            Los resultados firmados <strong>no se editan aquí</strong>; cada nueva versión y cada envío quedan en el historial.
         </p>
 
         <section class="documents-kpi-grid" aria-label="Resumen de documentos">
             <article class="documents-kpi">
-                <span class="documents-kpi-label">Reportes generados</span>
+                <span class="documents-kpi-label">Informes emitidos</span>
                 <strong class="documents-kpi-value"><?= (int) $panelDocumentos['total'] ?></strong>
             </article>
             <article class="documents-kpi">
-                <span class="documents-kpi-label">Con nueva versión</span>
-                <strong class="documents-kpi-value is-warning"><?= (int) $panelDocumentos['corregidos'] ?></strong>
+                <span class="documents-kpi-label">Pendientes de enviar al cliente</span>
+                <strong class="documents-kpi-value is-warning"><?= (int) $panelDocumentos['pendientes_envio'] ?></strong>
             </article>
             <article class="documents-kpi">
-                <span class="documents-kpi-label">Lotes con informe</span>
-                <strong class="documents-kpi-value is-success"><?= (int) $panelDocumentos['lotes'] ?></strong>
+                <span class="documents-kpi-label">Con nueva versión</span>
+                <strong class="documents-kpi-value"><?= (int) $panelDocumentos['corregidos'] ?></strong>
             </article>
         </section>
 
@@ -131,9 +130,17 @@ foreach ($panelDocumentos['documentos'] as $documento) {
                         <?php endforeach; ?>
                     </select>
                 </label>
+                <label class="documents-filter">
+                    <span class="sr-only">Filtrar por envío al cliente</span>
+                    <select id="documentSendFilter">
+                        <option value="">Todos los envíos</option>
+                        <option value="pendiente">Pendientes de enviar</option>
+                        <option value="enviado">Enviados al cliente</option>
+                    </select>
+                </label>
                 <label class="documents-search">
                     <?= docs_svg('buscar') ?>
-                    <span class="sr-only">Buscar reportes</span>
+                    <span class="sr-only">Buscar informes</span>
                     <input type="search" id="documentSearch" placeholder="Buscar por número de lote o cliente…" autocomplete="off">
                 </label>
             </div>
@@ -141,15 +148,15 @@ foreach ($panelDocumentos['documentos'] as $documento) {
             <div class="documents-table-wrap">
                 <table class="documents-table">
                     <thead>
-                        <tr><th>Lote</th><th>Tipo de muestra</th><th>Cliente</th><th>Versión</th><th>Firmado por</th><th>Fecha</th><th>Acciones</th></tr>
+                        <tr><th>Lote</th><th>Tipo de muestra</th><th>Cliente</th><th>Firmado por</th><th>Fecha de firma</th><th>Envío al cliente</th><th>Acciones</th></tr>
                     </thead>
                     <tbody id="documentsTableBody">
                         <?php if (empty($panelDocumentos['documentos'])): ?>
                             <tr class="documents-empty-row"><td colspan="7">
                                 <?php if (!$panelDocumentos['tabla_disponible']): ?>
-                                    La tabla de documentos todavía no está disponible. Los reportes aparecerán aquí cuando se aplique la migración del flujo documental.
+                                    La tabla de documentos todavía no está disponible. Los informes aparecerán aquí cuando se aplique la migración del flujo documental.
                                 <?php else: ?>
-                                    Sin reportes todavía — se generan cuando el jefe de laboratorio aprueba y firma el informe de un lote en Informes.
+                                    Sin informes emitidos todavía: aparecen cuando el jefe de laboratorio aprueba y firma el informe de un lote en Aprobación de informes.
                                 <?php endif; ?>
                             </td></tr>
                         <?php else: ?>
@@ -168,19 +175,19 @@ foreach ($panelDocumentos['documentos'] as $documento) {
                                     docs_codigo($idDocumento),
                                 ]), 'UTF-8');
                                 ?>
-                                <tr class="document-row" data-type="<?= docs_e(mb_strtolower($tipoMuestra, 'UTF-8')) ?>" data-search="<?= docs_e($textoBusqueda) ?>">
+                                <tr class="document-row" data-envio="<?= !empty($documento['enviado_en']) ? 'enviado' : 'pendiente' ?>" data-type="<?= docs_e(mb_strtolower($tipoMuestra, 'UTF-8')) ?>" data-search="<?= docs_e($textoBusqueda) ?>">
                                     <td class="documents-lote">
                                         <strong><?= docs_e($codigoLote) ?></strong>
                                         <?php if ($version > 1): ?><span class="documents-version-badge">v<?= $version ?></span><?php endif; ?>
                                     </td>
                                     <td class="documents-small"><?= docs_e(docs_tipo_muestra($tipoMuestra)) ?></td>
                                     <td><?= docs_e($cliente) ?></td>
-                                    <td class="documents-mono">v<?= $version ?></td>
                                     <td class="documents-small"><?= docs_e($documento['generado_por'] ?: '—') ?></td>
                                     <td class="documents-muted"><?= docs_e(docs_fecha($documento['generado_en'] ?? null)) ?></td>
+                                    <td><?php if (!empty($documento['enviado_en'])): ?><span class="documents-envio is-sent" title="Último envío por correo o entrega registrada al cliente">Entregado <?=docs_e(docs_fecha($documento['enviado_en'])) ?></span><?php else: ?><span class="documents-envio is-pending"><?= $version > 1 ? 'Pendiente (nueva versión)' : 'Pendiente' ?></span><?php endif; ?></td>
                                     <td class="documents-actions">
                                         <details class="documents-menu">
-                                            <summary class="documents-button is-ghost" aria-label="Acciones del reporte del lote <?= docs_e($codigoLote) ?>">Acciones <span aria-hidden="true">▾</span></summary>
+                                            <summary class="documents-button is-ghost" aria-label="Acciones del informe del lote <?= docs_e($codigoLote) ?>">Acciones <span aria-hidden="true">▾</span></summary>
                                             <div class="documents-menu-list" role="menu">
                                                 <span class="documents-menu-title">Informe · Lote <?= docs_e($codigoLote) ?></span>
                                                 <button type="button" role="menuitem" data-view-document="<?= $idDocumento ?>"><?= docs_svg('ver') ?>Ver PDF</button>
@@ -189,6 +196,7 @@ foreach ($panelDocumentos['documentos'] as $documento) {
                                                     <a role="menuitem" href="../controllers/informe_excel.php?lote=<?= (int) $documento['id_lote'] ?>" title="Informe firmado en Excel (.xlsx), con los valores aprobados"><?= docs_svg('excel') ?>Descargar Excel</a>
                                                 <?php endif; ?>
                                                 <button type="button" role="menuitem" data-send-document="<?= $idDocumento ?>"><?= docs_svg('correo') ?>Enviar por correo</button>
+                                                <button type="button" role="menuitem" data-deliver-document="<?= $idDocumento ?>" title="Registrar que el informe se entregó en persona, por WhatsApp u otro medio"><?= docs_svg('historial') ?>Marcar como entregado</button>
                                                 <span class="documents-menu-title">Trazabilidad</span>
                                                 <?php if (!empty($documento['total_cambios'])): ?>
                                                     <button type="button" role="menuitem" data-view-history="<?= $idDocumento ?>"><?= docs_svg('historial') ?>Historial (<?= (int) $documento['total_cambios'] ?>)</button>
@@ -205,7 +213,7 @@ foreach ($panelDocumentos['documentos'] as $documento) {
                     </tbody>
                 </table>
             </div>
-            <nav class="lab-pager" id="documentsPager" aria-label="Páginas de reportes" hidden>
+            <nav class="lab-pager" id="documentsPager" aria-label="Páginas de informes" hidden>
                 <span data-pager-rango></span>
                 <div class="lab-pager-nav">
                     <button type="button" class="lab-pager-btn" data-pager-prev aria-label="Página anterior"><span aria-hidden="true">‹</span></button>
@@ -243,7 +251,7 @@ foreach ($panelDocumentos['documentos'] as $documento) {
     <div class="documents-modal" id="sendModal" hidden>
         <form class="documents-modal-dialog documents-send-dialog" id="sendForm" role="dialog" aria-modal="true" aria-labelledby="sendModalTitle" novalidate>
             <header class="documents-modal-head">
-                <h2 id="sendModalTitle">Enviar reporte por correo</h2>
+                <h2 id="sendModalTitle">Enviar informe por correo</h2>
                 <button type="button" class="documents-modal-close" data-close-modal aria-label="Cerrar"><?= docs_svg('cerrar') ?></button>
             </header>
             <div class="documents-send-body">
@@ -262,12 +270,45 @@ foreach ($panelDocumentos['documentos'] as $documento) {
         </form>
     </div>
 
+    <div class="documents-modal" id="deliverModal" hidden>
+        <form class="documents-modal-dialog documents-send-dialog" id="deliverForm" role="dialog" aria-modal="true" aria-labelledby="deliverModalTitle" novalidate>
+            <header class="documents-modal-head">
+                <h2 id="deliverModalTitle">Marcar informe como entregado</h2>
+                <button type="button" class="documents-modal-close" data-close-modal aria-label="Cerrar"><?= docs_svg('cerrar') ?></button>
+            </header>
+            <div class="documents-send-body">
+                <p class="documents-send-summary" id="deliverSummary"></p>
+                <label class="documents-send-field">
+                    <span>Medio de entrega</span>
+                    <select id="deliverMedio" required>
+                        <option value="">Seleccione…</option>
+                        <option>En persona (impreso)</option>
+                        <option>WhatsApp</option>
+                        <option>Correo electrónico personal</option>
+                        <option>Otro medio</option>
+                    </select>
+                </label>
+                <label class="documents-send-field">
+                    <span>Quién lo recibió / detalle</span>
+                    <input type="text" id="deliverDetalle" maxlength="300" placeholder="Ej. Recibido por Juan Pérez (Ingenio La Unión)" required>
+                    <small>Queda en el historial del informe con su usuario y la fecha. Use esta opción solo si el informe no se envió con "Enviar por correo".</small>
+                </label>
+                <p class="documents-send-status" id="deliverStatus" role="status" aria-live="polite"></p>
+            </div>
+            <footer class="documents-modal-foot">
+                <button type="button" class="documents-button is-ghost" data-close-modal>Cancelar</button>
+                <button type="submit" class="documents-button is-primary" id="deliverSubmit"><?= docs_svg('historial') ?> Registrar entrega</button>
+            </footer>
+        </form>
+    </div>
+
 <?php lab_shell_content_close(); ?>
 <script src="../js/lab_pager.js?v=<?= filemtime(__DIR__ . '/../js/lab_pager.js') ?>"></script>
 <script>
 (function () {
     var typeFilter = document.getElementById('documentTypeFilter');
     var search = document.getElementById('documentSearch');
+    var sendFilter = document.getElementById('documentSendFilter');
     var rows = Array.prototype.slice.call(document.querySelectorAll('.document-row'));
     var filteredEmpty = document.getElementById('documentsFilteredEmpty');
     var modal = document.getElementById('documentModal');
@@ -301,11 +342,13 @@ foreach ($panelDocumentos['documentos'] as $documento) {
     function filterRows() {
         var type = typeFilter ? typeFilter.value : '';
         var term = normalize(search ? search.value.trim() : '');
+        var envio = sendFilter ? sendFilter.value : '';
         var visibles = [];
         rows.forEach(function (row) {
             var matchesType = !type || row.dataset.type === type;
             var matchesSearch = !term || normalize(row.dataset.search).indexOf(term) !== -1;
-            row.hidden = !(matchesType && matchesSearch);
+            var matchesEnvio = !envio || row.dataset.envio === envio;
+            row.hidden = !(matchesType && matchesSearch && matchesEnvio);
             if (!row.hidden) visibles.push(row);
         });
         if (filteredEmpty) filteredEmpty.hidden = visibles.length !== 0;
@@ -378,8 +421,56 @@ foreach ($panelDocumentos['documentos'] as $documento) {
             frame.src = 'about:blank';
         }
         if (sendModal) sendModal.hidden = true;
+        if (deliverModal) deliverModal.hidden = true;
         document.body.classList.remove('documents-modal-open');
     }
+
+    // Entrega por otro medio (en persona, WhatsApp…): queda en el historial y cuenta como entregado.
+    var deliverModal = document.getElementById('deliverModal');
+    var deliverForm = document.getElementById('deliverForm');
+    var deliverMedio = document.getElementById('deliverMedio');
+    var deliverDetalle = document.getElementById('deliverDetalle');
+    var deliverStatus = document.getElementById('deliverStatus');
+    var deliverSubmit = document.getElementById('deliverSubmit');
+    var deliverId = null;
+    function setDeliverStatus(text, kind) {
+        deliverStatus.textContent = text;
+        deliverStatus.className = 'documents-send-status' + (kind ? ' is-' + kind : '');
+    }
+    function openDeliver(id) {
+        var doc = documents[id];
+        if (!doc || !deliverModal) return;
+        deliverId = id;
+        document.getElementById('deliverSummary').textContent = 'Informe del lote ' + doc.lote + (doc.tipo ? ' (' + doc.tipo + ')' : '') + ' · ' + doc.cliente + ' · v' + doc.version;
+        deliverMedio.value = '';
+        deliverDetalle.value = '';
+        setDeliverStatus('', '');
+        deliverSubmit.disabled = false;
+        deliverModal.hidden = false;
+        document.body.classList.add('documents-modal-open');
+        deliverMedio.focus();
+    }
+    if (deliverForm) deliverForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!deliverMedio.value) { setDeliverStatus('Seleccione el medio de entrega.', 'error'); deliverMedio.focus(); return; }
+        if (!deliverDetalle.value.trim()) { setDeliverStatus('Indique quién recibió el informe o el detalle de la entrega.', 'error'); deliverDetalle.focus(); return; }
+        deliverSubmit.disabled = true;
+        setDeliverStatus('Registrando…', '');
+        fetch('../controllers/marcar_entregado.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+            body: JSON.stringify({id_documento: Number(deliverId), medio: deliverMedio.value, detalle: deliverDetalle.value.trim(), csrf: csrf})
+        }).then(function (response) {
+            return response.json().catch(function () { return {ok: false, message: 'Respuesta no válida del servidor (' + response.status + ').'}; });
+        }).then(function (data) {
+            setDeliverStatus(data.message || (data.ok ? 'Entrega registrada.' : 'No se pudo registrar.'), data.ok ? 'ok' : 'error');
+            if (data.ok) setTimeout(function () { location.reload(); }, 900); // refleja "Entregado" en la tabla
+            else deliverSubmit.disabled = false;
+        }).catch(function () {
+            setDeliverStatus('No se pudo conectar con el servidor.', 'error');
+            deliverSubmit.disabled = false;
+        });
+    });
 
     function openSend(id) {
         var doc = documents[id];
@@ -443,6 +534,10 @@ foreach ($panelDocumentos['documentos'] as $documento) {
 
     if (typeFilter) typeFilter.addEventListener('change', filterRows);
     if (search) search.addEventListener('input', filterRows);
+    if (sendFilter) sendFilter.addEventListener('change', filterRows);
+    // ?buscar=<lote> (enlace desde Aprobación de informes) deja filtrado ese lote.
+    var buscarInicial = new URLSearchParams(location.search).get('buscar');
+    if (search && buscarInicial) search.value = buscarInicial;
     filterRows();
     document.addEventListener('click', function (event) {
         var viewButton = event.target.closest('[data-view-document]');
@@ -452,11 +547,13 @@ foreach ($panelDocumentos['documentos'] as $documento) {
         if (viewButton) openModal(viewButton.dataset.viewDocument, false);
         if (historyButton) openModal(historyButton.dataset.viewHistory, true);
         if (sendButton) openSend(sendButton.dataset.sendDocument);
-        if (event.target.closest('[data-close-modal]') || event.target === modal || event.target === sendModal) closeModal();
+        var deliverButton = event.target.closest('[data-deliver-document]');
+        if (deliverButton) openDeliver(deliverButton.dataset.deliverDocument);
+        if (event.target.closest('[data-close-modal]') || event.target === modal || event.target === sendModal || event.target === deliverModal) closeModal();
     });
     document.addEventListener('keydown', function (event) {
         if (event.key !== 'Escape') return;
-        if ((modal && !modal.hidden) || (sendModal && !sendModal.hidden)) closeModal();
+        if ((modal && !modal.hidden) || (sendModal && !sendModal.hidden) || (deliverModal && !deliverModal.hidden)) closeModal();
         else closeMenus(null);
     });
 })();

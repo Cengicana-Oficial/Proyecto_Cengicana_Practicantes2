@@ -1,0 +1,76 @@
+/* =============================================================
+   Identidad CengiInvestiga (Experimentos / SIGEC, familia Cengitech).
+   CSS plano (no pasa por Laravel Mix): lo carga layouts/app.blade.php
+   después de dist/css/app.css. Solo sobrescribe.
+   ============================================================= */
+
+/* ---------- Barra lateral oscura ---------- */
+.sigec-shell .cengi-sidebar {
+    border-right: 0;
+    color: #fff;
+    background-color: #04330f;
+    background-image:
+        linear-gradient(180deg, rgba(4,51,15,1) 0%, rgba(10,74,28,.97) 55%, rgba(13,90,34,.86) 100%),
+        url('../img/campo-cana.jpg');
+    background-size: cover, cover;
+    background-position: center, center bottom;
+    scrollbar-color: rgba(188,243,46,.35) transparent;
+}
+.sigec-shell .cengi-brand { gap: 12px; min-height: 0; padding: 18px 16px; background: transparent; }
+.sigec-shell .cengi-brand::after { left: 16px; right: 16px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, #73BC25, #A3D300, #FFCC00, #FF6B00); }
+.sigec-shell .cengi-brand:hover, .sigec-shell .cengi-brand:focus { background: rgba(255,255,255,.05); }
+.sigec-shell .cengi-brand .cgi-logo { width: 54px; height: auto; flex: none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+.sigec-shell .cengi-brand:hover .cgi-logo { transform: rotate(-6deg) scale(1.06); }
+.sigec-shell .cengi-brand-copy { line-height: 1; }
+.sigec-shell .cengi-brand-copy strong { font: 850 20px Inter, "Segoe UI", Arial, sans-serif; letter-spacing: -.055em; color: #fff; }
+.sigec-shell .cengi-brand-copy strong b { color: #bcf32e; font-weight: 850; }
+.sigec-shell .cengi-brand-copy small { margin-top: 6px; color: rgba(255,255,255,.66); }
+
+.sigec-shell .cengi-nav-group + .cengi-nav-group { border-top-color: rgba(188,243,46,.14); }
+.sigec-shell .cengi-nav-label { color: rgba(220,255,152,.62); }
+.sigec-shell .cengi-nav-item { color: rgba(255,255,255,.86); transition: background-color .18s, color .18s, transform .18s, border-color .18s; }
+.sigec-shell .cengi-nav-item i,
+.sigec-shell .cengi-nav-item svg { color: #dcfa51; }
+.sigec-shell .cengi-nav-item:hover,
+.sigec-shell .cengi-nav-item:focus { background: rgba(255,255,255,.09); color: #fff; transform: translateX(2px); }
+.sigec-shell .cengi-nav-item.is-active { border-left-color: #bcf32e; background: rgba(188,243,46,.16); color: #e6ff9e; }
+.sigec-shell .cengi-nav-item.is-active i { color: #e6ff9e; }
+.sigec-shell .cengi-sidebar-foot { border-top: 1px solid rgba(188,243,46,.2); background: rgba(0,0,0,.18); }
+.sigec-shell .cengi-menu-link { color: rgba(255,255,255,.86); }
+.sigec-shell .cengi-logout-link,
+.sigec-shell .cengi-logout-link i { color: #ffb4a6; }
+.sigec-shell .cengi-logout-link:hover,
+.sigec-shell .cengi-logout-link:focus { background: rgba(255,107,0,.16); color: #ffd2c9; }
+.sigec-shell .cengi-sidebar-version { color: rgba(255,255,255,.55); }
+.sigec-shell .cengi-sidebar :focus-visible { outline: 2px solid #bcf32e; outline-offset: 2px; }
+
+/* ---------- Dashboard: franja de resumen con foto ---------- */
+.sigec-shell .db .db-contexto {
+    position: relative; isolation: isolate; overflow: hidden;
+    align-items: center; gap: 10px; margin-bottom: 16px; padding: 22px 24px 22px;
+    border: 1px solid rgba(171,235,63,.45); border-radius: 20px;
+    background:
+        linear-gradient(110deg, rgba(4,48,17,.95) 0%, rgba(8,70,26,.87) 55%, rgba(17,96,34,.72) 100%),
+        url('../img/campo-cana.jpg') center 60% / cover;
+    box-shadow: 0 20px 44px rgba(7,60,24,.2);
+    animation: cgi-entrar .6s cubic-bezier(.2,.8,.2,1) backwards;
+}
+.sigec-shell .db .db-contexto::before { /* marca del módulo */
+    content: ""; flex: 0 0 100%; height: 50px; margin-bottom: 6px;
+    background: url('../img/logo-cengiinvestiga.svg') left center / auto 50px no-repeat;
+}
+.sigec-shell .db .db-contexto::after { /* destello periódico */
+    content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; z-index: -1; pointer-events: none;
+    background: linear-gradient(100deg, transparent, rgba(188,243,46,.12), transparent); transform: skewX(-18deg);
+    animation: cgi-barrido 9s 1.2s ease-in-out infinite;
+}
+.sigec-shell .db .db-contexto span { padding: 7px 14px; background: rgba(2,55,16,.55); border-color: rgba(171,235,63,.45); color: rgba(255,255,255,.82); backdrop-filter: blur(6px); }
+.sigec-shell .db .db-contexto i { color: #dcfa51; }
+.sigec-shell .db .db-contexto b { color: #fff; }
+
+@keyframes cgi-entrar { from { opacity: 0; transform: translateY(14px); } }
+@keyframes cgi-barrido { 0% { left: -40%; } 22%, 100% { left: 130%; } }
+@media (prefers-reduced-motion: reduce) {
+    .sigec-shell .db .db-contexto, .sigec-shell .db .db-contexto::after { animation: none !important; }
+    .sigec-shell .cengi-nav-item, .sigec-shell .cengi-brand .cgi-logo { transition: none !important; }
+}

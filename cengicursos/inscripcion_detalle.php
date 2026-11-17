@@ -6,14 +6,19 @@ require_once __DIR__ . '/cobranza_helpers.php';
 if (!cengi_puede_ver_solicitudes() && !cengi_ins_puede_ver_pagos()) { header('Location: ver_cursos.php'); exit; }
 $db = conectar();
 $id = (int) ($_GET['id'] ?? 0);
+// Sin id llega un filtro de Validaciones y pagos enviado desde esta ruta (enlaces o
+// favoritos antiguos): se reenvía a esa pantalla conservando los filtros.
+if ($id <= 0 && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+    $params = $_GET; unset($params['id']); $params['vista'] = 'pagos';
+    header('Location: inscripciones.php?' . http_build_query(array_filter($params, static function ($v) { return $v !== ''; }))); exit;
+}
 $s = cengi_ins_solicitud($db, $id);
 $limite = cengi_ins_ingenio_limitado();
 if (!$s || ($limite !== null && cengi_texto_normalizado($s['nombre_ingenios'] ?? '') !== cengi_texto_normalizado($limite))) {
     http_response_code(403); exit('Inscripción no disponible.');
 }
-if ($s['planificacion_id']) {
-    header('Location: pagos_inscripcion.php?plan=' . (int) $s['planificacion_id'] . '&anio=' . (int) $s['anio'] . '&q=' . rawurlencode($s['cui_participante'])); exit;
-}
+// Con o sin convocatoria se muestra la ficha. Con convocatoria, la asignación respeta el cupo y la
+// lista de espera (cengi_ins_procesar_plan), igual que en Validaciones y pagos.
 if (empty($_SESSION['ins_csrf'])) $_SESSION['ins_csrf'] = bin2hex(random_bytes(32));
 $mensaje = ''; $tipoMensaje = 'success';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -30,13 +35,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($accion === 'cuota') {
             if (!cengi_ins_puede_validar_pagos()) throw new InvalidArgumentException('No tienes permiso para configurar el cobro.');
             if (cengi_ins_estado_cobro($s) === 'pagado') throw new InvalidArgumentException('No se modifica una inscripción pagada.');
-            $monto = filter_var($_POST['monto'] ?? '', FILTER_VALIDATE_FLOAT);
             $paga = (string) ($_POST['tipo_pago'] ?? '');
+            // Tarifa (asociado / externo / extranjero) independiente de quién paga: p. ej. un colaborador
+            // de ingenio que paga por su cuenta conserva la cuota de asociado.
+            $tarifa = array_key_exists($_POST['cuota'] ?? '', CENGI_INS_CUOTAS) ? $_POST['cuota'] : ($s['cuota'] ?: 'asociado');
+            $moneda = $s['moneda'] ?: 'GTQ';
+            if (trim((string) ($_POST['monto'] ?? '')) === '' && $s['planificacion_id'] && $paga !== 'Exonerado') {
+                [$monto, $moneda] = cengi_ins_monto(cengi_pp_plan($db, $s['planificacion_id']), $tarifa);
+            } else {
+                $monto = filter_var($_POST['monto'] ?? '', FILTER_VALIDATE_FLOAT);
+                if ($tarifa !== $s['cuota']) $moneda = $tarifa === 'extranjero' ? 'USD' : 'GTQ';
+            }
             if ($monto === false || $monto < 0 || $monto > 99999999 || !in_array($paga,['Ingenio','Propio','Exonerado'],true)) throw new InvalidArgumentException('Revisa el monto y quién paga.');
             if ($paga === 'Exonerado' && $monto != 0) throw new InvalidArgumentException('La exoneración debe tener monto cero.');
             if ($paga !== 'Exonerado' && $monto <= 0) throw new InvalidArgumentException('Indica la cuota; utiliza exoneración si es sin costo.');
-            $db->prepare("UPDATE solicitudes_inscripcion SET tipo_pago=?, monto=?, moneda='GTQ', pago_estado=?, validacion_ingenio=?, validacion_ingenio_por='', validacion_ingenio_en=NULL, pago_verificado_por='', pago_verificado_en=NULL, pago_nota=? WHERE id_solicitud=?")
-                ->execute([$paga,$monto,$paga==='Exonerado'?'exonerado':'pendiente',$paga==='Ingenio'?'pendiente':null,$motivo,$id]);
+            if ($s['grupo_pago_id']) {
+                $q = $db->prepare('SELECT proforma_id FROM pagos_grupales WHERE id = ?'); $q->execute([(int) $s['grupo_pago_id']]);
+                if ($q->fetchColumn()) throw new InvalidArgumentException('La cuota de esta inscripción viene de su proforma: para cambiarla, anula la proforma y emite otra.');
+            }
+            if ($paga === $s['tipo_pago']) {
+                // Mismo responsable: solo cambia la cuota; la validación ya hecha se conserva.
+                $db->prepare("UPDATE solicitudes_inscripcion SET monto=?, moneda=?, cuota=?, pago_estado=IF(?='Exonerado','exonerado',pago_estado) WHERE id_solicitud=?")->execute([$monto,$moneda,$tarifa,$paga,$id]);
+            } else {
+                // Cambia quién paga: la validación anterior ya no aplica y se ubica en el grupo de pago que corresponda.
+                $grupo = $paga === 'Ingenio' && $s['planificacion_id'] && $s['ingenio_id'] ? cengi_ins_grupo_abierto($db, $s['planificacion_id'], $s['ingenio_id']) : null;
+                $db->prepare("UPDATE solicitudes_inscripcion SET tipo_pago=?, monto=?, moneda=?, cuota=?, pago_estado=?, validacion_ingenio=?, validacion_ingenio_por='', validacion_ingenio_en=NULL, pago_verificado_por='', pago_verificado_en=NULL, pago_nota=?, grupo_pago_id=? WHERE id_solicitud=?")
+                    ->execute([$paga,$monto,$moneda,$tarifa,$paga==='Exonerado'?'exonerado':'pendiente',$paga==='Ingenio'?'pendiente':null,$motivo,$grupo,$id]);
+                cengi_ins_recalcular_grupo($db, $grupo);
+            }
+            cengi_ins_recalcular_grupo($db, $s['grupo_pago_id']);
         } elseif ($accion === 'ingenio') {
             if ($s['tipo_pago'] !== 'Ingenio' || !cengi_ins_puede_validar_ingenio($s['nombre_ingenios'])) throw new InvalidArgumentException('Valida con el responsable del ingenio.');
             $db->prepare("UPDATE solicitudes_inscripcion SET validacion_ingenio='validada', validacion_ingenio_por=?, validacion_ingenio_en=NOW(), validacion_ingenio_nota=? WHERE id_solicitud=?")->execute([$por,$motivo,$id]);
@@ -62,36 +89,237 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($accion === 'asignar') {
             if (!cengi_puede_aprobar_solicitudes()) throw new InvalidArgumentException('No tienes permiso de asignación.');
             if ($s['estado'] === 'Aprobado') throw new InvalidArgumentException('Ya está asignado.');
-            cengi_ins_asignar($db,$s,$por);
+            if ($s['planificacion_id']) {
+                // Asignación manual (p. ej. desde lista de espera): aunque el curso supere el cupo máximo.
+                $plan = cengi_pp_plan($db, $s['planificacion_id']);
+                if (empty($plan['curso_id'])) throw new InvalidArgumentException('La convocatoria aún no tiene curso abierto; se asigna al abrirse.');
+                $s['curso_id'] = $plan['curso_id'];
+                cengi_ins_asignar($db,$s,$por);
+                $GLOBALS['cengi_ins_cola'][] = ['tipo' => 'asignado', 'plan' => $plan, 'solicitud' => $s];
+            } else {
+                cengi_ins_asignar($db,$s,$por);
+            }
         } else throw new InvalidArgumentException('Acción no válida.');
         $despues = cengi_ins_solicitud($db,$id);
         if(in_array($accion,['ingenio','validar_pago','pagado'],true)&&$despues['estado']==='Pendiente'&&cengi_ins_admitida($despues)) {
-            cengi_ins_asignar($db,$despues,$por);$despues=cengi_ins_solicitud($db,$id);
+            // Con convocatoria: asigna según cupo o pasa a lista de espera; sin convocatoria: asigna directo.
+            if ($despues['planificacion_id']) cengi_ins_procesar_plan($db, $despues['planificacion_id'], $por);
+            else cengi_ins_asignar($db,$despues,$por);
+            $despues=cengi_ins_solicitud($db,$id);
+        } elseif ($accion === 'cuota' && $despues['planificacion_id']) {
+            cengi_ins_procesar_plan($db, $despues['planificacion_id']);
+            $despues=cengi_ins_solicitud($db,$id);
         }
         $db->prepare('INSERT INTO inscripcion_historial (solicitud_id,accion,usuario,motivo,antes,despues) VALUES (?,?,?,?,?,?)')->execute([$id,$accion,$por,$motivo,$antes,json_encode($despues,JSON_UNESCAPED_UNICODE)]);
-        $db->commit(); $s=$despues; $mensaje='Cambio guardado. La inscripción y el cobro se conservan por curso.';
+        $db->commit(); cengi_ins_enviar_cola($db); $s=$despues;
+        $mensaje = $despues['estado'] === 'Espera' ? 'Cambio guardado. El curso está lleno: la inscripción quedó en lista de espera.' : 'Cambio guardado. La inscripción y el cobro se conservan por curso.';
     } catch (Throwable $e) {
         if ($db->inTransaction()) $db->rollBack();
+        $GLOBALS['cengi_ins_cola'] = [];
+        if (function_exists('cengi_ins_deshacer_cuentas_creadas')) cengi_ins_deshacer_cuentas_creadas($db);
         $mensaje = $e instanceof InvalidArgumentException ? $e->getMessage() : 'No fue posible guardar el cambio.'; $tipoMensaje='error';
         if (!($e instanceof InvalidArgumentException)) error_log('Inscripción: '.$e->getMessage());
     }
 }
 $q=$db->prepare('SELECT accion,usuario,motivo,creado FROM inscripcion_historial WHERE solicitud_id=? ORDER BY id DESC LIMIT 50');$q->execute([$id]);$historial=$q->fetchAll(PDO::FETCH_ASSOC);
+// ---------------------------------------------------------------- datos para la vista
+$e = 'cengi_pp_h';
+$fh = static function ($iso) { return $iso ? date('d/m/Y H:i', strtotime((string) $iso)) : ''; };
+$cobro = cengi_ins_estado_cobro($s);
+$req = cengi_ins_requisito($s);
+$rechazado = $s['estado'] === 'Rechazado';
+$asignado = $s['estado'] === 'Aprobado';
+$previa = strpos((string) $s['asignado_por'], 'Asignaci') === 0;
+$cobroListo = in_array($cobro, ['pagado', 'exonerado'], true);
+$sinCuota = $s['monto'] === null && $s['tipo_pago'] !== 'Exonerado';
+$esPropio = $s['tipo_pago'] === 'Propio';
+$esIngenio = $s['tipo_pago'] === 'Ingenio';
+$puedePagos = cengi_ins_puede_validar_pagos();
+$puedeCuota = $puedePagos && $cobro !== 'pagado';
+$puedeComprobante = $puedePagos && $esPropio && !in_array($s['pago_estado'], ['pagado', 'reembolsado'], true);
+$puedeIngenio = $esIngenio && ($s['validacion_ingenio'] ?? '') !== 'validada' && cengi_ins_puede_validar_ingenio($s['nombre_ingenios']);
+$puedeAsignar = !$asignado && cengi_ins_admitida($s) && cengi_puede_aprobar_solicitudes();
+$hayAcciones = !$rechazado && ($puedeCuota || $puedeComprobante || $puedeIngenio || $puedeAsignar);
+$pagador = ['Ingenio' => 'Su ingenio', 'Propio' => 'Pago propio', 'Exonerado' => 'Sin costo'][$s['tipo_pago']] ?? $s['tipo_pago'];
+if ($s['tipo_pago'] === 'Propio' && ($s['cuota'] ?? '') === 'asociado' && $s['ingenio_id']) $pagador = 'Pago propio · cuota de ingenio';
+$tarifaTexto = isset(CENGI_INS_CUOTAS[$s['cuota'] ?? '']) ? CENGI_INS_CUOTAS[$s['cuota']][0] . ' (' . CENGI_INS_CUOTAS[$s['cuota']][1] . ')' : '—';
+$origen = CENGI_INS_ORIGENES[$s['origen_inscripcion'] ?? 'sin_identificar'] ?? 'Registro anterior';
+
+// Pasos del proceso: [titulo, estado (ok|pend|warn), detalle]
+$pasos = [
+    ['Registro', 'ok', cengi_pp_fecha($s['creado']) . ' · ' . $origen],
+    ['Validación', $req['ok'] ? 'ok' : (($s['validacion_ingenio'] ?? '') === 'rechazada' || $s['pago_estado'] === 'rechazado' ? 'warn' : 'pend'), $req['texto']],
+    ['Asignación', $asignado ? 'ok' : 'pend', $asignado ? ($previa ? 'Asignado antes del proceso' : 'Asignado') . ($s['asignado_en'] ? ' · ' . cengi_pp_fecha($s['asignado_en']) : '') : ($s['estado'] === 'Espera' ? 'En lista de espera' : 'Aún sin asignar')],
+    ['Cobro', $cobroListo ? 'ok' : ($sinCuota ? 'warn' : 'pend'), $sinCuota ? 'Cuota por definir' : (CENGI_INS_ESTADOS_PAGO[$cobro][0] ?? ucfirst((string) $cobro))],
+];
+
+// Siguiente paso sugerido según el estado actual.
+if ($rechazado) {
+    $siguiente = ['warn', 'Inscripción rechazada o dada de baja', 'Para retomarla, reactívala desde el listado de Interesados.'];
+} elseif (!$req['ok']) {
+    $siguiente = ['pend', $esIngenio ? 'Falta la validación del ingenio' : 'Falta validar el pago propio',
+        $esIngenio ? 'El responsable del ingenio (o Capacitación, indicando quién autoriza) debe validar el patrocinio.' : 'Registra el comprobante del participante y Administración acepta el pago.'];
+} elseif ($sinCuota) {
+    $siguiente = ['warn', 'Define la cuota del curso', 'Sin cuota no se puede incluir en la proforma ni registrar el pago. Si no tiene costo, marca “Exonerado” con monto 0.'];
+} elseif (!$asignado) {
+    $siguiente = ['pend', 'Lista para asignar al curso', 'La validación está completa; falta asignarla al curso.'];
+} elseif (!$cobroListo) {
+    $siguiente = ['pend', 'Falta registrar el pago', $esIngenio ? 'Incluye al participante en la proforma del ingenio y registra el pago del grupo.' : 'Cuando Administración confirme el depósito, registra el pago recibido.'];
+} else {
+    $siguiente = ['ok', 'Inscripción completa', 'Validada, asignada al curso y con el cobro resuelto.'];
+}
+
+const CENGI_INSD_ACCIONES = [
+    'autorizar_ingenio' => ['Validación del ingenio', 'ok'], 'ingenio' => ['Patrocinio validado', 'ok'],
+    'cuota' => ['Cuota y responsable actualizados', 'usd'], 'comprobante' => ['Comprobante registrado', 'paperclip'],
+    'actualizar_boleta' => ['Boleta actualizada', 'paperclip'], 'validar_pago' => ['Pago aceptado', 'ok'],
+    'aceptar_pago_propio' => ['Pago propio aceptado', 'ok'], 'pagado' => ['Pago registrado', 'usd'],
+    'asignar' => ['Asignado al curso', 'education'], 'pago_lote' => ['Pago registrado en grupo', 'usd'], 'reenviar_formulario' => ['Enlace de boleta reenviado', 'envelope'],
+];
 ?>
-<!doctype html><html lang="es"><head><?php cengi_pp_head('Inscripción y cobro'); ?></head><body class="cengi-canvas"><?php menu_render(); ?>
-<main class="container pp-page"><header class="pp-page-header"><h1>Inscripción #<?php echo $id; ?></h1><p><?php echo cengi_pp_h($s['nombre_participante'].' · '.$s['plan_nombre']); ?></p><a href="inscripciones.php">Volver a Inscripciones</a></header>
-<?php cengi_ins_nav('pagos'); cengi_pp_feedback($mensaje,$tipoMensaje); ?>
-<section class="pp-card"><?php if($s['tipo_pago']==='Propio'&&!in_array($s['pago_estado'],['pagado','validado'],true)): ?><p>Espacio seguro para adjuntar boleta: <input class="form-control" readonly value="<?= cengi_pp_h(cengi_cob_url_comprobante($db,$s)) ?>"></p><?php endif; ?><h2>1. Registro · 2. Validación · 3. Asignación · 4. Cobro</h2>
-<p>Estado: <b><?php echo cengi_pp_h($s['estado']); ?></b> · Responsable: <b><?php echo cengi_pp_h($s['tipo_pago']); ?></b> · Cobro: <b><?php echo cengi_pp_h(cengi_ins_estado_cobro($s)); ?></b></p>
-<p>Cuota: <?php echo $s['monto'] === null ? 'Por definir; no se considera gratuita' : cengi_ins_dinero($s['monto'],$s['moneda']); ?> · <?php echo cengi_pp_h(cengi_ins_requisito($s)['texto']); ?></p>
-<p>Validar el patrocinio autoriza la participación. Solo registrar el pago con evidencia marca la inscripción como pagada.</p>
-<?php if($s['tipo_pago']==='Ingenio'): ?><p><a class="btn btn-primary" href="inscripcion_preparar_cobro.php?curso=<?= (int)$s['curso_id'] ?>">Preparar proforma y pago del grupo</a></p><?php endif; ?>
-<?php if($s['comprobante_ruta']): ?><p><a target="_blank" rel="noopener" href="comprobante_inscripcion.php?s=<?= $id ?>">Revisar comprobante</a> · <?= cengi_ins_dinero($s['monto_comprobante'],$s['moneda']) ?> · Boleta <?= cengi_pp_h($s['boleta']) ?></p><?php endif; ?>
-<form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?php echo cengi_pp_h($_SESSION['ins_csrf']); ?>">
-<?php if (cengi_ins_puede_validar_pagos()): ?><div class="row"><label class="col-sm-4">Quién paga<select class="form-control" name="tipo_pago"><?php foreach(['Ingenio','Propio','Exonerado'] as $p): ?><option <?php echo $s['tipo_pago']===$p?'selected':''; ?>><?php echo $p; ?></option><?php endforeach; ?></select></label><label class="col-sm-4">Cuota por este curso (Q)<input class="form-control" name="monto" type="number" min="0" step="0.01" value="<?php echo cengi_pp_h($s['monto']); ?>"></label></div>
-<div class="row"><label class="col-sm-4">Referencia / recibo<input class="form-control" name="referencia" maxlength="120"></label><label class="col-sm-4">Fecha de pago<input class="form-control" name="fecha" type="date" max="<?php echo date('Y-m-d'); ?>"></label></div><?php endif; ?>
-<label>Motivo o evidencia; si aceptas por el ingenio, indica nombre y cargo de quien autoriza<textarea class="form-control" name="motivo" required maxlength="500"></textarea></label><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:15px">
-<?php if(cengi_ins_puede_validar_pagos()): ?><button class="btn btn-default" name="accion" value="cuota">Guardar cuota y responsable</button><?php if($s['tipo_pago']==='Propio'): ?><label>Monto comprobante<input class="form-control" name="monto_comprobante" type="number" min="0" step="0.01"></label><label>Comprobante (PDF, JPG o PNG · hasta 5 MB)<input name="archivo" type="file" accept="application/pdf,image/jpeg,image/png"></label><button class="btn btn-default" name="accion" value="comprobante">Registrar comprobante</button><?php if($s['pago_estado']==='en revisión'): ?><button class="btn btn-primary" name="accion" value="validar_pago">Aceptar pago e inscribir</button><?php endif; ?><?php if($s['pago_estado']==='validado'): ?><button class="btn btn-success" name="accion" value="pagado">Registrar pago recibido</button><?php endif; ?><?php endif; ?><?php endif; ?>
-<?php if($s['tipo_pago']==='Ingenio' && cengi_ins_puede_validar_ingenio($s['nombre_ingenios'])): ?><button class="btn btn-primary" name="accion" value="ingenio">Validar patrocinio</button><?php endif; ?>
-<?php if($s['estado']!=='Aprobado' && cengi_ins_admitida($s) && cengi_puede_aprobar_solicitudes()): ?><button class="btn btn-primary" name="accion" value="asignar">Asignar al curso</button><?php endif; ?></div></form></section>
-<section class="pp-card"><h2>Historial de esta inscripción</h2><?php foreach($historial as $h): ?><p><b><?php echo cengi_pp_h($h['creado'].' · '.$h['accion'].' · '.$h['usuario']); ?></b><br><?php echo cengi_pp_h($h['motivo']); ?></p><?php endforeach; ?><?php if(!$historial): ?><p>No hay cambios registrados todavía.</p><?php endif; ?></section></main></body></html>
+<!doctype html><html lang="es"><head><?php cengi_pp_head('Inscripción #' . $id); ?><link rel="stylesheet" href="css/inscripcion_detalle.css?v=<?= (int) @filemtime(__DIR__ . '/css/inscripcion_detalle.css') ?>"></head>
+<body class="cengi-canvas cg-tema"><?php menu_render(); ?>
+<main class="container pp-page insd-page">
+<header class="ins-process-header"><small>INSCRIPCIÓN #<?= $id ?> · <?= $e(mb_strtoupper((string) $s['plan_nombre'], 'UTF-8')) ?></small><h1><?= $e($s['nombre_participante']) ?></h1><p>Seguimiento de la inscripción: validación, asignación al curso y cobro. Cada cambio queda en el historial con su motivo.</p></header>
+<?php cengi_ins_nav('inscripciones'); cengi_pp_feedback($mensaje, $tipoMensaje); ?>
+<a class="insd-back" href="inscripciones.php?vista=inscripciones&amp;q=<?= rawurlencode((string) $s['cui_participante']) ?>"><span class="glyphicon glyphicon-arrow-left" aria-hidden="true"></span> Volver a Inscritos</a>
+
+<section class="insd-person">
+ <div class="insd-avatar" aria-hidden="true"><?= $e(mb_strtoupper(mb_substr(trim((string) $s['nombre_participante']), 0, 1, 'UTF-8'), 'UTF-8')) ?></div>
+ <div class="insd-person-info">
+  <h2><?= $e($s['nombre_participante']) ?></h2>
+  <p><?= $e($s['nombre_ingenios'] ?: ($s['institucion_otra'] ?: 'Sin institución')) ?><?= $s['puesto_participante'] ? ' · ' . $e($s['puesto_participante']) : '' ?></p>
+  <ul class="insd-tags">
+   <li><?= $e($pagador) ?></li>
+   <?php if ($previa): ?><li class="is-amarillo">Asignado antes del proceso de validación</li><?php endif; ?>
+   <?php if ($rechazado): ?><li class="is-naranja">Rechazada</li><?php endif; ?>
+  </ul>
+ </div>
+ <div class="insd-fee"><small>Cuota del curso</small><strong><?= $s['monto'] === null ? ($esIngenio || $esPropio ? 'Por definir' : 'Sin costo') : cengi_ins_dinero($s['monto'], $s['moneda']) ?></strong><?= cengi_pp_badge(CENGI_INS_ESTADOS_PAGO, $cobro) ?></div>
+</section>
+
+<ol class="insd-steps" aria-label="Avance de la inscripción">
+ <?php foreach ($pasos as $n => [$titulo, $estado, $detalle]): ?>
+ <li class="is-<?= $estado ?>"><span class="insd-step-dot" aria-hidden="true"><?= $estado === 'ok' ? '<span class="glyphicon glyphicon-ok"></span>' : $n + 1 ?></span><span class="insd-step-text"><b><?= $titulo ?></b><small><?= $e($detalle) ?></small></span></li>
+ <?php endforeach; ?>
+</ol>
+
+<div class="insd-next is-<?= $siguiente[0] ?>"><span class="glyphicon glyphicon-<?= $siguiente[0] === 'ok' ? 'ok-circle' : ($siguiente[0] === 'warn' ? 'alert' : 'time') ?>" aria-hidden="true"></span><div><strong><?= $e($siguiente[1]) ?></strong><p><?= $e($siguiente[2]) ?></p></div></div>
+
+<div class="insd-layout">
+ <div class="insd-col">
+  <section class="insd-card">
+   <h3><span class="glyphicon glyphicon-user" aria-hidden="true"></span> Participante</h3>
+   <dl class="insd-dl">
+    <dt>CUI</dt><dd><?= $e($s['cui_participante'] ?: '—') ?></dd>
+    <dt>Correo</dt><dd><?= $s['correo'] ? '<a href="mailto:' . $e($s['correo']) . '">' . $e($s['correo']) . '</a>' : '—' ?></dd>
+    <dt>Teléfono</dt><dd><?= $e($s['telefono'] ?: '—') ?></dd>
+    <dt>Puesto · área</dt><dd><?= $e(trim($s['puesto_participante'] . ' · ' . $s['area_participante'], ' ·') ?: '—') ?></dd>
+    <dt>Grado académico</dt><dd><?= $e($s['grado_academico'] ?: '—') ?></dd>
+    <dt>Origen</dt><dd><?= $e($origen) ?><?= $s['como_se_entero'] ? '<small>' . $e($s['como_se_entero']) . '</small>' : '' ?></dd>
+   </dl>
+  </section>
+
+  <section class="insd-card">
+   <h3><span class="glyphicon glyphicon-check" aria-hidden="true"></span> Validación</h3>
+   <dl class="insd-dl">
+    <dt>Estado</dt><dd><span class="insd-chip is-<?= $pasos[1][1] ?>"><?= $e($req['texto']) ?></span></dd>
+    <?php if ($esIngenio): ?>
+     <dt>Validó</dt><dd><?= $e($s['validacion_ingenio_por'] ?: '—') ?><?= $s['validacion_ingenio_en'] ? '<small>' . $fh($s['validacion_ingenio_en']) . '</small>' : '' ?></dd>
+     <?php if ($s['validacion_ingenio_nota']): ?><dt>Nota</dt><dd><?= $e($s['validacion_ingenio_nota']) ?></dd><?php endif; ?>
+    <?php elseif ($esPropio): ?>
+     <dt>Revisó</dt><dd><?= $e($s['pago_validado_por'] ?: ($s['pago_verificado_por'] ?: '—')) ?><?= $s['pago_validado_rol'] ? '<small>' . $e($s['pago_validado_rol']) . '</small>' : '' ?></dd>
+    <?php endif; ?>
+   </dl>
+  </section>
+
+  <section class="insd-card">
+   <h3><span class="glyphicon glyphicon-usd" aria-hidden="true"></span> Cobro</h3>
+   <dl class="insd-dl">
+    <dt>Quién paga</dt><dd><?= $e($pagador) ?></dd>
+    <dt>Cuota</dt><dd><?= $s['monto'] === null ? '<span class="insd-chip is-warn">Por definir</span>' : cengi_ins_dinero($s['monto'], $s['moneda']) ?><small>Tarifa: <?= $e($tarifaTexto) ?></small></dd>
+    <dt>Estado</dt><dd><?= cengi_pp_badge(CENGI_INS_ESTADOS_PAGO, $cobro) ?></dd>
+    <?php if ($esIngenio): ?><dt>Orden / proforma</dt><dd><?= $s['grupo_orden'] ? $e($s['grupo_orden']) : 'Sin orden de pago del grupo' ?></dd><?php endif; ?>
+    <?php if ($s['pago_referencia'] || $s['pago_fecha']): ?><dt>Referencia</dt><dd><?= $e($s['pago_referencia'] ?: $s['boleta'] ?: '—') ?><?= $s['pago_fecha'] ? '<small>' . cengi_pp_fecha($s['pago_fecha']) . ($s['pago_forma'] ? ' · ' . $e($s['pago_forma']) : '') . '</small>' : '' ?></dd><?php endif; ?>
+    <?php if ($s['pago_verificado_por']): ?><dt>Verificó</dt><dd><?= $e($s['pago_verificado_por']) ?><?= $s['pago_verificado_en'] ? '<small>' . $fh($s['pago_verificado_en']) . '</small>' : '' ?></dd><?php endif; ?>
+    <?php if ($s['comprobante_ruta']): ?><dt>Comprobante</dt><dd><a target="_blank" rel="noopener" href="comprobante_inscripcion.php?s=<?= $id ?>"><span class="glyphicon glyphicon-paperclip" aria-hidden="true"></span> Ver comprobante</a><small>Boleta <?= $e($s['boleta'] ?: '—') ?><?= $s['monto_comprobante'] !== null ? ' · ' . cengi_ins_dinero($s['monto_comprobante'], $s['moneda']) : '' ?></small></dd><?php endif; ?>
+    <?php if ($s['pago_nota']): ?><dt>Nota</dt><dd><?= $e($s['pago_nota']) ?></dd><?php endif; ?>
+   </dl>
+   <?php if ($esIngenio && !$cobroListo && !$rechazado): ?><a class="insd-link-btn" href="<?= $s['planificacion_id'] ? 'inscripciones.php?' . $e(http_build_query(['vista' => 'pagos', 'tab' => 'grupos', 'plan' => (int) $s['planificacion_id'], 'anio' => (int) $s['anio']])) : 'inscripcion_preparar_cobro.php?curso=' . (int) $s['curso_id'] ?>"><span class="glyphicon glyphicon-file" aria-hidden="true"></span> Preparar proforma y pago del grupo</a><?php endif; ?>
+   <?php if ($esPropio && !$rechazado && !in_array($s['pago_estado'], ['pagado', 'validado'], true)): ?>
+    <div class="insd-share"><label for="insd-link">Enlace seguro para que el participante adjunte su boleta</label><div class="insd-share-row"><input id="insd-link" readonly value="<?= $e(cengi_cob_url_comprobante($db, $s)) ?>" onclick="this.select()"><button type="button" onclick="var i=document.getElementById('insd-link');i.select();var b=this;if(navigator.clipboard){navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado';});}else{b.textContent='Ctrl+C';}">Copiar</button></div></div>
+   <?php endif; ?>
+  </section>
+ </div>
+
+ <div class="insd-col">
+  <?php if ($hayAcciones): ?>
+  <section class="insd-card insd-actions">
+   <h3><span class="glyphicon glyphicon-pencil" aria-hidden="true"></span> Registrar un cambio</h3>
+   <form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?= $e($_SESSION['ins_csrf']) ?>">
+    <label class="insd-field insd-motivo">Motivo o evidencia <span>(obligatorio, queda en el historial)</span>
+     <textarea name="motivo" required maxlength="500" placeholder="<?= $puedeIngenio ? 'Si validas por el ingenio, indica nombre y cargo de quien autoriza.' : 'Ej.: boleta recibida por correo, acuerdo con el ingenio, corrección de cuota…' ?>"></textarea></label>
+
+    <?php if ($puedeIngenio): ?>
+    <fieldset class="insd-group"><legend>Validación del ingenio</legend>
+     <p>Confirma que el ingenio autoriza y cubre la participación.</p>
+     <button class="btn btn-primary" name="accion" value="ingenio"><span class="glyphicon glyphicon-ok" aria-hidden="true"></span> Validar patrocinio</button>
+    </fieldset>
+    <?php endif; ?>
+
+    <?php if ($puedeCuota): ?>
+    <fieldset class="insd-group"><legend>Cuota y responsable del pago</legend>
+     <div class="insd-grid">
+      <label class="insd-field">Quién paga<select name="tipo_pago"><?php foreach (['Ingenio' => 'Ingenio', 'Propio' => 'Pago propio', 'Exonerado' => 'Exonerado (sin costo)'] as $v => $t): ?><option value="<?= $v ?>" <?= $s['tipo_pago'] === $v ? 'selected' : '' ?>><?= $t ?></option><?php endforeach; ?></select></label>
+      <label class="insd-field">Tarifa<select name="cuota"><?php foreach (CENGI_INS_CUOTAS as $v => [$t, $ayuda]): ?><option value="<?= $v ?>" <?= ($s['cuota'] ?: 'asociado') === $v ? 'selected' : '' ?>><?= $e($t . ' · ' . $ayuda) ?></option><?php endforeach; ?></select></label>
+      <label class="insd-field">Cuota por este curso (<?= ($s['moneda'] ?? '') === 'USD' ? 'US$' : 'Q' ?>)<input name="monto" type="number" min="0" step="0.01" value="<?= $e($s['monto']) ?>" placeholder="<?= $s['planificacion_id'] ? 'Vacío = según la tarifa' : '0.00' ?>"></label>
+     </div>
+     <p class="insd-hint">Quien trabaja en un ingenio y paga por su cuenta: «Pago propio» con tarifa «Asociado». <?= $s['planificacion_id'] ? 'Deja la cuota vacía para calcularla según la tarifa de la convocatoria. ' : '' ?>Cambiar quién paga reinicia la validación.</p>
+     <button class="btn btn-default" name="accion" value="cuota"><span class="glyphicon glyphicon-floppy-disk" aria-hidden="true"></span> Guardar cuota y responsable</button>
+    </fieldset>
+    <?php endif; ?>
+
+    <?php if ($puedeComprobante): ?>
+    <fieldset class="insd-group"><legend>Pago propio</legend>
+     <div class="insd-grid">
+      <label class="insd-field">Referencia / boleta<input name="referencia" maxlength="120"></label>
+      <label class="insd-field">Fecha de pago<input name="fecha" type="date" max="<?= date('Y-m-d') ?>"></label>
+      <?php if ($s['pago_estado'] !== 'validado'): ?>
+      <label class="insd-field">Monto del comprobante (Q)<input name="monto_comprobante" type="number" min="0" step="0.01"></label>
+      <label class="insd-field">Comprobante <small>PDF, JPG o PNG · hasta 5 MB</small><input name="archivo" type="file" accept="application/pdf,image/jpeg,image/png"></label>
+      <?php endif; ?>
+     </div>
+     <div class="insd-buttons">
+      <?php if ($s['pago_estado'] !== 'validado'): ?><button class="btn btn-default" name="accion" value="comprobante"><span class="glyphicon glyphicon-upload" aria-hidden="true"></span> Registrar comprobante</button><?php endif; ?>
+      <?php if ($s['pago_estado'] === 'en revisión'): ?><button class="btn btn-primary" name="accion" value="validar_pago"><span class="glyphicon glyphicon-ok" aria-hidden="true"></span> Aceptar pago e inscribir</button><?php endif; ?>
+      <?php if ($s['pago_estado'] === 'validado'): ?><button class="btn btn-success" name="accion" value="pagado"><span class="glyphicon glyphicon-usd" aria-hidden="true"></span> Registrar pago recibido</button><?php endif; ?>
+     </div>
+    </fieldset>
+    <?php endif; ?>
+
+    <?php if ($puedeAsignar): ?>
+    <fieldset class="insd-group"><legend>Asignación</legend>
+     <p>La validación está completa: asigna al participante al curso.</p>
+     <button class="btn btn-primary" name="accion" value="asignar"><span class="glyphicon glyphicon-education" aria-hidden="true"></span> Asignar al curso</button>
+    </fieldset>
+    <?php endif; ?>
+   </form>
+  </section>
+  <?php else: ?>
+  <section class="insd-card insd-empty"><span class="glyphicon glyphicon-info-sign" aria-hidden="true"></span><p><?= $rechazado ? 'La inscripción está rechazada; reactívala desde el listado para registrar cambios.' : 'No hay acciones disponibles para tu rol en esta inscripción.' ?></p></section>
+  <?php endif; ?>
+
+  <section class="insd-card">
+   <h3><span class="glyphicon glyphicon-time" aria-hidden="true"></span> Historial</h3>
+   <?php if ($historial): ?>
+   <ol class="insd-timeline">
+    <?php foreach ($historial as $h): [$etq, $ico] = CENGI_INSD_ACCIONES[$h['accion']] ?? [ucfirst(str_replace('_', ' ', $h['accion'])), 'record']; ?>
+    <li><span class="insd-tl-dot glyphicon glyphicon-<?= $ico ?>" aria-hidden="true"></span><div><b><?= $e($etq) ?></b><small><?= $fh($h['creado']) ?> · <?= $e($h['usuario']) ?></small><?php if ($h['motivo'] !== ''): ?><p><?= $e($h['motivo']) ?></p><?php endif; ?></div></li>
+    <?php endforeach; ?>
+    <?php if ($asignado && $previa): ?><li class="is-previa"><span class="insd-tl-dot glyphicon glyphicon-education" aria-hidden="true"></span><div><b>Asignado antes del proceso de validación</b><small><?= $fh($s['asignado_en']) ?></small><p><?= $e($s['asignado_por']) ?></p></div></li><?php endif; ?>
+   </ol>
+   <?php else: ?><p class="insd-hint">No hay cambios registrados todavía.</p><?php endif; ?>
+  </section>
+ </div>
+</div>
+</main></body></html>

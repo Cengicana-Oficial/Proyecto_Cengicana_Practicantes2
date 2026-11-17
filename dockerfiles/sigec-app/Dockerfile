@@ -36,9 +36,10 @@ RUN sed -i 's|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|ht
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 COPY dockerfiles/sigec-app/000-default.conf /etc/apache2/sites-available/000-default.conf
+COPY dockerfiles/sigec-app/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 
 WORKDIR /var/www/html/sigec
-COPY sigec/. /var/www/html/sigec
+COPY experimentos/. /var/www/html/sigec
 
 RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
 # public/vendor (AdminLTE, Bootstrap, jQuery, Font Awesome) no se versiona (.gitignore):

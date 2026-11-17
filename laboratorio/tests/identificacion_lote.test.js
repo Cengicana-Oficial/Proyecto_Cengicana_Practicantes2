@@ -15,20 +15,22 @@ async function run() {
   assert(api.code128Svg("S-001-10-26",36).includes("<svg"), "Código de barras");
 
   class Node {
-    constructor() { this.value="";this.textContent="";this.innerHTML="";this.dataset={};this.listeners={};this.checked=false;this.disabled=false;this.hidden=false;this.classList={add(){},remove(){}}; }
+    constructor() { this.value="";this.textContent="";this.innerHTML="";this.dataset={};this.listeners={};this.checked=false;this.disabled=false;this.hidden=false;this.classList={add(){},remove(){},toggle(){}}; }
     addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); }
     async emit(name, event={}) { for(const fn of this.listeners[name] || []) await fn({target:this,currentTarget:this,...event}); }
     setAttribute(name,value) { this[name]=value; }
     hasAttribute(name) { return name==="data-info" ? !!this.dataset.info : name==="data-field" ? !!this.dataset.field : false; }
     querySelectorAll() { return []; }
+    insertAdjacentHTML(position, html) { if(position !== 'beforeend') throw new Error('Posición no implementada: '+position); this.innerHTML += html; }
     focus() {} click() {} appendChild() {}
   }
   const nodes=new Map(), el=id=>{if(!nodes.has(id))nodes.set(id,new Node());return nodes.get(id);};
   const tabs=["registro","base","etiquetas"].map(t=>{const b=new Node();b.dataset.workTab=t;return b;});
   const panels=tabs.map(b=>{const p=new Node();p.dataset.workPanel=b.dataset.workTab;return p;});
   const app=el("ident-workflow"), page=new Node(), camera=new Node();
-  app.dataset={user:"test",initialSample:"",initialLote:""};
-  app.querySelectorAll=selector=>selector==="[data-work-tab]"?tabs:selector==="[data-work-panel]"?panels:[];
+  const methods=['qr','barras','tabular'].map(m=>{const b=new Node();b.dataset.metodo=m;return b;});
+  app.dataset={user:"test",initialSample:"",initialLote:"1"};
+  app.querySelectorAll=selector=>selector==="[data-work-tab]"?tabs:selector==="[data-work-panel]"?panels:selector==="[data-metodo]"?methods:[];
   app.querySelector=selector=>selector==="[data-batch-camera]"?camera:null;
   const document={getElementById:el,querySelector:()=>page,createElement:()=>new Node(),body:new Node()};
   const sample=(id,codigo)=>({id_muestra:id,codigo_lab:codigo,etiqueta:{info:"",contenido:"completa",campos:{},origen:""}});
@@ -59,7 +61,7 @@ async function run() {
   const before=storage.get("lab-ident-v3:test:1");
   await el("iw-grid-body").emit("paste",{target:input,clipboardData:{getData:()=>"a\nb\nc\n"},preventDefault(){}});
   assert(storage.get("lab-ident-v3:test:1")===before,"Pegado fuera de rango no debe modificar parcialmente");
-  el("iw-metodo").value="qr";await el("iw-metodo").emit("change");
+  await methods[0].emit("click");
   el("iw-lectura").value="F-001-10-26";await el("iw-asignar").emit("click");
   assert(el("iw-status").textContent.includes("otro")||el("iw-status").textContent.includes("pertenece"),"Detecta códigos de otro lote");
   el("iw-lectura").value="SOL-123";await el("iw-asignar").emit("click");

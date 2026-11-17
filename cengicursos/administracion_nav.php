@@ -2,6 +2,7 @@
 /** Navegación del proceso de inscripción, con el mismo contexto en todas sus vistas. */
 function cengi_ins_nav($activa='inscripciones') {
     if($activa==='pagos' && ($_GET['tab']??'')==='proformas')$activa='proformas';
+    if($activa==='pagos' && ($_GET['tab']??'')==='cobranza')$activa='cobros';
     $context=[];
     foreach(['plan','curso','anio'] as $key) if(!empty($_GET[$key])) $context[$key]=(int)$_GET[$key];
     if(isset($_GET['q'])&&is_string($_GET['q'])&&$_GET['q']!=='') $context['q']=$_GET['q'];
@@ -12,7 +13,8 @@ function cengi_ins_nav($activa='inscripciones') {
     $tabs[]=['inscripciones','Inscritos',['vista'=>'inscripciones'],'inbox'];
     if(cengi_ins_puede_ver_pagos()) {
         $tabs[]=['proformas','Proformas',['vista'=>'pagos','tab'=>'proformas'],'folder-open'];
-        $tabs[]=['cobros','Cobros pendientes',['vista'=>'inscripciones','cobro'=>'pendiente','pagador'=>'Propio'],'usd'];
+        // Pendientes de cobro con selección en grupo (pago propio y personas pagadas por proforma del ingenio).
+        $tabs[]=['cobros','Cobros pendientes',['vista'=>'pagos','tab'=>'cobranza'],'usd'];
     }
     if (cengi_ins_puede_validar_pagos()) $tabs[]=['recibos','Recibos contables',['vista'=>'recibos'],'file'];
     echo '<nav class="pp-subnav cengi-nav-barra" aria-label="Inscripciones y pagos">';

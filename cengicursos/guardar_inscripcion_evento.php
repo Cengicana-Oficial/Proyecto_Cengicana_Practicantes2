@@ -7,7 +7,7 @@ function cengi_inscripcion_evento_redirigir($token, $resultado, $mensaje = '', $
     // Ante un error se conservan los datos escritos (excepto el archivo) para que
     // inscripcion_evento.php vuelva a llenar el formulario.
     if ($resultado === 'error') {
-        $_SESSION['cengi_ins_evt_previo'] = array_intersect_key($_POST, array_flip(['nombre', 'cui', 'correo', 'telefono', 'institucion', 'pago_boleta', 'pago_fecha', 'pago_banco', 'pago_monto', 'origen', 'sin_comprobante']));
+        $_SESSION['cengi_ins_evt_previo'] = array_intersect_key($_POST, array_flip(['nombre', 'cui', 'correo', 'telefono', 'institucion', 'cargo', 'pago_boleta', 'pago_fecha', 'pago_banco', 'pago_monto', 'origen', 'sin_comprobante']));
     }
     $parametros = ['token' => $token, 'resultado' => $resultado];
     if ($mensaje !== '') {
@@ -39,19 +39,23 @@ if (trim((string) ($_POST['sitio_web'] ?? '')) !== '') {
     cengi_inscripcion_evento_redirigir($token, 'ok');
 }
 
-$nombre = trim((string) ($_POST['nombre'] ?? ''));
+// Nombre y cargo escritos todo en mayusculas o minusculas se guardan con formato de nombre propio.
+$nombre = cengi_texto_propio($_POST['nombre'] ?? '');
 $cui = trim((string) ($_POST['cui'] ?? ''));
-$correo = trim((string) ($_POST['correo'] ?? ''));
-$telefono = trim((string) ($_POST['telefono'] ?? ''));
+$correo = strtolower(trim((string) ($_POST['correo'] ?? '')));
+$telefono = trim(preg_replace('/\s+/u', ' ', (string) ($_POST['telefono'] ?? '')));
 $institucion = trim(preg_replace('/\s+/u', ' ', (string) ($_POST['institucion'] ?? '')));
-if ($institucion === '') {
-    $institucion = 'Particular';
-}
+$cargo = cengi_texto_cargo($_POST['cargo'] ?? '');
 
+// Todos los datos de contacto son obligatorios: asi el inscrito llega completo al
+// directorio de Comites (eventos de transferencia) y a los reportes.
 if ($nombre === '' || $correo === '') {
     cengi_inscripcion_evento_redirigir($token, 'error', 'Completa tu nombre y correo electrónico.');
 }
-if (strlen($nombre) > 255 || strlen($cui) > 25 || strlen($correo) > 255 || strlen($telefono) > 30 || strlen($institucion) > 255) {
+if ($institucion === '' || $cargo === '') {
+    cengi_inscripcion_evento_redirigir($token, 'error', 'Indica tu institución o ingenio y tu puesto o cargo (si no trabajas en una institución, escribe “Particular”).');
+}
+if (strlen($nombre) > 255 || strlen($cui) > 25 || strlen($correo) > 255 || strlen($telefono) > 30 || strlen($institucion) > 255 || mb_strlen($cargo, 'UTF-8') > 150) {
     cengi_inscripcion_evento_redirigir($token, 'error', 'Uno de los datos supera la longitud permitida.');
 }
 if (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {
@@ -125,13 +129,11 @@ if ((int) ($evento['cupo'] ?? 0) > 0) {
     }
 }
 
-// "Institucion o ingenio" es texto libre (como en el prototipo); si coincide con un
-// ingenio del catalogo tambien se guarda ingenio_id, con el mismo criterio TRIM que la
-// carga masiva (cengi_evt_carga_masiva_filas en eventos_qr.php).
-$stmtIngenioTexto = $db->prepare('SELECT id FROM ingenios WHERE TRIM(nombre_ingenios) = TRIM(?) LIMIT 1');
-$stmtIngenioTexto->execute([$institucion]);
-$ingenioId = (int) ($stmtIngenioTexto->fetchColumn() ?: 0);
-$ingenioId = $ingenioId > 0 ? $ingenioId : null;
+// "Institucion o ingenio" es texto libre: "trinidad", "Ingenio Trinidad" o "ING. TRINIDAD S.A."
+// se reconocen como el ingenio del catalogo (ingenio_id) y se guardan con su nombre oficial.
+$institucionNormalizada = cengi_institucion_normalizar($db, $institucion);
+$institucion = $institucionNormalizada['institucion'];
+$ingenioId = $institucionNormalizada['ingenio_id'];
 
 $reciboPago = null;
 $pagoBoleta = null;
@@ -227,13 +229,13 @@ try {
     $stmt = $db->prepare("
         INSERT INTO evento_participantes
           (evento_id, participante_id, nombre_invitado, cui_invitado, correo_invitado, telefono_invitado,
-           institucion_invitado, ingenio_id, codigo_qr, recibo_pago, pago_boleta, pago_banco, pago_fecha, pago_monto,
+           institucion_invitado, cargo_invitado, ingenio_id, codigo_qr, recibo_pago, pago_boleta, pago_banco, pago_fecha, pago_monto,
            pago_estado, pago_origen, confirmado_en)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $stmt->execute([
         (int) $evento['id'], $participanteId, $nombre, $cui, $correo, $telefono,
-        $institucion, $ingenioId, $codigo, $reciboPago, $pagoBoleta, $pagoBanco, $pagoFecha, $pagoMonto,
+        $institucion, $cargo, $ingenioId, $codigo, $reciboPago, $pagoBoleta, $pagoBanco, $pagoFecha, $pagoMonto,
         $eventoPagado ? ($sinComprobante ? 'pendiente' : 'por_validar') : null, $pagoOrigen, $eventoPagado ? null : date('Y-m-d H:i:s'),
     ]);
 } catch (Throwable $e) {

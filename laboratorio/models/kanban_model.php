@@ -63,9 +63,18 @@ if (!function_exists('lab_planificacion_prioridad')) {
 }
 
 if (!function_exists('lab_planificacion_tareas')) {
-    function lab_planificacion_tareas(PDO $pdo): array
+    /**
+     * @param bool $soloEnCurso true = omite los lotes con informe firmado (finalizados). Lo usa el
+     *        tablero para pantalla, que así no recorre todo el historial en cada actualización.
+     * @param int|null $idSolicitud solo las tareas de esa recepción (seguimiento público del QR de la boleta).
+     */
+    function lab_planificacion_tareas(PDO $pdo, bool $soloEnCurso = false, ?int $idSolicitud = null): array
     {
-        $stmt = $pdo->query("
+        $porSolicitud = $idSolicitud !== null ? ' AND s.id_solicitud = ' . (int) $idSolicitud : '';
+        $filtro = ($soloEnCurso
+            ? "AND NOT EXISTS (SELECT 1 FROM lab_informe li WHERE li.id_lote = s.id_lote AND li.estado = 'FIRMADO')"
+            : '') . $porSolicitud;
+        $sql = "
             SELECT
                 m.id_muestra,
                 m.codigo_lab,
@@ -95,9 +104,18 @@ if (!function_exists('lab_planificacion_tareas')) {
                 WHERE lr.id_lote=s.id_lote AND m.numero_muestra BETWEEN lr.inicio AND lr.fin AND f2.id_tipo_analisis=ta.id_tipo
             )
             LEFT JOIN estado_formulario ef ON ef.id_estado = f.id_estado
-            WHERE COALESCE(ta.activo, 1) = 1
+            WHERE COALESCE(ta.activo, 1) = 1 {FILTRO}
             ORDER BY tm.nombre, ta.nombre, l.codigo_lote, m.numero_muestra, m.id_muestra
-        ");
+        ";
+        try {
+            $stmt = $pdo->query(str_replace('{FILTRO}', $filtro, $sql));
+        } catch (PDOException $e) {
+            if (!$soloEnCurso) {
+                throw $e;
+            }
+            // Sin la tabla lab_informe (instalación nueva) no hay lotes finalizados: se omite solo ese filtro.
+            $stmt = $pdo->query(str_replace('{FILTRO}', $porSolicitud, $sql));
+        }
 
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         foreach ($rows as &$row) {

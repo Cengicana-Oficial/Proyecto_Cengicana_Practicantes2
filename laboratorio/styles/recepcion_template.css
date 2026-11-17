@@ -921,3 +921,65 @@ body.cengi-canvas {
 /* Nota bajo "Fecha estimada": de qué análisis sale el plazo (Catálogo › Duración en días) */
 .fecha-estimada-ayuda { display: block; margin-top: 4px; font-size: 11.5px; line-height: 1.35; color: var(--cengi-muted, #636A6F); }
 .fecha-estimada-ayuda:empty { display: none; }
+
+/* ===== Optimización de espacio de la boleta de recepción =====
+   - Sin la franja vacía superior (margin-top: 92px heredado de la barra de navegación antigua).
+   - Tipo de muestra y avance (Datos · Análisis · Firmas) en una sola barra.
+   - Datos del muestreo en 4 columnas en pantallas anchas (3 filas en lugar de 5).
+   - Firmas: nombre y correo en la misma fila.
+   - Botón "Registrar recepción" siempre visible al pie mientras se llena la boleta. */
+main.cengi-lab-content, main.reception-page { margin-top: 0; }
+.reception-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; border-bottom: 1px solid var(--recepcion-line); padding-bottom: 12px; }
+.reception-toolbar .tipo-btns { margin: 0; }
+.reception-toolbar .reception-progress { border-bottom: 0; padding: 0; margin: 0; gap: 14px; }
+@media (min-width: 1100px) {
+  #solicitud-form > .field-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 14px; row-gap: 12px; }
+  #solicitud-form > .field-grid .field--span2 { grid-column: span 2; }
+}
+#solicitud-form > .field-grid .field small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.3; color: var(--recepcion-muted); }
+.firma-card { display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px; align-content: start; }
+.firma-card > .firma-label, .firma-card > .firma-canvas, .firma-card > .firma-actions { grid-column: 1 / -1; }
+.firma-card input + input { margin-top: 0; }
+#observaciones { min-height: 58px; }
+.form-completion { position: sticky; bottom: 0; z-index: 5; background: #fff; padding: 12px 0; margin-bottom: -12px; box-shadow: 0 -8px 16px -12px rgba(0, 0, 0, .25); }
+@media (max-width: 760px) {
+  .firma-card { grid-template-columns: 1fr; }
+  .reception-toolbar { flex-direction: column; align-items: flex-start; }
+}
+
+/* A) Pestañas "Nueva recepción | Recepciones registradas" */
+.reception-tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--recepcion-line); margin: 0 0 14px; }
+.reception-tabs [role="tab"] { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border: 0; border-bottom: 3px solid transparent; margin-bottom: -2px; background: none; font: inherit; font-size: 14px; font-weight: 700; color: var(--recepcion-muted); cursor: pointer; }
+.reception-tabs [role="tab"] .material-symbols-outlined { font-size: 19px; }
+.reception-tabs [role="tab"][aria-selected="true"] { color: var(--recepcion-green-deep); border-bottom-color: var(--recepcion-green-deep, #4E8418); }
+.reception-tabs [role="tab"]:hover { color: var(--recepcion-green-deep); }
+#solicitud-form[hidden], .reception-history[hidden] { display: none !important; }
+/* B) Franja de datos asignados automáticamente */
+.reception-resumen { display: flex; flex-wrap: wrap; gap: 8px 28px; align-items: flex-start; padding: 10px 14px; border: 1px dashed var(--recepcion-line); border-radius: 10px; background: #FAFCF7; }
+.reception-resumen .reception-resumen-item { margin: 0; min-width: 0; }
+.reception-resumen .reception-resumen-item label { font-size: 10.5px; margin-bottom: 2px; }
+.reception-resumen .reception-resumen-item input { border: 0 !important; background: transparent !important; padding: 0 !important; height: auto !important; min-height: 0 !important; box-shadow: none !important; font-weight: 700; font-size: 14px; color: var(--recepcion-ink, #22272B); width: 11ch; }
+.reception-resumen .reception-resumen-item .laboratorio-range { display: flex; align-items: center; gap: 6px; }
+.reception-resumen .reception-resumen-item .laboratorio-range input { width: 13ch; }
+.reception-resumen .reception-resumen-item .laboratorio-range input + input::before { content: none; }
+.reception-resumen .reception-resumen-item .laboratorio-range::after { content: none; }
+.reception-resumen .reception-resumen-item small { font-size: 10.5px; color: var(--recepcion-muted); }
+.reception-resumen #lote + small { display: none; }  /* "Correlativo automático…": el lote ya se ve asignado */
+.doc-header-right .meta-badge:has(#lote-resumen) { display: none; }  /* el lote ya está en la franja */
+/* Ajustes tras revisar en pantalla */
+.reception-tabs [role="tab"], .reception-tabs [role="tab"]:hover { background: transparent !important; box-shadow: none !important; border-radius: 0 !important; }
+.reception-tabs [role="tab"][aria-selected="false"] { color: var(--recepcion-muted, #636A6F) !important; border-bottom-color: transparent !important; }
+.reception-tabs [role="tab"][aria-selected="true"] { color: var(--recepcion-green-deep, #4E8418) !important; border-bottom: 3px solid var(--recepcion-green-deep, #4E8418) !important; }
+@media (min-width: 1100px) {
+  /* Sin los campos automáticos quedan 5: cliente, responsable, ensayo, fecha de muestreo y n.º de muestras, en una fila. */
+  #solicitud-form > .field-grid { grid-template-columns: 1.2fr 1fr 1.5fr .9fr .8fr; }
+}
+.reception-resumen input::placeholder { font-weight: 400; color: var(--recepcion-muted, #858C91); opacity: .8; }
+/* N.º de laboratorio dinámico: qué falta / rango que se asignará, y resaltado al actualizarse */
+#n-laboratorio-estado { display: block; margin-top: 4px; font-size: 11px; color: #8A5A00; }
+#n-laboratorio-estado.is-ok { color: var(--recepcion-green-deep, #4E8418); font-weight: 600; }
+@keyframes lab-rango-actualizado { from { background: #E3F1D3; } to { background: transparent; } }
+.laboratorio-range.is-updated { animation: lab-rango-actualizado 1.2s ease-out; border-radius: 6px; }
+/* QR de verificación de la boleta: el enlace necesita más módulos, por eso un poco más grande, y su código debajo */
+.recepcion-boleta .bol-qr { width: 74px; min-width: 74px; text-align: center; }
+.recepcion-boleta .bol-qr-codigo { display: block; margin-top: 2px; font: 600 7.5px/1.2 ui-monospace, Consolas, monospace; color: #474D51; word-break: break-all; }

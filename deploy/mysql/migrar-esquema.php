@@ -49,12 +49,13 @@ switch ($modulo) {
     case 'comites':
         // config/database.php crea la base, las tablas base y los datos del menú con el usuario de migraciones.
         require $raiz . '/comites/config/database.php';
-        foreach (['functions', 'domain', 'catalogo', 'directorio', 'agenda', 'informes', 'memorias', 'usuarios'] as $archivo) {
+        foreach (['functions', 'domain', 'catalogo', 'directorio', 'agenda', 'informes', 'memorias', 'usuarios', 'cifras'] as $archivo) {
             require_once $raiz . "/comites/includes/$archivo.php";
         }
         agenda_preparar($pdo); // incluye directorio_preparar() y catalogo_preparar()
         inf_preparar($pdo);
         mem_preparar($pdo);
+        cifras_preparar($pdo);
         usuarios_preparar_programas($menuPdo);
         break;
 
@@ -69,7 +70,7 @@ switch ($modulo) {
         foreach (['includes/catalogo_muestras_helper.php', 'includes/catalogo_analisis_helper.php', 'includes/catalogo_campos_muestra_helper.php',
             'includes/solicitud_formulario_helpers.php', 'includes/muestra_identificacion_helper.php', 'includes/identificacion_lote_helper.php',
             'includes/formulario_revision_helper.php', 'includes/workflow_trabajo_helper.php', 'includes/catalogo_control_helper.php',
-            'models/informes_model.php', 'includes/recepcion_catalogo_helper.php'] as $archivo) {
+            'models/informes_model.php', 'includes/recepcion_catalogo_helper.php', 'includes/verificacion_documentos_helper.php'] as $archivo) {
             require_once $raiz . '/laboratorio/' . $archivo;
         }
         $pdo = Conexion::conectar();
@@ -86,6 +87,7 @@ switch ($modulo) {
         wfSchema($pdo);
         labCatalogoControlEsquema($pdo);
         lab_informes_esquema($pdo); // incluye lab_documentos_esquema()
+        lab_verificacion_esquema($pdo); // códigos y QR de verificación pública (boleta e informe)
         labRecepcionPrepararCatalogo($pdo);
         break;
 

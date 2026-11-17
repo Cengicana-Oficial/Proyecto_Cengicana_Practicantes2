@@ -67,7 +67,7 @@ function cengi_banner($titulo = null, $subtitulo = null, $antetitulo = null, $ac
     [$tituloDefecto, $subtituloDefecto] = cengi_pagina_titulo(strtok($paginaActual, '?'), $esEstudiante);
     if ($antetitulo === null) {
         $ubicacion = $esEstudiante ? null : cengi_nav_ubicar($paginaActual);
-        $antetitulo = $ubicacion ? $ubicacion[1] : 'Cengicursos';
+        $antetitulo = $ubicacion ? $ubicacion[1] : 'CengiCursos';
     }
     $h = static function ($texto) {
         return htmlspecialchars((string) $texto, ENT_QUOTES, 'UTF-8');
@@ -347,11 +347,16 @@ function menu_render($vistaEstudiante = false)
     ?>
 <?php /* Menú "Acciones" en las filas de tabla de todas las páginas (ver js/course_actions.js). */ ?>
 <link rel="stylesheet" href="css/course_actions.css?v=<?php echo $version('css/course_actions.css'); ?>">
+<?php /* Identidad CengiCursos (barra lateral, banners). */ ?>
+<link rel="stylesheet" href="css/cengicursos-marca.css?v=<?php echo $version('css/cengicursos-marca.css'); ?>">
 <script src="js/course_actions.js?v=<?php echo $version('js/course_actions.js'); ?>" defer></script>
 <aside class="cengi-sidebar" id="cengiSidebar">
-    <a class="cengi-brand" href="index.php" aria-label="Ir al inicio de Cengicursos">
-        <img class="cengi-brand-logo" src="img/logo-comite-capacitacion.png"
-            alt="Comité de Capacitación CENGICAÑA">
+    <a class="cengi-brand" href="index.php" aria-label="Ir al inicio de CengiCursos">
+        <img class="cgc-logo" src="img/logo-cengicursos.svg" alt="" aria-hidden="true">
+        <span class="cgc-copy">
+            <strong>Cengi<b>Cursos</b></strong>
+            <small>Capacitación · Cengicaña</small>
+        </span>
     </a>
 
     <nav class="cengi-sidebar-nav" id="cengiPrimaryNav" aria-label="Navegacion principal">
@@ -407,7 +412,11 @@ function menu_render($vistaEstudiante = false)
             <span class="glyphicon glyphicon-log-out"></span>
             <span>Salir</span>
         </a>
-        <div class="cengi-sidebar-version">Cengicursos &middot; Año <?php echo date('Y'); ?></div>
+        <div class="cgc-comite">
+            <img src="img/logo-comite-capacitacion.png" alt="">
+            <span>Comité de Capacitación CENGICAÑA</span>
+        </div>
+        <div class="cengi-sidebar-version">CengiCursos &middot; Año <?php echo date('Y'); ?></div>
     </div>
 </aside>
 
@@ -455,7 +464,7 @@ function menu_render($vistaEstudiante = false)
     </div>
 </header>
 
-<script src="js/cengi-navigation.js"></script>
+<script src="js/cengi-navigation.js?v=<?= (int) @filemtime(__DIR__ . '/js/cengi-navigation.js') ?>"></script>
 <script>
 (function () {
     var sidebar = document.getElementById('cengiSidebar');
@@ -507,11 +516,58 @@ function menu_render($vistaEstudiante = false)
         notifPanel.hidden = true;
         notifBtn.setAttribute('aria-expanded', 'false');
     }
+    // Lo ya visto se recuerda en este navegador (por usuario): el número rojo cuenta solo los
+    // pendientes nuevos; al abrir la campana se marcan como vistos. Los avisos siguen en la
+    // lista hasta resolverse (notificaciones_helpers.php).
+    var notifClave = notif ? 'cengiNotifVistos:' + (notif.getAttribute('data-usuario') || '0') : '';
+    function leerVistos() {
+        try { return JSON.parse(localStorage.getItem(notifClave) || '{}') || {}; } catch (e) { return {}; }
+    }
+    function marcarVistos() {
+        var vistos = {};
+        if (!notif) return;
+        notif.querySelectorAll('[data-clave]').forEach(function (a) {
+            vistos[a.getAttribute('data-clave')] = (a.getAttribute('data-ids') || '').split(',').filter(Boolean);
+        });
+        try { localStorage.setItem(notifClave, JSON.stringify(vistos)); } catch (e) { /* sin almacenamiento */ }
+    }
+    function pintarNovedades() {
+        if (!notif) return;
+        var vistos = leerVistos(), nuevos = 0, pendientes = 0;
+        notif.querySelectorAll('[data-clave]').forEach(function (a) {
+            var ids = (a.getAttribute('data-ids') || '').split(',').filter(Boolean);
+            var previos = vistos[a.getAttribute('data-clave')] || [];
+            var n = ids.filter(function (id) { return previos.indexOf(id) === -1; }).length;
+            var marca = a.querySelector('.cengi-notif-nuevo');
+            if (marca) { marca.hidden = !n; marca.textContent = n === 1 ? '1 nuevo' : n + ' nuevos'; }
+            a.classList.toggle('is-nuevo', n > 0);
+            nuevos += n; pendientes += ids.length;
+        });
+        var badge = document.getElementById('cengiNotifN');
+        if (badge) {
+            badge.textContent = nuevos > 99 ? '99+' : String(nuevos);
+            badge.hidden = nuevos === 0;
+        }
+        notifBtn.classList.toggle('has-avisos', nuevos > 0);
+        notifBtn.classList.toggle('has-vistos', nuevos === 0 && pendientes > 0);
+        notifBtn.setAttribute('aria-label', 'Notificaciones: ' + (nuevos ? nuevos + ' nueva' + (nuevos === 1 ? '' : 's') : (pendientes ? 'pendientes ya revisados' : 'sin pendientes')));
+    }
     if (notifBtn && notifPanel) {
+        pintarNovedades();
         notifBtn.addEventListener('click', function () {
             var willOpen = notifPanel.hidden;
             notifPanel.hidden = !willOpen;
             notifBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            if (willOpen) {
+                // Se marcan como vistos al abrir; las etiquetas "nuevo" siguen visibles mientras el panel está abierto.
+                marcarVistos();
+                var badge = document.getElementById('cengiNotifN');
+                if (badge) badge.hidden = true;
+                notifBtn.classList.remove('has-avisos');
+                notifBtn.classList.toggle('has-vistos', !!notif.querySelector('[data-clave]'));
+            } else {
+                pintarNovedades();
+            }
         });
         document.addEventListener('click', function (event) {
             if (!notif.contains(event.target)) closeNotif();

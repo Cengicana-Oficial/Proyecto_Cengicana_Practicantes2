@@ -30,7 +30,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$correo]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if ($user) {
+            // La base del enlace sale de LOGIN_URL (login/.env), nunca de la
+            // cabecera Host: con Host falso, un atacante podria pedir el reseteo
+            // de otra persona y hacer que el correo legitimo apunte a su dominio,
+            // capturando el token cuando la victima hace clic.
+            cengi_login_cargar_env();
+            $baseLogin = rtrim(trim((string) ($_ENV['LOGIN_URL'] ?? '')), '/');
+            if ($baseLogin !== '' && !preg_match('#^https?://[^/\s]+#i', $baseLogin)) {
+                $baseLogin = '';
+            }
+
+            if ($user && $baseLogin === '') {
+                error_log('login: LOGIN_URL no configurada o invalida en login/.env; no se envio el correo de reseteo.');
+            } elseif ($user) {
                 $token = bin2hex(random_bytes(32));
                 $tokenHash = hash('sha256', $token);
                 $expiraEn = date('Y-m-d H:i:s', time() + CENGI_RESET_TOKEN_TTL_SEGUNDOS);
@@ -47,10 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ");
                 $insert->execute([$user['id'], $tokenHash, $expiraEn, $ipHash]);
 
-                $esquema = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-                $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-                $directorio = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/login/forgot_password.php')), '/');
-                $enlace = "{$esquema}://{$host}{$directorio}/reset_password.php?token=" . urlencode($token);
+                $enlace = "{$baseLogin}/reset_password.php?token=" . urlencode($token);
 
                 cengi_login_enviar_correo_reset($user['correo'], $user['nombre'], $enlace);
             }
@@ -67,52 +76,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Olvidé mi contraseña - CENGICAÑA</title>
-    <link rel="stylesheet" href="assets/login.css">
-    <div class="logo-top">
-    <img src="assets/img/logo.png" alt="Logo">
-</div>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#073d17">
+    <title>Recuperar contraseña | Cengitech</title>
+    <link rel="stylesheet" href="assets/portada.css">
 </head>
-<body>
+<body class="ct-login">
+<div class="ct-page">
+    <header class="ct-masthead">
+        <img class="ct-official-logo" src="assets/img/logo-cengicana.png" alt="Cengicaña">
+    </header>
 
-<div class="login-container">
-
-    <div class="login-card">
-
-        <div class="logo-box">
-            <h1>CENGICAÑA</h1>
-            <p>Recupera el acceso a tu cuenta</p>
-        </div>
-
-        <?php if ($mensaje): ?>
-            <div class="error-msg">
-                <?= htmlspecialchars($mensaje, ENT_QUOTES, 'UTF-8') ?>
+    <main class="ct-main ct-main--solo">
+        <section class="ct-card" aria-labelledby="recuperar-title">
+            <div class="ct-card-brand">
+                <img src="assets/img/logo-cengitech.svg" alt="" aria-hidden="true">
+                <span>Cengi<b>tech</b></span>
             </div>
-        <?php endif; ?>
+            <h2 id="recuperar-title">¿Olvidaste tu contraseña?</h2>
+            <p class="ct-subtitle">Ingresa el correo con el que accedes a Cengitech y te enviaremos un enlace para restablecerla.</p>
 
-        <form method="POST" class="login-form">
+            <?php if ($mensaje): ?>
+                <div class="ct-alert ct-alert--ok" role="status"><?= htmlspecialchars($mensaje, ENT_QUOTES, 'UTF-8') ?></div>
+            <?php endif; ?>
 
-            <label>Correo electrónico</label>
-            <input
-                type="email"
-                name="correo"
-                placeholder="Ingresa tu email"
-                required
-            >
+            <form id="recuperar-form" method="POST" autocomplete="on">
+                <div class="ct-field">
+                    <label for="correo">Correo electrónico</label>
+                    <input id="correo" name="correo" type="email" autocomplete="username" inputmode="email" required>
+                </div>
+                <button class="ct-submit" type="submit">Enviar enlace de recuperación</button>
+            </form>
 
-            <button type="submit">
-                Enviar enlace de recuperación
-            </button>
+            <a class="ct-recovery" href="login.php">← Volver a iniciar sesión</a>
+        </section>
+    </main>
 
-        </form>
-
-        <p style="text-align:center; margin-top:16px;">
-            <a href="login.php" style="color: var(--verde-oscuro); text-decoration: none; font-size: 14px;">Volver a iniciar sesión</a>
-        </p>
-    </div>
-
+    <footer class="ct-footer">Conectando conocimiento, tecnología y aprendizaje para el desarrollo de la Agroindustria</footer>
 </div>
-
+<script>
+    document.getElementById('recuperar-form').addEventListener('submit', function (e) {
+        var btn = e.target.querySelector('.ct-submit');
+        btn.disabled = true;
+        btn.textContent = 'Enviando…';
+    });
+</script>
 </body>
 </html>

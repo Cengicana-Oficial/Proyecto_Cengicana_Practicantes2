@@ -20,7 +20,7 @@ function cengi_evg_datos(PDO $db)
 
     $eventos = $db->query("
         SELECT e.id, e.nombre, e.tipo, e.fecha, e.hora, e.lugar, e.cupo, e.color, e.estado, e.modalidad_pago,
-               e.en_colaboracion, e.colab_modalidad, e.colab_financia, e.token_percepcion, e.percep_enviada_en,
+               e.en_colaboracion, e.colab_modalidad, e.colab_financia, e.token_percepcion, e.percep_enviada_en, e.encuesta_formato,
                e.dif_flyer, e.dif_flyer_nombre, e.dif_landing, e.dif_canva, e.dif_aprob_por, e.dif_aprob_fecha, e.dif_aprob_nota,
                (SELECT COUNT(*) FROM evento_participantes ep WHERE ep.evento_id = e.id) AS registrados,
                (SELECT COUNT(*) FROM evento_participantes ep WHERE ep.evento_id = e.id
@@ -70,8 +70,9 @@ function cengi_evg_datos(PDO $db)
 
     foreach ($db->query("
         SELECT r.evento_id, r.evento_participante_id, r.via, r.estrellas, r.mejora, r.creado,
-               ep.nombre_invitado AS participante,
-               COALESCE(i.nombre_ingenios, NULLIF(ep.institucion_invitado, '')) AS institucion
+               r.correo, r.cargo, r.area, r.logistica, r.permanencia,
+               COALESCE(NULLIF(r.nombre, ''), ep.nombre_invitado) AS participante,
+               COALESCE(NULLIF(r.institucion, ''), i.nombre_ingenios, NULLIF(ep.institucion_invitado, '')) AS institucion
         FROM evento_encuesta_percep r
         LEFT JOIN evento_participantes ep ON ep.id = r.evento_participante_id
         LEFT JOIN ingenios i ON i.id = ep.ingenio_id
@@ -85,6 +86,8 @@ function cengi_evg_datos(PDO $db)
             'pid' => $r['evento_participante_id'] !== null ? (int) $r['evento_participante_id'] : null, 'via' => $r['via'],
             'estrellas' => (int) $r['estrellas'], 'mejora' => (string) $r['mejora'], 'ts' => $r['creado'],
             'participante' => $r['participante'], 'institucion' => $r['institucion'],
+            'correo' => (string) $r['correo'], 'cargo' => (string) $r['cargo'], 'area' => (string) $r['area'],
+            'logistica' => $r['logistica'] !== null ? (int) $r['logistica'] : null, 'permanencia' => (string) $r['permanencia'],
         ];
     }
 

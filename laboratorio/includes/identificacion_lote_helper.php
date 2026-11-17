@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/muestra_identificacion_helper.php';
 require_once __DIR__ . '/catalogo_muestras_helper.php';
+require_once __DIR__ . '/experimentos_helper.php';
 
 function labIdentificacionConfig(?array $reemplazo = null): array
 {
@@ -249,6 +250,7 @@ function labIdentificacionGuardarLote(PDO $pdo, array $data, string $usuario): a
             ON DUPLICATE KEY UPDATE lectura_codigo=VALUES(lectura_codigo),actualizado_por=VALUES(actualizado_por)');
         $compartidos = $pdo->prepare('UPDATE muestra_identificacion SET parcela=?, bloque=?, tratamiento=?, repeticion=?, variedad=?, observaciones=? WHERE id_muestra=?');
         unset($etiquetas['_plantilla']);
+        $deExperimentos = []; // id_muestra del laboratorio => ID de Experimentos leido en la etiqueta
         foreach ($etiquetas as $idM => $e) {
             if (labIdentificacionEstado($e) !== 'pendiente' || $version > 0) {
                 $lectura = $e['info'] !== '' && mb_strlen($e['info']) <= 255 ? $e['info'] : $permitidas[$idM]['codigo_lab'];
@@ -256,7 +258,21 @@ function labIdentificacionGuardarLote(PDO $pdo, array $data, string $usuario): a
                 if ($metodo === 'tabular') {
                     $c = $e['campos'];
                     $compartidos->execute([$c['parcela'] ?? '',$c['bloque'] ?? '',$c['tratamiento'] ?? '',$c['repeticion'] ?? '',$c['variedad'] ?? '',$c['obs'] ?? '',$idM]);
+                } elseif ($idExp = labExpIdDeLectura($e['info'])) {
+                    $deExperimentos[$idM] = $idExp;
                 }
+            }
+        }
+        // Etiquetas de Experimentos: la ficha se llena con los datos de la muestra en Experimentos
+        // (lectura directa de su base), sin digitar.
+        if ($deExperimentos) {
+            $datosExp = labExpMuestras($pdo, array_values($deExperimentos));
+            foreach ($deExperimentos as $idM => $idExp) {
+                if (!isset($datosExp[$idExp])) continue;
+                $i = $datosExp[$idExp]['identificacion'];
+                $corta = static fn($v, int $n) => mb_substr((string) ($v ?? ''), 0, $n); // mismos limites que la ficha
+                $compartidos->execute([$corta($i['parcela'], 120),$corta($i['bloque'], 120),$corta($i['tratamiento'], 255),
+                    $corta($i['repeticion'], 120),$corta($i['variedad'], 180),$corta($i['observaciones'], 1000),$idM]);
             }
         }
         if ($own) $pdo->commit();

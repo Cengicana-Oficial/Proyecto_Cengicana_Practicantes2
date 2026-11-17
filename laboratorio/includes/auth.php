@@ -7,6 +7,21 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 }
 
 /*
+ * Campanita de notificaciones (includes/notificaciones_helper.php): su resultado se guarda 60 s en
+ * la sesión. Cualquier acción del usuario (POST: capturar, validar, asignar, firmar, enviar,
+ * marcar entregado…) borra ese guardado, para que la campanita refleje de inmediato lo que acaba
+ * de resolver en lugar de seguir mostrándolo hasta un minuto más.
+ */
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && session_status() === PHP_SESSION_ACTIVE) {
+    foreach (array_keys($_SESSION) as $claveNotif) {
+        if (is_string($claveNotif) && strncmp($claveNotif, 'lab_notif_', 10) === 0) {
+            unset($_SESSION[$claveNotif]);
+        }
+    }
+    unset($claveNotif);
+}
+
+/*
  * Rol por modulo (login/config/roles_modulo.php): la sesion es compartida con los demas
  * modulos, asi que en cada peticion se cargan el rol y los permisos del usuario EN
  * LABORATORIO. Su rol en Cursos, Comites, etc. no aplica aqui.

@@ -89,28 +89,43 @@ function menu_modulo_meta($nombre)
     $rolId = (int) ($_SESSION['rol_id'] ?? 0);
     $ruta = '#';
     $icono = 'apps';
+    $nombreVisible = null;
+    $logo = null;
 
     if ($modulo === 'cursos') {
         $ruta = '../cengicursos/index.php';
         $icono = 'school';
+        $nombreVisible = 'CengiCursos';
+        $logo = 'assets/img/logo-cengicursos.svg';
     } elseif (in_array($modulo, ['laboratorio', 'laboratorios'], true)) {
         $ruta = '../laboratorio/index.php';
         $icono = 'science';
+        $nombreVisible = 'CengiLabs';
+        $logo = 'assets/img/logo-cengilabs.svg';
     } elseif ($modulo === 'comites, transferencia y comunicacion') {
         $ruta = '../comites/index.php';
         $icono = 'diversity_3';
+        // Marca visible del modulo; el nombre en BD no cambia (se usa para enlazarlo).
+        $nombreVisible = 'CengiConecta';
+        $logo = 'assets/img/logo-cengiconecta.svg';
     } elseif ($modulo === 'solicitudes internas') {
         $ruta = '../sistema_de_solicitudes/index.php';
         $icono = 'assignment';
+        $nombreVisible = 'CengiColabora';
+        $logo = 'assets/img/logo-cengicolabora.svg';
     } elseif (in_array($modulo, ['sigec', 'experimentos'], true)) {
         // Experimentos (SIGEC) corre en su propio contenedor/dominio (no comparte sesion
         // PHP nativa), por eso pasa por el puente de SSO en vez de saltar
         // directo a una carpeta hermana como los demas modulos.
         $ruta = 'sso_sigec.php';
         $icono = 'biotech';
+        $nombreVisible = 'CengiInvestiga';
+        $logo = 'assets/img/logo-cengiinvestiga.svg';
     } elseif ($modulo === 'solicitud de visitas') {
         $ruta = '../Pruebas/public/admin/dashboard_unificado.php?modulo=solicitudes';
         $icono = 'calendar_today';
+        $nombreVisible = 'CengiVisitas';
+        $logo = 'assets/img/logo-cengivisitas.svg';
 
         if (!$esSuperadmin && $rolId === 2) {
             $ruta .= '&estado=aprobado';
@@ -129,7 +144,32 @@ function menu_modulo_meta($nombre)
         $icono = 'payments';
     }
 
-    return ['ruta' => $ruta, 'icono' => $icono];
+    return [
+        'ruta' => $ruta,
+        'icono' => $icono,
+        'descripcion' => menu_modulo_descripcion($modulo),
+        'nombre' => $nombreVisible ?? $nombre,
+        'logo' => $logo,
+    ];
+}
+
+function menu_modulo_descripcion($moduloNormalizado)
+{
+    $descripciones = [
+        'cursos' => 'Capacitación, inscripciones y eventos',
+        'laboratorio' => 'Muestras, análisis y resultados',
+        'laboratorios' => 'Muestras, análisis y resultados',
+        'experimentos' => 'Programas, ensayos y evaluaciones',
+        'sigec' => 'Programas, ensayos y evaluaciones',
+        'comites, transferencia y comunicacion' => 'Comités, transferencia y comunicación',
+        'solicitudes internas' => 'Requerimientos entre áreas',
+        'solicitud de visitas' => 'Programación y aprobación de visitas',
+        'servicio tecnico' => 'Atención y seguimiento técnico',
+        'ensayos' => 'Gestión de ensayos',
+        'pago' => 'Control de pagos',
+    ];
+
+    return $descripciones[$moduloNormalizado] ?? 'Sistema de la plataforma';
 }
 
 $mostrarAdministracion = !empty($_SESSION['es_superadmin']);
@@ -200,20 +240,22 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($titulo); ?> | CENGICAÑA</title>
+    <meta name="theme-color" content="#073d17">
+    <title>Panel general | Cengitech</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/Menu.css?v=<?php echo filemtime(__DIR__ . '/assets/Menu.css'); ?>">
+    <link rel="stylesheet" href="assets/menu-cengitech.css?v=<?php echo filemtime(__DIR__ . '/assets/menu-cengitech.css'); ?>">
 </head>
-<body>
+<body class="cx">
     <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
     <header class="app-header" id="appHeader">
-        <div class="brand-accent"></div>
         <div class="nav-shell">
-            <a class="brand" href="Menu.php" aria-label="Ir al panel principal">
-                <img class="brand-logo" src="assets/img/logo.png" alt="CENGICAÑA" width="150" style="width:150px;max-width:150px;height:auto;max-height:64px;object-fit:contain;">
+            <a class="brand" href="Menu.php" aria-label="Cengitech, ir al panel general">
+                <img class="brand-symbol" src="assets/img/logo-cengitech.svg" alt="" aria-hidden="true">
+                <span class="brand-name">Cengi<b>tech</b></span>
             </a>
 
             <button class="menu-toggle" id="menuBtn" type="button"
@@ -253,7 +295,7 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
                     </details>
                 <?php endif; ?>
 
-                <details class="nav-dropdown systems-dropdown">
+                <details class="nav-dropdown">
                     <summary class="nav-link">
                         <span class="material-symbols-outlined">apps</span>
                         Sistemas
@@ -266,8 +308,12 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
                             <?php $meta = menu_modulo_meta($modulo['nombre']); ?>
                             <a href="<?php echo htmlspecialchars($meta['ruta']); ?>"
                                <?php echo $meta['ruta'] === '#' ? 'class="is-disabled" aria-disabled="true"' : ''; ?>>
-                                <span class="material-symbols-outlined"><?php echo htmlspecialchars($meta['icono']); ?></span>
-                                <?php echo htmlspecialchars($modulo['nombre']); ?>
+                                <?php if ($meta['logo']): ?>
+                                    <img class="dropdown-logo" src="<?php echo htmlspecialchars($meta['logo']); ?>" alt="" aria-hidden="true">
+                                <?php else: ?>
+                                    <span class="material-symbols-outlined"><?php echo htmlspecialchars($meta['icono']); ?></span>
+                                <?php endif; ?>
+                                <?php echo htmlspecialchars($meta['nombre']); ?>
                             </a>
                         <?php endforeach; ?>
                     </div>
@@ -303,31 +349,35 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
 
     <main id="contenido" tabindex="-1">
         <section class="hero">
-            <div class="hero-copy">
-                <span class="eyebrow">CENGICAÑA Digital</span>
-                <h1>Todo el trabajo,<br><span>en un mismo lugar.</span></h1>
-                <p>Gestiona procesos, solicitudes y accesos desde una plataforma clara, rápida y organizada.</p>
-            </div>
+            <div class="hero-inner">
+                <div class="hero-copy">
+                    <span class="eyebrow"><i></i> Hola, <?php echo htmlspecialchars(explode(' ', trim($user['nombre']))[0]); ?></span>
+                    <h1>Bienvenido a Cengi<span>tech</span></h1>
+                    <p class="hero-tagline">Conocimiento, innovación y gestión para la agroindustria cañera</p>
+                    <div class="hero-accent" aria-hidden="true"></div>
+                    <p class="hero-intro">Desde aquí accedes a los módulos del ecosistema digital de Cengitech habilitados para tu cuenta.</p>
+                </div>
 
-            <div class="hero-summary">
-                <div class="summary-heading">
-                    <span class="material-symbols-outlined">monitoring</span>
-                    <div>
-                        <strong>Resumen de la plataforma</strong>
-                        <small>Información actualizada de tus sistemas</small>
+                <aside class="hero-summary" aria-label="Resumen de la plataforma">
+                    <div class="summary-heading">
+                        <span class="material-symbols-outlined">monitoring</span>
+                        <div>
+                            <strong>Resumen de la plataforma</strong>
+                            <small>Información de tus sistemas</small>
+                        </div>
                     </div>
-                </div>
-                <div class="summary-grid">
-                    <div>
-                        <strong><?php echo count($modulos); ?></strong>
-                        <span>Sistemas disponibles</span>
+                    <div class="summary-grid">
+                        <div>
+                            <strong><?php echo count($modulos); ?></strong>
+                            <span>Sistemas disponibles</span>
+                        </div>
+                        <div>
+                            <strong><?php echo $totalUsuariosVinculados; ?></strong>
+                            <span>Vínculos de usuarios</span>
+                        </div>
                     </div>
-                    <div>
-                        <strong><?php echo $totalUsuariosVinculados; ?></strong>
-                        <span>Vínculos de usuarios</span>
-                    </div>
-                </div>
-                <span class="summary-status"><i></i> Accesos habilitados para tu cuenta</span>
+                    <span class="summary-status"><i></i> Accesos habilitados para tu cuenta</span>
+                </aside>
             </div>
         </section>
 
@@ -335,39 +385,48 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
             <div class="section-heading">
                 <div>
                     <span class="section-kicker">Accesos directos</span>
-                    <h2>Sistemas disponibles</h2>
-                    <p>Ingresa rápidamente a las herramientas habilitadas para tu cuenta.</p>
+                    <h2>Módulos disponibles</h2>
+                    <p>Accede rápidamente a los módulos habilitados para tu cuenta.</p>
+                </div>
+                <div class="systems-toolbar" id="systemsToolbar" hidden>
+                    <label class="system-search" for="systemSearch">
+                        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                        <span class="sr-only">Buscar módulo por nombre</span>
+                        <input id="systemSearch" type="search" placeholder="Buscar un módulo…" autocomplete="off" aria-controls="systemsGrid">
+                    </label>
+                    <span id="systemResults" role="status" aria-live="polite"></span>
                 </div>
             </div>
 
-            <div class="systems-toolbar" id="systemsToolbar" hidden>
-                <label class="system-search" for="systemSearch">
-                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
-                    <span class="sr-only">Buscar sistema por nombre</span>
-                    <input id="systemSearch" type="search" placeholder="Buscar un sistema…" autocomplete="off" aria-controls="systemsGrid">
-                </label>
-                <span id="systemResults" role="status" aria-live="polite"></span>
-            </div>
             <div class="systems-grid" id="systemsGrid">
-                <?php foreach ($modulos as $modulo): ?>
+                <?php foreach (array_values($modulos) as $i => $modulo): ?>
                     <?php $meta = menu_modulo_meta($modulo['nombre']); ?>
                     <a class="system-card<?php echo $meta['ruta'] === '#' ? ' is-disabled' : ''; ?>"
+                       data-buscar="<?php echo htmlspecialchars($meta['nombre'] . ' ' . $modulo['nombre'] . ' ' . $meta['descripcion']); ?>"
+                       style="--i: <?php echo (int) $i; ?>"
                        href="<?php echo htmlspecialchars($meta['ruta']); ?>"
                        <?php echo $meta['ruta'] === '#' ? 'aria-disabled="true"' : ''; ?>>
-                        <span class="system-icon">
-                            <span class="material-symbols-outlined"><?php echo htmlspecialchars($meta['icono']); ?></span>
+                        <span class="system-icon<?php echo $meta['logo'] ? ' has-logo' : ''; ?>">
+                            <?php if ($meta['logo']): ?>
+                                <img src="<?php echo htmlspecialchars($meta['logo']); ?>" alt="" aria-hidden="true">
+                            <?php else: ?>
+                                <span class="material-symbols-outlined"><?php echo htmlspecialchars($meta['icono']); ?></span>
+                            <?php endif; ?>
                         </span>
-                        <span>
-                            <strong><?php echo htmlspecialchars($modulo['nombre']); ?></strong>
-                            <small><?php echo $meta['ruta'] === '#' ? 'Acceso no configurado' : 'Abrir sistema'; ?></small>
+                        <span class="system-copy">
+                            <strong><?php echo htmlspecialchars($meta['nombre']); ?></strong>
+                            <small><?php echo htmlspecialchars($meta['descripcion']); ?></small>
                         </span>
-                        <span class="material-symbols-outlined system-arrow">arrow_forward</span>
+                        <span class="system-cta">
+                            <?php echo $meta['ruta'] === '#' ? 'Acceso no configurado' : 'Ingresar al módulo'; ?>
+                            <span class="material-symbols-outlined system-arrow">arrow_forward</span>
+                        </span>
                     </a>
                 <?php endforeach; ?>
             </div>
             <div class="systems-empty" id="systemsEmpty" <?php echo count($modulos) ? 'hidden' : ''; ?>>
                 <span class="material-symbols-outlined" aria-hidden="true">search_off</span>
-                <h3><?php echo count($modulos) ? 'No se encontraron sistemas' : 'No tienes sistemas asignados'; ?></h3>
+                <h3><?php echo count($modulos) ? 'No se encontraron módulos' : 'No tienes módulos asignados'; ?></h3>
                 <p><?php echo count($modulos) ? 'Prueba con otro nombre o limpia la búsqueda.' : 'Contacta al administrador para solicitar acceso.'; ?></p>
                 <?php if (count($modulos)): ?><button type="button" id="clearSystemSearch">Mostrar todos</button><?php endif; ?>
             </div>
@@ -375,11 +434,11 @@ $inicialUsuario = mb_strtoupper(mb_substr($user['nombre'], 0, 1, 'UTF-8'), 'UTF-
     </main>
 
     <footer class="app-footer">
-        <div>
-            <strong>CENGICAÑA</strong>
-            <span>© <?php echo date('Y'); ?> · Plataforma de gestión institucional</span>
+        <p class="footer-band">Conectando conocimiento, tecnología y aprendizaje para el desarrollo de la Agroindustria</p>
+        <div class="footer-bottom">
+            <span><strong>Cengi<b>tech</b></strong> · © <?php echo date('Y'); ?> Cengicaña</span>
+            <img src="assets/img/logo-cengicana.png" alt="Cengicaña">
         </div>
-        <span>Innovación al servicio de la agroindustria</span>
     </footer>
 
     <script src="config/menu.js?v=<?php echo filemtime(__DIR__ . '/config/menu.js'); ?>"></script>

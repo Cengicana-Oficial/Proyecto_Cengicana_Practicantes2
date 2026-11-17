@@ -57,7 +57,7 @@ if (!function_exists('lab_shell_nav_items')) {
      *     Planificacion del trabajo, Bandeja del analista,
      *     Validacion tecnica, Historial de versiones.
      *   Calidad y entrega:
-     *     Control de calidad, Informes, Firma electronica, Reportes.
+     *     Control de calidad, Aprobación de informes, Firma electronica, Informes emitidos.
      *   Sistema:
      *     Catalogo de analisis, Administracion.
      *
@@ -129,10 +129,10 @@ if (!function_exists('lab_shell_nav_items')) {
             $calidad[] = ['href' => 'controllers/consolidacion_controller.php', 'icon' => 'verified', 'label' => 'Control de calidad', 'match' => ['consolidacion_controller.php']];
         }
         if ($canInformes && is_file(__DIR__ . '/../view/informes_view.php')) {
-            $calidad[] = ['href' => 'view/informes_view.php', 'icon' => 'summarize', 'label' => 'Informes', 'match' => ['informes_view.php', 'firma_electronica_view.php']];
+            $calidad[] = ['href' => 'view/informes_view.php', 'icon' => 'summarize', 'label' => 'Aprobación de informes', 'match' => ['informes_view.php', 'firma_electronica_view.php']];
         }
         if ($canDocumentos && is_file(__DIR__ . '/../view/documentos_view.php')) {
-            $calidad[] = ['href' => 'view/documentos_view.php', 'icon' => 'description', 'label' => 'Reportes', 'match' => ['documentos_view.php']];
+            $calidad[] = ['href' => 'view/documentos_view.php', 'icon' => 'description', 'label' => 'Informes emitidos', 'match' => ['documentos_view.php']];
         }
         if ($calidad) {
             $groups['Calidad y entrega'] = $calidad;
@@ -180,7 +180,8 @@ if (!function_exists('lab_shell_head')) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= htmlspecialchars($titulo !== '' ? $titulo . ' · Laboratorio' : 'Laboratorio', ENT_QUOTES, 'UTF-8') ?></title>
+<title><?= htmlspecialchars($titulo !== '' ? $titulo . ' · CengiLabs' : 'CengiLabs', ENT_QUOTES, 'UTF-8') ?></title>
+<link rel="icon" type="image/svg+xml" href="<?= htmlspecialchars($base, ENT_QUOTES, 'UTF-8') ?>img/logo-cengilabs.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
@@ -224,12 +225,14 @@ if (!function_exists('lab_shell_open')) {
         $groups = lab_shell_nav_items();
         $currentScript = basename($currentScript);
         ?>
+<?php /* Identidad CengiLabs: se carga aquí para que aplique también a las vistas con <head> propio. */ ?>
+<link rel="stylesheet" href="<?= htmlspecialchars($base, ENT_QUOTES, 'UTF-8') ?>css/cengilabs.css?v=<?= (int) @filemtime(__DIR__ . '/../css/cengilabs.css') ?>">
 <div class="cengi-sidebar-wrap">
 <aside class="cengi-sidebar" id="cengiLabSidebar">
     <a class="cengi-brand" href="<?= htmlspecialchars($base, ENT_QUOTES, 'UTF-8') ?>index.php">
-        <div class="cengi-brand-mark"><span class="material-symbols-outlined">experiment</span></div>
+        <img class="cgl-logo" src="<?= htmlspecialchars($base, ENT_QUOTES, 'UTF-8') ?>img/logo-cengilabs.svg" alt="" aria-hidden="true">
         <div class="cengi-brand-copy">
-            <strong>CENGILABS</strong>
+            <strong>Cengi<b>Labs</b></strong>
             <small>Lab. Agroindustrial</small>
         </div>
     </a>
@@ -263,7 +266,7 @@ if (!function_exists('lab_shell_open')) {
             <span class="material-symbols-outlined">logout</span>
             <span>Cerrar sesion</span>
         </a>
-        <div class="cengi-sidebar-version">Laboratorio &middot; Zafra 2025&ndash;2026</div>
+        <div class="cengi-sidebar-version">CengiLabs &middot; Zafra 2025&ndash;2026</div>
     </div>
 </aside>
 
@@ -279,7 +282,7 @@ if (!function_exists('lab_shell_open')) {
         <?php endif; ?>
     </div>
     <div class="cengi-topbar-right">
-        <div class="cengi-notif" id="cengiNotif" data-endpoint="<?= htmlspecialchars($base . 'controllers/notificaciones.php', ENT_QUOTES, 'UTF-8') ?>" data-base="<?= htmlspecialchars($base, ENT_QUOTES, 'UTF-8') ?>">
+        <div class="cengi-notif" id="cengiNotif" data-endpoint="<?= htmlspecialchars($base . 'controllers/notificaciones.php', ENT_QUOTES, 'UTF-8') ?>" data-base="<?= htmlspecialchars($base, ENT_QUOTES, 'UTF-8') ?>" data-usuario="<?= substr(hash('sha256', (string) (lab_current_user()['id'] ?? '') . '|' . (string) (lab_current_user()['nombre'] ?? '')), 0, 16) ?>">
             <button type="button" class="cengi-notif-btn" id="cengiNotifBtn" aria-label="Notificaciones" aria-haspopup="true" aria-expanded="false" aria-controls="cengiNotifPanel">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
                 <span class="cengi-notif-count" id="cengiNotifCount" hidden></span>
@@ -359,7 +362,10 @@ if (!function_exists('lab_shell_content_close')) {
 })();
 
 /* Campanita: pide al servidor lo que le toca atender al usuario (según su rol) y lo
-   refresca cada 2 minutos y al volver a la pestaña. */
+   refresca cada 2 minutos y al volver a la pestaña.
+   Las notificaciones son tareas: desaparecen de la lista cuando se resuelven. El número rojo, en
+   cambio, cuenta solo lo NUEVO desde la última vez que el usuario abrió la campanita (se guarda
+   en este navegador lo visto por tipo); al abrirla se apaga, y las novedades se marcan en la lista. */
 (function () {
     var root = document.getElementById('cengiNotif');
     if (!root || !window.fetch) return;
@@ -368,24 +374,50 @@ if (!function_exists('lab_shell_content_close')) {
     var list = document.getElementById('cengiNotifList');
     var count = document.getElementById('cengiNotifCount');
     var base = root.dataset.base || '';
+    var claveVisto = 'cengilabs_notif_visto_' + (root.dataset.usuario || 'anon');
+    var ultimo = null; // últimos datos recibidos
     function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }
+    function leerVisto() { try { return JSON.parse(localStorage.getItem(claveVisto) || 'null'); } catch (e) { return null; } }
+    function guardarVisto(v) { try { localStorage.setItem(claveVisto, JSON.stringify(v)); } catch (e) {} }
+    // Cantidades por tipo de notificación (id → cantidad).
+    function cantidades(items) { var c = {}; (items || []).forEach(function (n) { c[n.id] = Number(n.cantidad) || 0; }); return c; }
     function pintar(datos) {
+        ultimo = datos;
+        var items = datos.items || [], actual = cantidades(items), visto = leerVisto();
+        // Nunca abrió la campanita en este navegador: todo lo pendiente cuenta como nuevo.
+        if (!visto) visto = {};
+        // Si algo bajó (se resolvió), la base baja también: así un aumento posterior sí cuenta como nuevo.
+        var ajustado = false;
+        Object.keys(visto).forEach(function (id) { var a = actual[id] || 0; if (visto[id] > a) { visto[id] = a; ajustado = true; } });
+        if (ajustado) guardarVisto(visto);
+        var nuevos = 0, nuevosPor = {};
+        items.forEach(function (n) { var d = (actual[n.id] || 0) - (visto[n.id] || 0); if (d > 0) { nuevos += d; nuevosPor[n.id] = d; } });
         var total = datos.total || 0;
-        count.hidden = total <= 0;
-        count.textContent = total > 99 ? '99+' : String(total);
-        btn.setAttribute('aria-label', total ? 'Notificaciones: ' + total + ' pendiente(s)' : 'Notificaciones: nada pendiente');
-        list.innerHTML = (datos.items || []).length
-            ? datos.items.map(function (n) {
-                return '<a class="cengi-notif-item is-' + esc(n.tono) + '" href="' + esc(base + n.href) + '">'
+        count.hidden = nuevos <= 0;
+        count.textContent = nuevos > 99 ? '99+' : String(nuevos);
+        btn.setAttribute('aria-label', 'Notificaciones: ' + (total ? total + ' pendiente(s)' : 'nada pendiente') + (nuevos ? ', ' + nuevos + ' nuevo(s)' : ''));
+        list.innerHTML = items.length
+            ? items.map(function (n) {
+                var d = nuevosPor[n.id] || 0;
+                return '<a class="cengi-notif-item is-' + esc(n.tono) + (d ? ' is-nuevo' : '') + '" href="' + esc(base + n.href) + '">'
                     + '<span class="cengi-notif-num">' + esc(n.cantidad) + '</span>'
-                    + '<span><b>' + esc(n.titulo) + '</b><small>' + esc(n.detalle) + '</small></span></a>';
+                    + '<span><b>' + esc(n.titulo) + (d ? ' <em class="cengi-notif-new">+' + esc(d) + ' nuevo' + (d === 1 ? '' : 's') + '</em>' : '') + '</b><small>' + esc(n.detalle) + '</small></span></a>';
             }).join('')
             : '<p class="cengi-notif-empty">Todo al día: no tiene pendientes por atender.</p>';
+    }
+    // Al abrir la campanita, todo lo actual queda como visto: el número rojo se apaga
+    // (las marcas "nuevo" de la lista se mantienen mientras esté abierta).
+    function marcarVisto() {
+        if (!ultimo) return;
+        guardarVisto(cantidades(ultimo.items));
+        count.hidden = true;
+        var total = ultimo.total || 0;
+        btn.setAttribute('aria-label', 'Notificaciones: ' + (total ? total + ' pendiente(s)' : 'nada pendiente'));
     }
     function cargar(fresco) {
         return fetch(root.dataset.endpoint + (fresco ? '?fresco=1' : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } })
             .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (datos) { if (datos) pintar(datos); })
+            .then(function (datos) { if (datos) { pintar(datos); if (!panel.hidden) marcarVisto(); } })
             .catch(function () {});
     }
     function abrir(abierto) {
@@ -417,6 +449,8 @@ if (!function_exists('lab_shell_content_close')) {
 .cengi-notif-item small { display:block; color:var(--cengi-muted, #636A6F); font-size:12px; margin-top:2px; }
 .cengi-notif-num { flex:none; min-width:30px; height:30px; padding:0 6px; border-radius:8px; background:#E3F1D3; color:#30353A; font-weight:700; line-height:30px; text-align:center; }
 .cengi-notif-item.is-alerta .cengi-notif-num { background:#FFD9BF; color:#B34B00; }
+.cengi-notif-item.is-nuevo { background:#F6FBEF; box-shadow:inset 3px 0 0 var(--cengi-primary, #73bc25); }
+.cengi-notif-new { display:inline-block; margin-left:6px; padding:0 7px; border-radius:999px; background:#B34B00; color:#fff; font-size:10.5px; font-style:normal; font-weight:700; line-height:17px; vertical-align:1px; }
 .cengi-notif-empty { margin:0; padding:18px 14px; color:var(--cengi-muted, #636A6F); font-size:13px; text-align:center; }
 </style>
         <?php

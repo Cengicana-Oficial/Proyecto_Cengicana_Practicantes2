@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" role="img" aria-label="Símbolo CengiLabs: tubo de ensayo, molécula y caña de azúcar">
+  <defs>
+    <linearGradient id="cc-anillo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#bcf32e"/>
+      <stop offset="1" stop-color="#5aa816"/>
+    </linearGradient>
+    <radialGradient id="cc-fondo" cx=".45" cy=".4" r=".7">
+      <stop offset="0" stop-color="#0d5a22"/>
+      <stop offset="1" stop-color="#03300f"/>
+    </radialGradient>
+    <linearGradient id="cc-cana" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f4ffe0"/>
+      <stop offset="1" stop-color="#a9dc4c"/>
+    </linearGradient>
+    <linearGradient id="cc-hoja" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#7cc62a"/>
+      <stop offset="1" stop-color="#e9ffb8"/>
+    </linearGradient>
+    <clipPath id="cc-dentro"><circle cx="290" cy="250" r="156"/></clipPath>
+  </defs>
+  <!-- Tubo de ensayo con líquido (equivale al mango de la lupa de Cengitech) -->
+  <g transform="translate(178 362) rotate(-45)">
+    <clipPath id="cl-tubo"><rect x="-178" y="-24" width="190" height="48" rx="24"/></clipPath>
+    <rect x="-178" y="-24" width="190" height="48" rx="24" fill="#eaffc4"/>
+    <g clip-path="url(#cl-tubo)">
+      <rect x="-190" y="-30" width="110" height="60" fill="url(#cc-anillo)"/>
+      <circle cx="-150" cy="-6" r="6" fill="#f4ffe0" opacity=".9"/>
+      <circle cx="-122" cy="8" r="4.5" fill="#f4ffe0" opacity=".85"/>
+      <circle cx="-100" cy="-8" r="3.5" fill="#f4ffe0" opacity=".8"/>
+    </g>
+    <rect x="-178" y="-24" width="190" height="48" rx="24" fill="none" stroke="url(#cc-anillo)" stroke-width="9"/>
+  </g>
+
+  <!-- Molécula (equivale a los nodos de circuito de Cengitech) -->
+  <g stroke="url(#cc-anillo)" stroke-width="14" stroke-linecap="round">
+    <line x1="430" y1="148" x2="522" y2="92"/>
+    <line x1="522" y1="92" x2="616" y2="128"/>
+    <line x1="616" y1="128" x2="672" y2="54"/>
+    <line x1="616" y1="128" x2="584" y2="222"/>
+    <line x1="584" y1="222" x2="460" y2="226"/>
+    <line x1="532" y1="78" x2="606" y2="106" stroke-width="6" opacity=".7"/>
+  </g>
+  <g>
+    <circle cx="522" cy="92" r="32" fill="url(#cc-anillo)"/><circle cx="522" cy="92" r="13" fill="#f4ffe0"/>
+    <circle cx="616" cy="128" r="24" fill="url(#cc-anillo)"/><circle cx="616" cy="128" r="9" fill="#f4ffe0"/>
+    <circle cx="672" cy="54" r="18" fill="#FFCC00"/><circle cx="672" cy="54" r="7" fill="#fff6c9"/>
+    <circle cx="584" cy="222" r="28" fill="url(#cc-anillo)"/><circle cx="584" cy="222" r="11" fill="#f4ffe0"/>
+  </g>
+  <!-- Anillo -->
+  <circle cx="290" cy="250" r="178" fill="url(#cc-fondo)" stroke="url(#cc-anillo)" stroke-width="44"/>
+
+  <!-- Interior: caña y hojas -->
+  <g clip-path="url(#cc-dentro)">
+    <g transform="rotate(-8 262 260)">
+      <rect x="240" y="128" width="44" height="74" rx="12" fill="url(#cc-cana)"/>
+      <rect x="240" y="208" width="44" height="80" rx="12" fill="url(#cc-cana)"/>
+      <rect x="240" y="294" width="44" height="80" rx="12" fill="url(#cc-cana)"/>
+      <rect x="240" y="380" width="44" height="60" rx="12" fill="url(#cc-cana)"/>
+    </g>
+    <g transform="rotate(22 330 330)">
+      <rect x="312" y="270" width="36" height="62" rx="10" fill="url(#cc-cana)" opacity=".95"/>
+      <rect x="312" y="338" width="36" height="70" rx="10" fill="url(#cc-cana)" opacity=".95"/>
+    </g>
+    <path d="M268 236 C 276 160, 330 112, 404 104 C 372 146, 330 196, 268 236 Z" fill="url(#cc-hoja)"/>
+    <path d="M276 196 C 300 176, 340 156, 380 150" fill="none" stroke="#0d5a22" stroke-width="4" stroke-linecap="round" opacity=".35"/>
+    <path d="M256 290 C 222 236, 186 214, 150 214 C 178 246, 206 280, 256 290 Z" fill="url(#cc-hoja)" opacity=".9"/>
+    <path d="M300 268 C 344 236, 392 232, 430 248 C 392 262, 350 278, 300 268 Z" fill="url(#cc-hoja)" opacity=".8"/>
+  </g>
+</svg>

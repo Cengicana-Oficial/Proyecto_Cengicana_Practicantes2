@@ -75,15 +75,20 @@ try {
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard Unificado</title>
+    <title>CengiVisitas · Solicitud de visitas</title>
+    <link rel="icon" type="image/svg+xml" href="../../assets/img/logo-cengivisitas.svg">
     <link rel="stylesheet" href="../../assets/dashboard.css">
     <link rel="stylesheet" href="../../assets/inicio.css">
+    <link rel="stylesheet" href="../../assets/cengivisitas.css?v=<?= (int) @filemtime(__DIR__ . '/../../assets/cengivisitas.css') ?>">
 </head>
 <body>
 
 <div class="layout">
     <aside class="sidebar">
-        <div class="logo">CENGICANA</div>
+        <a class="cv-brand" href="dashboard_unificado.php?modulo=inicio">
+            <img src="../../assets/img/logo-cengivisitas.svg" alt="" aria-hidden="true">
+            <span><strong>Cengi<b>Visitas</b></strong><small>Solicitud de visitas</small></span>
+        </a>
 
         <nav>
             <?php if ($canInicio): ?>
@@ -106,7 +111,10 @@ try {
             <?php endif; ?>
         </nav>
 
-        <a href="logout.php" class="btn-logout">Cerrar sesion</a>
+        <div class="cv-foot">
+            <a href="../../../login/Menu.php" class="cv-menu">Menú principal</a>
+            <a href="logout.php" class="btn-logout">Cerrar sesion</a>
+        </div>
     </aside>
 
     <main class="main-content">
@@ -123,7 +131,13 @@ try {
             <?php include 'modulos/solicitudes_unificadas.php'; ?>
         <?php else: ?>
             <header class="dashboard-header">
+                <span class="dashboard-kicker">Inicio</span>
                 <h2>Dashboard General</h2>
+                <div class="cv-hero-brand">
+                    <img src="../../assets/img/logo-cengivisitas.svg" alt="" aria-hidden="true">
+                    <strong>Cengi<b>Visitas</b></strong>
+                    <span>· parte del ecosistema Cengitech</span>
+                </div>
             </header>
 
             <div class="cards">

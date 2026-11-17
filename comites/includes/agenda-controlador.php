@@ -3,6 +3,8 @@ declare(strict_types=1);
 require_once __DIR__.'/directorio.php';
 require_once __DIR__.'/directorio-exportar.php';
 require_once __DIR__.'/agenda.php';
+require_once __DIR__.'/agenda-informe.php';
+require_once __DIR__.'/marca.php';
 $agendaTipo=$view==='eventos'?'eventos':'reuniones';
 $agendaRecurso=$agendaTipo;
 if(can_view_resource($user,$agendaRecurso)) {
@@ -24,6 +26,15 @@ if(isset($_GET['agenda_api']) || $_SERVER['REQUEST_METHOD']==='POST' || isset($_
             };
             header('Content-Type: text/csv; charset=utf-8');header('Content-Disposition: attachment; filename="plantilla_'.(in_array($_GET['plantilla'] ?? '',['asistentes','encuesta'],true)?$_GET['plantilla']:'planificacion').'.csv"');
             $f=fopen('php://output','w');fwrite($f,"\xEF\xBB\xBF");foreach($filas as $row)fputcsv($f,$row);fclose($f);exit;
+        }
+        if(in_array($accion,['informe_html','informe_pdf'],true) && $agendaTipo==='eventos') {
+            // Informe de evaluación de un evento (como el de eventos de Cengicursos).
+            $evento=current(array_filter(agenda_datos($pdo,$user,'eventos')['registros'],static fn($r)=>$r['id']===(int)($d['id'] ?? 0)));
+            if(!$evento)throw new RuntimeException('El evento ya no existe.');
+            $html=agenda_informe_evento($evento,$accion==='informe_html');$archivo='informe_'.trim(preg_replace('/[^a-z0-9]+/','_',normalize_text($evento['nombre'])),'_');
+            if($accion==='informe_pdf'){$pdf=directorio_pdf($html,'portrait');header('Content-Type: application/pdf');header('Content-Disposition: attachment; filename="'.$archivo.'.pdf"');echo $pdf;}
+            else{header('Content-Type: text/html; charset=utf-8');echo $html;}
+            exit;
         }
         if(in_array($accion,['preview','html','pdf','csv','enviar'],true)) {
             $datos=agenda_datos($pdo,$user,$agendaTipo);$anio=(int)($d['anio'] ?? date('Y'));$comite=(string)($d['comite'] ?? 'todos');
@@ -54,10 +65,11 @@ if(isset($_GET['agenda_api']) || $_SERVER['REQUEST_METHOD']==='POST' || isset($_
 
 function agenda_reporte(string $tipo,array $rows,array $comites,int $anio,array $d): string
 {
-    $colores=['verde'=>'#047857','azul'=>'#1d4ed8','cafe'=>'#92400e','gris'=>'#334155'];$color=$colores[$d['color'] ?? 'verde'] ?? '#047857';
+    $marca=marca_color($d['color'] ?? 'verde');
     $titulo=e((string)($d['titulo'] ?? ('Planificación de '.$tipo.' '.$anio)));$logo=(string)($d['logo'] ?? '');
     if(strlen($logo)>1500000 || !preg_match('~^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$~',$logo))$logo='';
-    $html='<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>'.$titulo.'</title><style>body{font:11px "DejaVu Sans",Arial;color:#334155;margin:22px}h1{color:'.$color.';font-size:24px}header{border-bottom:4px solid '.$color.';padding-bottom:12px;margin-bottom:18px}header img{float:right;max-height:60px;max-width:160px}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{padding:7px;border:1px solid #e2e8f0;word-wrap:break-word;vertical-align:top}th{background:'.$color.';color:#fff}small{color:#64748b}p{white-space:pre-wrap}tr{page-break-inside:avoid}.realizada{background:#d1fae5}.cancelada{background:#f1f5f9;text-decoration:line-through}.sin_registrar{background:#fff1f2}.reprogramada{background:#fffbeb}</style></head><body><header>'.($logo?'<img alt="Logo" src="'.e($logo).'">':'').'<h1>'.$titulo.'</h1><p>'.e((string)($d['descripcion'] ?? '')).'</p><small>CENGICAÑA · '.$anio.' · '.count($rows).' registros</small></header><table>';
+    $estados='';foreach(MARCA_ESTADOS as $k=>[$fondo,$texto])$estados.=".{$k}{background:{$fondo};color:{$texto}}";
+    $html='<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>'.$titulo.'</title><style>body{font:11px "DejaVu Sans",Arial;margin:22px}h1{font-size:22px;margin:0 0 4px}header{margin-bottom:16px}.cab{width:100%;border-collapse:collapse;margin-bottom:8px}.cab td{border:0;padding:0;vertical-align:top}.cab img{max-height:56px;max-width:170px}table.plan{width:100%;border-collapse:collapse;table-layout:fixed}table.plan th,table.plan td{padding:7px;border:1px solid '.MARCA_GRIS.';word-wrap:break-word;vertical-align:top}p{white-space:pre-wrap}tr{page-break-inside:avoid}table.plan td p{margin:0 0 3px;padding:3px 5px;border-radius:4px}.cancelada{text-decoration:line-through}'.$estados.marca_css($marca).'.cab td{border:0}</style></head><body><header><table class="cab"><tr><td><h1>'.$titulo.'</h1><p>'.e((string)($d['descripcion'] ?? '')).'</p><small>CENGICAÑA · '.$anio.' · '.count($rows).' registros</small></td><td style="text-align:right">'.($logo?'<img alt="Logo" src="'.e($logo).'">':marca_logo()).'</td></tr></table>'.marca_franja().'</header><table class="plan">';
     if($tipo==='reuniones') {
         $html.='<thead><tr><th style="width:140px">Comité</th>';foreach(AGENDA_MESES as $m)$html.='<th>'.mb_substr($m,0,3).'</th>';$html.='</tr></thead><tbody>';
         foreach($comites as $c){$rs=array_filter($rows,static fn($r)=>$r['comite_id']===$c['id']);if(!$rs)continue;$html.='<tr><td>'.e($c['nombre']).'</td>';

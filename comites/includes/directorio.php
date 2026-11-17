@@ -71,7 +71,136 @@ function directorio_historial(PDO $pdo, array $contactos): array
     return $historial;
 }
 
-function directorio_datos(PDO $pdo, array $user): array
+const DIRECTORIO_PARTICIPACION = ['muy_activo'=>'Muy activo','activo'=>'Activo','ocasional'=>'Ocasional','inactivo'=>'Inactivo','solo_eventos'=>'Solo eventos','sin_comite'=>'Sin actividad para medir'];
+/**
+ * Como se mide la participacion: la asistencia a las reuniones de sus comites es
+ * obligatoria para quien esta asignado y es la base del indice (0-100). Asistir a los
+ * eventos realizados es opcional: suma un bono de hasta BONO_EVENTOS puntos, nunca resta.
+ */
+const DIRECTORIO_BONO_EVENTOS = 15;
+/** Periodos de analisis de participacion (meses hacia atras). */
+const DIRECTORIO_PERIODOS = [3=>'Últimos 3 meses',6=>'Últimos 6 meses',12=>'Últimos 12 meses',24=>'Últimos 24 meses'];
+const DIRECTORIO_UMBRALES = ['muy_activo'=>80,'activo'=>60,'ocasional'=>30];
+/** Agrupacion informativa en reportes (no cambia la forma de medir). */
+const DIRECTORIO_PERFILES = ['interno'=>['nombre'=>'CENGICAÑA'],'ingenio'=>['nombre'=>'Ingenios y externos']];
+
+/** Perfil del contacto segun su empresa: CENGICANA (interno) o ingenio / externo. */
+function directorio_perfil(array $c): string
+{
+    return str_contains(normalize_text((string)($c['empresa'] ?? '')),'cengica') ? 'interno' : 'ingenio';
+}
+
+/**
+ * Participacion de cada contacto en los ultimos 12 meses (o desde su alta): asistencia a
+ * las reuniones realizadas de sus comites (obligatoria) y a los eventos realizados
+ * (opcional, bono). Articulos y proximos pasos se informan pero no suman al indice.
+ * Devuelve el indice 0-100 con su nivel, roles, actividad por mes y alertas.
+ */
+function directorio_participacion(PDO $pdo, array $contactos, array $historial, int $meses=12): array
+{
+    $hoy=new DateTimeImmutable('today'); $desde12=$hoy->modify("-$meses months")->format('Y-m-d');
+    $reuniones=[];
+    foreach ($pdo->query("SELECT r.id,r.comite_id,r.fecha,c.nombre FROM reuniones r LEFT JOIN comites c ON c.id=r.comite_id WHERE r.realizada=1 AND r.fecha IS NOT NULL ORDER BY r.fecha") as $r) $reuniones[$r['comite_id']][]=$r;
+    $asistio=[];
+    foreach ($pdo->query('SELECT reunion_id,contacto_id FROM reunion_asistentes') as $r) $asistio[(int)$r['contacto_id']][(int)$r['reunion_id']]=true;
+    $porNombre=[];
+    foreach ($contactos as $c) if ($c['nombre']) $porNombre[normalize_text($c['nombre'])][]=(int)$c['id'];
+    $pasos=[];
+    foreach ($pdo->query('SELECT responsable,estado,plazo,fecha FROM acuerdos') as $a) {
+        foreach ($porNombre[normalize_text((string)$a['responsable'])] ?? [] as $id) $pasos[$id][]=$a;
+    }
+    $lideres=[];
+    foreach ($pdo->query('SELECT id,nombre,lider_id FROM comites WHERE lider_id IS NOT NULL') as $g) $lideres[(int)$g['lider_id']][]=$g['nombre'];
+    $meses=[];
+    for ($i=11;$i>=0;$i--) $meses[]=$hoy->modify('first day of this month')->modify("-$i months")->format('Y-m');
+    // Fechas de los eventos realizados: cada contacto se compara con los que hubo desde su alta.
+    $fechasEventos=app_table_exists($pdo,'eventos_transferencia')
+        ? $pdo->query("SELECT fecha FROM eventos_transferencia WHERE realizada=1 AND cancelada=0 AND fecha>='$desde12'")->fetchAll(PDO::FETCH_COLUMN) : [];
+
+    $res=[];
+    foreach ($contactos as $c) {
+        $id=(int)$c['id'];
+        $alta=(string)($c['origen_fecha'] ?: substr((string)$c['creado_en'],0,10));
+        $inicio=max($desde12,$alta);
+        // Asistencia por comite: reuniones realizadas desde su alta (maximo 12 meses).
+        $comites=[]; $convocadas=0; $asistidas=0;
+        foreach ($c['comites'] as $cid) {
+            $lista=array_values(array_filter($reuniones[$cid] ?? [],static fn($r)=>$r['fecha']>=$inicio));
+            if (!$lista) { $comites[]=['id'=>$cid,'nombre'=>null,'convocadas'=>0,'asistidas'=>0,'pct'=>null,'ultimas'=>[],'faltas_seguidas'=>0]; continue; }
+            $marcas=array_map(static fn($r)=>['fecha'=>$r['fecha'],'asistio'=>isset($asistio[$id][(int)$r['id']])],$lista);
+            $n=count($marcas); $si=count(array_filter($marcas,static fn($m)=>$m['asistio']));
+            $seguidas=0; foreach (array_reverse($marcas) as $m) { if ($m['asistio']) break; $seguidas++; }
+            $comites[]=['id'=>$cid,'nombre'=>$lista[0]['nombre'],'convocadas'=>$n,'asistidas'=>$si,'pct'=>$si/$n*100,'ultimas'=>array_slice($marcas,-8),'faltas_seguidas'=>$seguidas];
+            $convocadas+=$n; $asistidas+=$si;
+        }
+        $h=array_filter($historial[$id] ?? [],static fn($e)=>$e['tipo']!=='origen' && (string)$e['fecha']>=$desde12);
+        $cuenta=static fn(string $tipo,string $prefijo='')=>count(array_filter($h,static fn($e)=>$e['tipo']===$tipo && ($prefijo===''||str_starts_with($e['titulo'],$prefijo))));
+        $eventos=$cuenta('evento'); $correos=$cuenta('correo');
+        $autor=$cuenta('memoria','Autor'); $revisor=$cuenta('memoria','Revisor');
+        $misPasos=array_filter($pasos[$id] ?? [],static fn($a)=>!$a['fecha']||$a['fecha']>=$desde12);
+        $completados=count(array_filter($misPasos,static fn($a)=>$a['estado']==='Completado'));
+        $vencidos=count(array_filter($misPasos,static fn($a)=>$a['plazo'] && $a['plazo']<$hoy->format('Y-m-d') && !in_array($a['estado'],['Completado','Cancelado'],true)));
+        $activos=array_filter($historial[$id] ?? [],static fn($e)=>in_array($e['tipo'],['reunion','evento','memoria','paso'],true) && $e['fecha']);
+        $ultima=$activos ? max(array_column($activos,'fecha')) : null;
+        $dias=$ultima ? (int)$hoy->diff(new DateTimeImmutable($ultima))->days : null;
+
+        // Indice: % de asistencia a las reuniones de sus comites (obligatoria) + bono por
+        // asistir a los eventos realizados desde su alta (opcional, hasta DIRECTORIO_BONO_EVENTOS).
+        $perfil=directorio_perfil($c);
+        $eventosPosibles=count(array_filter($fechasEventos,static fn($f)=>$f>=$inicio));
+        $pctEventos=$eventos ? min(1,$eventos/max(1,$eventosPosibles)) : ($eventosPosibles ? 0.0 : null);
+        $pctComites=$convocadas ? $asistidas/$convocadas*100 : null;
+        $bono=$pctEventos!==null ? $pctEventos*DIRECTORIO_BONO_EVENTOS : 0;
+        if ($pctComites!==null) {
+            $indice=(int)round(min(100,$pctComites+$bono));
+            $nivel=$indice>=DIRECTORIO_UMBRALES['muy_activo'] ? 'muy_activo' : ($indice>=DIRECTORIO_UMBRALES['activo'] ? 'activo' : ($indice>=DIRECTORIO_UMBRALES['ocasional'] ? 'ocasional' : 'inactivo'));
+        } elseif ($eventos) {
+            // Sin reuniones de comite que medir, pero asiste a eventos: se mide por eventos.
+            $indice=(int)round($pctEventos*100); $nivel='solo_eventos';
+        } else {
+            $indice=0; $nivel='sin_comite';
+        }
+        $componentes=[
+            'Asistencia a comités'=>[$pctComites===null ? 0 : (int)round($pctComites),100,$pctComites!==null,'obligatoria'],
+            'Eventos (bono)'=>[(int)round($bono),DIRECTORIO_BONO_EVENTOS,$pctEventos!==null,'opcional'],
+        ];
+
+        $roles=[];
+        if (isset($lideres[$id])) $roles[]='Líder de '.implode(', ',$lideres[$id]);
+        if ($asistidas) $roles[]='Asiste a reuniones';
+        if ($eventos) $roles[]='Asiste a eventos';
+        if ($autor) $roles[]='Autor en memoria';
+        if ($revisor) $roles[]='Revisor de artículos';
+        if ($misPasos) $roles[]='Responsable de próximos pasos';
+        if (!$roles && $correos) $roles[]='Solo recibe correos';
+
+        $porMes=array_fill_keys($meses,0);
+        foreach ($activos as $e) { $m=substr((string)$e['fecha'],0,7); if (isset($porMes[$m])) $porMes[$m]++; }
+
+        $alertas=[];
+        foreach ($comites as $g) {
+            if ($g['faltas_seguidas']>=2) $alertas[]=['mejorar','No asistió a las últimas '.$g['faltas_seguidas'].' reuniones de '.$g['nombre'].'.'];
+            elseif ($g['convocadas']>=3 && $g['pct']<50) $alertas[]=['mejorar','Asistencia baja en '.$g['nombre'].': '.$g['asistidas'].' de '.$g['convocadas'].' reuniones.'];
+        }
+        if ($vencidos) $alertas[]=['info',$vencidos.' próximo(s) paso(s) vencido(s) sin completar (no afecta el índice).'];
+        if ($c['comites'] && !$convocadas && !$activos) $alertas[]=['info','Sus comités aún no tienen reuniones realizadas desde su ingreso: todavía no hay participación que medir.'];
+        elseif ($c['comites'] && ($dias===null || $dias>90)) $alertas[]=['mejorar',$dias===null ? 'Integra comités pero no tiene participación registrada.' : 'Sin participación activa en '.$dias.' días.'];
+        if (!$asistidas && !$eventos && $correos>=3) $alertas[]=['info','Recibe correos ('.$correos.') pero no asiste: conviene invitarlo personalmente.'];
+        if ($revisor+$autor>=2) $alertas[]=['bien','Aporta al comité editorial ('.($autor+$revisor).' artículos).'];
+        if ($convocadas>=2 && $asistidas===$convocadas) $alertas[]=['bien','Asistió a todas las reuniones de sus comités ('.$asistidas.').'];
+        if ($eventosPosibles>=2 && !$eventos && $convocadas) $alertas[]=['info','No asistió a ninguno de los '.$eventosPosibles.' eventos realizados (opcional: asistir suma hasta +'.DIRECTORIO_BONO_EVENTOS.' puntos).'];
+        if ($eventos>=2) $alertas[]=['bien','Asistió a '.$eventos.' eventos de transferencia.'];
+
+        $res[$id]=['indice'=>$indice,'nivel'=>$nivel,'convocadas'=>$convocadas,'asistidas'=>$asistidas,'pct_asistencia'=>$convocadas ? round($asistidas/$convocadas*100) : null,
+            'comites'=>$comites,'eventos'=>$eventos,'correos'=>$correos,'autor'=>$autor,'revisor'=>$revisor,'pasos'=>count($misPasos),'pasos_completados'=>$completados,'pasos_vencidos'=>$vencidos,
+            'ultima_activa'=>$ultima,'dias'=>$dias,'roles'=>$roles,'por_mes'=>$porMes,'alertas'=>$alertas,
+            'eventos_posibles'=>$eventosPosibles,'pct_eventos'=>$pctEventos===null ? null : (int)round($pctEventos*100),
+            'perfil'=>$perfil,'perfil_nombre'=>DIRECTORIO_PERFILES[$perfil]['nombre'],'componentes'=>$componentes];
+    }
+    return $res;
+}
+
+function directorio_datos(PDO $pdo, array $user, int $meses=12): array
 {
     $contactos=$pdo->query('SELECT * FROM contactos ORDER BY nombre')->fetchAll();
     $rel=[];
@@ -84,12 +213,15 @@ function directorio_datos(PDO $pdo, array $user): array
         foreach ($c['historial'] as $h) { if ($h['tipo']!=='origen' && $h['fecha']) { $c['ultima']=$h; break; } }
     }
     unset($c);
+    $participacion=directorio_participacion($pdo,$contactos,$historial,$meses);
+    foreach ($contactos as &$c) $c['participacion']=$participacion[$c['id']];
+    unset($c);
     $stmt=$pdo->prepare('SELECT id,nombre,filtros FROM contacto_segmentos WHERE usuario_id=? ORDER BY id'); $stmt->execute([(int)$user['id']]);
     $segmentos=$stmt->fetchAll();
     foreach ($segmentos as &$s) $s['filtros']=json_decode($s['filtros'],true);
     unset($s);
     $areas=array_values(array_unique(array_merge(DIRECTORIO_AREAS,array_filter(array_column($contactos,'area')))));
-    return ['contactos'=>$contactos,'comites'=>$pdo->query('SELECT id,nombre,activo,lider_id FROM comites ORDER BY nombre')->fetchAll(),'segmentos'=>$segmentos,'areas'=>$areas,'niveles'=>DIRECTORIO_NIVELES,'origenes'=>DIRECTORIO_ORIGENES,'gestionar'=>can_manage_resource($user,'contactos'),'enviar'=>can_manage_resource($user,'correos'),'csrf'=>$_SESSION['directorio_csrf']];
+    return ['contactos'=>$contactos,'comites'=>$pdo->query('SELECT id,nombre,activo,lider_id FROM comites ORDER BY nombre')->fetchAll(),'segmentos'=>$segmentos,'areas'=>$areas,'niveles'=>DIRECTORIO_NIVELES,'origenes'=>DIRECTORIO_ORIGENES,'participacion_niveles'=>DIRECTORIO_PARTICIPACION,'perfiles'=>DIRECTORIO_PERFILES,'umbrales'=>DIRECTORIO_UMBRALES,'bono_eventos'=>DIRECTORIO_BONO_EVENTOS,'meses'=>$meses,'periodos'=>DIRECTORIO_PERIODOS,'gestionar'=>can_manage_resource($user,'contactos'),'enviar'=>can_manage_resource($user,'correos'),'csrf'=>$_SESSION['directorio_csrf']];
 }
 
 function directorio_validar(array $d): array
