@@ -42,7 +42,11 @@ if (!function_exists('lab_verificacion_esquema')) {
 }
 
 if (!function_exists('lab_verif_url_base')) {
-    /** URL pública del sitio: LAB_PUBLIC_URL o APP_URL del .env; si no, la del pedido actual. */
+    /**
+     * URL pública del sitio: LAB_PUBLIC_URL o APP_URL del .env. Nunca se deduce de la cabecera Host
+     * (la controla quien hace el pedido y el QR impreso apuntaría a otro dominio). Sin ninguna de
+     * las dos devuelve '' y los documentos salen sin QR.
+     */
     function lab_verif_url_base(): string
     {
         foreach (['LAB_PUBLIC_URL', 'APP_URL'] as $var) {
@@ -51,15 +55,21 @@ if (!function_exists('lab_verif_url_base')) {
                 return rtrim($v, '/');
             }
         }
-        $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-        return ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+        static $avisado = false;
+        if (!$avisado) {
+            $avisado = true;
+            error_log('[laboratorio][verificacion] LAB_PUBLIC_URL/APP_URL no configuradas: los documentos se emiten sin QR de verificación.');
+        }
+        return '';
     }
 }
 
 if (!function_exists('lab_verif_url')) {
+    /** Enlace público de verificación, o '' si no hay URL pública configurada (no se genera QR). */
     function lab_verif_url(string $codigo): string
     {
-        return lab_verif_url_base() . '/laboratorio/validar.php?c=' . rawurlencode($codigo);
+        $base = lab_verif_url_base();
+        return $base === '' ? '' : $base . '/laboratorio/validar.php?c=' . rawurlencode($codigo);
     }
 }
 
@@ -138,7 +148,7 @@ if (!function_exists('lab_verif_boleta')) {
      */
     function lab_verif_boleta(PDO $pdo, int $idSolicitud, array $datosPublicos, string $usuario = ''): ?array
     {
-        if ($idSolicitud <= 0 || !lab_verif_tabla_existe($pdo)) {
+        if ($idSolicitud <= 0 || lab_verif_url_base() === '' || !lab_verif_tabla_existe($pdo)) {
             return null;
         }
         $json = json_encode($datosPublicos, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -150,14 +160,16 @@ if (!function_exists('lab_verif_boleta')) {
                 $pdo->prepare("UPDATE lab_documento_verificacion SET datos = ?, huella = ?, actualizado_en = NOW() WHERE codigo = ?")
                     ->execute([$json, hash('sha256', (string) $json), $fila['codigo']]);
             }
-            return ['codigo' => $fila['codigo'], 'url' => lab_verif_url($fila['codigo'])];
+            $url = lab_verif_url($fila['codigo']);
+            return $url === '' ? null : ['codigo' => $fila['codigo'], 'url' => $url];
         }
         for ($intento = 0; $intento < 3; $intento++) {
             try {
                 $codigo = lab_verif_nuevo_codigo($pdo, 'boleta');
                 $pdo->prepare("INSERT INTO lab_documento_verificacion (codigo, tipo, id_solicitud, id_lote, huella, datos, emitido_por) VALUES (?, 'boleta', ?, ?, ?, ?, ?)")
                     ->execute([$codigo, $idSolicitud, $datosPublicos['id_lote'] ?? null, hash('sha256', (string) $json), $json, $usuario !== '' ? $usuario : null]);
-                return ['codigo' => $codigo, 'url' => lab_verif_url($codigo)];
+                $url = lab_verif_url($codigo);
+                return $url === '' ? null : ['codigo' => $codigo, 'url' => $url];
             } catch (PDOException $e) {
                 if ($e->getCode() !== '23000') {
                     throw $e; // otra falla distinta a código duplicado (carrera entre dos pedidos)

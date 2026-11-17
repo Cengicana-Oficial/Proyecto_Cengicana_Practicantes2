@@ -35,6 +35,7 @@ tar czf ~/uploads-antes-de-actualizar-$(date +%Y%m%d).tgz uploads
 | Comités → Configuración → Correos | Dirección del sistema | `https://modulos.cengicana.org/comites`. Ya no se toma ni se guarda sola desde la petición; sin ella, los correos del cron van sin botón. |
 | `docker-compose.prod.yml` | `COMITES_CORREO_POR_WORKER` | Ya trae `"1"`: los correos de Comités los envía el servicio `comites-correos-worker` y la página no espera al SMTP. Si se quita el servicio, quitar también esta variable o los correos se quedan en la cola. |
 | `docker-compose.prod.yml` | `HOSTS_PERMITIDOS` | Ya trae `modulos.cengicana.org,localhost,127.0.0.1`. Apache responde 403 a cualquier otro `Host`, para que nadie pueda hacer que los enlaces de los correos apunten a otro dominio. Si el sitio se publica con otro nombre, agregarlo aquí. |
+| `laboratorio.env` | `LAB_PUBLIC_URL` (o `APP_URL`) | **Obligatoria:** `https://modulos.cengicana.org`. Es la base de los QR de verificación de boletas e informes. Ya no se deduce de la cabecera `Host`: sin ella los documentos se emiten sin QR y se registra un aviso en el log. |
 | `sigec.env` | `APP_URL`, `SESSION_SECURE_COOKIE` | Verificar que no queden al final las líneas de entorno local (`localhost`, `false`). |
 
 ## 3. Código e imagen
