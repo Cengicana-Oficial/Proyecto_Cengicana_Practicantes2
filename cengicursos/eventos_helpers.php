@@ -283,8 +283,10 @@ function cengi_texto_cargo($texto)
     return mb_strtoupper(mb_substr($texto, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($texto, 1, null, 'UTF-8');
 }
 
-/* Datos ya registrados de un correo: inscritos del evento, catalogo de participantes y
-   directorio de Comites (lectura directa). Null si no se conoce. */
+/* Inscrito de ESE evento con el correo dado (AUD-2026-003/A-1). Solo mira evento_participantes
+   de $eventoId: no consulta el catalogo de participantes ni el directorio de Comites, para que
+   la encuesta publica no sirva para averiguar datos de personas ajenas al evento. Devuelve
+   los datos del registro (para uso interno; nunca se envian al navegador) o null. */
 function cengi_evento_buscar_por_correo(PDO $db, $eventoId, $correo)
 {
     $correo = strtolower(trim((string) $correo));
@@ -298,32 +300,54 @@ function cengi_evento_buscar_por_correo(PDO $db, $eventoId, $correo)
         WHERE ep.evento_id = ? AND LOWER(TRIM(COALESCE(NULLIF(p.correo_participantes, ''), ep.correo_invitado, ''))) = ? LIMIT 1");
     $stmt->execute([(int) $eventoId, $correo]);
     $fila = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$fila) {
-        $stmt = $db->prepare("SELECT p.id AS participante_id, p.nombre_participantes AS nombre, COALESCE(i.nombre_ingenios, '') AS institucion
-            FROM participantes p LEFT JOIN ingenios i ON i.id = p.ingenio_id
-            WHERE LOWER(TRIM(p.correo_participantes)) = ? AND p.nombre_participantes <> '' ORDER BY p.id DESC LIMIT 1");
-        $stmt->execute([$correo]);
-        $fila = $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-    if (!$fila) {
-        $env = cengicursos_env();
-        $base = str_replace('`', '``', $env['DB_COMITES_NAME'] ?? $env['COMITES_DB_NAME'] ?? 'sistema_comites');
-        try {
-            $stmt = $db->prepare("SELECT NULL AS participante_id, nombre, COALESCE(empresa, '') AS institucion FROM `{$base}`.contactos
-                WHERE LOWER(TRIM(email)) = ? AND nombre <> '' LIMIT 1");
-            $stmt->execute([$correo]);
-            $fila = $stmt->fetch(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            error_log('Directorio de Comites desde la encuesta: ' . $e->getMessage());
-        }
-    }
     return $fila ? ['participante_id' => $fila['participante_id'] !== null ? (int) $fila['participante_id'] : null,
         'nombre' => trim((string) $fila['nombre']), 'institucion' => trim((string) $fila['institucion'])] : null;
 }
 
+/* Ventana en la que la encuesta general (QR) registra asistencia, respecto de eventos.fecha:
+   desde 1 dia antes hasta 7 dias despues (inclusive). Sin fecha en el evento no se restringe. */
+const CENGI_ENCUESTA_DIAS_ANTES = 1;
+const CENGI_ENCUESTA_DIAS_DESPUES = 7;
+function cengi_evento_encuesta_en_ventana($fechaEvento, $hoy = null)
+{
+    $fechaEvento = trim((string) $fechaEvento);
+    $dia = $fechaEvento !== '' && strpos($fechaEvento, '0000') !== 0 ? DateTimeImmutable::createFromFormat('!Y-m-d', substr($fechaEvento, 0, 10)) : false;
+    if (!$dia) {
+        return true;
+    }
+    $hoy = $hoy ?: date('Y-m-d');
+    return $hoy >= $dia->modify('-' . CENGI_ENCUESTA_DIAS_ANTES . ' day')->format('Y-m-d')
+        && $hoy <= $dia->modify('+' . CENGI_ENCUESTA_DIAS_DESPUES . ' day')->format('Y-m-d');
+}
+
+/* Limite de intentos de la encuesta general por IP + evento (tabla evento_encuesta_intentos,
+   migrations/20261113_encuesta_intentos.sql). Registra el intento y devuelve true si en los
+   ultimos CENGI_ENCUESTA_VENTANA_SEG segundos hubo mas de CENGI_ENCUESTA_INTENTOS_MAX. El tope es
+   holgado porque en un evento muchas personas comparten la misma IP (red del lugar). Si la tabla
+   no existe (migracion pendiente) no bloquea y lo deja en el log. */
+const CENGI_ENCUESTA_INTENTOS_MAX = 120;
+const CENGI_ENCUESTA_VENTANA_SEG = 600;
+function cengi_evento_encuesta_limite_excedido(PDO $db, $eventoId)
+{
+    $ipHash = hash('sha256', (string) ($_SERVER['REMOTE_ADDR'] ?? 'desconocida'));
+    try {
+        $db->prepare('INSERT INTO evento_encuesta_intentos (evento_id, ip_hash) VALUES (?, ?)')->execute([(int) $eventoId, $ipHash]);
+        if (random_int(1, 50) === 1) {
+            $db->exec('DELETE FROM evento_encuesta_intentos WHERE creado_en < (NOW() - INTERVAL 1 DAY)');
+        }
+        $stmt = $db->prepare('SELECT COUNT(*) FROM evento_encuesta_intentos WHERE evento_id = ? AND ip_hash = ? AND creado_en >= (NOW() - INTERVAL ' . (int) CENGI_ENCUESTA_VENTANA_SEG . ' SECOND)');
+        $stmt->execute([(int) $eventoId, $ipHash]);
+        return (int) $stmt->fetchColumn() > CENGI_ENCUESTA_INTENTOS_MAX;
+    } catch (PDOException $e) {
+        error_log('Limite de intentos de la encuesta, evento ' . (int) $eventoId . ': ' . $e->getMessage());
+        return false;
+    }
+}
+
 /* Registra la asistencia de quien responde la encuesta por el enlace general: si ya estaba
-   inscrito (por correo o nombre) se le marca el ingreso; si no, se crea su registro en el evento.
-   En ambos casos ingreso_via = 'encuesta'. Devuelve el id de evento_participantes. */
+   inscrito (mismo correo) se le marca el ingreso; si no, se crea su registro en el evento.
+   Ya no se empareja por nombre (AUD-2026-003/A-1). En ambos casos ingreso_via = 'encuesta'.
+   Devuelve el id de evento_participantes. */
 function cengi_evento_asistencia_encuesta(PDO $db, $eventoId, array $d)
 {
     require_once __DIR__ . '/cengi_texto.php';
@@ -334,14 +358,11 @@ function cengi_evento_asistencia_encuesta(PDO $db, $eventoId, array $d)
         WHERE ep.evento_id = ? FOR UPDATE");
     $stmt->execute([(int) $eventoId]);
     $correo = strtolower($d['correo']);
-    $nombre = cengi_texto_normalizado(preg_replace('/\s+/u', ' ', $d['nombre']));
     $encontrado = null;
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $ep) {
-        if (($correo !== '' && $ep['correo'] === $correo) || cengi_texto_normalizado(preg_replace('/\s+/u', ' ', $ep['nombre'])) === $nombre) {
+        if ($correo !== '' && $ep['correo'] === $correo) {
             $encontrado = $ep;
-            if ($correo !== '' && $ep['correo'] === $correo) {
-                break;
-            }
+            break;
         }
     }
     if ($encontrado) {
