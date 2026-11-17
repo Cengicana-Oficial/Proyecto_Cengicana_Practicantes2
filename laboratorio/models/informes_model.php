@@ -297,7 +297,7 @@ if (!function_exists('lab_informe_meta')) {
         $verificacion = null;
         if (!$preview && ($inf['estado'] ?? '') === 'FIRMADO') {
             require_once __DIR__ . '/../includes/verificacion_documentos_helper.php';
-            if (lab_verif_tabla_existe($pdo)) {
+            if (lab_verif_url_base() !== '' && lab_verif_tabla_existe($pdo)) {
                 $q = $pdo->prepare("SELECT codigo FROM lab_documento_verificacion WHERE tipo = 'informe' AND id_lote = ? AND estado = 'vigente' ORDER BY id DESC LIMIT 1");
                 $q->execute([(int) $detalle['lote']['id_lote']]);
                 if ($codigoVerif = $q->fetchColumn()) {
@@ -352,8 +352,8 @@ if (!function_exists('lab_informe_firmar')) {
             // Código y QR de verificación pública del informe firmado (laboratorio/validar.php).
             require_once __DIR__ . '/../includes/verificacion_documentos_helper.php';
             $verificacion = null;
-            if (lab_verif_tabla_existe($pdo)) {
-                $codigoVerif = lab_verif_nuevo_codigo($pdo, 'informe');
+            if (lab_verif_url_base() !== '' && lab_verif_tabla_existe($pdo)) { // sin URL pública no hay QR
+                $codigoVerif =lab_verif_nuevo_codigo($pdo, 'informe');
                 $urlVerif = lab_verif_url($codigoVerif);
                 $verificacion = ['codigo' => $codigoVerif, 'url' => $urlVerif, 'qr' => lab_verif_qr_png($urlVerif)];
             }

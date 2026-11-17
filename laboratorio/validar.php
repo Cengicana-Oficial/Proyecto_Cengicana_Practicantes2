@@ -5,7 +5,8 @@
  *   si es auténtico y vigente, quién lo firmó y cuándo, y la huella del documento.
  * - QR de la BOLETA de recepción: estado del análisis para el cliente (etapas, avance por análisis y
  *   fecha estimada), sin valores de resultados; cuando el informe se firma, enlaza a su verificación.
- * No requiere sesión. Los códigos llevan una parte aleatoria, así que no se pueden recorrer.
+ * No requiere sesión. Los códigos llevan una parte aleatoria y los intentos fallidos por IP están
+ * limitados (429). La vista pública enmascara al cliente y no muestra quién recibió la muestra.
  */
 require_once __DIR__ . '/conexion.php';
 require_once __DIR__ . '/includes/verificacion_documentos_helper.php';
@@ -25,7 +26,20 @@ $error = null;
 if ($codigo !== '') {
     try {
         $pdo = Conexion::conectar();
-        $doc = lab_verif_buscar($pdo, $codigo);
+        // Límite persistente de intentos fallidos por IP (10 cada 15 min); excedido: 429 sin consultar.
+        if (lab_verif_bloqueado($pdo) === true) {
+            http_response_code(429);
+            header('Retry-After: 900');
+            $error = 'Demasiados intentos con códigos no válidos desde su conexión. Espere unos 15 minutos e intente de nuevo.';
+        } else {
+            $doc = lab_verif_buscar($pdo, $codigo);
+            if (!$doc) {
+                // Si no hay tabla de límite (migración pendiente) queda el freno por retardo.
+                if (!lab_verif_registrar_fallo($pdo)) {
+                    usleep(400000);
+                }
+            }
+        }
         if ($doc && $doc['tipo'] === 'boleta' && !empty($doc['id_solicitud'])) {
             try {
                 $avance = wfEstadoPublicoSolicitud($pdo, (int) $doc['id_solicitud']);
@@ -37,9 +51,6 @@ if ($codigo !== '') {
     } catch (Throwable $ex) {
         error_log('[laboratorio][validar] ' . $ex->getMessage());
         $error = 'No se pudo consultar el código en este momento. Intente de nuevo más tarde.';
-    }
-    if (!$doc && !$error) {
-        usleep(400000); // frena intentos masivos de adivinar códigos
     }
 }
 $fecha = static function ($v): string {
@@ -146,7 +157,7 @@ dd.tarde{color:var(--bad)}
   <section class="card">
     <div class="seg-head">
       <div><small>Estado de su análisis</small><h2><?= $e(preg_match('/^lote\b/i', (string) ($d['lote'] ?? '')) ? $d['lote'] : 'Lote ' . ($d['lote'] ?? '—')) ?></h2>
-        <p><?= $e($d['tipo_muestra'] ?? '') ?> · <?= (int) ($d['muestras'] ?? 0) ?> muestra<?= (int) ($d['muestras'] ?? 0) === 1 ? '' : 's' ?><?= !empty($d['rango']) ? ' · ' . $e($d['rango']) : '' ?><?= ($d['cliente'] ?? '') !== '' ? ' · ' . $e($d['cliente']) : '' ?></p></div>
+        <p><?= $e($d['tipo_muestra'] ?? '') ?> · <?= (int) ($d['muestras'] ?? 0) ?> muestra<?= (int) ($d['muestras'] ?? 0) === 1 ? '' : 's' ?><?= !empty($d['rango']) ? ' · ' . $e($d['rango']) : '' ?><?= ($d['cliente'] ?? '') !== '' ? ' · ' . $e(lab_verif_enmascarar((string) $d['cliente'])) : '' ?></p></div>
       <?php if ($avance): ?><div class="seg-pct"><b><?= $avance['pct'] ?>%</b><span>análisis aprobados</span></div><?php endif; ?>
     </div>
     <?php if (!$avance): ?>
@@ -199,7 +210,7 @@ dd.tarde{color:var(--bad)}
       <dt>Documento</dt><dd><?= $e($d['documento'] ?? '') ?><?= $esInforme && !empty($d['informe']) ? ' ' . $e($d['informe']) : '' ?><?= $esInforme ? ' · versión ' . (int) ($d['version'] ?? $doc['version']) : '' ?></dd>
       <dt>Lote</dt><dd><?= $e($d['lote'] ?? '—') ?></dd>
       <dt>Tipo de muestra</dt><dd><?= $e(($t = (string) ($d['tipo_muestra'] ?? '')) !== '' ? mb_strtoupper(mb_substr($t, 0, 1)) . mb_substr($t, 1) : '—') ?></dd>
-      <dt>Cliente / institución</dt><dd><?= $e(($d['cliente'] ?? '') !== '' ? $d['cliente'] : '—') ?></dd>
+      <dt>Cliente / institución</dt><dd><?= $e(($d['cliente'] ?? '') !== '' ? lab_verif_enmascarar((string) $d['cliente']) : '—') ?></dd>
       <dt>Muestras</dt><dd><?= (int) ($d['muestras'] ?? 0) ?><?= !empty($d['rango']) ? ' · ' . $e($d['rango']) : '' ?></dd>
       <?php if (!empty($d['analisis'])): ?><dt>Análisis</dt><dd class="chips"><?php foreach ((array) $d['analisis'] as $a): ?><span><?= $e($a) ?></span><?php endforeach; ?></dd><?php endif; ?>
       <?php if ($esInforme): ?>
@@ -208,7 +219,6 @@ dd.tarde{color:var(--bad)}
       <dt>Huella del documento</dt><dd class="mono" title="SHA-256 del informe emitido"><?= $e(substr((string) $doc['huella'], 0, 16)) ?>…</dd>
       <?php else: ?>
       <dt>Fecha de ingreso</dt><dd><?= $e($fecha($d['fecha_ingreso'] ?? '')) ?></dd>
-      <dt>Recibido por</dt><dd><?= $e(($d['recibido_por'] ?? '') !== '' ? $d['recibido_por'] : '—') ?></dd>
       <?php endif; ?>
       <dt>Emitido</dt><dd><?= $e($fecha($doc['emitido_en'])) ?><?= !empty($doc['actualizado_en']) && !$esInforme ? ' · datos actualizados el ' . $e($fecha($doc['actualizado_en'])) : '' ?></dd>
     </dl>
