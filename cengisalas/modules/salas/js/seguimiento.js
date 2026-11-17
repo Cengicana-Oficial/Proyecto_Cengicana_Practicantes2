@@ -1,0 +1,31 @@
+const settings=window.SALAFLOW_SUPABASE;
+const db=window.supabase?.createClient(settings?.url,settings?.publishableKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+const $=selector=>document.querySelector(selector);
+let lastLookup=null,refreshTimer=null;
+const safe=value=>String(value??'').replace(/[&<>'"]/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
+const dateTime=value=>value?new Intl.DateTimeFormat('es-GT',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Guatemala'}).format(new Date(value)):'—';
+const dayParts=value=>{const parts=new Intl.DateTimeFormat('es-GT',{day:'2-digit',month:'short',timeZone:'America/Guatemala'}).formatToParts(new Date(value));return{day:parts.find(part=>part.type==='day')?.value||'',month:(parts.find(part=>part.type==='month')?.value||'').replace('.','')}};
+const schedule=value=>new Intl.DateTimeFormat('es-GT',{weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'America/Guatemala'}).format(new Date(value));
+const time=value=>new Intl.DateTimeFormat('es-GT',{hour:'2-digit',minute:'2-digit',timeZone:'America/Guatemala'}).format(new Date(value));
+const statusLabels={pending:'Pendiente de revisión',approved:'Aprobada',rejected:'Rechazada',cancelled:'Cancelada',mixed:'Procesada por fechas'};
+const noticeText={pending:'Tu solicitud fue recibida y está pendiente de revisión por el equipo administrador.',approved:'Tu solicitud fue aprobada. Revisa abajo el salón y horario confirmados.',rejected:'La solicitud fue revisada y rechazada. Puedes consultar el motivo en la fecha correspondiente.',cancelled:'La solicitud fue cancelada. Consulta el detalle de cada fecha abajo.',mixed:'Las fechas de esta solicitud tienen resoluciones diferentes. Revisa el estado individual de cada una.'};
+
+function renderProcess(data){
+  const status=data.overallStatus,finished=status!=='pending',steps=[...document.querySelectorAll('#trackingSteps li')];steps.forEach(step=>step.className='');steps[0].classList.add('complete');steps[1].classList.add(status==='pending'?'current':'complete');steps[2].querySelector('i').textContent=finished?(status==='approved'?'✓':status==='mixed'?'•':'×'):'3';if(finished)steps[2].classList.add(status);$('#resolutionLabel').textContent=status==='mixed'?'Resolución por fechas':statusLabels[status]||'Resolución';$('#resolutionAt').textContent=finished?`Último cambio: ${dateTime(data.updatedAt)}`:'Pendiente';$('.process-line i').style.width=finished?'100%':'50%';
+}
+function renderOccurrences(items){
+  $('#occurrencesTitle').textContent=items.length===1?'Fecha solicitada':`${items.length} fechas solicitadas`;
+  $('#trackingOccurrences').innerHTML=items.map(item=>{const parts=dayParts(item.startsAt),reason=['rejected','cancelled'].includes(item.status)&&item.reason?`<div class="occurrence-reason"><b>${item.status==='rejected'?'Motivo del rechazo':'Motivo de cancelación'}:</b> ${safe(item.reason)}</div>`:'';return`<article class="occurrence"><div class="occurrence-date"><b>${safe(parts.day)}</b><small>${safe(parts.month)}</small></div><div class="occurrence-copy"><b>${safe(schedule(item.startsAt))}</b><small>Finaliza a las ${safe(time(item.endsAt))}</small></div><div class="occurrence-space"><b>${safe(item.spaceName||'Salón por confirmar')}</b><small>${safe(item.configuration||'Configuración por confirmar')}</small></div><span class="status-pill ${safe(item.status)}">${safe(statusLabels[item.status]||item.status)}</span>${reason}</article>`}).join('');
+}
+function renderResult(data){
+  $('#trackingTitle').textContent=data.title;$('#trackingMetadata').textContent=`Registrada ${dateTime(data.createdAt)}${data.occurrences.length>1?' · Solicitud recurrente':''}`;$('#trackingReference').textContent=data.requestCode;$('#trackingOrganization').textContent=data.organization;$('#trackingMeetingType').textContent=data.meetingType;$('#trackingConfiguration').textContent=data.configuration;$('#trackingAttendees').textContent=`${data.attendees} personas`;const notice=$('#trackingNotice');notice.className=`status-notice ${data.overallStatus}`;notice.innerHTML=`<b>${safe(statusLabels[data.overallStatus]||'Estado actualizado')}.</b> ${safe(noticeText[data.overallStatus]||'Consulta el detalle de la solicitud.')}`;$('#receivedAt').textContent=dateTime(data.createdAt);renderProcess(data);renderOccurrences(data.occurrences||[]);$('#trackingResult').classList.remove('hidden');
+}
+async function lookup(silent=false){
+  const code=$('#trackingCode').value.trim().toUpperCase(),button=$('#trackingSubmit'),errorBox=$('#trackingError');if(!code)return;lastLookup={code};if(!silent){errorBox.textContent='';button.disabled=true;button.innerHTML='Consultando…';}
+  try{if(!db)throw new Error('No fue posible conectar con el servicio.');const{data,error}=await db.rpc('track_external_request',{p_request_code:code});if(error)throw error;if(!data?.found){$('#trackingResult').classList.add('hidden');throw new Error('No encontramos una solicitud con ese código. Verifica que esté escrito correctamente.');}renderResult(data);if(!silent)$('#trackingResult').scrollIntoView({behavior:'smooth',block:'start'});clearInterval(refreshTimer);refreshTimer=setInterval(()=>lookup(true),30000)}catch(error){if(!silent)errorBox.textContent=error?.message?.startsWith('No encontramos')?error.message:'No fue posible consultar la solicitud. Intenta nuevamente en unos momentos.';}finally{if(!silent){button.disabled=false;button.innerHTML='Consultar solicitud <span>→</span>';}}
+}
+$('#trackingForm').onsubmit=event=>{event.preventDefault();void lookup()};
+$('#refreshTracking').onclick=()=>{if(lastLookup)void lookup()};
+$('#copyReference').onclick=async()=>{try{await navigator.clipboard.writeText($('#trackingReference').textContent);$('#copyReference').textContent='Código copiado';setTimeout(()=>$('#copyReference').textContent='Copiar código',1800)}catch{$('#copyReference').textContent='Selecciona y copia el código';}};
+$('#trackingCode').oninput=event=>event.target.value=event.target.value.toUpperCase();
+const queryCode=new URLSearchParams(location.search).get('codigo');if(queryCode){$('#trackingCode').value=queryCode.toUpperCase();void lookup()}

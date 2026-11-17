@@ -3,7 +3,6 @@ session_start();
 require_once("../config/conexion.php");
 require_once("../config/permisos_roles.php");
 require_once __DIR__ . "/_guard.php";
-require_once __DIR__ . "/_modulos_rol.php";
 
 /**
  * Muestra una página de aviso con el mismo lenguaje visual del módulo
@@ -67,29 +66,29 @@ $rol = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$rol) {
     roles_mostrar_aviso("Rol no encontrado", "El rol que intentas editar ya no existe.");
 }
-
 $error = "";
-$permisos = obtener_permisos($conn);
+$permisos = array_values(array_filter(obtener_permisos($conn), static function (array $permiso): bool {
+    return !str_starts_with((string) $permiso['nombre_permiso'], 'cengisalas.salas.');
+}));
 $gruposPermisos = agrupar_permisos($permisos);
-$permisosRol = obtener_permisos_rol($conn, $id);
-$modulos = rol_mod_listar_modulos($conn);
-$modulosRol = cengi_rm_modulos_de_rol($conn, $id);
-$nombresModulos = array_column($modulos, 'nombre', 'id');
+$permisosRolActuales = obtener_permisos_rol($conn, $id);
+$permisosCengiSalas = array_values(array_filter($permisosRolActuales, static function (string $permiso): bool {
+    return str_starts_with($permiso, 'cengisalas.salas.');
+}));
+$permisosRol = array_values(array_diff($permisosRolActuales, $permisosCengiSalas));
 
 if ($_POST) {
     $nombre = trim($_POST['nombre'] ?? '');
-    $permisosSeleccionados = $_POST['permisos'] ?? [];
-    $modulosRol = rol_mod_leer_post($_POST, $modulos);
-    $conflictos = rol_mod_conflictos($conn, $id, $modulosRol);
+    $permisosEnviados = $_POST['permisos'] ?? [];
+    $nombresDisponibles = array_column($permisos, 'nombre_permiso');
+    $permisosSeleccionados = is_array($permisosEnviados)
+        ? array_values(array_intersect($permisosEnviados, $nombresDisponibles)) : [];
+    $permisosRol = $permisosSeleccionados;
 
-    if ($nombre === "") {
+    if (!is_array($permisosEnviados)) {
+        $error = 'La selección de permisos no es válida.';
+    } elseif ($nombre === "") {
         $error = "El nombre no puede estar vacio";
-    } elseif ($conflictos) {
-        $partes = [];
-        foreach ($conflictos as $moduloId => $total) {
-            $partes[] = ($nombresModulos[$moduloId] ?? 'módulo #' . $moduloId) . " ({$total} usuario(s))";
-        }
-        $error = "No puedes quitar el rol de: " . implode(', ', $partes) . ". Primero cambia el rol de esos usuarios en ese módulo.";
     } else {
         $check = $conn->prepare("
             SELECT id
@@ -108,10 +107,11 @@ if ($_POST) {
             ");
             $stmt->execute([$nombre, $id]);
 
-            guardar_permisos_rol($conn, $id, $permisosSeleccionados);
-            rol_mod_guardar($conn, $id, $modulosRol);
+            // Los permisos históricos de CengiSalas quedan intactos, pero ya
+            // no se editan ni sincronizan desde los roles del portal.
+            guardar_permisos_rol($conn, $id, array_merge($permisosSeleccionados, $permisosCengiSalas));
 
-            header("Location: roles.php");
+            header('Location: roles.php');
             exit;
         }
     }
@@ -155,8 +155,6 @@ if ($_POST) {
             <input id="nombre" name="nombre" value="<?= htmlspecialchars($rol['nombre_rol']) ?>" required autofocus>
         </div>
 
-        <?php rol_mod_render($modulos, $modulosRol); ?>
-
         <div class="permisos-toolbar">
             <h3>Permisos del rol</h3>
             <div class="permisos-toolbar-actions">
@@ -164,20 +162,40 @@ if ($_POST) {
                 <button type="button" class="btn-light" onclick="marcarPermisos(false)">Limpiar</button>
             </div>
         </div>
-
         <?php if (empty($permisos)): ?>
             <div class="empty-permissions">
                 No hay permisos en la base de datos. Ejecuta primero el script de permisos en MySQL Workbench.
             </div>
         <?php endif; ?>
 
-        <?php
-        if ($_POST) {
-            // Conserva lo marcado si el formulario vuelve con error.
-            $permisosRol = array_map('strval', (array) ($_POST['permisos'] ?? []));
-        }
-        require __DIR__ . '/_permisos_form.php';
-        ?>
+        <?php foreach ($gruposPermisos as $grupo => $items): ?>
+            <section class="permiso-section">
+                <div class="permiso-section-head">
+                    <div>
+                        <span class="permiso-kicker"><?= htmlspecialchars(titulo_corto_grupo_permiso($grupo)) ?></span>
+                        <h4><?= htmlspecialchars($grupo) ?></h4>
+                    </div>
+                    <span class="permiso-count"><?= count($items) ?> permisos</span>
+                </div>
+                <p class="permiso-section-copy"><?= htmlspecialchars(descripcion_grupo_permiso($grupo)) ?></p>
+                <div class="permisos-grid">
+                    <?php foreach ($items as $permiso): ?>
+                        <label class="permiso-item">
+                            <input
+                                type="checkbox"
+                                name="permisos[]"
+                                value="<?= htmlspecialchars($permiso['nombre_permiso']) ?>"
+                                <?= in_array($permiso['nombre_permiso'], $permisosRol, true) ? 'checked' : '' ?>
+                            >
+                            <span>
+                                <strong><?= htmlspecialchars(etiqueta_permiso($permiso['nombre_permiso'])) ?></strong>
+                                <small><?= htmlspecialchars($permiso['descripcion'] ?: $permiso['nombre_permiso']) ?></small>
+                            </span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endforeach; ?>
 
         <div class="form-actions">
             <button type="submit" class="btn-primary">
@@ -191,9 +209,8 @@ if ($_POST) {
 
 <script>
 function marcarPermisos(checked) {
-    setTimeout(() => document.dispatchEvent(new Event("permisos:cambio")));
     document.querySelectorAll('input[name="permisos[]"]').forEach(input => {
-        if (input.type === "checkbox") input.checked = checked;
+        input.checked = checked;
     });
 }
 </script>

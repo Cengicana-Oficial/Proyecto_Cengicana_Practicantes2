@@ -1,0 +1,23 @@
+# Secretos y configuracion local
+.env
+.env.*
+!.env.example
+modules/*/.env
+modules/*/.env.*
+!modules/*/.env.example
+
+# Dependencias reconstruibles
+modules/*/vendor/
+modules/*/composer.phar
+node_modules/
+
+# Archivos cargados por usuarios y temporales
+modules/*/uploads/
+tmp/
+*.log
+
+# Sistema/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

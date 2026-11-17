@@ -32,9 +32,14 @@ RUN a2enconf no-php-uploads
 COPY dockerfiles/modulos-app/error-pages.conf /etc/apache2/conf-available/error-pages.conf
 RUN a2enconf error-pages
 
+<<<<<<< HEAD
 # IP real del visitante detras del proxy del servidor (ver remoteip.conf).
 COPY dockerfiles/modulos-app/remoteip.conf /etc/apache2/conf-available/remoteip.conf
 RUN a2enconf remoteip
+=======
+COPY dockerfiles/modulos-app/cengisalas-session.conf /etc/apache2/conf-available/cengisalas-session.conf
+RUN a2enconf cengisalas-session
+>>>>>>> bd371ce26ea5dc9d285731d843ba2da50a6188e8
 
 # Reenvia /sigec/* al contenedor "sigec" (docker-compose.prod.yml), sin
 # exponer su puerto publicamente: modulos.cengicana.org/sigec/... se sirve
@@ -74,6 +79,10 @@ RUN if [ -f cengicursos/composer.json ]; then \
 # revienta con "failed to open stream".
 RUN if [ -f Pruebas/composer.json ]; then \
         cd Pruebas && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \
+    fi
+
+RUN if [ -f visitas/composer.json ]; then \
+        cd visitas && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \
     fi
 
 RUN chown -R www-data:www-data /var/www/html

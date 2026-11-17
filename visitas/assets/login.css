@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+
+/* VARIABLES DE MARCA CENGICAÑA */
+:root {
+    --verde-sostenible: #73BC25;
+    --verde-tecnologico: #A3D300;
+    --amarillo-energetico: #FFCC00;
+    --gris-inteligente: #CED2D5;
+    --verde-oscuro: #5a9a1c;
+    --verde-fondo-1: #2d5e0e;
+    --verde-fondo-2: #4a8a18;
+    --texto-oscuro: #1a2e0a;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'DM Sans', sans-serif;
+    background: linear-gradient(135deg, var(--verde-fondo-1), var(--verde-fondo-2));
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+/* CONTENEDOR */
+.login-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* CARD */
+.login-card {
+    background: white;
+    width: 100%;
+    max-width: 420px;
+    padding: 40px;
+    border-radius: 18px;
+    box-shadow: 0 10px 40px rgba(45, 94, 14, 0.25);
+    border-top: 5px solid var(--verde-sostenible);
+}
+
+/* LOGO */
+.logo-box {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.logo-box h1 {
+    color: var(--verde-sostenible);
+    font-size: 30px;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+}
+
+.logo-box p {
+    color: #777;
+    font-size: 14px;
+}
+
+/* FORM */
+.login-form {
+    display: flex;
+    flex-direction: column;
+}
+
+.login-form label {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    margin-top: 14px;
+    color: var(--texto-oscuro);
+}
+
+.login-form input {
+    padding: 14px;
+    border: 1.5px solid var(--gris-inteligente);
+    border-radius: 10px;
+    font-size: 15px;
+    outline: none;
+    transition: 0.3s;
+    background: #fafafa;
+}
+
+.login-form input:focus {
+    border-color: var(--verde-sostenible);
+    background: white;
+    box-shadow: 0 0 0 3px rgba(115, 188, 37, 0.18);
+}
+
+/* BOTÓN */
+.login-form button {
+    margin-top: 25px;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--verde-sostenible);
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.3s;
+    letter-spacing: 0.5px;
+}
+
+.login-form button:hover {
+    background: var(--verde-oscuro);
+    box-shadow: 0 4px 14px rgba(115, 188, 37, 0.4);
+    transform: translateY(-1px);
+}
+
+.login-form button:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+/* ERROR */
+.error-msg {
+    background: #fff4cc;
+    color: #7a5a00;
+    border-left: 4px solid var(--amarillo-energetico);
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    text-align: center;
+}
+
+/* RESPONSIVE TELÉFONO */
+@media (max-width: 480px) {
+    .login-card {
+        padding: 25px;
+        border-radius: 14px;
+    }
+
+    .logo-box h1 {
+        font-size: 24px;
+    }
+
+    .login-form input {
+        padding: 12px;
+        font-size: 14px;
+    }
+
+    .login-form button {
+        padding: 12px;
+        font-size: 15px;
+    }
+}

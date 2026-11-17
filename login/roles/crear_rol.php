@@ -8,7 +8,9 @@ require_once __DIR__ . "/_modulos_rol.php";
 $conn = Conexion::conectar();
 asegurar_tablas_permisos($conn);
 
-$permisos = obtener_permisos($conn);
+$permisos = array_values(array_filter(obtener_permisos($conn), static function (array $permiso): bool {
+    return !str_starts_with((string) $permiso['nombre_permiso'], 'cengisalas.salas.');
+}));
 $gruposPermisos = agrupar_permisos($permisos);
 $modulos = rol_mod_listar_modulos($conn);
 $modulosRol = rol_mod_leer_post($_POST, $modulos);
@@ -16,9 +18,13 @@ $error = "";
 
 if ($_POST) {
     $nombre = trim($_POST['nombre'] ?? '');
-    $permisosSeleccionados = $_POST['permisos'] ?? [];
+    $permisosEnviados = $_POST['permisos'] ?? [];
+    $permisosSeleccionados = is_array($permisosEnviados)
+        ? array_values(array_intersect($permisosEnviados, array_column($permisos, 'nombre_permiso'))) : [];
 
-    if ($nombre === "") {
+    if (!is_array($permisosEnviados)) {
+        $error = 'La selección de permisos no es válida.';
+    } elseif ($nombre === "") {
         $error = "El nombre no puede estar vacio";
     } else {
         $check = $conn->prepare("SELECT id FROM roles WHERE nombre_rol = ?");
