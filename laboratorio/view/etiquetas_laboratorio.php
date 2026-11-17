@@ -130,7 +130,7 @@ $e = static fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
                 var q = '';
                 if (qr) { var g = window.qrcode(0, 'M'); g.addData(m.codigo); g.make(); q = '<div class="qr">' + g.createSvgTag({cellSize: 2, margin: 4, scalable: true}) + '</div>'; }
                 var b = barras && c128 && /^[\x20-\x7e]+$/.test(m.codigo) ? c128(m.codigo, 36) : '';
-                return '<article class="label"><div><strong>CENGICAÑA</strong><b>' + esc(m.codigo) + '</b><small>' + esc('Lote ' + datos.lote + ' · ' + datos.tipo) + '</small>' + b + '</div>' + q + '</article>';
+                return '<article class="label"><div><strong>CENGICAÑA</strong><b>' + esc(m.codigo) + '</b><small>' + esc((/^\s*lote\b/i.test(String(datos.lote)) ? String(datos.lote).trim() : 'Lote ' + datos.lote) + ' · ' + datos.tipo) + '</small>' + b + '</div>' + q + '</article>';
             }).join('');
         }
         document.getElementById('seleccion').addEventListener('change', function (e) {

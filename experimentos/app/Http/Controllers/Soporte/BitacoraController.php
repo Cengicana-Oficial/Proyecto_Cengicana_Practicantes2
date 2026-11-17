@@ -20,26 +20,25 @@ class BitacoraController extends Controller
         'Incidencia fitosanitaria', 'Visita técnica', 'Otro',
     ];
 
+    /**
+     * La bitacora es una vista de Ensayos (Lista · Ciclo · Mapa · Bitacora) con sus mismos
+     * filtros de programa, proyecto y estado; esta ruta se conserva para los enlaces existentes.
+     */
     public function index()
     {
-        $user = Auth::user();
-        $ensayoIds = Ensayo::visiblesPara($user)->pluck('id');
+        return redirect()->route('investigacion.ensayos.index', ['vista' => 'bitacora']);
+    }
 
-        $entradas = Bitacora::with(['ensayo', 'responsable'])
-            ->whereIn('ensayo_id', $ensayoIds)
-            ->orderByDesc('fecha')
-            ->get();
+    /** Anotaciones de los ensayos visibles (vista Bitacora de Ensayos). */
+    public function listado()
+    {
+        $ensayoIds = Ensayo::visiblesPara(Auth::user())->pluck('id');
 
-        return view('component', [
-            'title' => 'Bitacora',
-            'component' => 'bitacora-index',
-            'params' => [
-                'entradas' => $entradas,
-                'ensayos' => Ensayo::visiblesPara($user)->orderBy('codigo')->get(['id', 'codigo']),
-                'tipos' => self::TIPOS,
-                'puedeEscribir' => $user->can('write_bitacora'),
-                'puedeEliminar' => $user->can('admin_only'),
-            ],
+        return response()->json([
+            'entradas' => Bitacora::with(['ensayo:id,codigo,nombre', 'responsable:id,name'])
+                ->whereIn('ensayo_id', $ensayoIds)
+                ->orderByDesc('fecha')->orderByDesc('id')
+                ->get(),
         ]);
     }
 

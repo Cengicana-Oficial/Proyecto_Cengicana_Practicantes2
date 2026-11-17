@@ -102,3 +102,4 @@ a.ep-btn { display: block; text-align: center; text-decoration: none; }
     .ep-grid2 { grid-template-columns: 1fr; }
     .ep-h1 { font-size: 32px; }
 }
+.ep-ayuda { display: block; min-height: 15px; margin-top: 4px; font-size: 11.5px; color: #3E7A12; }

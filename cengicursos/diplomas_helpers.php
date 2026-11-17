@@ -219,6 +219,38 @@ function cengi_dip_guardar_plantilla(PDO $db, $clave, array $datos, $usuario)
 }
 
 /**
+ * Código nuevo de diploma / constancia, el mismo en todos los puntos de emisión (diseñador,
+ * carga de PDF y publicación desde el aula):
+ *   CEN-CU-<año>-<correlativo>-<verificador>  (cursos)
+ *   CEN-EV-<año>-<correlativo>-<verificador>  (eventos)
+ * El correlativo empieza en 0001 y se reinicia cada año, por separado para cursos y eventos;
+ * se toma el mayor emitido (no el conteo), así un diploma borrado no repite su número.
+ * Los 4 caracteres finales evitan que en la página pública de validación se puedan recorrer
+ * códigos consecutivos para ver los nombres de los participantes.
+ * Los códigos ya emitidos con el formato anterior (CEN-DIP-######, CEN-EVT-######) se conservan.
+ */
+function cengi_dip_codigo_nuevo(PDO $db, $esEvento, $anio = null)
+{
+    $anio = preg_match('/^\d{4}$/', (string) $anio) ? (string) $anio : date('Y');
+    $prefijo = 'CEN-' . ($esEvento ? 'EV' : 'CU') . '-' . $anio . '-';
+    $stmt = $db->prepare("SELECT MAX(CAST(SUBSTRING_INDEX(SUBSTRING(codigo_unico, ?), '-', 1) AS UNSIGNED)) FROM diplomas WHERE codigo_unico LIKE ?");
+    $stmt->execute([strlen($prefijo) + 1, $prefijo . '%']);
+    $n = (int) $stmt->fetchColumn();
+    $existe = $db->prepare('SELECT COUNT(*) FROM diplomas WHERE codigo_unico LIKE ?');
+    do {
+        $n++;
+        $base = $prefijo . str_pad((string) $n, 4, '0', STR_PAD_LEFT);
+        $existe->execute([$base . '-%']);
+    } while ((int) $existe->fetchColumn() > 0);
+    $verificador = '';
+    while (strlen($verificador) < 4) {
+        // Sin caracteres que se confunden al transcribir (0/O, 1/I/L).
+        $verificador .= 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[random_int(0, 30)];
+    }
+    return $base . '-' . $verificador;
+}
+
+/**
  * Emite (o reutiliza) el diploma de cada destinatario y devuelve [id => codigo].
  * Codigo: CEN-CU|EV-<año>-<correlativo>-<4 caracteres aleatorios>; la parte aleatoria
  * evita que alguien recorra codigos consecutivos en la pagina publica de validacion.
@@ -231,7 +263,6 @@ function cengi_dip_emitir(PDO $db, array $actividad, array $ids, array $plantill
     }
     $tipo = $actividad['evento'] ? 'evento' : 'curso';
     $columna = $actividad['evento'] ? 'evento_participante_id' : 'asignacion_id';
-    $prefijo = 'CEN-' . ($actividad['evento'] ? 'EV' : 'CU') . '-' . substr((string) ($plantilla['emision'] ?? date('Y')), 0, 4) . '-';
     $codigos = [];
     foreach (array_unique(array_map('intval', $ids)) as $id) {
         if (!isset($participantes[$id])) {
@@ -245,15 +276,7 @@ function cengi_dip_emitir(PDO $db, array $actividad, array $ids, array $plantill
             $codigos[$id] = $p['codigo'];
             continue;
         }
-        $stmt = $db->prepare('SELECT COUNT(*) FROM diplomas WHERE codigo_unico LIKE ?');
-        $stmt->execute([$prefijo . '%']);
-        $n = (int) $stmt->fetchColumn();
-        do {
-            $n++;
-            $codigo = $prefijo . str_pad((string) $n, 4, '0', STR_PAD_LEFT) . '-' . strtoupper(substr(str_replace(['+', '/', '='], '', base64_encode(random_bytes(6))), 0, 4));
-            $existe = $db->prepare('SELECT COUNT(*) FROM diplomas WHERE codigo_unico = ?');
-            $existe->execute([$codigo]);
-        } while ((int) $existe->fetchColumn() > 0);
+        $codigo = cengi_dip_codigo_nuevo($db, (bool) $actividad['evento'], substr((string) ($plantilla['emision'] ?? date('Y')), 0, 4));
         $db->prepare("INSERT INTO diplomas (tipo, $columna, codigo_unico, emitido_en, creado_por, plantilla_clave, documento, actividad, nombre_participante)
             VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?)")->execute(array_merge([$tipo, $id, $codigo, $usuarioId ?: null], $datos));
         $codigos[$id] = $codigo;

@@ -1,0 +1,81 @@
+/* =============================================================
+   Identidad CengiColabora (Solicitudes internas, familia Cengitech).
+   Se carga después de styles.css; solo sobrescribe.
+   ============================================================= */
+
+/* ---------- A. Barra lateral ---------- */
+.sidebar {
+  border-right: 0; color: #fff;
+  background-color: #04330f;
+  background-image:
+    linear-gradient(180deg, rgba(4,51,15,1) 0%, rgba(10,74,28,.97) 55%, rgba(13,90,34,.86) 100%),
+    url('../img/campo-cana.jpg');
+  background-size: cover, cover; background-position: center, center bottom;
+  scrollbar-color: rgba(188,243,46,.35) transparent;
+}
+
+.sidebar-brand {
+  position: relative; gap: 12px; padding: 18px 16px 18px;
+  background: transparent; border-bottom: 0;
+}
+.sidebar-brand::after { /* franja de los cuatro colores */
+  content: ""; position: absolute; left: 16px; right: 16px; bottom: 0; height: 3px; border-radius: 3px;
+  background: linear-gradient(90deg, #73BC25, #A3D300, #FFCC00, #FF6B00);
+}
+.sidebar-brand-logo { width: 54px; height: auto; flex: none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+.sidebar-brand:hover .sidebar-brand-logo { transform: rotate(-6deg) scale(1.06); }
+.sidebar-brand-copy strong { font-size: 23px; font-weight: 850; letter-spacing: -.055em; color: #fff; line-height: 1; }
+.sidebar-brand-copy strong b { color: #bcf32e; font-weight: 850; }
+.sidebar-brand-copy small { margin-top: 5px; font-size: 9.5px; font-weight: 700; color: rgba(255,255,255,.66); }
+
+.sidebar-nav-label { color: rgba(220,255,152,.62); }
+.sidebar-nav-item { color: rgba(255,255,255,.86); border-left-color: transparent; transition: background-color .18s, color .18s, transform .18s; }
+.sidebar-nav-item i { color: #dcfa51; }
+.sidebar-nav-item:hover { background: rgba(255,255,255,.09); color: #fff; transform: translateX(2px); }
+.sidebar-nav-item.is-active { background: rgba(188,243,46,.16); border-left-color: #bcf32e; color: #e6ff9e; }
+.sidebar-nav-item.is-active i { color: #e6ff9e; }
+.sidebar-foot { border-top: 1px solid rgba(188,243,46,.2); }
+.sidebar-menu-link:hover { color: #fff; }
+.sidebar-logout-link, .sidebar-logout-link i { color: #ffb4a6; }
+.sidebar-logout-link:hover { background: rgba(255,107,0,.16); color: #ffd2c9; }
+.sidebar :focus-visible { outline: 2px solid #bcf32e; outline-offset: 2px; }
+
+/* ---------- Panel: bienvenida con foto ---------- */
+.panel-hero {
+  position: relative; isolation: isolate; overflow: hidden; color: #fff;
+  border: 1px solid rgba(171,235,63,.45); border-left: 1px solid rgba(171,235,63,.45); border-radius: 20px;
+  padding: 26px 28px;
+  background: linear-gradient(110deg, rgba(4,48,17,.95) 0%, rgba(8,70,26,.87) 55%, rgba(17,96,34,.72) 100%), url('../img/campo-cana.jpg') center 60% / cover;
+  box-shadow: 0 20px 44px rgba(7,60,24,.22);
+  animation: cb-entrar .6s cubic-bezier(.2,.8,.2,1) backwards;
+}
+.panel-hero::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; z-index: -1; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(188,243,46,.12), transparent); transform: skewX(-18deg);
+  animation: cb-barrido 9s 1.2s ease-in-out infinite;
+}
+.panel-hero-date { padding: 5px 11px; border-radius: 99px; background: rgba(188,243,46,.14); border: 1px solid rgba(188,243,46,.35); color: #e6ff9e; }
+.panel-hero-title { margin-top: 12px; color: #fff; font-size: clamp(24px, 2.4vw, 32px); font-weight: 850; letter-spacing: -.035em; }
+.panel-hero-title::after { content: ""; display: block; width: 90px; height: 4px; margin-top: 10px; border-radius: 6px; background: linear-gradient(90deg, #A3D300, #FFCC00); }
+.panel-hero-sub { margin-top: 10px; color: rgba(255,255,255,.86); }
+.panel-hero-sub strong { color: #e6ff9e; }
+.cb-hero-brand { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; font-size: 12px; color: rgba(255,255,255,.7); }
+.cb-hero-brand img { width: 40px; height: auto; }
+.cb-hero-brand strong { font-size: 19px; font-weight: 850; letter-spacing: -.05em; color: #fff; }
+.cb-hero-brand strong b { color: #bcf32e; font-weight: 850; }
+.panel-hero .btn-primary { border-radius: 12px; padding: 11px 18px; background: linear-gradient(100deg, #bcf32e, #A3D300); color: #073c18; box-shadow: 0 10px 24px rgba(163,211,0,.3); transition: transform .2s, box-shadow .2s; }
+.panel-hero .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(188,243,46,.42); }
+.panel-hero .btn-outline { border-radius: 12px; padding: 11px 18px; background: rgba(255,255,255,.12); border-color: rgba(188,243,46,.45); color: #fff; backdrop-filter: blur(6px); }
+.panel-hero .btn-outline:hover { background: rgba(255,255,255,.2); }
+
+@keyframes cb-entrar { from { opacity: 0; transform: translateY(16px); } }
+@keyframes cb-barrido { 0% { left: -40%; } 22%, 100% { left: 130%; } }
+@media print { .panel-hero { background: #fff; color: #1d3320; box-shadow: none; } .panel-hero-title { color: #1d3320; } }
+@media (prefers-reduced-motion: reduce) {
+  .panel-hero, .panel-hero::after { animation: none !important; }
+  .sidebar-nav-item, .sidebar-brand-logo { transition: none !important; }
+}
+
+/* Nombre más largo que Cengiconecta: un poco más pequeño para que quepa en la barra. */
+.sidebar-brand-copy strong { font-size: 20px; }
+.sidebar-brand-logo { width: 50px; }

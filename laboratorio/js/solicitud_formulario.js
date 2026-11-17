@@ -201,6 +201,9 @@ function updateNumeroLaboratorio() {
     inicioInput.value = "";
     finInput.value = "";
     ocultoInput.value = "";
+    // Indica qué falta: el rango usa el mes y año de la fecha de muestreo y la cantidad de muestras.
+    const faltan = [!mesAnio ? "la fecha de muestreo" : "", (Number.isNaN(muestras) || muestras < 1) ? "el número de muestras" : ""].filter(Boolean);
+    setEstadoNumeroLaboratorio(faltan.length ? "Falta " + faltan.join(" y ") + " para calcular el rango." : "", false);
     return;
   }
 
@@ -209,9 +212,34 @@ function updateNumeroLaboratorio() {
   const codigoInicio = `${inicial}-${formatLote(loteInicial, longitudLote)}-${mesAnio}`;
   const codigoFin = `${inicial}-${formatLote(loteFinal, longitudLote)}-${mesAnio}`;
 
+  const cambio = inicioInput.value !== codigoInicio || finInput.value !== codigoFin;
   inicioInput.value = codigoInicio;
   finInput.value = codigoFin;
   ocultoInput.value = `${codigoInicio} / ${codigoFin}`;
+  setEstadoNumeroLaboratorio(`${muestras} muestra${muestras === 1 ? "" : "s"}: ${codigoInicio} → ${codigoFin} · se confirma al registrar`, true);
+  if (cambio) {
+    // Resalta brevemente el rango para que se note que se actualizó al cambiar muestras o fecha.
+    const rango = inicioInput.closest(".laboratorio-range");
+    if (rango) { rango.classList.remove("is-updated"); void rango.offsetWidth; rango.classList.add("is-updated"); }
+  }
+}
+
+/* Mensaje bajo el número de laboratorio: qué falta para calcularlo o el rango que se asignará. */
+function setEstadoNumeroLaboratorio(texto, ok) {
+  const inicio = document.getElementById("n_laboratorio_inicio");
+  const campo = inicio && inicio.closest(".field");
+  if (!campo) return;
+  let estado = document.getElementById("n-laboratorio-estado");
+  if (!estado) {
+    estado = document.createElement("small");
+    estado.id = "n-laboratorio-estado";
+    estado.setAttribute("role", "status");
+    estado.setAttribute("aria-live", "polite");
+    campo.appendChild(estado);
+  }
+  estado.textContent = texto;
+  estado.classList.toggle("is-ok", !!ok);
+  estado.hidden = !texto;
 }
 
 function formatearFechaVisual(fecha) {
@@ -342,11 +370,38 @@ function sincronizarFechasSolicitudVisuales(tipoForzado = null) {
     fechaEstimadaInput.value = calcularFechaEstimadaVisual(fechaIngresoInput.value, tipoActivo);
   }
 }
+/* "Nombre del ensayo": lista de ensayos de Experimentos; el valor se guarda en #numero_de_muestra
+   (codigo_muestreo). "Otro" muestra el campo para escribir un nombre libre. */
+function syncEnsayoExperimentos() {
+  const sel = document.querySelector("[data-ensayo-experimentos]");
+  const input = document.getElementById("numero_de_muestra");
+  if (!sel || !input) return;
+  const valor = input.value.trim();
+  const enLista = !!valor && Array.from(sel.options).some(o => o.value === valor && o.value !== "__otro");
+  sel.value = enLista ? valor : (valor ? "__otro" : "");
+  input.hidden = sel.value !== "__otro";
+  sel.disabled = input.readOnly;
+}
+document.querySelector("[data-ensayo-experimentos]")?.addEventListener("change", e => {
+  const input = document.getElementById("numero_de_muestra");
+  if (e.target.value === "__otro") {
+    input.value = "";
+    input.hidden = false;
+    input.focus();
+  } else {
+    input.value = e.target.value;
+    input.hidden = true;
+  }
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+syncEnsayoExperimentos();
+
 function setCamposReadonly(readonly) {
   ["numero_de_muestra", "fecha_muestreo", "numero_muestras"].forEach(id => {
     const input = document.getElementById(id);
     if (input) input.readOnly = readonly;
   });
+  syncEnsayoExperimentos();
 
   const lote = document.getElementById("lote");
   if (lote) lote.readOnly = true;
@@ -398,6 +453,7 @@ function aplicarSolicitudDb(idSolicitud) {
   });
   syncSelectAllAnalisis();
   document.getElementById("numero_de_muestra").value = solicitudSeleccionada.codigo_muestreo || "";
+  syncEnsayoExperimentos();
   document.getElementById("lote").value = solicitudSeleccionada.codigo_lote || "";
   document.getElementById("fecha_muestreo").value = solicitudSeleccionada.fecha_muestreo || "";
   document.getElementById("numero_muestras").value = solicitudSeleccionada.numero_muestras || "";
@@ -447,7 +503,10 @@ function initTipoButtons() {
 function initLaboratorioInputs() {
   ["fecha_muestreo", "numero_muestras"].forEach(id => {
     const input = document.getElementById(id);
-    if (input) input.addEventListener("input", updateNumeroLaboratorio);
+    if (!input) return;
+    input.addEventListener("input", updateNumeroLaboratorio);
+    // Al elegir la fecha en el calendario algunos navegadores solo emiten "change".
+    input.addEventListener("change", updateNumeroLaboratorio);
   });
 }
 

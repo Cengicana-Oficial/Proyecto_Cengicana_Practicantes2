@@ -6,7 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class Parcela extends Model
 {
-    protected $fillable = ['ensayo_id', 'tratamiento_id', 'codigo', 'repeticion', 'area', 'notas'];
+    protected $fillable = ['ensayo_id', 'tratamiento_id', 'codigo', 'repeticion', 'posicion', 'area', 'notas', 'geometria'];
+
+    protected $casts = ['geometria' => 'array'];
 
     public function ensayo()
     {

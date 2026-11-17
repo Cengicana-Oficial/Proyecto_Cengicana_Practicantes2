@@ -56,7 +56,7 @@ if (!function_exists('lab_roles_definicion')) {
                 'permisos' => $analista,
             ],
             'Recepcionista' => [
-                'descripcion' => 'Registra y edita las recepciones de muestras, identifica e imprime etiquetas, y envía al cliente los reportes firmados.',
+                'descripcion' => 'Registra y edita las recepciones de muestras, identifica e imprime etiquetas, y envía al cliente los informes firmados.',
                 'notifica' => 'Reportes firmados que aún no se han enviado al cliente.',
                 'permisos' => $recepcionista,
             ],

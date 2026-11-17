@@ -30,7 +30,12 @@ $comentario = trim((string) ($payload['comentario'] ?? ''));
 $reanalizar = is_array($payload['reanalizar'] ?? null) ? $payload['reanalizar'] : [];
 $categoria = trim((string) ($payload['categoria'] ?? ''));
 
-if ($idFormulario <= 0 || !in_array($accion, ['aprobar', 'rechazar'], true)) {
+// Hoja completa: todos los formularios (uno por análisis) de un mismo envío.
+$idsFormulario = is_array($payload['ids_formulario'] ?? null)
+    ? array_values(array_filter(array_map('intval', $payload['ids_formulario']), static fn($id) => $id > 0))
+    : [];
+
+if (($idFormulario <= 0 && !$idsFormulario) || !in_array($accion, ['aprobar', 'rechazar'], true)) {
     http_response_code(422);
     echo json_encode(['ok' => false, 'error' => 'Datos incompletos.']);
     exit;
@@ -38,9 +43,39 @@ if ($idFormulario <= 0 || !in_array($accion, ['aprobar', 'rechazar'], true)) {
 
 $usuario = lab_current_user();
 
+// Constancia de validación: aprobar exige que el técnico la haya confirmado en pantalla. Se registra
+// aparte en el historial de cada formulario (no en el comentario, que es el motivo de reanálisis
+// que recibe el analista): quién, cargo y declaración; la fecha la pone la base.
+$constancia = null;
+if ($accion === 'aprobar') {
+    if (($payload['constancia'] ?? false) !== true) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => 'Confirme la constancia de validación técnica antes de aprobar.']);
+        exit;
+    }
+    $cargo = trim((string) ($usuario['rol'] ?? ''));
+    $constancia = 'Constancia de validación técnica: ' . (trim((string) ($usuario['nombre'] ?? '')) ?: 'Usuario sin nombre')
+        . ($cargo !== '' ? ' (' . $cargo . ')' : '')
+        . ' declara que revisó los datos capturados, los cálculos y los controles, y que los resultados aprobados son conformes.';
+}
+
 try {
     $pdo = Conexion::conectar();
-    $resultado = lab_validacion_resolver(
+    // Una sola transacción: la aprobación y su constancia se guardan juntas o ninguna.
+    $pdo->beginTransaction();
+    $resultado = $idsFormulario ? lab_validacion_resolver_grupo(
+        $pdo,
+        $idsFormulario,
+        $accion,
+        (string) ($usuario['nombre'] ?? ''),
+        !empty($usuario['id']) ? (int) $usuario['id'] : null,
+        $comentario,
+        $reanalizar,
+        $categoria,
+        // Parámetros de la corrida corregidos por el técnico (p. ej. factor de temperatura CE).
+        is_array($payload['encabezado'] ?? null) ? $payload['encabezado'] : [],
+        is_array($payload['texturas'] ?? null) ? $payload['texturas'] : []
+    ) : lab_validacion_resolver(
         $pdo,
         $idFormulario,
         $accion,
@@ -50,6 +85,13 @@ try {
         $reanalizar,
         $categoria
     );
+    if ($constancia !== null) {
+        $registrar = $pdo->prepare("INSERT INTO historial_formulario (id_formulario, accion, estado_anterior, estado_nuevo, usuario, fecha, comentario) VALUES (?, 'constancia_validacion', NULL, NULL, ?, NOW(), ?)");
+        foreach ($idsFormulario ?: [$idFormulario] as $idConst) {
+            $registrar->execute([(int) $idConst, (string) ($usuario['nombre'] ?? ''), $constancia]);
+        }
+    }
+    $pdo->commit();
 
     echo json_encode(['ok' => true, 'data' => $resultado]);
 } catch (InvalidArgumentException $e) {
@@ -68,4 +110,9 @@ try {
     error_log('[laboratorio][validacion_tecnica] ' . $e->getMessage());
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'No se pudo registrar la decision.']);
+} finally {
+    // Cualquier error deja todo como estaba (aprobación y constancia).
+    if (isset($pdo) && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
 }

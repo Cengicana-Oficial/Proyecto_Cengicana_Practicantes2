@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Programa extends Model
 {
-    protected $fillable = ['nombre', 'descripcion', 'lider', 'color'];
+    protected $fillable = ['nombre', 'sigla', 'descripcion', 'lider', 'color'];
 
     public function proyectos()
     {

@@ -1,0 +1,75 @@
+/* =============================================================
+   Identidad CengiVisitas (Solicitud de visitas, familia Cengitech).
+   Lo carga public/admin/dashboard_unificado.php después de
+   dashboard.css e inicio.css: solo sobrescribe.
+   ============================================================= */
+
+/* ---------- Barra lateral ---------- */
+.sidebar {
+  width: 248px;
+  padding: 0 14px 18px;
+  background-color: #04330f;
+  background-image:
+    linear-gradient(180deg, rgba(4,51,15,1) 0%, rgba(10,74,28,.97) 55%, rgba(13,90,34,.86) 100%),
+    url('img/campo-cana.jpg');
+  background-size: cover, cover;
+  background-position: center, center bottom;
+  scrollbar-color: rgba(188,243,46,.35) transparent;
+}
+.main-content { margin-left: 248px; }
+.cv-brand { position: relative; display: flex; align-items: center; gap: 12px; margin: 0 -14px; padding: 18px 16px; text-decoration: none; }
+.cv-brand::after { content: ""; position: absolute; left: 16px; right: 16px; bottom: 0; height: 3px; border-radius: 3px; background: linear-gradient(90deg, #73BC25, #A3D300, #FFCC00, #FF6B00); }
+.cv-brand img { width: 54px; height: auto; flex: none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+.cv-brand:hover img { transform: rotate(-6deg) scale(1.06); }
+.cv-brand span { display: flex; flex-direction: column; line-height: 1; }
+.cv-brand strong { font-size: 22px; font-weight: 850; letter-spacing: -.055em; color: #fff; }
+.cv-brand strong b { color: #bcf32e; font-weight: 850; }
+.cv-brand small { margin-top: 6px; font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: rgba(255,255,255,.66); }
+
+.sidebar nav { margin-top: 18px; gap: 6px; }
+.sidebar nav a { padding: 11px 14px; border-radius: 12px; background: transparent; border: 1px solid transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; color: rgba(255,255,255,.86); font-size: 13.5px; transition: background-color .18s, color .18s, transform .18s; }
+.sidebar nav a:hover { background: rgba(255,255,255,.09); color: #fff; transform: translateX(2px); box-shadow: none; }
+.sidebar nav a.active { background: rgba(188,243,46,.16); border-color: transparent; color: #e6ff9e; box-shadow: inset 3px 0 0 #bcf32e; }
+.cv-foot { margin-top: auto; padding-top: 14px; border-top: 1px solid rgba(188,243,46,.2); display: flex; flex-direction: column; gap: 6px; }
+.cv-foot .cv-menu { display: block; padding: 10px 14px; border-radius: 12px; color: rgba(255,255,255,.86); font-size: 13.5px; font-weight: 600; text-decoration: none; }
+.cv-foot .cv-menu:hover { background: rgba(255,255,255,.09); color: #fff; }
+.cv-foot .btn-logout { margin-top: 0; align-self: stretch; text-align: center; border-radius: 12px; }
+.sidebar :focus-visible { outline: 2px solid #bcf32e; outline-offset: 2px; }
+
+/* ---------- Encabezados de sección con foto ---------- */
+.dashboard-header {
+  position: relative; isolation: isolate; overflow: hidden;
+  margin-bottom: 22px; padding: 24px 28px; border-left: 0;
+  border: 1px solid rgba(171,235,63,.45); border-radius: 20px; color: #fff;
+  background:
+    linear-gradient(110deg, rgba(4,48,17,.95) 0%, rgba(8,70,26,.87) 55%, rgba(17,96,34,.72) 100%),
+    url('img/campo-cana.jpg') center 60% / cover;
+  box-shadow: 0 20px 44px rgba(7,60,24,.2);
+  animation: cv-entrar .6s cubic-bezier(.2,.8,.2,1) backwards;
+}
+.dashboard-header::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; z-index: -1; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(188,243,46,.12), transparent); transform: skewX(-18deg);
+  animation: cv-barrido 9s 1.2s ease-in-out infinite;
+}
+.dashboard-header::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #73BC25 0 25%, #A3D300 25% 50%, #FFCC00 50% 75%, #FF6B00 75% 100%); }
+.dashboard-header h2 { color: #fff; font-size: clamp(22px, 2.3vw, 30px); font-weight: 850; letter-spacing: -.035em; }
+.dashboard-kicker { background: rgba(188,243,46,.14); border: 1px solid rgba(188,243,46,.35); color: #e6ff9e; }
+.dashboard-subtitle { color: rgba(255,255,255,.86); }
+.cv-hero-brand { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; font-size: 12px; color: rgba(255,255,255,.7); }
+.cv-hero-brand img { width: 38px; height: auto; }
+.cv-hero-brand strong { font-size: 18px; font-weight: 850; letter-spacing: -.05em; color: #fff; }
+.cv-hero-brand strong b { color: #bcf32e; font-weight: 850; }
+
+/* Tarjetas del inicio y mini indicadores: entrada escalonada */
+.cards .card, .mini-stat-card { animation: cv-entrar .55s cubic-bezier(.2,.8,.2,1) backwards; }
+.cards .card:nth-child(2), .mini-stat-card:nth-child(2) { animation-delay: .08s; }
+.cards .card:nth-child(3), .mini-stat-card:nth-child(3) { animation-delay: .16s; }
+.cards .card:nth-child(4), .mini-stat-card:nth-child(4) { animation-delay: .24s; }
+
+@keyframes cv-entrar { from { opacity: 0; transform: translateY(14px); } }
+@keyframes cv-barrido { 0% { left: -40%; } 22%, 100% { left: 130%; } }
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-header, .dashboard-header::before, .cards .card, .mini-stat-card { animation: none !important; }
+  .sidebar nav a, .cv-brand img { transition: none !important; }
+}

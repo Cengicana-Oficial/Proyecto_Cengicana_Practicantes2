@@ -35,6 +35,60 @@ $mixed=array_merge($q,[['id'=>3,'tipo'=>'abierta'],['id'=>4,'tipo'=>'tarea']]);
 check(aula_grade($mixed,['1'=>'0','2'=>'1'])===null,'Revision pendiente no debe figurar como cero');
 check(aula_grade($mixed,['1'=>'0','2'=>'1'],['3'=>['puntos'=>0.5],'4'=>['puntos'=>1]])===87.5,'Puntaje docente y automatico');
 try { aula_grade($mixed,[],['3'=>['puntos'=>2]]); throw new RuntimeException('Acepto puntos fuera de rango'); } catch(InvalidArgumentException $e){}
+// Banco de preguntas: varias correctas con puntaje parcial, duracion y carga masiva.
+$multi=[['id'=>5,'tipo'=>'multiple','correctas'=>'[0,2]']];
+check(aula_grade($multi,['5'=>'0,2'])===100.0,'Varias correctas completas');
+check(aula_grade($multi,['5'=>'0'])===50.0,'Una de dos correctas vale la mitad');
+check(aula_grade($multi,['5'=>'0,1'])===0.0,'Incorrecta marcada resta');
+check(aula_grade($multi,['5'=>'0,1,2,3'])===0.0,'Marcar todas no da puntos');
+check(aula_grade($multi,['5'=>''])===0.0,'Sin respuesta');
+check(aula_indices_correctos('A y c',4)===[0,2]&&aula_indices_correctos('3, 1',4)===[0,2],'Letras, numeros y separadores');
+expect_failure(function(){aula_indices_correctos('5',4);},'Opcion correcta fuera de rango');
+check(aula_minutos_post(['duracion'=>'1.5','duracion_unidad'=>'horas'])===90&&aula_minutos_post(['minutos'=>'45'])===45,'Duracion en horas y campo antiguo');
+check(aula_duracion_texto(90)==='1 h 30 min'&&aula_duracion_texto(45)==='45 min','Texto de duracion');
+$mods=[['id'=>7,'nombre'=>'Módulo I: Suelos'],['id'=>8,'nombre'=>'Módulo II']];
+expect_failure(function()use($mods){aula_pregunta_datos(['tipo'=>'multiple','enunciado'=>'X','opciones'=>"a\nb",'correcta'=>'1'],$mods);},'Varias correctas exige al menos dos');
+expect_failure(function()use($mods){aula_pregunta_datos(['tipo'=>'seleccion','enunciado'=>'X','opciones'=>"a\nb",'correcta'=>'1','curso_modulo_id'=>99],$mods);},'Modulo ajeno al curso');
+[$okRows,$errRows]=aula_banco_filas([
+    ['Instrucción libre'],
+    ['TIPO','Módulo','TEMA','ENUNCIADO','Opción A','OPCION_B','OPCION_C','CORRECTA','CRITERIO'],
+    ['Una correcta','modulo i: suelos','','¿Uno?','a','b','','B',''],
+    ['Varias correctas','2','','¿Dos?','a','b','c','A,C',''],
+    ['','','','Explica','','','','','Claridad'],
+    ['','','','','','','','',''],
+    ['Una correcta','Módulo X','','¿Error?','a','b','','A',''],
+],$mods);
+check(count($okRows)===3&&$okRows[0]['curso_modulo_id']===7&&$okRows[0]['correcta']===1&&$okRows[1]['correctas']==='[0,2]'&&$okRows[1]['curso_modulo_id']===8&&$okRows[2]['tipo']==='abierta','Carga masiva: filas validas');
+check(count($errRows)===1&&strpos($errRows[0],'Fila 7')===0,'Carga masiva: error con numero de fila');
+// Valor por pregunta: la nota se pondera por puntos.
+$pond=[['id'=>1,'tipo'=>'seleccion','correcta'=>0,'puntos'=>'3'],['id'=>2,'tipo'=>'seleccion','correcta'=>0,'puntos'=>'1'],['id'=>3,'tipo'=>'multiple','correctas'=>'[0,1]','puntos'=>'4']];
+check(aula_grade($pond,['1'=>'0','2'=>'1','3'=>'0'])===62.5,'Nota ponderada: (3+0+2)/8');
+check(aula_grade([['id'=>4,'tipo'=>'abierta','puntos'=>'5'],['id'=>5,'tipo'=>'seleccion','correcta'=>0,'puntos'=>'5']],['5'=>'0'],['4'=>['puntos'=>0.4]])===70.0,'Revision docente ponderada');
+expect_failure(function(){aula_valor_valido('0');},'Valor cero no permitido');
+check(aula_valor_valido('')===1.0&&aula_valor_valido('2,5')===2.5,'Valor por defecto y decimal con coma');
+// Autocalificacion: momento de la nota y de la retroalimentacion.
+$evBase=['publicar'=>0,'cierra'=>'2026-11-20 18:00:00','nota_visible'=>'entrega','retro'=>'correctas','retro_momento'=>'cierre','retro_desde'=>null];
+check(aula_nota_visible($evBase,'2026-11-15 10:00:00')&&!aula_retro_visible($evBase,'2026-11-15 10:00:00')&&aula_retro_visible($evBase,'2026-11-20 18:00:00'),'Nota al entregar, retroalimentacion al cierre');
+check(!aula_nota_visible(['nota_visible'=>'cierre']+$evBase,'2026-11-15 10:00:00')&&aula_nota_visible(['nota_visible'=>'cierre']+$evBase,'2026-11-21 00:00:00'),'Nota al cerrar');
+check(!aula_nota_visible(['nota_visible'=>'manual']+$evBase,'2026-12-01 00:00:00')&&aula_nota_visible(['nota_visible'=>'manual','publicar'=>1]+$evBase),'Manual depende de publicar');
+check(!aula_retro_visible(['retro'=>'no']+$evBase,'2027-01-01 00:00:00'),'Sin retroalimentacion');
+check(aula_retro_visible(['retro_momento'=>'fecha','retro_desde'=>'2026-11-16 08:00:00']+$evBase,'2026-11-16 08:00:00')&&!aula_retro_visible(['retro_momento'=>'fecha','retro_desde'=>'2026-11-16 08:00:00']+$evBase,'2026-11-16 07:59:00'),'Retroalimentacion desde una fecha');
+check(aula_retro_visible(['retro_momento'=>'nota']+$evBase,'2026-11-15 10:00:00'),'Retroalimentacion junto con la nota');
+// Modalidad asincronica: avance de grabaciones y desbloqueo de evaluaciones por modulo.
+check(aula_bits_contar("\xFF\x01",10)===9&&aula_bits_contar("\xFF\xFF",10)===10,'Conteo de tramos vistos');
+$vidYt=['fuente'=>'youtube','duracion_min'=>null];
+check(aula_video_porcentaje($vidYt,['duracion'=>100,'segmentos'=>base64_encode("\xFF\x3F"),'segundos'=>0])===70.0,'14 de 20 tramos = 70 %');
+check(aula_video_porcentaje(['fuente'=>'otro','duracion_min'=>10],['duracion'=>0,'segmentos'=>'','segundos'=>420])===70.0,'Drive: 7 de 10 minutos');
+check(aula_video_porcentaje(['fuente'=>'otro','duracion_min'=>null],['duracion'=>0,'segmentos'=>'','segundos'=>900])===70.0,'Sin duracion: 15 minutos habilitan');
+$mods=[['id'=>1,'nombre'=>'Suelos'],['id'=>2,'nombre'=>'Riego']];
+$ses=[['id'=>10,'modulo'=>'Suelos','fecha'=>'2026-10-01','estado'=>'impartida'],['id'=>11,'modulo'=>'Suelos','fecha'=>'2026-10-02','estado'=>'programada'],['id'=>12,'modulo'=>'Riego','fecha'=>'2026-12-01','estado'=>'programada']];
+$vids=[100=>['id'=>100,'sesion_id'=>10],101=>['id'=>101,'sesion_id'=>11]];
+$evMod=['curso_modulo_id'=>1,'sesion_id'=>null];
+check(!aula_async_eval_estado($evMod,$vids,[100=>['visto_en'=>'x']],$mods,$ses,null,'2026-11-11')['ok'],'Modulo bloqueado con una grabacion pendiente');
+check(aula_async_eval_estado($evMod,$vids,[100=>['visto_en'=>'x'],101=>['visto_en'=>'y']],$mods,$ses,null,'2026-11-11')['ok'],'Modulo habilitado al ver todas sus grabaciones');
+check(!aula_async_eval_estado(['curso_modulo_id'=>2,'sesion_id'=>null],$vids,[],$mods,$ses,null,'2026-11-11')['ok'],'Modulo con sesiones futuras sigue bloqueado');
+check(!aula_async_eval_estado($evMod,$vids,[100=>['visto_en'=>'x'],101=>['visto_en'=>'y']],$mods,$ses,'2026-11-10','2026-11-11')['ok'],'Plazo vencido bloquea');
+check(aula_async_resumen($vids,[100=>['visto_en'=>'x']])===['vistas'=>1,'total'=>2,'porcentaje'=>50.0],'Resumen de avance');
 check(aula_url('javascript:alert(1)')===null,'Esquema inseguro');
 check(aula_vimeo('https://vimeo.com/123456/abc123')==='https://player.vimeo.com/video/123456?h=abc123','Privacidad Vimeo');
 check(aula_vimeo('https://vimeo.com.evil.test/123')===null,'Host falso Vimeo');

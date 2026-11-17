@@ -130,7 +130,10 @@ function redes_api_guardar(PDO $pdo, string $proveedor, array $post, array $file
         $config['page_id'] = preg_replace('/\D/', '', $texto('page_id'));
         $config['ig_user_id'] = preg_replace('/\D/', '', $texto('ig_user_id'));
         $config['version'] = preg_match('/^v\d+\.\d+$/', $texto('version')) ? $texto('version') : 'v23.0';
+        $cuentaAds = preg_replace('/\D/', '', $texto('ad_account_id'));
+        $config['ad_account_id'] = $cuentaAds !== '' ? 'act_' . $cuentaAds : '';
         $nuevoSecreto('token');
+        $nuevoSecreto('ads_token');
         if ($config['page_id'] === '' || empty($secreto['token'])) {
             throw new RuntimeException('Meta: escribe el ID de la página y el token de acceso.');
         }
@@ -302,7 +305,7 @@ function redes_meta_sincronizar(PDO $pdo, array $cfg, array $sec): string
         $posts = array_merge($posts, $json['data'] ?? []);
     }
     foreach ($posts as $p) {
-        $ins = redes_meta_insights($v, $p['id'], ['post_impressions_unique', 'post_impressions', 'post_clicks', 'post_media_view', 'post_total_media_view_unique', 'post_video_views'], $token, $invalidas);
+        $ins = redes_meta_insights($v, $p['id'], ['post_impressions_unique', 'post_impressions', 'post_clicks', 'post_media_view', 'post_total_media_view_unique', 'post_video_views', 'post_impressions_paid_unique'], $token, $invalidas);
         $m = [
             'alcance' => $ins['post_impressions_unique'] ?? $ins['post_total_media_view_unique'] ?? 0,
             'impresiones' => $ins['post_impressions'] ?? $ins['post_media_view'] ?? 0,
@@ -315,6 +318,10 @@ function redes_meta_sincronizar(PDO $pdo, array $cfg, array $sec): string
         $m['interacciones'] = $m['reacciones'] + $m['comentarios'] + $m['compartidos'] + $m['clics'];
         $titulo = mb_strimwidth((string) ($p['message'] ?? ''), 0, 200, '…');
         $conteo['Facebook'][redes_api_guardar_publicacion($pdo, 'Facebook', $p['id'], $p['permalink_url'] ?? null, isset($p['created_time']) ? date('Y-m-d', strtotime($p['created_time'])) : null, $titulo, $p['status_type'] ?? null, $m)]++;
+        if (($ins['post_impressions_paid_unique'] ?? 0) > 0) {
+            // Meta reporta alcance pagado: la publicacion se promociono.
+            $pdo->prepare("UPDATE publicaciones SET pautada = 1 WHERE plataforma = 'Facebook' AND externo_id = ?")->execute([$p['id']]);
+        }
     }
 
     $avisoIg = '';
@@ -340,9 +347,24 @@ function redes_meta_sincronizar(PDO $pdo, array $cfg, array $sec): string
                 $m['interacciones'] = $ins['total_interactions'] ?? ($m['reacciones'] + $m['comentarios'] + $m['compartidos'] + $m['guardados']);
                 $conteo['Instagram'][redes_api_guardar_publicacion($pdo, 'Instagram', $p['id'], $p['permalink'] ?? null, isset($p['timestamp']) ? date('Y-m-d', strtotime($p['timestamp'])) : null, mb_strimwidth((string) ($p['caption'] ?? ''), 0, 200, '…'), ucfirst(strtolower((string) ($p['media_type'] ?? ''))), $m)]++;
             }
+            try {
+                $avisoIg .= redes_instagram_audiencia($pdo, $v, $ig, $token);
+            } catch (PDOException $e) {
+                $avisoIg .= ' No se pudo guardar la audiencia: falta migrar la base de datos.';
+            }
         }
     } catch (RuntimeException $e) {
         $avisoIg = ' Instagram no se pudo leer: ' . $e->getMessage();
+    }
+    try {
+        $avisoIg .= redes_facebook_audiencia($pdo, $v, $cfg['page_id'], $token);
+    } catch (Throwable $e) {
+        $avisoIg .= ' Audiencia de Facebook no disponible: ' . $e->getMessage();
+    }
+    try {
+        $avisoIg .= redes_meta_cuenta($pdo, $cfg, $sec, (string) ($ig ?? ''));
+    } catch (Throwable $e) {
+        $avisoIg .= ' Métricas de la cuenta no disponibles: ' . $e->getMessage();
     }
     $resumen = [];
     foreach ($conteo as $red => $c) {
@@ -439,7 +461,17 @@ function redes_linkedin_sincronizar(PDO $pdo, array $cfg, array $sec): string
         $ms = (int) ($p['publishedAt'] ?? $p['createdAt'] ?? 0);
         $conteo[redes_api_guardar_publicacion($pdo, 'LinkedIn', (string) $p['id'], 'https://www.linkedin.com/feed/update/' . $p['id'], $ms ? date('Y-m-d', intdiv($ms, 1000)) : null, mb_strimwidth((string) ($p['commentary'] ?? ''), 0, 200, '…'), null, $m)]++;
     }
-    return "LinkedIn: {$conteo['actualizada']} actualizada(s), {$conteo['nueva']} nueva(s)." . (!empty($cfg['token_expira']) && strtotime($cfg['token_expira']) < strtotime('+10 days') && empty($sec['refresh_token']) ? ' El token vence el ' . date('d/m/Y', strtotime($cfg['token_expira'])) . ': genera uno nuevo.' : '');
+    try {
+        $avisoAudiencia = redes_linkedin_audiencia($pdo, $org, $token, $version);
+    } catch (Throwable $e) {
+        $avisoAudiencia = ' Seguidores por país no disponibles: ' . $e->getMessage();
+    }
+    try {
+        $avisoAudiencia .= redes_linkedin_cuenta($pdo, $org, $token, $version);
+    } catch (Throwable $e) {
+        $avisoAudiencia .= ' Métricas de la cuenta no disponibles: ' . $e->getMessage();
+    }
+    return "LinkedIn: {$conteo['actualizada']} actualizada(s), {$conteo['nueva']} nueva(s)." . $avisoAudiencia . (!empty($cfg['token_expira']) && strtotime($cfg['token_expira']) < strtotime('+10 days') && empty($sec['refresh_token']) ? ' El token vence el ' . date('d/m/Y', strtotime($cfg['token_expira'])) . ': genera uno nuevo.' : '');
 }
 
 // ---------------------------------------------------------------- Google Analytics 4
@@ -525,7 +557,12 @@ function redes_ga4_sincronizar(PDO $pdo, array $cfg, array $sec): string
         $periodo = substr($d[0], 0, 4) . '-' . substr($d[0], 4, 2);
         $stmt->execute([$periodo, (int) $m[0], (int) $m[1], (int) $m[2], (int) $m[3], (int) round($m[4]), round($m[5] * 100, 2), $redes[$periodo] ?? 0, $whatsapp[$periodo] ?? 0]);
     }
-    return 'Google Analytics: ' . count($totales) . ' mes(es) actualizado(s).';
+    try {
+        $avisoAudiencia = redes_ga4_audiencia($pdo, $token, $cfg['property_id']);
+    } catch (Throwable $e) {
+        $avisoAudiencia = ' Audiencia por país no disponible: ' . $e->getMessage();
+    }
+    return 'Google Analytics: ' . count($totales) . ' mes(es) actualizado(s).' . $avisoAudiencia;
 }
 
 // ---------------------------------------------------------------- Orquestacion

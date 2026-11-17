@@ -40,6 +40,10 @@ unset($_SESSION['cengi_ins_evt_previo']);
 $ingeniosLista = $evento !== null
     ? $db->query('SELECT nombre_ingenios FROM ingenios ORDER BY nombre_ingenios')->fetchAll(PDO::FETCH_COLUMN)
     : [];
+// Cargos mas usados en inscripciones anteriores como sugerencias (se puede escribir cualquiera).
+$cargosLista = $evento !== null
+    ? $db->query("SELECT cargo_invitado FROM evento_participantes WHERE cargo_invitado <> '' GROUP BY cargo_invitado ORDER BY COUNT(*) DESC, cargo_invitado LIMIT 40")->fetchAll(PDO::FETCH_COLUMN)
+    : [];
 
 // Soporte de pagos (lo edita Administracion en Control QR de eventos). El boton de
 // WhatsApp solo se muestra si el numero ya esta configurado.
@@ -155,11 +159,13 @@ $logoEvento = $evento && $evento['logo'] && cengi_evento_imagen_archivo($evento[
                 <h2 class="ep-h2">🪪 Datos del participante</h2>
                 <div class="ep-grid2">
                     <div class="ep-f full"><label for="epN">Nombre completo</label><input id="epN" name="nombre" maxlength="255" autocomplete="name" value="<?php echo cengi_ins_evt_previo($previo, 'nombre'); ?>"></div>
-                    <div class="ep-f"><label for="epCui">CUI <span>(opcional)</span></label><input id="epCui" name="cui" maxlength="25" inputmode="numeric" value="<?php echo cengi_ins_evt_previo($previo, 'cui'); ?>"></div>
                     <div class="ep-f"><label for="epCorreo">Correo electrónico</label><input id="epCorreo" name="correo" type="email" maxlength="255" autocomplete="email" value="<?php echo cengi_ins_evt_previo($previo, 'correo'); ?>"></div>
                     <div class="ep-f"><label for="epTel">Teléfono / WhatsApp</label><input id="epTel" name="telefono" maxlength="30" autocomplete="tel" value="<?php echo cengi_ins_evt_previo($previo, 'telefono'); ?>"></div>
-                    <div class="ep-f"><label for="epIng">Institución o ingenio</label><input id="epIng" name="institucion" maxlength="255" list="epIngList" placeholder="Ej. Ingenio Magdalena, empresa o particular" value="<?php echo cengi_ins_evt_previo($previo, 'institucion'); ?>">
-                        <datalist id="epIngList"><?php foreach ($ingeniosLista as $nombreIngenio): ?><option value="<?php echo cengi_ins_evt_html($nombreIngenio); ?>"></option><?php endforeach; ?></datalist></div>
+                    <div class="ep-f"><label for="epIng">Institución o ingenio</label><input id="epIng" name="institucion" maxlength="255" list="epIngList" autocomplete="organization" placeholder="Ej. Magdalena, empresa o Particular" aria-describedby="epIngAyuda" value="<?php echo cengi_ins_evt_previo($previo, 'institucion'); ?>">
+                        <datalist id="epIngList"><?php foreach ($ingeniosLista as $nombreIngenio): ?><option value="<?php echo cengi_ins_evt_html($nombreIngenio); ?>"></option><?php endforeach; ?><option value="Particular"></option></datalist>
+                        <small class="ep-ayuda" id="epIngAyuda" aria-live="polite"></small></div>
+                    <div class="ep-f"><label for="epCargo">Puesto o cargo</label><input id="epCargo" name="cargo" maxlength="150" list="epCargoList" autocomplete="organization-title" placeholder="Ej. Jefe de campo, estudiante" value="<?php echo cengi_ins_evt_previo($previo, 'cargo'); ?>">
+                        <datalist id="epCargoList"><?php foreach ($cargosLista as $cargoSugerido): ?><option value="<?php echo cengi_ins_evt_html($cargoSugerido); ?>"></option><?php endforeach; ?></datalist></div>
                 </div>
                 <?php if ($eventoPagado): ?>
                     <h2 class="ep-h2" style="margin-top:22px;">💳 Pago del evento</h2>
@@ -304,6 +310,29 @@ $logoEvento = $evento && $evento['logo'] && cengi_evento_imagen_archivo($evento[
     if (reservar) { reservar.addEventListener('change', sincronizarReserva); sincronizarReserva(); }
 
     // Validacion previa al envio, con los mismos mensajes que ppEpEnviar del prototipo.
+    // Institucion: "trinidad" o "Ingenio Trinidad" se reconoce como el ingenio del catalogo al salir
+    // del campo (mismo criterio que cengi_institucion_normalizar en el servidor).
+    var campoIng = document.getElementById('epIng'), ayudaIng = document.getElementById('epIngAyuda');
+    if (campoIng && ayudaIng) {
+        var VACIAS = <?php echo json_encode(CENGI_INGENIO_PALABRAS_VACIAS); ?>, PARTICULAR = <?php echo json_encode(CENGI_INSTITUCION_PARTICULAR); ?>;
+        var clave = function (t) {
+            return String(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/)
+                .filter(function (p) { return p && VACIAS.indexOf(p) < 0; }).join(' ');
+        };
+        var catalogo = <?php echo json_encode(array_values($ingeniosLista), JSON_UNESCAPED_UNICODE); ?>.map(function (n) { return {nombre: n, clave: clave(n)}; });
+        var reconocer = function () {
+            var k = clave(campoIng.value);
+            ayudaIng.textContent = '';
+            if (!k) return;
+            if (PARTICULAR.indexOf(k) >= 0 || PARTICULAR.indexOf(campoIng.value.trim().toLowerCase()) >= 0) { campoIng.value = 'Particular'; return; }
+            var hallados = catalogo.filter(function (i) { return i.clave === k; });
+            if (!hallados.length) hallados = catalogo.filter(function (i) { return i.clave.length >= 4 && k.length >= 4 && (i.clave.indexOf(k) === 0 || k.indexOf(i.clave + ' ') === 0); });
+            if (hallados.length === 1) { campoIng.value = hallados[0].nombre; ayudaIng.textContent = '✓ Ingenio reconocido: ' + hallados[0].nombre; }
+        };
+        campoIng.addEventListener('change', reconocer);
+        if (campoIng.value) reconocer();
+    }
+
     var form = document.getElementById('formInscripcionEvento');
     var boton = document.getElementById('epBtn');
     if (form && boton) {
@@ -313,6 +342,8 @@ $logoEvento = $evento && $evento['logo'] && cengi_evento_imagen_archivo($evento[
             if (g('epN').value.trim().replace(/\s+/g, ' ').length < 5) errs.push('Escribe tu nombre completo.');
             if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(g('epCorreo').value.trim())) errs.push('Escribe un correo válido.');
             if (g('epTel').value.replace(/\D/g, '').length < 8) errs.push('Escribe un teléfono o WhatsApp de al menos 8 dígitos.');
+            if (!g('epIng').value.trim()) errs.push('Indica tu institución o ingenio (si no trabajas en una institución, escribe “Particular”).');
+            if (!g('epCargo').value.trim()) errs.push('Indica tu puesto o cargo.');
             var sinComp = document.getElementById('epSinComp');
             if (eventoPagado && !(sinComp && sinComp.checked)) {
                 if (!(archivo.files && archivo.files[0])) errs.push('Adjunta la foto o PDF de tu comprobante.');

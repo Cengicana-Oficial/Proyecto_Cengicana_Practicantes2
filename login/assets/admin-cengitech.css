@@ -1,0 +1,155 @@
+/* =============================================================
+   Administración Cengitech (usuarios, roles, módulos, ingenios)
+   Se carga DESPUÉS de ingenios.css y menu-cengitech.css. Todo va
+   bajo body.cx-admin para ganar a los estilos en línea de cada página.
+   ============================================================= */
+
+body.cx-admin {
+  --primary: #73BC25;
+  --primary-strong: #4f9d18;
+  --primary-deep: #166121;
+  --background: #f3f7ef;
+  --surface-soft: #eef7e2;
+  --border: #dfe7da;
+  --text: #1d3320;
+  --muted: #56685a;
+  background: var(--background);
+}
+body.cx-admin .ingenios-shell { position: relative; z-index: 1; flex: 1 0 auto; margin-top: -168px; padding-top: 28px; }
+
+/* Banda de foto bajo el encabezado */
+.cx-admin-band { position: relative; height: 210px; overflow: hidden; isolation: isolate; }
+.cx-admin-band::before { content: ""; position: absolute; inset: 0; z-index: -2; background: url('img/campo-cana.jpg') center 55% / cover no-repeat; transform: scale(1.06); animation: cx-zoom 22s ease-in-out infinite alternate; }
+.cx-admin-band::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(0,45,15,.9), rgba(0,48,13,.78) 60%, rgba(0,45,16,.68)), linear-gradient(180deg, transparent 50%, rgba(0,25,9,.45)); }
+
+/* Volver */
+body.cx-admin .btn-back {
+  background: rgba(255,255,255,.1); border: 1px solid rgba(188,243,46,.4); color: #fff;
+  backdrop-filter: blur(6px); padding: 9px 16px; font-size: 13px;
+  animation: cx-entrar .5s cubic-bezier(.2,.8,.2,1) backwards;
+}
+body.cx-admin .btn-back:hover { background: rgba(255,255,255,.18); border-color: #d4ff6a; color: #fff; }
+
+/* ---------- Hero de la página (topbar) ---------- */
+body.cx-admin .ingenios-topbar {
+  position: relative; isolation: isolate; overflow: hidden; align-items: center;
+  margin-bottom: 22px; padding: clamp(24px, 3vw, 36px) clamp(22px, 3vw, 38px);
+  border-radius: 26px; color: #fff; border: 1px solid rgba(171,235,63,.45);
+  background: linear-gradient(110deg, rgba(4,48,17,.95) 0%, rgba(8,70,26,.88) 55%, rgba(17,96,34,.78) 100%), url('img/campo-cana.jpg') center 60% / cover;
+  box-shadow: 0 24px 50px rgba(7,60,24,.22);
+  animation: cx-entrar .6s .05s cubic-bezier(.2,.8,.2,1) backwards;
+}
+body.cx-admin .ingenios-topbar::after { /* destello periódico */
+  content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; z-index: -1; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(188,243,46,.12), transparent); transform: skewX(-18deg);
+  animation: cx-barrido 9s 1.2s ease-in-out infinite;
+}
+body.cx-admin .page-heading .eyebrow {
+  background: rgba(188,243,46,.14); color: #e6ff9e; border: 1px solid rgba(188,243,46,.35);
+  padding: 6px 12px; font-size: 11px; margin-bottom: 12px;
+}
+body.cx-admin .page-heading h1 { color: #fff; font-size: clamp(28px, 3.4vw, 42px); font-weight: 850; letter-spacing: -.04em; line-height: 1.05; }
+body.cx-admin .page-heading h1::after { content: ""; display: block; width: 96px; height: 4px; margin-top: 14px; border-radius: 6px; background: linear-gradient(90deg, #A3D300, #FFCC00); }
+body.cx-admin .page-heading p { color: rgba(255,255,255,.86); font-size: 14.5px; max-width: 640px; margin-top: 14px; }
+
+/* ---------- Botones ---------- */
+body.cx-admin .btn-primary {
+  background: linear-gradient(100deg, #56b51c, #2f960d); color: #fff; border-radius: 13px;
+  padding: 12px 20px; font-size: 14px; box-shadow: 0 8px 18px rgba(47,150,13,.25);
+  transition: transform .2s, box-shadow .2s, filter .2s;
+}
+body.cx-admin .btn-primary:hover { background: linear-gradient(100deg, #56b51c, #2f960d); filter: brightness(1.08); transform: translateY(-2px); box-shadow: 0 12px 26px rgba(47,150,13,.35); }
+body.cx-admin .ingenios-topbar .btn-primary {
+  background: linear-gradient(100deg, #bcf32e, #A3D300); color: #073c18; font-weight: 800;
+  box-shadow: 0 10px 26px rgba(163,211,0,.3);
+}
+body.cx-admin .ingenios-topbar .btn-primary:hover { background: linear-gradient(100deg, #d4ff6a, #b5e61a); box-shadow: 0 14px 32px rgba(188,243,46,.42); }
+body.cx-admin .btn-secondary, body.cx-admin .btn-light { border-radius: 13px; transition: background-color .2s, transform .2s; }
+body.cx-admin .btn-secondary:hover, body.cx-admin .btn-light:hover { transform: translateY(-1px); }
+
+/* ---------- Indicadores (KPIs) ---------- */
+body.cx-admin .usr-kpi, body.cx-admin .rl-kpi {
+  border-radius: 18px; padding: 18px; border-color: var(--border); box-shadow: 0 8px 22px rgba(7,60,24,.07);
+  animation: cx-entrar .55s cubic-bezier(.2,.8,.2,1) backwards;
+  transition: transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s, border-color .3s;
+}
+body.cx-admin :is(.usr-kpis, .rl-kpis) > :nth-child(1) { animation-delay: .15s; }
+body.cx-admin :is(.usr-kpis, .rl-kpis) > :nth-child(2) { animation-delay: .22s; }
+body.cx-admin :is(.usr-kpis, .rl-kpis) > :nth-child(3) { animation-delay: .29s; }
+body.cx-admin :is(.usr-kpis, .rl-kpis) > :nth-child(4) { animation-delay: .36s; }
+body.cx-admin :is(button.usr-kpi, button.rl-kpi):hover { transform: translateY(-4px); border-color: rgba(115,188,37,.6); box-shadow: 0 16px 30px rgba(7,60,24,.13); }
+body.cx-admin :is(.usr-kpi-ico, .rl-kpi-ico) { width: 48px; height: 48px; border-radius: 14px; transition: transform .35s cubic-bezier(.2,.8,.2,1); }
+body.cx-admin :is(.usr-kpi-ico, .rl-kpi-ico):not(.is-gold):not(.is-warn):not(.is-gray):not(.is-blue) { background: linear-gradient(140deg, #0b4a1f, #13652a); color: #dcfa51; }
+body.cx-admin :is(.usr-kpi, .rl-kpi):hover :is(.usr-kpi-ico, .rl-kpi-ico) { transform: rotate(-6deg) scale(1.08); }
+body.cx-admin :is(.usr-kpi, .rl-kpi) strong { font-size: 26px; font-weight: 850; letter-spacing: -.03em; }
+
+/* ---------- Tarjetas, tablas y barras ---------- */
+body.cx-admin .ingenios-card {
+  border-radius: 22px; border-color: var(--border); box-shadow: 0 14px 34px rgba(7,60,24,.08);
+  animation: cx-entrar .6s .25s cubic-bezier(.2,.8,.2,1) backwards;
+}
+body.cx-admin .ingenios-card-head { background: linear-gradient(180deg, #fbfdf8, #fff); }
+body.cx-admin .ingenios-count { background: linear-gradient(135deg, #A3D300, #73BC25); color: #073c18; font-weight: 800; }
+body.cx-admin :is(.ingenios-table, .usr-table) th { background: #f5f9f0; color: #4c5f50; }
+body.cx-admin :is(.ingenios-table, .usr-table) tbody tr, body.cx-admin .ingenios-table tr { transition: background-color .15s; }
+body.cx-admin :is(.ingenios-table tr:hover td, .usr-table tbody tr:hover) { background: #f3fae9; }
+body.cx-admin .ingenio-icon { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(140deg, #0b4a1f, #13652a); color: #dcfa51; box-shadow: 0 6px 14px rgba(7,60,24,.2); transition: transform .3s; }
+body.cx-admin tr:hover .ingenio-icon { transform: rotate(-6deg) scale(1.06); }
+body.cx-admin .id-chip { border-radius: 8px; }
+body.cx-admin .usr-avatar { background: linear-gradient(135deg, #A3D300, #2f960d); }
+body.cx-admin .usr-toolbar { background: linear-gradient(180deg, #fbfdf8, #f7fbf2); }
+body.cx-admin .rl-toolbar { animation: cx-entrar .55s .3s cubic-bezier(.2,.8,.2,1) backwards; }
+body.cx-admin :is(.usr-search input, .rl-search input, .usr-toolbar select, .rl-toolbar select) { border-radius: 12px; min-height: 42px; }
+body.cx-admin .action-btn { border-radius: 11px; transition: transform .2s, background-color .2s, border-color .2s, box-shadow .2s; }
+body.cx-admin .action-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(7,60,24,.12); }
+body.cx-admin .usr-pager button.is-on { background: linear-gradient(100deg, #56b51c, #2f960d); border-color: transparent; }
+body.cx-admin .usr-legend, body.cx-admin .rl-foot { animation: cx-entrar .5s .4s backwards; }
+
+/* Roles: grupos/tarjetas existentes */
+body.cx-admin :is(.rl-group, .rl-detail, .permiso-section) { transition: box-shadow .3s, border-color .3s; }
+body.cx-admin :is(.rl-group, .permiso-section):hover { box-shadow: 0 12px 26px rgba(7,60,24,.08); }
+
+/* ---------- Formularios y confirmaciones ---------- */
+body.cx-admin :is(.form-card, .confirm-card) {
+  border-radius: 24px; border-color: var(--border); padding: clamp(24px, 3vw, 34px);
+  background: linear-gradient(90deg, #73BC25, #A3D300, #FFCC00) top / 100% 5px no-repeat, #fff;
+  box-shadow: 0 24px 50px rgba(7,60,24,.14);
+  animation: cx-entrar .6s .08s cubic-bezier(.2,.8,.2,1) backwards;
+}
+body.cx-admin .form-card h1, body.cx-admin .confirm-card h1 { color: var(--primary-deep); font-size: clamp(22px, 2.2vw, 28px); font-weight: 850; letter-spacing: -.035em; }
+body.cx-admin .form-field input, body.cx-admin .form-field select, body.cx-admin .form-field textarea { border-radius: 12px; transition: border-color .2s, box-shadow .2s; }
+body.cx-admin .form-field input:focus, body.cx-admin .form-field select:focus, body.cx-admin .form-field textarea:focus { border-color: #58a92d; box-shadow: 0 0 0 4px rgba(115,188,37,.17); }
+body.cx-admin .alert-banner { position: relative; z-index: 1; border-radius: 16px; box-shadow: 0 10px 24px rgba(155,42,34,.12); animation: cx-entrar .45s backwards; }
+body.cx-admin .confirm-icon { animation: cx-latido 2.4s ease-in-out infinite; }
+
+/* ---------- Modal ---------- */
+body.cx-admin .modal { background: rgba(3, 40, 14, .5); backdrop-filter: blur(4px); }
+body.cx-admin .modal-content { border-radius: 24px; padding: 30px; animation: cx-modal .28s cubic-bezier(.2,.8,.2,1); background: linear-gradient(90deg, #b94242, #f59e0b) top / 100% 5px no-repeat, #fff; }
+body.cx-admin .modal-buttons a, body.cx-admin .modal-buttons button { border-radius: 12px; transition: transform .2s, filter .2s; }
+body.cx-admin .modal-buttons a:hover, body.cx-admin .modal-buttons button:hover { transform: translateY(-1px); }
+
+/* Vacíos */
+body.cx-admin .empty-state .material-symbols-outlined { color: var(--primary); animation: cx-flotar 3.6s ease-in-out infinite; }
+
+/* Pie y encabezado comparten estilos con menu-cengitech.css */
+body.cx-admin .app-footer { margin-top: 48px; }
+
+/* ---------- Animaciones propias ---------- */
+@keyframes cx-barrido { 0% { left: -40%; } 22%, 100% { left: 130%; } }
+@keyframes cx-latido { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+@keyframes cx-flotar { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes cx-modal { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 760px) {
+  .cx-admin-band { height: 190px; }
+  body.cx-admin .ingenios-shell { margin-top: -150px; }
+  body.cx-admin .ingenios-topbar { border-radius: 20px; }
+  body.cx-admin .ingenios-topbar .btn-primary { width: 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.cx-admin *, body.cx-admin *::before, body.cx-admin *::after { animation: none !important; transition: none !important; }
+}
+
+@keyframes cx-entrar { from { opacity: 0; transform: translateY(18px); } }
+body.cx-admin { margin: 0; min-height: 100vh; display: flex; flex-direction: column; font-family: Inter, "Segoe UI", Arial, sans-serif; }
+body.cx-admin .app-header a, body.cx-admin .app-footer a { text-decoration: none; }

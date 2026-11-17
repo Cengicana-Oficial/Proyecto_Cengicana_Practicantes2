@@ -56,6 +56,7 @@ const CENGI_PAGO_MENSAJES = [
     'factura_req' => 'Requerimientos de factura enviados.',
     'aprobada' => 'Liquidación aprobada: lista para pago.',
     'pagada' => 'Pago registrado.',
+    'pagos_persona' => 'Pagos registrados.',
     'anulada' => 'Liquidación anulada: sus sesiones vuelven a quedar por liquidar.',
     'tarifas' => 'Tarifas actualizadas.',
     'impartidas' => 'Sesiones marcadas como impartidas: ya aparecen en “Por liquidar”.',
@@ -885,11 +886,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($_POST['accion'] ?? '', [
             }
             $db->prepare("UPDATE liquidaciones SET estado = 'pagada', pago_forma = ?, pago_referencia = ?, pago_fecha = ?, pagada_en = NOW(), pagada_por = ? WHERE id = ?")
                 ->execute([$forma, $referencia, $fecha, $usuario, $id]);
-            $stmtRecPago = $db->prepare('SELECT id, total FROM liquidacion_detalle WHERE liquidacion_id = ?');
+            $stmtRecPago = $db->prepare('SELECT id, total FROM liquidacion_detalle WHERE liquidacion_id = ? AND pagado_en IS NULL');
             $stmtRecPago->execute([$id]);
             foreach ($stmtRecPago->fetchAll(PDO::FETCH_ASSOC) as $rp) {
                 cengi_pr_log($db, $rp['id'], 'pagado', trim($forma . ' ' . $referencia) . ' · ' . cengi_pp_fecha($fecha), '', '', $rp['total'], $usuario);
             }
+            // Pago de la liquidación completa: cada fila aún sin pago registrado queda pagada por su monto.
+            $db->prepare('UPDATE liquidacion_detalle SET pago_monto = total, pago_forma = ?, pago_referencia = ?, pago_fecha = ?, pagado_en = NOW(), pagado_por = ?
+                WHERE liquidacion_id = ? AND pagado_en IS NULL')->execute([$forma, $referencia, $fecha, $usuario, $id]);
             // N.° de factura de quienes cobran con factura (los recibos ya tienen su correlativo).
             $stmtFac = $db->prepare("UPDATE liquidacion_detalle SET documento_numero = ? WHERE id = ? AND liquidacion_id = ? AND comprobante = 'factura'");
             foreach ((array) ($_POST['factura'] ?? []) as $detId => $numFactura) {
@@ -897,6 +901,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($_POST['accion'] ?? '', [
             }
             $extra = ['tab' => 'liquidaciones', 'ver' => $id, 'msg' => 'pagada'];
             $avisarLiq = !empty($_POST['avisar']) ? $id : 0;
+        } elseif ($accion === 'pagar_detalles') {
+            // Pago por persona (pestaña "Pagos"): varias filas de liquidación a la vez, con el monto
+            // realmente pagado, forma, fecha, referencia y comentario de cada una. Solo con el
+            // comprobante listo (recibo validado o factura registrada). Una diferencia contra el
+            // monto liquidado solo se acepta marcándola. Sirve también para editar un pago ya
+            // registrado. Al quedar pagadas todas sus filas, la liquidación pasa a "pagada".
+            $ids = array_values(array_unique(array_filter(array_map('intval', (array) ($_POST['detalles'] ?? [])))));
+            if (!$ids) {
+                throw new InvalidArgumentException('Marca al menos una persona.');
+            }
+            $montos = (array) ($_POST['monto'] ?? []);
+            $formas = (array) ($_POST['forma'] ?? []);
+            $fechas = (array) ($_POST['fecha'] ?? []);
+            $refs = (array) ($_POST['referencia'] ?? []);
+            $facturas = (array) ($_POST['factura'] ?? []);
+            $aceptar = (array) ($_POST['aceptar'] ?? []);
+            $notaComun = mb_substr(trim((string) ($_POST['nota'] ?? '')), 0, 300, 'UTF-8');
+            $stmt = $db->prepare('SELECT d.*, l.estado AS liq_estado, l.numero AS liq_numero FROM liquidacion_detalle d INNER JOIN liquidaciones l ON l.id = d.liquidacion_id
+                WHERE d.id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') FOR UPDATE');
+            $stmt->execute($ids);
+            $filasPago = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $estadosPago = cengi_pr_estados($db, array_column($filasPago, 'id'));
+            $hechos = 0;
+            $omitidos = [];
+            $liqsTocadas = [];
+            $upd = $db->prepare('UPDATE liquidacion_detalle SET pago_monto = ?, pago_forma = ?, pago_referencia = ?, pago_fecha = ?, pago_nota = ?,
+                pagado_en = COALESCE(pagado_en, NOW()), pagado_por = ? WHERE id = ?');
+            foreach ($filasPago as $d) {
+                $did = (int) $d['id'];
+                $nombre = $d['persona_nombre'] . ' (' . $d['liq_numero'] . ')';
+                if (!in_array($d['liq_estado'], ['enviada', 'aprobada', 'pagada'], true)) { $omitidos[] = $nombre . ': la liquidación no está enviada'; continue; }
+                if ($d['comprobante'] === 'recibo') {
+                    if (cengi_pr_estado($d, $estadosPago[$did] ?? null) !== 'validado' && !$d['pagado_en']) { $omitidos[] = $nombre . ': el recibo aún no está firmado y validado'; continue; }
+                } else {
+                    $numFactura = mb_substr(trim((string) ($facturas[$did] ?? '')), 0, 40, 'UTF-8');
+                    if ($numFactura !== '' && trim((string) $d['documento_numero']) === '') {
+                        $db->prepare('UPDATE liquidacion_detalle SET documento_numero = ? WHERE id = ?')->execute([$numFactura, $did]);
+                        cengi_pr_log($db, $did, 'factura', 'Factura ' . $numFactura . ' registrada al pagar', '', '', $d['total'], $usuario);
+                        $d['documento_numero'] = $numFactura;
+                    }
+                    if (trim((string) $d['documento_numero']) === '') { $omitidos[] = $nombre . ': falta el número de factura'; continue; }
+                }
+                $forma = mb_substr(trim((string) ($formas[$did] ?? '')), 0, 60, 'UTF-8');
+                $fecha = (string) ($fechas[$did] ?? '');
+                if ($forma === '') { $omitidos[] = $nombre . ': falta la forma de pago'; continue; }
+                if (!cengi_pp_es_fecha($fecha) || $fecha > $hoy) { $omitidos[] = $nombre . ': fecha de pago no válida (no puede ser futura)'; continue; }
+                $txt = str_replace(',', '', trim((string) ($montos[$did] ?? '')));
+                if (!is_numeric($txt) || (float) $txt <= 0) { $omitidos[] = $nombre . ': falta el monto pagado'; continue; }
+                $pagado = round((float) $txt, 2);
+                $dif = round($pagado - (float) $d['total'], 2);
+                if (abs($dif) > 0.009 && empty($aceptar[$did])) {
+                    $omitidos[] = $nombre . ': pagado ' . cengi_pp_q($pagado, 2) . ' y liquidado ' . cengi_pp_q($d['total'], 2) . ' (marca «aceptar diferencia»)'; continue;
+                }
+                // "Referencia o comentario": con números es la referencia (transferencia, cheque); solo texto es un comentario.
+                $textoRef = trim((string) ($refs[$did] ?? ''));
+                $comentario = $textoRef !== '' && !preg_match('/\d/', $textoRef) ? $textoRef : '';
+                $referencia = $comentario === '' ? mb_substr($textoRef, 0, 120, 'UTF-8') : '';
+                $nota = mb_substr(trim(implode(' · ', array_filter([$comentario, $notaComun,
+                    abs($dif) > 0.009 ? 'Pagado ' . cengi_pp_q($pagado, 2) . ' (liquidado ' . cengi_pp_q($d['total'], 2) . ', diferencia ' . cengi_pp_q($dif, 2) . ')' : '']))), 0, 500, 'UTF-8');
+                $upd->execute([$pagado, $forma, $referencia, $fecha, $nota, $usuario, $did]);
+                cengi_pr_log($db, $did, 'pagado', ($d['pagado_en'] ? 'Pago editado: ' : '') . trim($forma . ' ' . $referencia) . ' · ' . cengi_pp_fecha($fecha) . ($nota !== '' ? ' · ' . $nota : ''), '', '', $pagado, $usuario);
+                $liqsTocadas[(int) $d['liquidacion_id']] = true;
+                $hechos++;
+            }
+            if (!$hechos) {
+                throw new InvalidArgumentException('Ningún pago se registró. ' . cengi_pp_h(implode(' · ', $omitidos)));
+            }
+            // Liquidaciones con todas sus filas pagadas: pasan a "pagada" (forma y fecha del último pago).
+            foreach (array_keys($liqsTocadas) as $liqId) {
+                $r = $db->prepare("SELECT COUNT(*) AS n, SUM(pagado_en IS NOT NULL) AS pagadas, MAX(pago_fecha) AS fecha,
+                    COUNT(DISTINCT pago_forma) AS formas, MAX(pago_forma) AS forma FROM liquidacion_detalle WHERE liquidacion_id = ?");
+                $r->execute([$liqId]);
+                $res = $r->fetch(PDO::FETCH_ASSOC);
+                if ((int) $res['n'] > 0 && (int) $res['pagadas'] === (int) $res['n']) {
+                    $db->prepare("UPDATE liquidaciones SET estado = 'pagada', pago_forma = ?, pago_referencia = 'Pago por persona', pago_fecha = ?,
+                        pagada_en = COALESCE(pagada_en, NOW()), pagada_por = IF(pagada_por = '', ?, pagada_por) WHERE id = ? AND estado IN ('enviada', 'aprobada', 'pagada')")
+                        ->execute([(int) $res['formas'] === 1 ? $res['forma'] : 'Varias formas', $res['fecha'], $usuario, $liqId]);
+                }
+            }
+            $_SESSION['pg_pagos_omitidos'] = $omitidos;
+            $extra = array_filter(['tab' => 'pagos', 'pg' => (string) ($_POST['pg'] ?? ''), 'msg' => 'pagos_persona', 'n' => $hechos]);
         } elseif ($accion === 'marcar_impartidas') {
             // Sesiones pasadas que siguen "programadas" (mismas reglas que el calendario).
             $ids = array_values(array_unique(array_filter(array_map('intval', (array) ($_POST['sesiones'] ?? [])))));
@@ -1176,6 +1261,13 @@ if ($mensaje === '' && ($_GET['msg'] ?? '') === 'importado') {
             . (trim((string) ($_GET['err'] ?? '')) !== '' ? ' <br>No enviados: ' . cengi_pp_h(mb_substr((string) $_GET['err'], 0, 600, 'UTF-8')) . '.' : '');
         $mensajeTipo = (int) ($_GET['env'] ?? 0) ? 'success' : 'warning';
     }
+    if ($_GET['msg'] === 'pagos_persona') {
+        $omitPg = (array) ($_SESSION['pg_pagos_omitidos'] ?? []);
+        unset($_SESSION['pg_pagos_omitidos']);
+        $mensaje = 'Pago(s) registrado(s): <b>' . (int) ($_GET['n'] ?? 0) . '</b>. Las liquidaciones con todas sus personas pagadas pasan a «Pagada».'
+            . ($omitPg ? '<br>Se omitieron: ' . cengi_pp_h(implode(' · ', array_slice($omitPg, 0, 10)) . (count($omitPg) > 10 ? ' · …' : '')) . '.' : '');
+        $mensajeTipo = $omitPg ? 'warning' : 'success';
+    }
     if ($_GET['msg'] === 'pagada' && isset($_GET['av'])) {
         $mensaje .= ' Aviso por correo enviado a ' . (int) $_GET['av'] . ' persona(s)' . ((int) ($_GET['sc'] ?? 0) ? '; ' . (int) $_GET['sc'] . ' sin correo registrado' : '')
             . '. <a class="pp-link" href="comunicaciones.php?categoria=' . rawurlencode('Pago a instructores') . '">Ver en Comunicaciones</a>';
@@ -1278,7 +1370,7 @@ if ($liqVer && isset($_GET['recibos'])) {
     header('Content-Type: text/html; charset=UTF-8');
     ?><!DOCTYPE html>
 <html lang="es"><head><meta charset="utf-8"><title>Recibos · <?php echo cengi_pp_h($liqVer['numero']); ?></title>
-<link rel="stylesheet" href="css/pago_instructores.css?v=<?php echo (int) (@filemtime(__DIR__ . '/css/pago_instructores.css') ?: 1); ?>"></head>
+<link rel="stylesheet" href="css/pago_instructores.css?v=<?php echo (int) (@filemtime(__DIR__ . '/css/pago_instructores.css') ?: 1); ?>"><link rel="stylesheet" href="css/cobranza.css?v=<?php echo (int) (@filemtime(__DIR__ . '/css/cobranza.css') ?: 1); ?>"></head>
 <body class="pg-recibos-pagina">
 <div class="pg-recibos-barra"><span><b><?php echo count($recibos); ?></b> recibo(s) · Liquidación <?php echo cengi_pp_h($liqVer['numero']); ?></span>
     <?php $estImp = cengi_pr_estados($db, array_column($recibos, 'id')); $sinValidar = count(array_filter($recibos, static function ($d) use ($estImp) { return cengi_pr_estado($d, $estImp[(int) $d['id']] ?? null) !== 'validado'; })); ?>
@@ -1293,7 +1385,7 @@ if ($liqVer && isset($_GET['recibos'])) {
 
 // ---------------------------------------------------------------- datos
 // El Jefe de Transferencia (sin rol de administrador) solo ve las liquidaciones; abre en las que esperan su firma.
-$tab = in_array($_GET['tab'] ?? '', ['liquidaciones', 'recibos', 'facturas'], true) ? $_GET['tab'] : ($esAdmin ? 'liquidar' : 'recibos');
+$tab = in_array($_GET['tab'] ?? '', ['liquidaciones', 'recibos', 'facturas', 'pagos'], true) ? $_GET['tab'] : ($esAdmin ? 'liquidar' : 'recibos');
 $periodo = cengi_pago_periodo($_GET);
 $persona = preg_match('/^[is]:\d+$/', (string) ($_GET['persona'] ?? '')) ? $_GET['persona'] : '';
 $estadoLiq = array_key_exists($_GET['estado'] ?? '', CENGI_PP_ESTADOS_LIQ) || in_array($_GET['estado'] ?? '', ['por_firmar', 'esperando_recibos'], true) ? $_GET['estado'] : (!$esAdmin && !isset($_GET['estado']) ? 'por_firmar' : '');
@@ -1347,7 +1439,48 @@ $pendientesMes = $db->query("SELECT DATE_FORMAT(fecha, '%Y-%m') AS mes, COUNT(*)
 $pendientesTotal = array_sum(array_column($pendientesMes, 'sesiones'));
 
 $resumenLiq = $db->query("SELECT estado, COUNT(*) AS n, COALESCE(SUM(total), 0) AS total FROM liquidaciones GROUP BY estado")->fetchAll(PDO::FETCH_UNIQUE);
-$pagadoAnio = (float) $db->query("SELECT COALESCE(SUM(total), 0) FROM liquidaciones WHERE estado = 'pagada' AND YEAR(pago_fecha) = YEAR(CURDATE())")->fetchColumn();
+// Pagado en el año: lo realmente pagado a cada persona (pago por persona o liquidación pagada completa).
+$pagadoAnio = (float) $db->query("SELECT COALESCE(SUM(COALESCE(d.pago_monto, d.total)), 0) FROM liquidacion_detalle d INNER JOIN liquidaciones l ON l.id = d.liquidacion_id
+    WHERE l.estado <> 'anulada' AND ((d.pagado_en IS NOT NULL AND YEAR(d.pago_fecha) = YEAR(CURDATE())) OR (d.pagado_en IS NULL AND l.estado = 'pagada' AND YEAR(l.pago_fecha) = YEAR(CURDATE())))")->fetchColumn();
+
+// ---------------------------------------------------------------- pestaña Pagos: pago por persona
+// Filas de liquidaciones enviadas, aprobadas o pagadas. Se pueden seleccionar las que tienen el
+// comprobante listo (recibo validado o factura; el N.° de factura se puede indicar al pagar) para
+// registrar su pago en grupo, o editar un pago ya registrado.
+$filtroPg = in_array($_GET['pg'] ?? '', ['pendientes', 'pagados', 'todos'], true) ? $_GET['pg'] : 'pendientes';
+$pagosFilas = [];
+$pagosResumen = ['listos' => [0, 0.0], 'tramite' => [0, 0.0], 'pagados' => [0, 0.0, 0.0]];
+if ($tab === 'pagos' && $esAdmin) {
+    $pagosFilas = $db->query("SELECT d.*, l.numero AS liq_numero, l.estado AS liq_estado, l.desde, l.hasta FROM liquidacion_detalle d
+        INNER JOIN liquidaciones l ON l.id = d.liquidacion_id WHERE l.estado IN ('enviada', 'aprobada', 'pagada') ORDER BY (d.pagado_en IS NOT NULL), l.desde DESC, d.persona_nombre")->fetchAll(PDO::FETCH_ASSOC);
+    $estPg = cengi_pr_estados($db, array_column($pagosFilas, 'id'));
+    foreach ($pagosFilas as $i => $f) {
+        $pagadaLiq = $f['liq_estado'] === 'pagada';
+        $pagadoF = $f['pagado_en'] !== null || $pagadaLiq;
+        $erF = $estPg[(int) $f['id']] ?? null;
+        $estRec = $f['comprobante'] === 'recibo' ? cengi_pr_estado($f, $erF) : null;
+        $listo = $f['comprobante'] === 'recibo' ? $estRec === 'validado' : true;
+        $pagosFilas[$i]['pagado'] = $pagadoF;
+        $pagosFilas[$i]['seleccionable'] = ($listo && !$pagadaLiq) || $f['pagado_en'] !== null;
+        $pagosFilas[$i]['comp_txt'] = $f['comprobante'] === 'recibo'
+            ? 'Recibo ' . $f['documento_numero'] . ' · ' . (['sin_enviar' => 'por enviar', 'monto_cambio' => 'por reenviar', 'enviado' => 'esperando firma', 'firmado' => 'firmado, falta validación', 'validado' => 'validado'][$estRec] ?? '')
+            : (trim((string) $f['documento_numero']) !== '' ? 'Factura ' . $f['documento_numero'] : 'Factura sin número (indícalo al pagar)');
+        if ($pagadoF) {
+            $pagosResumen['pagados'][0]++;
+            $pagosResumen['pagados'][1] += (float) ($f['pago_monto'] ?? $f['total']);
+            $pagosResumen['pagados'][2] += (float) ($f['pago_monto'] ?? $f['total']) - (float) $f['total'];
+        } elseif ($listo) {
+            $pagosResumen['listos'][0]++;
+            $pagosResumen['listos'][1] += (float) $f['total'];
+        } else {
+            $pagosResumen['tramite'][0]++;
+            $pagosResumen['tramite'][1] += (float) $f['total'];
+        }
+    }
+    $pagosFilas = array_values(array_filter($pagosFilas, static function ($f) use ($filtroPg) {
+        return $filtroPg === 'todos' || ($filtroPg === 'pagados' ? $f['pagado'] : !$f['pagado']);
+    }));
+}
 
 // Recibos de cada liquidación y cuántos volvieron firmados por el monto vigente.
 $sqlRecibos = "(SELECT COUNT(*) FROM liquidacion_detalle dr WHERE dr.liquidacion_id = l.id AND dr.comprobante = 'recibo')";
@@ -1507,7 +1640,7 @@ $filtrosPeriodo = array_filter(['clase' => $clase === 'soporte' ? 'soporte' : ''
         ['pago_instructores.php?tab=recibos&rec=firmado', 'pencil', 'is-naranja', 'Recibos por validar', (string) $conteoRec['firmado'], $cargoJefe, $tab === 'recibos' && $filtroRec === 'firmado'],
         [$urlLiq('enviada'), 'send', 'is-verde2', 'Enviadas por aprobar', (string) (int) ($resumenLiq['enviada']['n'] ?? 0), cengi_pp_q($resumenLiq['enviada']['total'] ?? 0, 2), $tab === 'liquidaciones' && $estadoLiq === 'enviada'],
         [$urlLiq('aprobada'), 'check', 'is-amarillo', 'Aprobadas por pagar', (string) (int) ($resumenLiq['aprobada']['n'] ?? 0), cengi_pp_q($resumenLiq['aprobada']['total'] ?? 0, 2), $tab === 'liquidaciones' && $estadoLiq === 'aprobada'],
-        [$urlLiq('pagada'), 'usd', 'is-verde', 'Pagado en ' . date('Y'), cengi_pp_q($pagadoAnio, 2), (int) ($resumenLiq['pagada']['n'] ?? 0) . ' liquidación(es)', $tab === 'liquidaciones' && $estadoLiq === 'pagada'],
+        [$esAdmin ? 'pago_instructores.php?tab=pagos&pg=pagados' : $urlLiq('pagada'), 'usd', 'is-verde', 'Pagado en ' . date('Y'), cengi_pp_q($pagadoAnio, 2), (int) ($resumenLiq['pagada']['n'] ?? 0) . ' liquidación(es) pagada(s)', ($tab === 'liquidaciones' && $estadoLiq === 'pagada') || ($tab === 'pagos' && $filtroPg === 'pagados')],
     ]));
     ?>
     <nav class="pg-flujo is-<?php echo count($pasos); ?>" style="--n:<?php echo count($pasos); ?>" aria-label="Flujo del pago">
@@ -1549,6 +1682,7 @@ $filtrosPeriodo = array_filter(['clase' => $clase === 'soporte' ? 'soporte' : ''
                 }, $resumenLiq)); ?></span></a>
                 <a href="pago_instructores.php?tab=recibos" class="<?php echo $tab === 'recibos' ? 'is-active' : ''; ?>">Recibos <?php if ($recPendientes): ?><span class="pp-chip is-yellow"><?php echo $recPendientes; ?></span><?php endif; ?></a>
                 <a href="pago_instructores.php?tab=facturas" class="<?php echo $tab === 'facturas' ? 'is-active' : ''; ?>">Facturas <?php if ($facPendientes): ?><span class="pp-chip is-yellow"><?php echo $facPendientes; ?></span><?php endif; ?></a>
+                <?php if ($esAdmin): ?><a href="pago_instructores.php?tab=pagos" class="<?php echo $tab === 'pagos' ? 'is-active' : ''; ?>">Pagos</a><?php endif; ?>
             </nav>
             <div class="pg-herramientas">
                 <?php if ($esAdmin): ?>
@@ -2066,6 +2200,146 @@ document.addEventListener('click', function (e) {
     document.querySelectorAll('.pg-acciones-rec[open]').forEach(function (d) { if (!d.contains(e.target)) d.open = false; });
 });
 </script>
+        <?php elseif ($tab === 'pagos' && $esAdmin): ?>
+            <?php /* Pago por persona: seleccionar a varias personas con el comprobante listo y registrar
+                     monto pagado, forma, fecha y referencia o comentario de cada una (o editar un pago). */ ?>
+            <div class="pg-pagos-kpis">
+                <a class="pg-pagos-kpi is-amarillo<?php echo $filtroPg === 'pendientes' ? ' is-activo' : ''; ?>" href="pago_instructores.php?tab=pagos&amp;pg=pendientes"><small>Listos para pagar</small><b><?php echo cengi_pp_q($pagosResumen['listos'][1], 2); ?></b><span><?php echo $pagosResumen['listos'][0]; ?> persona(s) con recibo validado o factura</span></a>
+                <a class="pg-pagos-kpi is-gris<?php echo $filtroPg === 'pendientes' ? ' is-activo' : ''; ?>" href="pago_instructores.php?tab=pagos&amp;pg=pendientes"><small>Comprobante en trámite</small><b><?php echo cengi_pp_q($pagosResumen['tramite'][1], 2); ?></b><span><?php echo $pagosResumen['tramite'][0]; ?> recibo(s) sin firmar o validar</span></a>
+                <a class="pg-pagos-kpi is-verde<?php echo $filtroPg === 'pagados' ? ' is-activo' : ''; ?>" href="pago_instructores.php?tab=pagos&amp;pg=pagados"><small>Pagado</small><b><?php echo cengi_pp_q($pagosResumen['pagados'][1], 2); ?></b><span><?php echo $pagosResumen['pagados'][0]; ?> pago(s)<?php echo abs($pagosResumen['pagados'][2]) > 0.009 ? ' · diferencia ' . cengi_pp_q($pagosResumen['pagados'][2], 2) : ''; ?></span></a>
+            </div>
+            <div class="pg-pagos-barra">
+                <nav class="pg-pagos-filtro" aria-label="Filtro de pagos">
+                    <?php foreach (['pendientes' => 'Por pagar', 'pagados' => 'Pagados', 'todos' => 'Todos'] as $k => $t): ?><a href="pago_instructores.php?tab=pagos&amp;pg=<?php echo $k; ?>" class="<?php echo $filtroPg === $k ? 'is-active' : ''; ?>"><?php echo $t; ?></a><?php endforeach; ?>
+                </nav>
+                <label class="pg-pagos-todos"><input type="checkbox" id="pgp-todos"> Seleccionar todos</label>
+                <span class="pg-pagos-n"><b id="pgp-n">0</b> seleccionado(s)</span>
+                <button type="button" class="btn btn-primary btn-sm" id="pgp-btn" disabled data-toggle="modal" data-target="#pgp-modal"><span class="glyphicon glyphicon-usd" aria-hidden="true"></span> Registrar / editar pago</button>
+            </div>
+            <div class="pp-table-wrap"><table class="cengi-org-table pg-pagos-tabla">
+                <thead><tr><th class="pg-col-check"></th><th>Persona</th><th>Liquidación y curso</th><th>Comprobante</th><th class="pp-num">Liquidado</th><th>Pago</th></tr></thead>
+                <tbody>
+                <?php foreach ($pagosFilas as $f): $montoPagado = $f['pago_monto'] !== null ? (float) $f['pago_monto'] : null; ?>
+                    <tr class="<?php echo $f['pagado'] ? 'is-pagado' : ''; ?>">
+                        <td class="pg-col-check"><?php if ($f['seleccionable']): ?><input type="checkbox" class="pgp-check" name="detalles[]" form="pgp-form" value="<?php echo (int) $f['id']; ?>"
+                            data-nombre="<?php echo cengi_pp_h($f['persona_nombre']); ?>" data-liq="<?php echo cengi_pp_h($f['liq_numero']); ?>" data-total="<?php echo number_format((float) $f['total'], 2, '.', ''); ?>"
+                            data-comprobante="<?php echo cengi_pp_h($f['comprobante']); ?>" data-factura="<?php echo cengi_pp_h($f['documento_numero']); ?>"
+                            data-pagado="<?php echo $montoPagado !== null ? number_format($montoPagado, 2, '.', '') : ''; ?>" data-forma="<?php echo cengi_pp_h($f['pago_forma']); ?>"
+                            data-fecha="<?php echo cengi_pp_h((string) $f['pago_fecha']); ?>" data-ref="<?php echo cengi_pp_h($f['pago_referencia']); ?>"
+                            aria-label="Seleccionar a <?php echo cengi_pp_h($f['persona_nombre']); ?>"><?php endif; ?></td>
+                        <td><strong><?php echo cengi_pp_h($f['persona_nombre']); ?></strong><span class="pp-sub"><?php echo $f['tipo'] === 'soporte' ? 'Soporte técnico' : 'Instructor'; ?> · <?php echo (int) $f['sesiones']; ?> sesión(es)</span></td>
+                        <td><a class="pp-link" href="pago_instructores.php?tab=liquidaciones&amp;ver=<?php echo (int) $f['liquidacion_id']; ?>"><?php echo cengi_pp_h($f['liq_numero']); ?></a><span class="pp-sub"><?php echo cengi_pp_h($f['curso_nombre']); ?></span></td>
+                        <td><span class="pg-comp-chip is-<?php echo cengi_pp_h($f['comprobante']); ?>"><?php echo $f['comprobante'] === 'recibo' ? 'Recibo' : 'Factura'; ?></span><span class="pp-sub"><?php echo cengi_pp_h($f['comp_txt']); ?></span></td>
+                        <td class="pp-num"><b><?php echo cengi_pp_q($f['total'], 2); ?></b></td>
+                        <td><?php if ($f['pagado']): ?>
+                                <span class="pg-pago-ok">Pagado <?php echo cengi_pp_q($montoPagado ?? $f['total'], 2); ?></span>
+                                <span class="pp-sub"><?php echo cengi_pp_h(trim(($f['pago_forma'] ?: '') . ($f['pago_referencia'] ? ' · ' . $f['pago_referencia'] : '') . ($f['pago_fecha'] ? ' · ' . cengi_pp_fecha($f['pago_fecha']) : ''), ' ·')); ?></span>
+                                <?php if ($f['pago_nota'] !== ''): ?><span class="pp-sub"><i><?php echo cengi_pp_h($f['pago_nota']); ?></i></span><?php endif; ?>
+                                <?php if ($montoPagado !== null && abs($montoPagado - (float) $f['total']) > 0.009): ?><span class="pp-sub pg-pago-dif">Diferencia <?php echo cengi_pp_q($montoPagado - (float) $f['total'], 2); ?></span><?php endif; ?>
+                            <?php elseif ($f['seleccionable']): ?><span class="pg-pago-listo">Listo para pagar</span>
+                            <?php else: ?><span class="pp-sub">Esperando el comprobante</span><?php endif; ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if (!$pagosFilas): ?><tr><td colspan="6" class="pp-empty"><?php echo $filtroPg === 'pagados' ? 'Aún no hay pagos registrados.' : 'No hay pagos pendientes en liquidaciones enviadas o aprobadas.'; ?></td></tr><?php endif; ?>
+                </tbody>
+            </table></div>
+
+            <form method="post" id="pgp-form"><input type="hidden" name="accion" value="pagar_detalles"><input type="hidden" name="pg" value="<?php echo cengi_pp_h($filtroPg); ?>">
+            <div class="modal fade cengi-course-form-modal pp-modal" id="pgp-modal" tabindex="-1" role="dialog" aria-labelledby="pgp-title">
+                <div class="modal-dialog modal-lg" role="document"><div class="modal-content">
+                    <div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span>&times;</span></button><span class="cengi-course-modal-kicker">Pago a instructores y soporte</span><h4 class="modal-title" id="pgp-title">Registrar / editar pago</h4><p id="pgp-resumen"></p></div>
+                    <div class="modal-body">
+                        <div class="cob-lote-comunes">
+                            <span class="cob-lote-comunes-tit">Aplicar a todas las filas</span>
+                            <label>Forma de pago<select class="form-control input-sm" id="pgp-forma-todos"><option value="">—</option><option>Transferencia</option><option>Cheque</option><option>Depósito</option><option>Efectivo</option></select></label>
+                            <label>Fecha del pago<input type="date" class="form-control input-sm" id="pgp-fecha-todos" max="<?php echo $hoy; ?>"></label>
+                            <label>Referencia o comentario<input type="text" class="form-control input-sm" id="pgp-ref-todos" maxlength="120" placeholder="Ej.: Transferencia 88213"></label>
+                            <button type="button" class="btn btn-default btn-sm" id="pgp-aplicar">Aplicar</button>
+                        </div>
+                        <div class="pp-table-wrap"><table class="cob-lote-tabla">
+                            <thead><tr><th>Persona</th><th class="pp-num">Liquidado</th><th>Monto pagado</th><th>Forma de pago</th><th>Fecha del pago</th><th>Referencia o comentario</th><th>Revisión</th></tr></thead>
+                            <tbody id="pgp-filas"></tbody>
+                            <tfoot><tr><th>Total</th><th class="pp-num" id="pgp-total-liq"></th><th id="pgp-total-pag"></th><th colspan="4"></th></tr></tfoot>
+                        </table></div>
+                        <p class="cob-lote-ayuda-fila">Referencia: número de transferencia o cheque; si escribes solo texto (p. ej. «pagado en efectivo») se guarda como comentario. Si eliges a alguien ya pagado, se edita su pago.</p>
+                        <div class="form-group" style="margin-top:10px"><label for="pgp-nota">Nota (opcional, queda en cada pago)</label><input type="text" class="form-control" id="pgp-nota" name="nota" maxlength="300" placeholder="Ej.: planilla de noviembre"></div>
+                    </div>
+                    <div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-primary" id="pgp-guardar">Registrar pagos</button></div>
+                </div></div>
+            </div>
+            </form>
+            <script>
+(function () {
+    var form = document.getElementById('pgp-form'); if (!form) return;
+    var $id = function (i) { return document.getElementById(i); }, hoy = <?php echo json_encode($hoy); ?>;
+    var casillas = document.querySelectorAll('.pgp-check');
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var q = function (n) { return 'Q' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    var formas = ['Transferencia', 'Cheque', 'Depósito', 'Efectivo'];
+    var actualizar = function () {
+        var n = [].filter.call(casillas, function (c) { return c.checked; }).length, todos = $id('pgp-todos');
+        $id('pgp-n').textContent = n; $id('pgp-btn').disabled = !n;
+        if (todos) { todos.checked = n > 0 && n === casillas.length; todos.indeterminate = n > 0 && n < casillas.length; }
+    };
+    casillas.forEach(function (c) { c.addEventListener('change', actualizar); });
+    if ($id('pgp-todos')) $id('pgp-todos').addEventListener('change', function () { var v = this.checked; casillas.forEach(function (c) { c.checked = v; }); actualizar(); });
+    var revisar = function (tr) {
+        var liq = Number(tr.getAttribute('data-total')), pag = parseFloat(String(tr.querySelector('.pgp-monto').value).replace(/,/g, ''));
+        var acepta = tr.querySelector('.pgp-acepta'), est = tr.querySelector('.lote-estado'), fac = tr.querySelector('.pgp-factura');
+        var txt = 'Coincide con lo liquidado', cls = 'is-ok', pide = false;
+        if (fac && !fac.value.trim()) { txt = 'Indica el N.° de factura'; cls = 'is-error'; }
+        else if (!tr.querySelector('.pgp-fecha').value) { txt = 'Indica la fecha del pago'; cls = 'is-error'; }
+        else if (!(pag > 0)) { txt = 'Indica el monto pagado'; cls = 'is-error'; }
+        else { var dif = Math.round((pag - liq) * 100) / 100; if (Math.abs(dif) > 0.009) { txt = (dif > 0 ? 'Pagado de más ' : 'Faltan ') + q(Math.abs(dif)); cls = 'is-warn'; pide = true; } }
+        acepta.parentNode.hidden = !pide; est.textContent = txt; est.className = 'lote-estado ' + cls;
+        tr.classList.toggle('is-omitida', cls === 'is-error' || (pide && !acepta.checked));
+    };
+    var totales = function () {
+        var l = 0, p = 0;
+        form.querySelectorAll('#pgp-filas tr').forEach(function (tr) { l += Number(tr.getAttribute('data-total')); p += parseFloat(String(tr.querySelector('.pgp-monto').value).replace(/,/g, '')) || 0; });
+        $id('pgp-total-liq').textContent = q(l); $id('pgp-total-pag').textContent = q(p);
+    };
+    jQuery('#pgp-modal').on('show.bs.modal', function () {
+        var cuerpo = $id('pgp-filas'), sel = [].filter.call(casillas, function (c) { return c.checked; });
+        cuerpo.innerHTML = '';
+        sel.forEach(function (c) {
+            var id = c.value, editar = c.getAttribute('data-pagado') !== '', sinFactura = c.getAttribute('data-comprobante') === 'factura' && !c.getAttribute('data-factura');
+            var tr = document.createElement('tr'); tr.setAttribute('data-total', c.getAttribute('data-total'));
+            tr.innerHTML = '<td><b>' + esc(c.getAttribute('data-nombre')) + '</b><span class="pp-sub">' + esc(c.getAttribute('data-liq')) + (editar ? ' · <b>editar pago</b>' : '') + '</span>'
+                + (sinFactura ? '<input class="form-control input-sm pgp-factura" type="text" maxlength="40" name="factura[' + id + ']" placeholder="N.° de factura" style="margin-top:4px">' : '') + '</td>'
+                + '<td class="pp-num">' + q(c.getAttribute('data-total')) + '</td>'
+                + '<td><input class="form-control input-sm lote-monto pgp-monto" type="number" min="0" step="0.01" name="monto[' + id + ']" value="' + esc(c.getAttribute('data-pagado') || c.getAttribute('data-total')) + '"></td>'
+                + '<td><select class="form-control input-sm lote-forma pgp-forma" name="forma[' + id + ']">' + formas.map(function (f) { return '<option>' + f + '</option>'; }).join('') + '</select></td>'
+                + '<td><input class="form-control input-sm lote-fecha pgp-fecha" type="date" max="' + hoy + '" name="fecha[' + id + ']" value="' + esc(c.getAttribute('data-fecha') || hoy) + '"></td>'
+                + '<td><input class="form-control input-sm lote-ref pgp-ref" type="text" maxlength="120" name="referencia[' + id + ']" value="' + esc(c.getAttribute('data-ref')) + '" placeholder="N.° de transferencia o comentario"></td>'
+                + '<td><span class="lote-estado"></span><label class="lote-acepta-wrap" hidden><input type="checkbox" class="pgp-acepta" name="aceptar[' + id + ']" value="1"> aceptar diferencia</label></td>';
+            cuerpo.appendChild(tr);
+            var forma = c.getAttribute('data-forma'); tr.querySelector('.pgp-forma').value = formas.indexOf(forma) !== -1 ? forma : 'Transferencia';
+            tr.querySelectorAll('input, select').forEach(function (el) { el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' || el.type === 'date' ? 'change' : 'input', function () { revisar(tr); totales(); }); });
+            revisar(tr);
+        });
+        totales();
+        $id('pgp-resumen').textContent = sel.length + ' persona(s)';
+        $id('pgp-forma-todos').value = ''; $id('pgp-fecha-todos').value = ''; $id('pgp-ref-todos').value = '';
+    });
+    $id('pgp-aplicar').addEventListener('click', function () {
+        var f = $id('pgp-forma-todos').value, d = $id('pgp-fecha-todos').value, r = $id('pgp-ref-todos').value.trim();
+        form.querySelectorAll('#pgp-filas tr').forEach(function (tr) {
+            if (f) tr.querySelector('.pgp-forma').value = f;
+            if (d) tr.querySelector('.pgp-fecha').value = d;
+            if (r) tr.querySelector('.pgp-ref').value = r;
+            revisar(tr);
+        });
+    });
+    form.addEventListener('submit', function (e) {
+        var filas = form.querySelectorAll('#pgp-filas tr'), om = form.querySelectorAll('#pgp-filas tr.is-omitida').length;
+        if (!filas.length || om === filas.length) { e.preventDefault(); window.alert('Revisa las filas: ninguna está lista (falta monto, fecha o N.° de factura, o hay una diferencia sin aceptar).'); return; }
+        if (om && !window.confirm(om + ' fila(s) pendientes de revisar se omitirán. ¿Registrar las demás?')) { e.preventDefault(); return; }
+        setTimeout(function () { $id('pgp-guardar').disabled = true; }, 0);
+    });
+    actualizar();
+})();
+            </script>
         <?php endif; ?>
     </section>
 </main>

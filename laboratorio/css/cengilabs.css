@@ -1,0 +1,96 @@
+/* =============================================================
+   Identidad CengiLabs (familia Cengitech).
+   Lo carga lab_shell_open() en includes/shell_sidebar.php, después
+   de lab_shell.css y del CSS propio de cada vista: solo sobrescribe.
+   ============================================================= */
+
+/* ---------- Barra lateral oscura ---------- */
+.cengi-sidebar {
+  border-right: 0;
+  color: #fff;
+  background-color: #04330f;
+  background-image:
+    linear-gradient(180deg, rgba(4,51,15,1) 0%, rgba(10,74,28,.97) 55%, rgba(13,90,34,.86) 100%),
+    url('../img/campo-cana.jpg');
+  background-size: cover, cover;
+  background-position: center, center bottom;
+  scrollbar-color: rgba(188,243,46,.35) transparent;
+}
+.cengi-brand { gap: 12px; padding: 18px 16px; background: transparent; }
+.cengi-brand::after { left: 16px; right: 16px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, #73BC25, #A3D300, #FFCC00, #FF6B00); }
+.cengi-brand:hover, .cengi-brand:focus { background: rgba(255,255,255,.05); }
+.cengi-brand .cgl-logo { width: 56px; height: auto; flex: none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+.cengi-brand:hover .cgl-logo { transform: rotate(-6deg) scale(1.06); }
+.cengi-brand-copy { line-height: 1; }
+.cengi-brand-copy strong { font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 24px; font-weight: 850; letter-spacing: -.055em; color: #fff; }
+.cengi-brand-copy strong b { color: #bcf32e; font-weight: 850; }
+.cengi-brand-copy small { margin-top: 6px; font-weight: 700; color: rgba(255,255,255,.66); }
+
+.cengi-nav-group + .cengi-nav-group { border-top: 1px solid rgba(188,243,46,.14); }
+.cengi-nav-label { color: rgba(220,255,152,.62); }
+.cengi-nav-group:nth-child(3) .cengi-nav-label::before { background: rgba(255,255,255,.45); }
+.cengi-nav-item { color: rgba(255,255,255,.86); transition: background-color .18s, color .18s, transform .18s, border-color .18s; }
+.cengi-nav-item .material-symbols-outlined { color: #dcfa51; }
+.cengi-nav-item:hover, .cengi-nav-item:focus { background: rgba(255,255,255,.09); border-left-color: #A3D300; color: #fff; transform: translateX(2px); }
+.cengi-nav-item.is-active { background: rgba(188,243,46,.16); border-left-color: #bcf32e; color: #e6ff9e; box-shadow: none; }
+.cengi-nav-item.is-active .material-symbols-outlined { color: #e6ff9e; }
+.cengi-nav-badge { color: #073c18; }
+.cengi-nav-item.is-active .cengi-nav-badge { background: #FFCC00; }
+.cengi-sidebar-foot { border-top: 1px solid rgba(188,243,46,.2); background: rgba(0,0,0,.18); }
+.cengi-menu-link { color: rgba(255,255,255,.86); }
+.cengi-menu-link:hover, .cengi-menu-link:focus { background: rgba(255,255,255,.09); color: #fff; }
+.cengi-logout-link, .cengi-logout-link .material-symbols-outlined { color: #ffb4a6; }
+.cengi-logout-link:hover, .cengi-logout-link:focus { background: rgba(255,107,0,.16); border-left-color: #FF6B00; color: #ffd2c9; }
+.cengi-sidebar-version { color: rgba(255,255,255,.55); }
+.cengi-sidebar :focus-visible { outline: 2px solid #bcf32e; outline-offset: 2px; }
+
+/* ---------- Inicio: bienvenida con foto ---------- */
+.ini-hero {
+  isolation: isolate;
+  color: #fff;
+  border: 1px solid rgba(171,235,63,.45);
+  border-radius: 20px;
+  background:
+    linear-gradient(110deg, rgba(4,48,17,.95) 0%, rgba(8,70,26,.87) 55%, rgba(17,96,34,.72) 100%),
+    url('../img/campo-cana.jpg') center 60% / cover;
+  box-shadow: 0 20px 44px rgba(7,60,24,.22);
+  animation: cgl-entrar .6s cubic-bezier(.2,.8,.2,1) backwards;
+}
+.ini-hero::before { /* destello periódico (reemplaza el círculo decorativo) */
+  right: auto; top: 0; bottom: 0; left: -40%; width: 30%; height: auto; border-radius: 0; opacity: 1; z-index: -1;
+  background: linear-gradient(100deg, transparent, rgba(188,243,46,.12), transparent); transform: skewX(-18deg);
+  animation: cgl-barrido 9s 1.2s ease-in-out infinite;
+}
+.ini-hero::after { border-color: rgba(188,243,46,.08); }
+.ini-eyebrow { padding: 5px 11px; border-radius: 99px; background: rgba(188,243,46,.14); border: 1px solid rgba(188,243,46,.35); color: #e6ff9e; }
+.ini-hero h1 { font-family: Inter, "Segoe UI", Arial, sans-serif; font-weight: 850; letter-spacing: -.035em; color: #fff; }
+.ini-hero h1::after { content: ""; display: block; width: 90px; height: 4px; margin-top: 10px; border-radius: 6px; background: linear-gradient(90deg, #A3D300, #FFCC00); }
+.ini-hero p { margin-top: 10px; color: rgba(255,255,255,.86); }
+.ini-hero p b { color: #e6ff9e; }
+.cgl-hero-brand { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; font-size: 12px; color: rgba(255,255,255,.7); }
+.cgl-hero-brand img { width: 40px; height: auto; }
+.cgl-hero-brand strong { font-size: 19px; font-weight: 850; letter-spacing: -.05em; color: #fff; }
+.cgl-hero-brand strong b { color: #bcf32e; font-weight: 850; }
+.ini-btn-primary { background: linear-gradient(100deg, #bcf32e, #A3D300); color: #073c18; box-shadow: 0 10px 24px rgba(163,211,0,.3); }
+.ini-btn-primary:hover { box-shadow: 0 14px 30px rgba(188,243,46,.42); }
+.ini-btn-light { background: rgba(255,255,255,.12); border: 1px solid rgba(188,243,46,.4); color: #fff; backdrop-filter: blur(6px); }
+.ini-btn-light:hover { background: rgba(255,255,255,.2); }
+
+/* Indicadores: entrada escalonada y elevación */
+.ini-kpi { animation: cgl-entrar .55s cubic-bezier(.2,.8,.2,1) backwards; transition: transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s; }
+.ini-kpi:nth-child(1) { animation-delay: .12s; }
+.ini-kpi:nth-child(2) { animation-delay: .19s; }
+.ini-kpi:nth-child(3) { animation-delay: .26s; }
+.ini-kpi:nth-child(4) { animation-delay: .33s; }
+.ini-kpi:hover { transform: translateY(-4px); box-shadow: 0 16px 30px rgba(7,60,24,.13); }
+.ini-kpi-icon { transition: transform .35s cubic-bezier(.2,.8,.2,1); }
+.ini-kpi:hover .ini-kpi-icon { transform: rotate(-6deg) scale(1.08); }
+
+@keyframes cgl-entrar { from { opacity: 0; transform: translateY(14px); } }
+@keyframes cgl-barrido { 0% { left: -40%; } 22%, 100% { left: 130%; } }
+
+@media print { .ini-hero { background: #1f5632; box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .ini-hero, .ini-hero::before, .ini-kpi { animation: none !important; }
+  .cengi-nav-item, .cengi-brand .cgl-logo, .ini-kpi, .ini-kpi-icon { transition: none !important; }
+}

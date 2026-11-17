@@ -227,6 +227,7 @@ function initRedesForm() {
       if (actual[campo]) label.querySelector('.form-label').textContent = actual[campo];
     });
     document.querySelectorAll('#red-form [data-solo-whatsapp]').forEach((el) => { el.hidden = select.value !== 'WhatsApp'; });
+    document.querySelectorAll('#red-form [data-no-whatsapp]').forEach((el) => { el.hidden = select.value === 'WhatsApp'; });
   };
   select.addEventListener('change', update);
 }

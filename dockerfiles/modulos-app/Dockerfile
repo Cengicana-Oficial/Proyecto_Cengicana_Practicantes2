@@ -21,7 +21,7 @@ RUN sed -i 's|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|ht
         zip \
         mbstring \
         gd \
-    && a2enmod rewrite headers proxy proxy_http \
+    && a2enmod rewrite headers proxy proxy_http remoteip \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -32,11 +32,15 @@ RUN a2enconf no-php-uploads
 COPY dockerfiles/modulos-app/error-pages.conf /etc/apache2/conf-available/error-pages.conf
 RUN a2enconf error-pages
 
+# IP real del visitante detras del proxy del servidor (ver remoteip.conf).
+COPY dockerfiles/modulos-app/remoteip.conf /etc/apache2/conf-available/remoteip.conf
+RUN a2enconf remoteip
+
 # Reenvia /sigec/* al contenedor "sigec" (docker-compose.prod.yml), sin
 # exponer su puerto publicamente: modulos.cengicana.org/sigec/... se sirve
 # asi bajo el mismo dominio ya configurado, sin necesitar un subdominio ni
 # tocar el proxy externo. Ver dockerfiles/modulos-app/sigec-proxy.conf y
-# sigec/app/Providers/AppServiceProvider.php (URL::forceRootUrl) para la
+# experimentos/app/Providers/AppServiceProvider.php (URL::forceRootUrl) para la
 # otra mitad de este arreglo: sin eso, los enlaces/assets que genera
 # Laravel saldrian sin el prefijo /sigec.
 COPY dockerfiles/modulos-app/sigec-proxy.conf /etc/apache2/conf-available/sigec-proxy.conf
@@ -48,6 +52,12 @@ COPY dockerfiles/modulos-app/timezone.ini /usr/local/etc/php/conf.d/zz-timezone.
 
 WORKDIR /var/www/html
 COPY . /var/www/html
+
+# experimentos/ (SIGEC, Laravel) corre en su propio contenedor y aqui solo se
+# llega a el por el proxy de /sigec/. No puede ir en .dockerignore porque
+# sigec-app usa el mismo contexto de build; si se quedara en esta imagen,
+# Apache serviria su codigo fuente, storage/ y logs bajo /experimentos/.
+RUN rm -rf /var/www/html/experimentos
 
 RUN if [ -f login/composer.json ]; then \
         cd login && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \

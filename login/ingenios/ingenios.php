@@ -20,8 +20,11 @@ $ingenios = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/ingenios.css?v=<?= @filemtime(__DIR__ . '/../assets/ingenios.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/menu-cengitech.css?v=<?= @filemtime(__DIR__ . '/../assets/menu-cengitech.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/admin-cengitech.css?v=<?= @filemtime(__DIR__ . '/../assets/admin-cengitech.css') ?: '1' ?>">
 </head>
-<body>
+<body class="cx-admin">
+<?php require_once __DIR__ . '/../config/admin_layout.php'; cengi_admin_header('ingenios'); ?>
 <div class="ingenios-shell">
     <a href="../Menu.php" class="btn-back">
         <span class="material-symbols-outlined">arrow_back</span>
@@ -124,5 +127,6 @@ window.onclick = (e) => {
   if (e.target === modal) modal.classList.remove("active");
 };
 </script>
+<?php cengi_admin_footer(); ?>
 </body>
 </html>

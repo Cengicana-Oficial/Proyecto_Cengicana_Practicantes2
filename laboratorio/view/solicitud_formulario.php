@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/shell_sidebar.php';
 require_once __DIR__ . '/../models/trazabilidad_model.php';
 require_once __DIR__ . '/../includes/workflow_trabajo_helper.php';
 require_once __DIR__ . '/../includes/recepciones_historial_helper.php';
+require_once __DIR__ . '/../includes/experimentos_helper.php';
 
 lab_require_module_access();
 lab_ensure_schema_safe(fn() => wfSchema($conexion), 'workflow_trabajo_v3');
@@ -514,6 +515,11 @@ $versionValor = static function ($valor): string {
     </div>
   <?php endif; ?>
 
+  <div class="reception-tabs" role="tablist" aria-label="Recepción">
+    <button type="button" role="tab" data-rtab="form" aria-selected="true"><span class="material-symbols-outlined" aria-hidden="true">edit_note</span><?= $idEdicion > 0 ? 'Editar recepción' : 'Nueva recepción' ?></button>
+    <button type="button" role="tab" data-rtab="hist" aria-selected="false"><span class="material-symbols-outlined" aria-hidden="true">history</span>Recepciones registradas</button>
+  </div>
+
   <form id="solicitud-form" method="post">
   <input type="hidden" id="id_solicitud" name="id_solicitud" value="<?= $idSolicitudGet ? (int) $idSolicitudGet : '' ?>"/>
   <input type="hidden" id="tipo_form" name="tipo_form" value="<?= htmlspecialchars($tipoFormularioInicial, ENT_QUOTES, 'UTF-8') ?>"/>
@@ -553,6 +559,8 @@ $versionValor = static function ($valor): string {
     </div>
   </header>
 
+  <!-- Tipo de muestra y avance del registro en una sola barra (optimiza espacio) -->
+  <div class="reception-toolbar">
   <!-- TIPO DE ANÁLISIS --->
   <div class="tipo-btns" id="tipo-btns">
     <?php foreach ($catalogoMuestras as $clave => $muestra): ?>
@@ -580,6 +588,7 @@ $versionValor = static function ($valor): string {
   <li data-step="analisis"><span>2</span> Análisis</li>
   <li data-step="firmas"><span>3</span> Firmas</li>
 </ol>
+  </div>
 <!-- DATOS DEL MUESTREO -->
 
 <div class="section-title">
@@ -612,9 +621,25 @@ $versionValor = static function ($valor): string {
             value="<?= htmlspecialchars($loteSeleccionado, ENT_QUOTES, 'UTF-8') ?>"/>
         <small>Correlativo automático e independiente para cada tipo de muestra.</small>
     </div>
+    <?php $ensayosExperimentos = labExpEnsayosAgrupados($conexion); ?>
     <div class="field">
-        <label for="numero_de_muestra">Nombre del ensayo</label>
+        <label for="<?= $ensayosExperimentos ? 'ensayo_experimentos' : 'numero_de_muestra' ?>">Nombre del ensayo</label>
+        <?php if ($ensayosExperimentos): ?>
+            <!-- Ensayos de Experimentos (Programas y proyectos), leidos directamente de su base. -->
+            <select id="ensayo_experimentos" data-ensayo-experimentos>
+                <option value="">— Seleccione el ensayo —</option>
+                <?php foreach ($ensayosExperimentos as $grupo): ?>
+                    <optgroup label="<?= htmlspecialchars($grupo['grupo'], ENT_QUOTES, 'UTF-8') ?>">
+                        <?php foreach ($grupo['ensayos'] as $ens): ?>
+                            <option value="<?= htmlspecialchars($ens['codigo'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($ens['texto'], ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </optgroup>
+                <?php endforeach; ?>
+                <option value="__otro">Otro (no es de Experimentos): escribir el nombre</option>
+            </select>
+        <?php endif; ?>
         <input id="numero_de_muestra" name="codigo_muestreo" type="text" placeholder="Ej. Ensayo de variedades 2026" value="<?= htmlspecialchars((string) ($_POST['codigo_muestreo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"/>
+        <?php if ($ensayosExperimentos): ?><small>Ensayos de Programas y proyectos en Experimentos.</small><?php endif; ?>
     </div>
     <div class="field">
         <label for="fecha_muestreo">
@@ -667,7 +692,7 @@ $versionValor = static function ($valor): string {
             required
             placeholder="Ej. 7"/>
     </div>
-    <div class="field">
+    <div class="field field--span2">
         <label for="n_laboratorio_inicio">
             Número de laboratorio
         </label>
@@ -734,7 +759,7 @@ $versionValor = static function ($valor): string {
    <!-- OBSERVACIONES -->
   <div class="section-title">Observaciones</div>
   <div class="field">
-    <textarea id="observaciones" name="observaciones" rows="4"
+    <textarea id="observaciones" name="observaciones" rows="2"
       placeholder="Detalles adicionales sobre las muestras o el envío..."></textarea>
   </div>
   <?php if ($idEdicion > 0): ?>
@@ -837,6 +862,41 @@ $versionValor = static function ($valor): string {
     <script type="application/json" id="recepciones-estado"><?= json_encode(['pagina' => 1, 'paginas' => $paginaRecepciones['paginas'], 'total' => $paginaRecepciones['total'], 'por_pagina' => LAB_RECEPCIONES_POR_PAGINA], JSON_HEX_TAG) ?></script>
     <p id="recepciones-aviso" role="status" class="card-sub"></p><p id="recepciones-vacio" class="reception-empty"<?= $paginaRecepciones['total'] > 0 ? ' hidden' : '' ?>>Sin recepciones con los filtros actuales.</p>
   </section>
+  <script>
+  /* Optimización de espacio:
+     A) Pestañas "Nueva recepción | Recepciones registradas": el historial ya no queda debajo del formulario.
+        La pestaña se recuerda en la URL (#recepciones) para volver a ella al recargar.
+     B) Los datos automáticos (lote, ingreso, entrega estimada y n.º de laboratorio) se muestran en una franja
+        de resumen en lugar de cuatro casillas. Se mueven los mismos campos (con sus id y name), así el
+        formulario y sus scripts siguen funcionando igual. */
+  (function () {
+    var form = document.getElementById('solicitud-form');
+    var hist = document.querySelector('.reception-history');
+    var tabs = document.querySelectorAll('[data-rtab]');
+    function mostrar(cual, recordar) {
+      var esHist = cual === 'hist';
+      if (form) form.hidden = esHist;
+      if (hist) hist.hidden = !esHist;
+      tabs.forEach(function (t) { t.setAttribute('aria-selected', String(t.dataset.rtab === cual)); });
+      if (recordar) history.replaceState(null, '', esHist ? '#recepciones' : location.pathname + location.search);
+    }
+    tabs.forEach(function (t) { t.addEventListener('click', function () { mostrar(t.dataset.rtab, true); }); });
+    mostrar(location.hash === '#recepciones' ? 'hist' : 'form', false);
+
+    var grid = form && form.querySelector('.field-grid');
+    if (grid) {
+      var franja = document.createElement('div');
+      franja.className = 'reception-resumen';
+      franja.setAttribute('aria-label', 'Datos asignados automáticamente');
+      ['lote', 'fecha_ingreso', 'fecha_estimada', 'n_laboratorio_inicio'].forEach(function (id) {
+        var campo = document.getElementById(id);
+        var bloque = campo && campo.closest('.field');
+        if (bloque) { bloque.classList.add('reception-resumen-item'); franja.appendChild(bloque); }
+      });
+      if (franja.children.length) grid.parentNode.insertBefore(franja, grid);
+    }
+  })();
+  </script>
 </main>
 <dialog id="recepcion-boleta-dialog" class="recepcion-boleta-dialog" aria-labelledby="boleta-dialog-titulo">
   <div class="boleta-dialog-head"><h2 id="boleta-dialog-titulo" hidden>Boleta de recepción</h2>

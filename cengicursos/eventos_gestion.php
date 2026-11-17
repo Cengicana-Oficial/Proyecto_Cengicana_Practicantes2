@@ -79,21 +79,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($accion === 'exportar_respuestas' |
         foreach (CENGI_EVT_COLAB_ITEMS as $i) {
             $encabezados[] = $i['t'];
         }
-        $encabezados = array_merge($encabezados, ['¿Fortaleció el evento?', '¿Participaría nuevamente?', 'Qué mejorar / oportunidad de mejora', 'Apoyo deseado', 'Tema']);
+        $encabezados = array_merge($encabezados, ['¿Fortaleció el evento?', '¿Participaría nuevamente?', 'Qué mejorar / oportunidad de mejora', 'Apoyo deseado', 'Tema',
+            'Correo', 'Puesto / cargo', 'Área', 'Logística', 'Permanencia']);
         $filas = [];
         foreach ($e['colab'] as $c) {
             $fila = ['Colaboración', $c['ts'], $c['empresa'], $c['nombre'], '', ''];
             foreach (CENGI_EVT_COLAB_ITEMS as $i) {
                 $fila[] = $c['r'][$i['k']] === null ? 'No aplica' : $c['r'][$i['k']];
             }
-            $filas[] = array_merge($fila, [$c['fortalecio'], $c['participaria'], $c['mejorar'], $c['apoyo'], '']);
+            $filas[] = array_merge($fila, [$c['fortalecio'], $c['participaria'], $c['mejorar'], $c['apoyo'], '', '', '', '', '', '']);
         }
         foreach ($e['percep'] as $r) {
             $fila = ['Percepción', $r['ts'], $r['via'], $r['participante'] ?: 'Anónimo', (string) $r['institucion'], $r['estrellas']];
             foreach (CENGI_EVT_COLAB_ITEMS as $i) {
                 $fila[] = '';
             }
-            $filas[] = array_merge($fila, ['', '', $r['mejora'], '', $r['mejora'] !== '' ? cengi_evg_clasificar($r['mejora']) : '']);
+            $filas[] = array_merge($fila, ['', '', $r['mejora'], '', $r['mejora'] !== '' ? cengi_evg_clasificar($r['mejora']) : '',
+                $r['correo'], $r['cargo'], $r['area'], $r['logistica'] ?? '', CENGI_EVT_PERMANENCIA[$r['permanencia']] ?? '']);
         }
         cengi_export_enviar_excel($encabezados, $filas, 'Respuestas', 'Encuestas_' . preg_replace('/[^A-Za-z0-9]+/', '_', $e['nombre']));
     }

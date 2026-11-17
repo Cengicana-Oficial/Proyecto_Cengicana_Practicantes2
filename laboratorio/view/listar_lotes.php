@@ -368,6 +368,7 @@ $fechaMuestreoInput = $fechaMuestreo !== '' ? date('Y-m-d\TH:i', strtotime($fech
 
 <form method="GET" data-scanner-submit hidden><input name="muestra" data-scanner-value></form>
 <script src="../../cengicursos/js/qrcode-generator.js"></script>
+<script src="../../cengicursos/js/jsQR.js?v=<?= (int) filemtime(__DIR__ . '/../../cengicursos/js/jsQR.js') ?>"></script>
 <script src="../js/identificacion_lote.js?v=<?= (int) filemtime(__DIR__ . '/../js/identificacion_lote.js') ?>"></script>
 <script src="../js/identificacion_muestra.js?v=<?= (int) filemtime(__DIR__ . '/../js/identificacion_muestra.js') ?>"></script>
 <?php lab_shell_content_close(); ?>

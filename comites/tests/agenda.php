@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 if(PHP_SAPI!=='cli'){http_response_code(404);exit;}
+define('AGENDA_SIN_CURSOS',true); // los ids de las tablas temporales coinciden con eventos vinculados en Cengicursos
 require dirname(__DIR__).'/config/database.php';
 require dirname(__DIR__).'/includes/functions.php';
 require dirname(__DIR__).'/includes/domain.php';

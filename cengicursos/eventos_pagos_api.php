@@ -141,6 +141,76 @@ try {
         cengi_evp_json(['ok' => true, 'mensaje' => $mensaje]);
     }
 
+    // Registrar varios pagos a la vez (control de lo pagado): Administración revisa el monto de cada
+    // persona contra el costo; una diferencia solo se acepta marcando "aceptar diferencia".
+    if ($accion === 'pagos_lote') {
+        if (!$validar) {
+            cengi_evp_json(['ok' => false, 'error' => 'Solo Administración (permiso “Validar pagos”) puede registrar pagos.'], 403);
+        }
+        // Forma y fecha van por persona (forma_fila / fecha_fila); las comunes son el respaldo.
+        $formaComun = mb_substr(trim((string) ($_POST['forma'] ?? '')), 0, 120, 'UTF-8');
+        $fechaComun = trim((string) ($_POST['fecha'] ?? ''));
+        $refComun = mb_substr(trim((string) ($_POST['referencia'] ?? '')), 0, 60, 'UTF-8');
+        $notaComun = mb_substr(trim((string) ($_POST['nota'] ?? '')), 0, 300, 'UTF-8');
+        $formasFila = (array) ($_POST['forma_fila'] ?? []);
+        $fechasFila = (array) ($_POST['fecha_fila'] ?? []);
+        $montos = (array) ($_POST['monto'] ?? []);
+        $boletas = (array) ($_POST['boleta'] ?? []);
+        $aceptar = (array) ($_POST['aceptar'] ?? []);
+        $hechos = [];
+        $omitidos = [];
+        $usuarioPago = cengi_pp_usuario_nombre();
+        $upd = $db->prepare("UPDATE evento_participantes SET pago_estado = 'validado', pagado = 1, pago_boleta = ?, pago_banco = ?, pago_fecha = ?, pago_monto = ?,
+            pago_nota = ?, pago_validado_por = ?, pago_validado_en = NOW() WHERE id = ?");
+        foreach (cengi_evp_participantes($db, (array) ($_POST['ids'] ?? []), $eventoId) as $p) {
+            $pid = (int) $p['id'];
+            if ($p['modalidad_pago'] !== 'Pagado') { $omitidos[] = $p['nombre'] . ': el evento es gratuito'; continue; }
+            if (in_array($p['pago_estado'], ['validado', 'exonerado'], true)) { $omitidos[] = $p['nombre'] . ': ya tenía el pago ' . ($p['pago_estado'] === 'validado' ? 'validado' : 'exonerado'); continue; }
+            $forma = mb_substr(trim((string) ($formasFila[$pid] ?? '')), 0, 120, 'UTF-8') ?: $formaComun;
+            $fecha = trim((string) ($fechasFila[$pid] ?? '')) ?: $fechaComun;
+            if ($forma === '') { $omitidos[] = $p['nombre'] . ': falta la forma de pago'; continue; }
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) || $fecha > date('Y-m-d')) { $omitidos[] = $p['nombre'] . ': fecha de pago no válida (no puede ser futura)'; continue; }
+            $txt = str_replace(',', '', trim((string) ($montos[$pid] ?? '')));
+            if (!is_numeric($txt) || (float) $txt <= 0) { $omitidos[] = $p['nombre'] . ': falta el monto pagado'; continue; }
+            $pagado = round((float) $txt, 2);
+            $usd = cengi_evp_es_usd($p);
+            $esperado = cengi_evp_monto_esperado($p);
+            $dif = round($pagado - $esperado, 2);
+            if ($esperado > 0 && abs($dif) > 0.009 && empty($aceptar[$pid])) {
+                $omitidos[] = $p['nombre'] . ': pagó ' . cengi_evp_dinero($pagado, $usd) . ' y el costo es ' . cengi_evp_dinero($esperado, $usd) . ' (marca «aceptar diferencia»)';
+                continue;
+            }
+            // "Boleta o comentario": con números es la boleta; solo texto ("pagado", "efectivo") es un comentario.
+            $textoFila = trim((string) ($boletas[$pid] ?? ''));
+            $comentarioFila = $textoFila !== '' && !preg_match('/\d/', $textoFila) ? mb_substr($textoFila, 0, 150, 'UTF-8') : '';
+            $boletaFila = $comentarioFila === '' ? mb_substr($textoFila, 0, 60, 'UTF-8') : '';
+            $boleta = $boletaFila ?: ($refComun ?: (string) $p['pago_boleta']);
+            $nota = trim(implode(' · ', array_filter([
+                'Registrado en lote por Administración',
+                $comentarioFila,
+                $notaComun,
+                $esperado > 0 && abs($dif) > 0.009 ? 'Pagó ' . cengi_evp_dinero($pagado, $usd) . ' (costo ' . cengi_evp_dinero($esperado, $usd) . ', diferencia ' . cengi_evp_dinero($dif, $usd) . ')' : '',
+            ])));
+            $upd->execute([$boleta ?: null, $forma, $fecha, $pagado, mb_substr($nota, 0, 500, 'UTF-8'), $usuarioPago, $pid]);
+            $hechos[] = $pid;
+        }
+        if (!$hechos) {
+            throw new InvalidArgumentException('Ningún pago se registró. ' . implode(' · ', $omitidos));
+        }
+        $partes = [count($hechos) . ' pago(s) registrado(s) como validados.'];
+        // Igual que al validar uno por uno: con el pago validado la persona pasa a participante (QR y gafete).
+        if (!empty($_POST['confirmar'])) {
+            $r = cengi_evp_confirmar($db, cengi_evp_participantes($db, $hechos, $eventoId));
+            $partes[] = $r['confirmados'] . ' participación(es) confirmada(s); gafete enviado a ' . $r['enviados'] . '.';
+            if ($r['sin_correo']) $partes[] = 'Sin correo (entrégales el gafete impreso): ' . implode(', ', $r['sin_correo']) . '.';
+            if ($r['fallidos']) $partes[] = 'Falló el envío del gafete a: ' . implode(', ', $r['fallidos']) . '.';
+        } else {
+            $partes[] = 'Quedan «Por confirmar»: Capacitación confirma y envía el gafete.';
+        }
+        if ($omitidos) $partes[] = 'Se omitieron: ' . implode(' · ', $omitidos) . '.';
+        cengi_evp_json(['ok' => true, 'mensaje' => implode(' ', $partes), 'omitidos' => count($omitidos)]);
+    }
+
     if ($accion === 'confirmar') {
         if (!$gestionar) {
             cengi_evp_json(['ok' => false, 'error' => 'Solo Capacitación (gestión de eventos) confirma la participación.'], 403);

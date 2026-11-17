@@ -15,7 +15,9 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        // Datos de las estaciones ICC (pestana Clima de los ensayos).
+        $schedule->command('clima:sincronizar-icc --dias=3')->hourlyAt(10)->withoutOverlapping();
+        $schedule->command('laboratorio:sincronizar')->everyFifteenMinutes()->withoutOverlapping();
     }
 
     /**

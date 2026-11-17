@@ -18,6 +18,9 @@ $adminAccion = $activoAccion && $esPropioAccion && cengi_ins_puede_validar_pagos
 $tieneBoleta = !empty($s['comprobante_ruta']);
 $ingenioValidado = ($s['validacion_ingenio'] ?? '') === 'validada';
 // Otras personas del mismo grupo de pago del ingenio que aún esperan validación.
+// Desde Inscritos (asignados con validación o pago por regularizar) se vuelve a esa vista.
+$vistaAccion = isset($vistaAccion) ? $vistaAccion : 'interesados';
+$campoVista = '<input type="hidden" name="vista" value="' . cengi_pp_h($vistaAccion) . '">';
 $grupoAccion = $esIngenioAccion && $s['grupo_pago_id'] ? array_diff_key($gruposPendientes[(int) $s['grupo_pago_id']] ?? [], [$idAccion => true]) : [];
 ?>
 <details class="ins-action-list">
@@ -37,7 +40,7 @@ $grupoAccion = $esIngenioAccion && $s['grupo_pago_id'] ? array_diff_key($gruposP
   <?php elseif ($activoAccion && $s['pago_estado'] !== 'pagado'): ?>
    <?php /* Sin boleta: reenviar el formulario o cargarla Capacitación/Administración; siempre valida Administración. */ ?>
    <?php if ($capAccion || $adminAccion): ?>
-    <form method="post" onsubmit="return confirm('¿Enviar a <?= cengi_pp_h(addslashes($s['correo'])) ?> el correo con el enlace para adjuntar su boleta?');"><input type="hidden" name="csrf" value="<?= cengi_pp_h($_SESSION['ins_csrf']) ?>"><input type="hidden" name="accion" value="reenviar_formulario"><input type="hidden" name="id" value="<?= $idAccion ?>">
+    <form method="post" onsubmit="return confirm('¿Enviar a <?= cengi_pp_h(addslashes($s['correo'])) ?> el correo con el enlace para adjuntar su boleta?');"><input type="hidden" name="csrf" value="<?= cengi_pp_h($_SESSION['ins_csrf']) ?>"><?= $campoVista ?><input type="hidden" name="accion" value="reenviar_formulario"><input type="hidden" name="id" value="<?= $idAccion ?>">
      <button><span class="glyphicon glyphicon-envelope" aria-hidden="true"></span> Reenviar formulario al participante</button></form>
    <?php endif; ?>
    <?php if ($capAccion): ?>
@@ -57,11 +60,11 @@ $grupoAccion = $esIngenioAccion && $s['grupo_pago_id'] ? array_diff_key($gruposP
    <button disabled>Validado por el ingenio</button>
   <?php else: ?>
    <?php if ($igAccion): ?>
-    <form method="post"><input type="hidden" name="csrf" value="<?= cengi_pp_h($_SESSION['ins_csrf']) ?>"><input type="hidden" name="accion" value="autorizar_ingenio"><input type="hidden" name="id" value="<?= $idAccion ?>"><button>1. Validación por el ingenio</button></form>
+    <form method="post"><input type="hidden" name="csrf" value="<?= cengi_pp_h($_SESSION['ins_csrf']) ?>"><?= $campoVista ?><input type="hidden" name="accion" value="autorizar_ingenio"><input type="hidden" name="id" value="<?= $idAccion ?>"><button>1. Validación por el ingenio</button></form>
    <?php endif; ?>
    <?php if ($capAccion): ?>
     <details class="ins-authorization"><summary><?= $igAccion ? '2.' : '1.' ?> Validar por Capacitación</summary>
-     <form method="post"><input type="hidden" name="csrf" value="<?= cengi_pp_h($_SESSION['ins_csrf']) ?>"><input type="hidden" name="via" value="capacitacion"><input type="hidden" name="accion" value="autorizar_ingenio"><input type="hidden" name="id" value="<?= $idAccion ?>">
+     <form method="post"><input type="hidden" name="csrf" value="<?= cengi_pp_h($_SESSION['ins_csrf']) ?>"><?= $campoVista ?><input type="hidden" name="via" value="capacitacion"><input type="hidden" name="accion" value="autorizar_ingenio"><input type="hidden" name="id" value="<?= $idAccion ?>">
       <label>Quién autoriza por el ingenio<input class="form-control" name="autoriza" required maxlength="180" placeholder="Nombre y cargo"></label>
       <label>Motivo de la validación por Capacitación<textarea class="form-control" name="motivo" required maxlength="300" placeholder="Por qué valida Capacitación y cómo se autorizó (correo, llamada, acuerdo...)"></textarea></label>
       <?php if ($grupoAccion): ?>
@@ -75,7 +78,11 @@ $grupoAccion = $esIngenioAccion && $s['grupo_pago_id'] ? array_diff_key($gruposP
   <?php endif; ?>
   <?php if ($s['proforma_id']): ?><a href="proforma.php?id=<?= (int) $s['proforma_id'] ?>"><span class="glyphicon glyphicon-file" aria-hidden="true"></span> Ver proforma N.° <?= (int) $s['proforma_numero'] ?></a><?php endif; ?>
  <?php endif; ?>
+ <?php if ($s['estado'] === 'Aprobado'): ?>
+ <a href="inscripcion_detalle.php?id=<?= $idAccion ?>"><span class="glyphicon glyphicon-list-alt" aria-hidden="true"></span> Ver detalle e historial</a>
+ <?php else: ?>
  <button class="ins-reject" type="button" <?= !$activoAccion || !$puedeGestionar ? 'disabled' : '' ?> data-toggle="modal" data-target="#motivo-modal" data-accion="rechazar" data-id="<?= $idAccion ?>" data-titulo="<?= cengi_pp_h('Rechazar: '.$s['nombre_participante']) ?>">Rechazar</button>
- <?php if (!$activoAccion && $puedeGestionar): ?><form method="post"><input type="hidden" name="csrf" value="<?= cengi_pp_h($_SESSION['ins_csrf']) ?>"><input type="hidden" name="accion" value="reactivar"><input type="hidden" name="id" value="<?= $idAccion ?>"><button>Reactivar interesado</button></form><?php endif; ?>
+ <?php endif; ?>
+ <?php if (!$activoAccion && $puedeGestionar): ?><form method="post"><input type="hidden" name="csrf" value="<?= cengi_pp_h($_SESSION['ins_csrf']) ?>"><?= $campoVista ?><input type="hidden" name="accion" value="reactivar"><input type="hidden" name="id" value="<?= $idAccion ?>"><button>Reactivar interesado</button></form><?php endif; ?>
  </div>
 </details>

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Propuesta Cengiconecta</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<style>
+  :root { --verde:#73BC25; --verde2:#A3D300; --lima:#bcf32e; --amarillo:#FFCC00; --naranja:#FF6B00; --oscuro:#073c18; --titulo:#166121; --texto:#1d3320; --suave:#56685a; --borde:#dfe7da; --fondo:#f3f7ef; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Inter,"Segoe UI",Arial,sans-serif; color:var(--texto); background:var(--fondo); }
+  .material-symbols-outlined { font-size:20px; line-height:1; vertical-align:middle; }
+  .wrap { max-width:1280px; margin:0 auto; padding:0 24px; }
+  .wm { font-weight:850; letter-spacing:-.055em; line-height:1; }
+  .wm b { color:#5aa816; font-weight:850; }
+  .on-dark .wm, .wm.on-dark { color:#fff; }
+  .on-dark .wm b, .wm.on-dark b { color:var(--lima); }
+
+  /* Portada de la propuesta */
+  .intro { position:relative; isolation:isolate; overflow:hidden; color:#fff; padding:56px 0 64px; }
+  .intro::before { content:""; position:absolute; inset:0; z-index:-2; background:url('assets/campo-cana.jpg') center 55%/cover; }
+  .intro::after { content:""; position:absolute; inset:0; z-index:-1; background:linear-gradient(90deg,rgba(0,45,15,.9),rgba(0,48,13,.75) 60%,rgba(0,45,16,.62)); }
+  .intro .wrap { display:grid; grid-template-columns:auto 1fr; gap:36px; align-items:center; }
+  .intro img { width:clamp(180px,22vw,300px); filter:drop-shadow(0 12px 20px rgba(0,0,0,.25)); }
+  .intro .tag { display:inline-block; padding:6px 12px; border-radius:99px; border:1px solid rgba(188,243,46,.4); background:rgba(188,243,46,.12); color:#e6ff9e; font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+  .intro h1 { margin:14px 0 0; font-size:clamp(48px,6.4vw,96px); }
+  .intro .sub { font-size:clamp(17px,1.6vw,24px); font-style:italic; font-weight:700; margin:16px 0 14px; }
+  .accent { width:130px; height:5px; border-radius:6px; background:linear-gradient(90deg,var(--verde2),var(--amarillo)); }
+  .intro p.txt { max-width:720px; font-size:17px; line-height:1.55; color:rgba(255,255,255,.9); margin:16px 0 0; }
+
+  section.block { padding:48px 0 8px; }
+  .kicker { font-size:12px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--verde); }
+  h2 { margin:6px 0 8px; font-size:clamp(26px,2.6vw,36px); letter-spacing:-.035em; color:var(--titulo); }
+  .lead { margin:0 0 24px; color:var(--suave); font-size:16px; line-height:1.55; max-width:860px; }
+
+  /* Identidad */
+  .id-grid { display:grid; grid-template-columns:1.2fr 1fr 1fr; gap:18px; }
+  .tile { border-radius:22px; padding:26px; border:1px solid var(--borde); background:#fff; box-shadow:0 10px 26px rgba(7,60,24,.07); }
+  .tile.dark { background:linear-gradient(140deg,#04330f,#0b4a1f); border-color:#0b4a1f; color:#fff; }
+  .lockup { display:flex; align-items:center; gap:14px; }
+  .lockup img { width:96px; }
+  .lockup .wm { font-size:44px; }
+  .tile small { display:block; margin-top:14px; font-size:13px; color:var(--suave); }
+  .tile.dark small { color:rgba(255,255,255,.7); }
+  .sizes { display:flex; align-items:flex-end; gap:18px; margin-top:6px; }
+  .sizes .ico { display:grid; place-items:center; border-radius:14px; background:var(--oscuro); }
+  .family { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .family > div { display:flex; align-items:center; gap:8px; }
+  .family img { width:54px; }
+  .family .wm { font-size:22px; }
+  .concept { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:18px; }
+  .concept div { background:#fff; border:1px solid var(--borde); border-radius:18px; padding:18px; }
+  .concept strong { display:flex; align-items:center; gap:8px; color:var(--titulo); margin-bottom:6px; }
+  .concept strong .material-symbols-outlined { color:var(--verde); }
+  .concept p { margin:0; font-size:14px; color:var(--suave); line-height:1.5; }
+
+  /* Maqueta del módulo */
+  .opt-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
+  .opt-badge { display:inline-grid; place-items:center; width:36px; height:36px; border-radius:12px; background:linear-gradient(135deg,var(--verde2),var(--verde)); color:var(--oscuro); font-weight:900; }
+  .pros { display:flex; gap:12px; flex-wrap:wrap; margin:0 0 18px; }
+  .pros span { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; padding:6px 12px; border-radius:99px; background:#fff; border:1px solid var(--borde); }
+  .pros .ok { color:#2b7a14; } .pros .meh { color:#9a6b00; }
+  .mock { border-radius:18px; overflow:hidden; border:1px solid #cfd9c8; box-shadow:0 26px 60px rgba(7,60,24,.16); background:#fff; }
+  .mock-bar { display:flex; align-items:center; gap:8px; padding:10px 14px; background:#e9eee6; border-bottom:1px solid #d6ded1; }
+  .mock-bar i { width:11px; height:11px; border-radius:50%; background:#cfd6cb; display:inline-block; }
+  .mock-bar span { margin-left:10px; font-size:12px; color:#6b7a6e; background:#fff; padding:4px 12px; border-radius:8px; }
+  .app { display:grid; grid-template-columns:250px 1fr; min-height:620px; }
+
+  .sb { padding:18px 14px; border-right:1px solid var(--borde); background:#fff; }
+  .sb-brand { display:flex; align-items:center; gap:10px; padding:4px 6px 16px; margin-bottom:12px; border-bottom:3px solid var(--naranja); }
+  .sb-brand img { width:50px; }
+  .sb-brand .wm { font-size:23px; }
+  .sb-brand small { display:block; margin-top:4px; font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--suave); text-transform:uppercase; }
+  .sb-label { font-size:11px; font-weight:800; letter-spacing:.1em; color:#7d8b80; text-transform:uppercase; margin:16px 8px 6px; }
+  .sb a { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:11px; color:var(--texto); text-decoration:none; font-size:14px; font-weight:500; }
+  .sb a .material-symbols-outlined { color:var(--verde); }
+  .sb a.on { background:#eef7e2; color:var(--titulo); font-weight:700; box-shadow:inset 3px 0 0 var(--verde); }
+  /* Opción A: lateral oscura */
+  .sb.dark { background:linear-gradient(180deg,#04330f,#0a4a1c 60%,#0d5a22); border-right:0; color:#fff; position:relative; overflow:hidden; }
+  .sb.dark::after { content:""; position:absolute; left:-30px; right:-30px; bottom:-40px; height:220px; background:url('assets/campo-cana.jpg') center/cover; opacity:.18; mask-image:linear-gradient(transparent,#000); -webkit-mask-image:linear-gradient(transparent,#000); pointer-events:none; }
+  .sb.dark .sb-brand { border-bottom:1px solid rgba(188,243,46,.25); }
+  .sb.dark .sb-brand small { color:rgba(255,255,255,.65); }
+  .sb.dark .sb-label { color:rgba(220,255,152,.6); }
+  .sb.dark a { color:rgba(255,255,255,.86); }
+  .sb.dark a .material-symbols-outlined { color:#dcfa51; }
+  .sb.dark a.on { background:rgba(188,243,46,.16); color:#e6ff9e; box-shadow:inset 3px 0 0 var(--lima); }
+
+  .main { background:var(--fondo); display:flex; flex-direction:column; min-width:0; }
+  .tb { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 22px; background:#fff; border-bottom:1px solid var(--borde); }
+  .tb strong { display:block; font-size:17px; color:var(--texto); }
+  .tb small { color:var(--suave); font-size:12px; }
+  .tb-right { display:flex; align-items:center; gap:10px; }
+  .pill { padding:5px 11px; border-radius:99px; background:#eef7e2; color:#2b7a14; font-size:12px; font-weight:700; border:1px solid #cfe7b3; }
+  .av { width:36px; height:36px; border-radius:11px; display:grid; place-items:center; background:linear-gradient(135deg,var(--verde2),var(--verde)); color:var(--oscuro); font-weight:850; font-size:14px; }
+  .content { padding:22px; display:grid; gap:18px; }
+
+  .welcome { display:grid; grid-template-columns:1.5fr 1fr; gap:18px; padding:24px; border-radius:20px; background:#fff; border:1px solid var(--borde); border-top:4px solid var(--verde); }
+  .welcome .date { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#2b7a14; background:#eef7e2; padding:5px 10px; border-radius:99px; }
+  .welcome h3 { margin:12px 0 8px; font-size:26px; letter-spacing:-.03em; }
+  .welcome p { margin:0; font-size:14px; line-height:1.55; color:var(--suave); }
+  .kpis { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .kpi { border-radius:14px; padding:14px; background:#f6fbef; border-left:4px solid var(--verde); }
+  .kpi:nth-child(3), .kpi:nth-child(4) { border-left-color:var(--amarillo); }
+  .kpi strong { display:block; font-size:26px; font-weight:850; letter-spacing:-.03em; }
+  .kpi span { font-size:12px; color:var(--suave); }
+  /* Opción B: hero con foto */
+  .welcome.hero { position:relative; isolation:isolate; overflow:hidden; color:#fff; border:1px solid rgba(171,235,63,.45); border-top:1px solid rgba(171,235,63,.45); background:linear-gradient(110deg,rgba(4,48,17,.95),rgba(8,70,26,.86) 55%,rgba(17,96,34,.74)), url('assets/campo-cana.jpg') center 60%/cover; box-shadow:0 20px 44px rgba(7,60,24,.22); }
+  .welcome.hero .date { background:rgba(188,243,46,.14); color:#e6ff9e; border:1px solid rgba(188,243,46,.35); }
+  .welcome.hero p { color:rgba(255,255,255,.86); }
+  .welcome.hero .hero-brand { display:flex; align-items:center; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,.14); }
+  .welcome.hero .hero-brand img { width:40px; }
+  .welcome.hero .hero-brand .wm { font-size:20px; }
+  .welcome.hero .hero-brand span:last-child { font-size:12px; color:rgba(255,255,255,.7); }
+  .welcome.hero h3::after { content:""; display:block; width:90px; height:4px; margin-top:10px; border-radius:6px; background:linear-gradient(90deg,var(--verde2),var(--amarillo)); }
+  .welcome.hero .kpi { background:rgba(2,55,16,.55); border:1px solid rgba(171,235,63,.45); border-left:4px solid var(--lima); backdrop-filter:blur(6px); }
+  .welcome.hero .kpi:nth-child(3), .welcome.hero .kpi:nth-child(4) { border-left-color:var(--amarillo); }
+  .welcome.hero .kpi span { color:rgba(255,255,255,.75); }
+
+  .row2 { display:grid; grid-template-columns:1.3fr 1fr; gap:18px; }
+  .card { background:#fff; border:1px solid var(--borde); border-radius:20px; padding:20px; }
+  .card h4 { margin:0 0 14px; display:flex; align-items:center; gap:8px; font-size:16px; }
+  .card h4 .material-symbols-outlined { color:var(--verde); }
+  .act { display:flex; align-items:center; gap:12px; padding:10px; border:1px solid var(--borde); border-radius:14px; margin-bottom:10px; }
+  .act .d { width:48px; text-align:center; background:#f6fbef; border-radius:10px; padding:6px 0; font-weight:850; font-size:18px; }
+  .act .d small { display:block; font-size:10px; font-weight:700; color:var(--suave); }
+  .act b { display:block; font-size:14px; } .act span { font-size:12px; color:var(--suave); }
+  .bar { height:8px; border-radius:6px; background:#eceee9; margin:6px 0 14px; overflow:hidden; }
+  .bar i { display:block; height:100%; border-radius:6px; background:var(--verde); }
+  .lbl { display:flex; justify-content:space-between; font-size:13px; }
+
+  /* Opción C: encabezado superior Cengitech + franja del módulo */
+  .topnav { display:flex; align-items:center; gap:14px; padding:10px 20px; background:rgba(5,52,20,.96); color:#fff; }
+  .topnav .crumb { display:flex; align-items:center; gap:10px; }
+  .topnav .crumb img { width:40px; }
+  .topnav .crumb .wm { font-size:22px; }
+  .topnav .sep { color:rgba(255,255,255,.4); }
+  .topnav .mod { display:inline-flex; align-items:center; gap:8px; padding:6px 12px 6px 6px; border-radius:12px; background:rgba(188,243,46,.14); border:1px solid rgba(188,243,46,.35); }
+  .topnav .mod img { width:34px; }
+  .topnav .mod .wm { font-size:18px; }
+  .topnav .right { margin-left:auto; display:flex; align-items:center; gap:10px; font-size:13px; }
+  .band { height:8px; background:linear-gradient(90deg,var(--verde),var(--verde2),var(--amarillo),var(--naranja)); }
+  .app.c { grid-template-columns:230px 1fr; min-height:560px; }
+  .app.c .sb-brand { display:none; }
+
+  .reco { margin:40px 0 0; border-radius:24px; padding:28px; color:#fff; background:linear-gradient(110deg,rgba(4,48,17,.96),rgba(8,70,26,.9)), url('assets/campo-cana.jpg') center/cover; }
+  .reco h2 { color:#fff; }
+  .reco ul { margin:8px 0 0; padding-left:20px; line-height:1.7; color:rgba(255,255,255,.9); }
+  footer { margin-top:48px; background:#4eaa1c; color:#fff; text-align:center; font-weight:750; padding:16px; font-size:18px; }
+
+  @media (max-width:980px) {
+    .intro .wrap, .id-grid, .concept, .welcome, .row2 { grid-template-columns:1fr; }
+    .app, .app.c { grid-template-columns:1fr; }
+    .sb { display:none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="intro on-dark">
+  <div class="wrap">
+    <img src="assets/logo-cengiconecta.svg" alt="Símbolo Cengiconecta">
+    <div>
+      <span class="tag">Propuesta de identidad · Módulo de Comités</span>
+      <h1 class="wm">Cengi<b>conecta</b></h1>
+      <p class="sub">Comités, transferencia y comunicación para la agroindustria cañera</p>
+      <div class="accent"></div>
+      <p class="txt">Nombre y símbolo para el módulo «Comités, Transferencia y Comunicación», de la misma familia visual que Cengitech, y tres formas de aplicarlos al módulo para evaluarlas.</p>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="block">
+    <span class="kicker">1 · Identidad</span>
+    <h2>Símbolo y logotipo</h2>
+    <p class="lead">Conserva la estructura de Cengitech (anillo lima, centro verde oscuro, caña de azúcar y nodos) y cambia el significado: la lupa pasa a ser un <b>globo de diálogo</b> y el circuito pasa a ser una <b>red de personas con ondas de comunicación</b>.</p>
+
+    <div class="id-grid">
+      <div class="tile dark on-dark">
+        <div class="lockup"><img src="assets/logo-cengiconecta.svg" alt=""><span class="wm">Cengi<b>conecta</b></span></div>
+        <small>Versión principal sobre fondo oscuro (encabezados, barra lateral, portada).</small>
+      </div>
+      <div class="tile">
+        <div class="lockup"><img src="assets/logo-cengiconecta.svg" alt=""><span class="wm" style="color:var(--titulo)">Cengi<b>conecta</b></span></div>
+        <small>Versión sobre fondo claro (documentos, correos, informes).</small>
+      </div>
+      <div class="tile">
+        <div class="sizes">
+          <span class="ico" style="width:72px;height:72px"><img src="assets/logo-cengiconecta.svg" alt="" width="60"></span>
+          <span class="ico" style="width:44px;height:44px"><img src="assets/logo-cengiconecta.svg" alt="" width="36"></span>
+          <span class="ico" style="width:28px;height:28px;border-radius:8px"><img src="assets/logo-cengiconecta.svg" alt="" width="22"></span>
+        </div>
+        <small>Ícono en tamaños pequeños (pestaña del navegador, menú de sistemas).</small>
+      </div>
+    </div>
+
+    <div class="concept">
+      <div><strong><span class="material-symbols-outlined">forum</span>Globo de diálogo</strong><p>Comunicación y reuniones con los ingenios; ocupa el lugar del mango de la lupa de Cengitech.</p></div>
+      <div><strong><span class="material-symbols-outlined">hub</span>Red y ondas</strong><p>Comités, directorio de contactos y difusión (correos, redes sociales); ocupa el lugar de los circuitos.</p></div>
+      <div><strong><span class="material-symbols-outlined">eco</span>Caña de azúcar</strong><p>El elemento común de la familia Cengicaña: identifica que todo nace del cultivo.</p></div>
+    </div>
+
+    <div class="tile" style="margin-top:18px">
+      <div class="family">
+        <div><img src="assets/logo-cengitech.svg" alt=""><span class="wm" style="color:var(--titulo)">Cengi<b>tech</b></span></div>
+        <span class="material-symbols-outlined" style="color:#9aa79e">arrow_forward</span>
+        <div><img src="assets/logo-cengiconecta.svg" alt=""><span class="wm" style="color:var(--titulo)">Cengi<b>conecta</b></span></div>
+        <span style="color:var(--suave);font-size:14px">La plataforma y sus módulos comparten el prefijo «Cengi» y el sufijo en verde lima. El mismo esquema serviría para otros módulos.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- OPCIÓN A -->
+  <section class="block">
+    <span class="kicker">2 · Aplicación al módulo</span>
+    <div class="opt-head"><span class="opt-badge">A</span><h2>Barra lateral oscura con la marca</h2></div>
+    <p class="lead">La identidad vive en la barra lateral: fondo verde profundo como el encabezado de Cengitech, la caña al pie y la marca arriba. El contenido no cambia.</p>
+    <div class="pros"><span class="ok"><span class="material-symbols-outlined">check_circle</span>Marca siempre visible en todas las vistas</span><span class="ok"><span class="material-symbols-outlined">check_circle</span>Cambio solo de estilos de la barra</span><span class="meh"><span class="material-symbols-outlined">info</span>Más oscuro: hay que cuidar el contraste de los textos</span></div>
+    <div class="mock">
+      <div class="mock-bar"><i></i><i></i><i></i><span>localhost:8085/comites/index.php?view=dashboard</span></div>
+      <div class="app">
+        <aside class="sb dark on-dark">
+          <div class="sb-brand"><img src="assets/logo-cengiconecta.svg" alt=""><div><span class="wm">Cengi<b>conecta</b></span><small>Comités · Transferencia · Comunicación</small></div></div>
+          <div class="sb-label">General</div>
+          <a class="on" href="#"><span class="material-symbols-outlined">space_dashboard</span>Inicio / Dashboard</a>
+          <div class="sb-label">Comités</div>
+          <a href="#"><span class="material-symbols-outlined">hub</span>Comités</a>
+          <a href="#"><span class="material-symbols-outlined">contacts</span>Directorio de contactos</a>
+          <a href="#"><span class="material-symbols-outlined">event</span>Reuniones</a>
+          <a href="#"><span class="material-symbols-outlined">co_present</span>Eventos de transferencia</a>
+          <div class="sb-label">Documentación</div>
+          <a href="#"><span class="material-symbols-outlined">folder_open</span>Biblioteca documental</a>
+          <a href="#"><span class="material-symbols-outlined">mail</span>Correos y envíos</a>
+          <div class="sb-label">Comunicación</div>
+          <a href="#"><span class="material-symbols-outlined">share</span>Redes sociales</a>
+        </aside>
+        <div class="main">
+          <div class="tb"><div><strong>Inicio / Dashboard</strong><small>Transferencia de Tecnología · Gestión de información</small></div><div class="tb-right"><span class="pill">Superadmin</span><span class="av">DC</span></div></div>
+          <div class="content">
+            <div class="welcome">
+              <div><span class="date"><span class="material-symbols-outlined" style="font-size:15px">calendar_today</span>Miércoles, 4 de noviembre de 2026</span><h3>Hola, Developer</h3><p>Este módulo centraliza el trabajo de Transferencia de Tecnología: comités técnicos con los ingenios, seguimiento de acuerdos, documentación y comunicación de resultados.</p></div>
+              <div class="kpis"><div class="kpi"><strong>15</strong><span>Comités activos</span></div><div class="kpi"><strong>2</strong><span>Contactos</span></div><div class="kpi"><strong>1</strong><span>Reuniones</span></div><div class="kpi"><strong>1</strong><span>Acuerdos</span></div></div>
+            </div>
+            <div class="row2">
+              <div class="card"><h4><span class="material-symbols-outlined">event_upcoming</span>Próximas actividades</h4>
+                <div class="act"><div class="d">4<small>NOV</small></div><div><b>Primer tercio de zafra</b><span>Presencial · Auditorio CENGICAÑA</span></div></div>
+                <div class="act"><div class="d">26<small>NOV</small></div><div><b>Presentación y avance de resultados II</b><span>Presencial · Auditorio CENGICAÑA</span></div></div>
+              </div>
+              <div class="card"><h4><span class="material-symbols-outlined">donut_large</span>Avance de la gestión</h4>
+                <div class="lbl"><span>Acuerdos completados</span><b>100%</b></div><div class="bar"><i style="width:100%"></i></div>
+                <div class="lbl"><span>Reuniones realizadas</span><b>100%</b></div><div class="bar"><i style="width:100%;background:var(--amarillo)"></i></div>
+                <div class="lbl"><span>Eventos realizados</span><b>0%</b></div><div class="bar"><i style="width:2%"></i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OPCIÓN B -->
+  <section class="block">
+    <div class="opt-head"><span class="opt-badge">B</span><h2>Barra clara + bienvenida con foto (como la portada)</h2></div>
+    <p class="lead">Se mantiene la barra lateral clara actual, solo con el nuevo logo. El impacto visual lo da la tarjeta de bienvenida del dashboard, que pasa a ser un hero con la foto de caña, igual que la portada de Cengitech.</p>
+    <div class="pros"><span class="ok"><span class="material-symbols-outlined">check_circle</span>Mismo lenguaje que la portada y el panel</span><span class="ok"><span class="material-symbols-outlined">check_circle</span>El resto de vistas sigue claro y legible</span><span class="meh"><span class="material-symbols-outlined">info</span>El efecto fuerte solo aparece en el dashboard</span></div>
+    <div class="mock">
+      <div class="mock-bar"><i></i><i></i><i></i><span>localhost:8085/comites/index.php?view=dashboard</span></div>
+      <div class="app">
+        <aside class="sb">
+          <div class="sb-brand"><img src="assets/logo-cengiconecta.svg" alt=""><div><span class="wm" style="color:var(--titulo)">Cengi<b>conecta</b></span><small>Comités · Transferencia · Comunicación</small></div></div>
+          <div class="sb-label">General</div>
+          <a class="on" href="#"><span class="material-symbols-outlined">space_dashboard</span>Inicio / Dashboard</a>
+          <div class="sb-label">Comités</div>
+          <a href="#"><span class="material-symbols-outlined">hub</span>Comités</a>
+          <a href="#"><span class="material-symbols-outlined">contacts</span>Directorio de contactos</a>
+          <a href="#"><span class="material-symbols-outlined">event</span>Reuniones</a>
+          <a href="#"><span class="material-symbols-outlined">co_present</span>Eventos de transferencia</a>
+          <div class="sb-label">Documentación</div>
+          <a href="#"><span class="material-symbols-outlined">folder_open</span>Biblioteca documental</a>
+          <a href="#"><span class="material-symbols-outlined">mail</span>Correos y envíos</a>
+          <div class="sb-label">Comunicación</div>
+          <a href="#"><span class="material-symbols-outlined">share</span>Redes sociales</a>
+        </aside>
+        <div class="main">
+          <div class="tb"><div><strong>Inicio / Dashboard</strong><small>Transferencia de Tecnología · Gestión de información</small></div><div class="tb-right"><span class="pill">Superadmin</span><span class="av">DC</span></div></div>
+          <div class="content">
+            <div class="welcome hero">
+              <div><span class="date"><span class="material-symbols-outlined" style="font-size:15px">calendar_today</span>Miércoles, 4 de noviembre de 2026</span><h3>Hola, Developer</h3><p>Comités técnicos con los ingenios, seguimiento de acuerdos, documentación y comunicación de resultados, en un solo lugar.</p>
+                <div class="hero-brand on-dark"><img src="assets/logo-cengiconecta.svg" alt=""><span class="wm">Cengi<b>conecta</b></span><span>· parte del ecosistema Cengitech</span></div></div>
+              <div class="kpis"><div class="kpi"><strong>15</strong><span>Comités activos</span></div><div class="kpi"><strong>2</strong><span>Contactos</span></div><div class="kpi"><strong>1</strong><span>Reuniones</span></div><div class="kpi"><strong>1</strong><span>Acuerdos</span></div></div>
+            </div>
+            <div class="row2">
+              <div class="card"><h4><span class="material-symbols-outlined">event_upcoming</span>Próximas actividades</h4>
+                <div class="act"><div class="d">4<small>NOV</small></div><div><b>Primer tercio de zafra</b><span>Presencial · Auditorio CENGICAÑA</span></div></div>
+                <div class="act"><div class="d">26<small>NOV</small></div><div><b>Presentación y avance de resultados II</b><span>Presencial · Auditorio CENGICAÑA</span></div></div>
+              </div>
+              <div class="card"><h4><span class="material-symbols-outlined">donut_large</span>Avance de la gestión</h4>
+                <div class="lbl"><span>Acuerdos completados</span><b>100%</b></div><div class="bar"><i style="width:100%"></i></div>
+                <div class="lbl"><span>Reuniones realizadas</span><b>100%</b></div><div class="bar"><i style="width:100%;background:var(--amarillo)"></i></div>
+                <div class="lbl"><span>Eventos realizados</span><b>0%</b></div><div class="bar"><i style="width:2%"></i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OPCIÓN C -->
+  <section class="block">
+    <div class="opt-head"><span class="opt-badge">C</span><h2>Encabezado superior Cengitech › Cengiconecta</h2></div>
+    <p class="lead">Una barra superior oscura común a todos los módulos (como la de Usuarios, Roles, etc.) muestra «Cengitech › Cengiconecta», con la franja de los cuatro colores debajo. Deja claro que el módulo es parte de la plataforma.</p>
+    <div class="pros"><span class="ok"><span class="material-symbols-outlined">check_circle</span>Unifica todos los módulos bajo Cengitech</span><span class="ok"><span class="material-symbols-outlined">check_circle</span>Lleva de vuelta al panel con un clic</span><span class="meh"><span class="material-symbols-outlined">info</span>Ocupa ~60 px más de alto; cambio mayor en el diseño del módulo</span></div>
+    <div class="mock">
+      <div class="mock-bar"><i></i><i></i><i></i><span>localhost:8085/comites/index.php?view=dashboard</span></div>
+      <div class="topnav on-dark">
+        <div class="crumb"><img src="assets/logo-cengitech.svg" alt=""><span class="wm">Cengi<b>tech</b></span></div>
+        <span class="sep material-symbols-outlined">chevron_right</span>
+        <span class="mod"><img src="assets/logo-cengiconecta.svg" alt=""><span class="wm">Cengi<b>conecta</b></span></span>
+        <div class="right"><span class="material-symbols-outlined">notifications</span><span class="av">DC</span><span>Developer CENGICANA</span></div>
+      </div>
+      <div class="band"></div>
+      <div class="app c">
+        <aside class="sb">
+          <div class="sb-brand"></div>
+          <div class="sb-label">General</div>
+          <a class="on" href="#"><span class="material-symbols-outlined">space_dashboard</span>Inicio / Dashboard</a>
+          <div class="sb-label">Comités</div>
+          <a href="#"><span class="material-symbols-outlined">hub</span>Comités</a>
+          <a href="#"><span class="material-symbols-outlined">contacts</span>Directorio de contactos</a>
+          <a href="#"><span class="material-symbols-outlined">event</span>Reuniones</a>
+          <a href="#"><span class="material-symbols-outlined">co_present</span>Eventos de transferencia</a>
+          <div class="sb-label">Documentación</div>
+          <a href="#"><span class="material-symbols-outlined">folder_open</span>Biblioteca documental</a>
+          <a href="#"><span class="material-symbols-outlined">mail</span>Correos y envíos</a>
+        </aside>
+        <div class="main">
+          <div class="content">
+            <div class="welcome">
+              <div><span class="date"><span class="material-symbols-outlined" style="font-size:15px">calendar_today</span>Miércoles, 4 de noviembre de 2026</span><h3>Hola, Developer</h3><p>Este módulo centraliza el trabajo de Transferencia de Tecnología: comités técnicos con los ingenios, seguimiento de acuerdos, documentación y comunicación de resultados.</p></div>
+              <div class="kpis"><div class="kpi"><strong>15</strong><span>Comités activos</span></div><div class="kpi"><strong>2</strong><span>Contactos</span></div><div class="kpi"><strong>1</strong><span>Reuniones</span></div><div class="kpi"><strong>1</strong><span>Acuerdos</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="reco on-dark">
+    <span class="kicker" style="color:var(--lima)">Sugerencia</span>
+    <h2>Combinar A + B</h2>
+    <ul>
+      <li><b>A</b> da identidad en todas las vistas del módulo con un cambio acotado (solo la barra lateral).</li>
+      <li><b>B</b> conecta visualmente el dashboard con la portada y el panel de Cengitech.</li>
+      <li>La <b>C</b> conviene si más adelante se quiere un encabezado común para todos los módulos (Cursos, Laboratorio, Experimentos…).</li>
+      <li>El nombre visible del módulo en el panel podría pasar a «Cengiconecta» con el subtítulo «Comités, transferencia y comunicación».</li>
+    </ul>
+  </div>
+</main>
+
+<footer>Conectando conocimiento, tecnología y aprendizaje para el desarrollo de la Agroindustria</footer>
+</body>
+</html>

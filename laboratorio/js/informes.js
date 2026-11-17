@@ -8,7 +8,7 @@ const norm=v=>String(v??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(
 /* ---------- lista: chips de estado y búsqueda ---------- */
 const lista=document.getElementById('inf-lista');
 if(lista){
-  let filtro='LISTO';
+  let filtro=(document.querySelector('[data-filtro].on')||{}).dataset?.filtro||'LISTO';
   /* 25 informes por página, sobre los que pasan el filtro de estado y la búsqueda. */
   const pager=window.LabPager.crear(document.getElementById('inf-paginas'),25);
   pager.alCambiar(()=>lista.closest('.cengi-table-wrap').scrollIntoView({behavior:'smooth',block:'start'}));
@@ -38,7 +38,7 @@ function valorColumna(idMuestra,col,celda){
       const p=(vista.principal||{})[col.an]||{};
       if(p.texto)return p.texto(m);
       v=p.k?m[p.k]:null;}
-    return typeof v==='number'&&isFinite(v)?v.toFixed(col.d??2):(v==null?'':String(v));
+    return typeof v==='number'&&isFinite(v)?defs.fx(v,col.d??2):(v==null?'':String(v));
   }catch(e){console.error(e);return '';}
 }
 /* solo celdas validadas por el técnico; el servidor marca el resto como "Pend." */
@@ -93,7 +93,19 @@ async function enviar(payload,boton){
 document.getElementById('inf-firmar')?.addEventListener('click',async e=>{
   if(!firmado){estado.textContent='Firme en el recuadro antes de aprobar.';estado.className='small vt-flag';return;}
   const r=await enviar({accion:'firmar',observaciones:document.getElementById('inf-obs').value,firma_png:canvas.toDataURL('image/png'),resultados},e.currentTarget);
-  estado.textContent=r.codigo+' aprobado y firmado — el PDF se guardó en Reportes.';estado.className='small';
+  estado.textContent=r.codigo+' aprobado y firmado — el PDF quedó en Informes emitidos para enviarlo al cliente.';estado.className='small';
+  setTimeout(()=>location.reload(),1200);
+});
+/* Compartir / retirar los resultados firmados con Experimentos. */
+document.getElementById('inf-exp-compartir')?.addEventListener('click',async e=>{
+  const r=await enviar({accion:'compartir'},e.currentTarget);
+  estado.textContent=r.codigo+' enviado a Experimentos ('+r.muestras+' de '+r.total_muestras+' muestra(s) con etiqueta QR).';estado.className='small';
+  setTimeout(()=>location.reload(),1200);
+});
+document.getElementById('inf-exp-retirar')?.addEventListener('click',async e=>{
+  if(!window.confirm('Experimentos dejara de ver los resultados de este lote. ¿Continuar?'))return;
+  const r=await enviar({accion:'retirar'},e.currentTarget);
+  estado.textContent=r.codigo+': se retiro de Experimentos.';estado.className='small';
   setTimeout(()=>location.reload(),1200);
 });
 document.getElementById('inf-devolver')?.addEventListener('click',async e=>{

@@ -35,6 +35,7 @@ tar czf ~/uploads-antes-de-actualizar-$(date +%Y%m%d).tgz uploads
 | Comités → Configuración → Correos | Dirección del sistema | `https://modulos.cengicana.org/comites`. Ya no se toma ni se guarda sola desde la petición; sin ella, los correos del cron van sin botón. |
 | `docker-compose.prod.yml` | `COMITES_CORREO_POR_WORKER` | Ya trae `"1"`: los correos de Comités los envía el servicio `comites-correos-worker` y la página no espera al SMTP. Si se quita el servicio, quitar también esta variable o los correos se quedan en la cola. |
 | `docker-compose.prod.yml` | `HOSTS_PERMITIDOS` | Ya trae `modulos.cengicana.org,localhost,127.0.0.1`. Apache responde 403 a cualquier otro `Host`, para que nadie pueda hacer que los enlaces de los correos apunten a otro dominio. Si el sitio se publica con otro nombre, agregarlo aquí. |
+| `laboratorio.env` | `LAB_PUBLIC_URL` (o `APP_URL`) | **Obligatoria:** `https://modulos.cengicana.org`. Es la base de los QR de verificación de boletas e informes. Ya no se deduce de la cabecera `Host`: sin ella los documentos se emiten sin QR y se registra un aviso en el log. |
 | `sigec.env` | `APP_URL`, `SESSION_SECURE_COOKIE` | Verificar que no queden al final las líneas de entorno local (`localhost`, `false`). |
 
 ## 3. Código e imagen
@@ -51,8 +52,8 @@ Las imágenes pasan a PHP 8.3.36 (antes 8.2 en los módulos y 8.1 en SIGEC); el 
 `php:8.3.36-apache`. Con los servicios ya levantados (paso 5), `docker compose -f docker-compose.prod.yml exec app php -v`
 y `... exec sigec php -v` deben decir `PHP 8.3.36`.
 
-SIGEC no compila su JavaScript al construir la imagen: usa el `sigec/public/dist/` que está en git.
-Quien cambie `sigec/resources/js` debe correr `npm run build` dentro de `sigec/` y versionar el `dist/`
+SIGEC no compila su JavaScript al construir la imagen: usa el `experimentos/public/dist/` que está en git.
+Quien cambie `experimentos/resources/js` debe correr `npm run build` dentro de `experimentos/` y versionar el `dist/`
 resultante en el mismo commit.
 
 Todavía no levantes los servicios: primero va el corte de zona horaria (paso 4).
@@ -126,6 +127,13 @@ de las funciones de esquema, que solo corren con `ESQUEMA_MIGRANDO`). Con los pe
 - `curl -s -o /dev/null -w "%{http_code}" https://.../uploads/x.php` debe dar 403 o 404.
 - `https://.../uploads/recibos_firmados/<cualquier archivo>` debe dar 403.
 - `curl -s -o /dev/null -w "%{http_code}" -H "Host: otro.ejemplo" http://127.0.0.1:8085/login/` debe dar 403.
+- **IP real del visitante** (AUD-2026-003). El contenedor `app` toma la IP de `X-Forwarded-For` con `mod_remoteip`
+  (`dockerfiles/modulos-app/remoteip.conf`); de ella dependen los límites por IP de login, recuperación de
+  contraseña, buzón de Solicitudes, verificación de Laboratorio y encuesta de eventos. El proxy del servidor debe
+  enviar esa cabecera (nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`; Apache con
+  `ProxyPass` la envía por defecto). Comprobar: abrir el sitio desde un equipo externo y revisar
+  `docker compose -f docker-compose.prod.yml logs --tail 20 app`; la primera columna debe ser la IP pública del
+  equipo, no `172.x.x.x` ni `127.0.0.1`. Si sale la del proxy, los límites se aplican a todos los usuarios a la vez.
 - `docker compose -f docker-compose.prod.yml exec app php cengicursos/cron_recordatorio_pago.php --simular`:
   revisar a quién se escribiría antes de programar el cron.
 - `docker compose -f docker-compose.prod.yml ps recibos-worker comites-correos-worker` en estado `running`;

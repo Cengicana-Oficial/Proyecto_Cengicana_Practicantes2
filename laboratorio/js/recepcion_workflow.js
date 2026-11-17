@@ -16,13 +16,23 @@
       '</span><small>' + esc(correo || "—") + '</small></div>';
   }
 
+  /* Un solo QR: el enlace de verificación pública (laboratorio/validar.php). Sirve al cliente o a un
+     tercero para comprobar la autenticidad y al laboratorio para identificar la recepción.
+     Si el ambiente aún no tiene la tabla de verificación, se usa el texto de identificación anterior. */
+  function contenidoQrBoleta(datos) {
+    if (datos.verificacion && datos.verificacion.url) return datos.verificacion.url;
+    return ["SIGELAB", datos.lote, datos.numeroLaboratorioInicio, datos.numeroLaboratorioFin, datos.idSolicitud].join("|");
+  }
   function qrBoleta(datos) {
     if (!datos.idSolicitud || typeof root.qrcode !== "function") return "";
     const qr = root.qrcode(0, "M");
-    qr.addData(["SIGELAB", datos.lote, datos.numeroLaboratorioInicio, datos.numeroLaboratorioFin, datos.idSolicitud].join("|"));
+    qr.addData(contenidoQrBoleta(datos));
     qr.make();
-    return '<div class="bol-qr" aria-label="QR de identificación de la recepción">' + qr.createSvgTag({ cellSize: 2, margin: 4, scalable: true }) + "</div>";
+    const codigo = datos.verificacion && datos.verificacion.codigo
+      ? '<small class="bol-qr-codigo" title="Código de verificación">' + esc(datos.verificacion.codigo) + "</small>" : "";
+    return '<div class="bol-qr" aria-label="QR de verificación de la boleta">' + qr.createSvgTag({ cellSize: 2, margin: 2, scalable: true }) + codigo + "</div>";
   }
+  root.LabQrBoleta = contenidoQrBoleta;
 
   function htmlBoleta(datos, preview = false) {
     const d = datos;
@@ -32,7 +42,7 @@
     return '<article class="recepcion-boleta">' +
       '<header class="bol-head"><div class="bol-marca"><img src="../assets/logo.png" alt="CENGICAÑA"><div><strong>CENGICAÑA</strong><span>Laboratorio Agroindustrial</span></div></div>' +
       '<dl class="bol-meta">' + campo("Código", "CG-R-SLA-001") + campo("Versión", "001") + campo("Fecha", fecha(d.fechaIngreso)) + '</dl>' + qrBoleta(d) + '</header>' +
-      '<div class="bol-titulo"><h2>Registro de recepción de muestras</h2><span>' + (preview ? "Vista previa · cambios sin guardar" : "Recepción registrada · solicitud #" + esc(d.idSolicitud)) + '</span></div>' +
+      '<div class="bol-titulo"><h2>Registro de recepción de muestras</h2><span>' + (preview ? "Vista previa · cambios sin guardar" : "Recepción registrada") + '</span></div>' +
       '<dl class="bol-claves">' + campo("Número de lote", d.lote) + campo("Tipo de muestra", d.tipo) + campo("Muestras", d.numeroMuestras) + campo("Número de laboratorio", rango) + '</dl>' +
       '<section class="bol-sec"><h3>Datos del muestreo</h3><dl class="bol-grid">' +
       campo("Cliente / institución", d.institucion) + campo("Responsable del envío", d.responsableEnvio) +

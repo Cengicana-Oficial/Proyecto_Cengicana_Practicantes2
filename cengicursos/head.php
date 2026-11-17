@@ -1,6 +1,6 @@
 <head>
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<link rel="icon" type="image/png" href="img/logo-comite-capacitacion.png">
+	<link rel="icon" type="image/svg+xml" href="img/logo-cengicursos.svg">
 	<link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
 	<link rel="stylesheet" type="text/css" href="css/bootstrap-theme.css">
 	<?php /* Cache-busting de la hoja de estilos (mismo patron que solicitudes.php):

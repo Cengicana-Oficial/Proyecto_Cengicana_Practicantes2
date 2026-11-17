@@ -1,0 +1,88 @@
+{
+  "fuente": "Prototipos/Cálculo Físico Suelos 2026 -Para calculo.xlsx",
+  "hojaHR": "%Humedad Residual (N) ",
+  "hojaTextura": "Textura",
+  "casos": [
+    {
+      "nombre": "Ejemplo 1",
+      "hrCelda": "G6",
+      "texturaFila": 4,
+      "humedad": {
+        "caja": 16.18,
+        "m": 5.01,
+        "cajaS": 21.08
+      },
+      "entrada": {
+        "hr": 2.1956087824351185,
+        "l1": 23,
+        "t1": 77.5,
+        "l2": 8,
+        "t2": 74.4
+      },
+      "esperado": {
+        "factor": 2.044897959183673,
+        "lc1": 26.5,
+        "lc2": 10.88,
+        "la": 54.18979591836734,
+        "total": 100,
+        "arcilla": 22.248489795918363,
+        "limo": 31.941306122448974,
+        "arena": 45.81020408163266
+      }
+    },
+    {
+      "nombre": "Ejemplo 2",
+      "hrCelda": "G7",
+      "texturaFila": 5,
+      "humedad": {
+        "caja": 15.15,
+        "m": 5.03,
+        "cajaS": 20.12
+      },
+      "entrada": {
+        "hr": 1.192842942345899,
+        "l1": 24,
+        "t1": 74.1,
+        "l2": 4,
+        "t2": 70.1
+      },
+      "esperado": {
+        "factor": 2.0241448692152915,
+        "lc1": 26.82,
+        "lc2": 6.02,
+        "la": 54.28756539235412,
+        "total": 100,
+        "arcilla": 12.185352112676053,
+        "limo": 42.10221327967807,
+        "arena": 45.71243460764588
+      }
+    },
+    {
+      "nombre": "CONTROL",
+      "hrCelda": "G8",
+      "texturaFila": 6,
+      "humedad": {
+        "caja": 16.23,
+        "m": 5.03,
+        "cajaS": 21.14
+      },
+      "entrada": {
+        "hr": 2.3856858846918687,
+        "l1": 15,
+        "t1": 74.6,
+        "l2": 4,
+        "t2": 70.3
+      },
+      "esperado": {
+        "factor": 2.04887983706721,
+        "lc1": 17.919999999999998,
+        "lc2": 6.06,
+        "la": 36.7159266802444,
+        "total": 100,
+        "arcilla": 12.416211812627292,
+        "limo": 24.29971486761711,
+        "arena": 63.2840733197556
+      }
+    }
+  ]
+}

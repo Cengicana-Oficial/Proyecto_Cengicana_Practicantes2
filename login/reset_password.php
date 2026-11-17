@@ -98,68 +98,106 @@ if ($exito) {
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Restablecer contraseña - CENGICAÑA</title>
-    <link rel="stylesheet" href="assets/login.css">
-    <div class="logo-top">
-    <img src="assets/img/logo.png" alt="Logo">
-</div>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#073d17">
+    <meta name="referrer" content="no-referrer">
+    <title>Restablecer contraseña | Cengitech</title>
+    <link rel="stylesheet" href="assets/portada.css">
 </head>
-<body>
+<body class="ct-login">
+<div class="ct-page">
+    <header class="ct-masthead">
+        <img class="ct-official-logo" src="assets/img/logo-cengicana.png" alt="Cengicaña">
+    </header>
 
-<div class="login-container">
-
-    <div class="login-card">
-
-        <div class="logo-box">
-            <h1>CENGICAÑA</h1>
-            <p>Restablecer contraseña</p>
-        </div>
-
-        <?php if ($error): ?>
-            <div class="error-msg">
-                <?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?>
+    <main class="ct-main ct-main--solo">
+        <section class="ct-card" aria-labelledby="reset-title">
+            <div class="ct-card-brand">
+                <img src="assets/img/logo-cengitech.svg" alt="" aria-hidden="true">
+                <span>Cengi<b>tech</b></span>
             </div>
-        <?php endif; ?>
+            <h2 id="reset-title">Restablecer contraseña</h2>
 
-        <?php if ($tokenValido): ?>
-            <form method="POST" class="login-form">
-                <input type="hidden" name="token" value="<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>">
+            <?php if ($tokenValido): ?>
+                <p class="ct-subtitle">
+                    <?php if (!empty($resetRow['nombre'])): ?>Hola, <?= htmlspecialchars($resetRow['nombre'], ENT_QUOTES, 'UTF-8') ?>. <?php endif; ?>
+                    Escribe tu nueva contraseña: al menos 8 caracteres, con letras y números.
+                </p>
+            <?php endif; ?>
 
-                <label>Nueva contraseña</label>
-                <input
-                    type="password"
-                    name="password"
-                    placeholder="Mínimo 8 caracteres, letras y números"
-                    minlength="8"
-                    required
-                >
+            <?php if ($error): ?>
+                <div class="ct-alert ct-alert--error" role="alert"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
+            <?php endif; ?>
 
-                <label>Confirmar contraseña</label>
-                <input
-                    type="password"
-                    name="password_confirmacion"
-                    placeholder="Repite tu nueva contraseña"
-                    minlength="8"
-                    required
-                >
+            <?php if ($tokenValido): ?>
+                <form id="reset-form" method="POST" autocomplete="off">
+                    <input type="hidden" name="token" value="<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>">
+                    <?php if (!empty($resetRow['correo'])): ?>
+                        <input type="hidden" name="username" autocomplete="username" value="<?= htmlspecialchars($resetRow['correo'], ENT_QUOTES, 'UTF-8') ?>">
+                    <?php endif; ?>
 
-                <button type="submit">
-                    Restablecer contraseña
-                </button>
-            </form>
-        <?php else: ?>
-            <p style="text-align:center; margin-top:8px;">
-                <a href="forgot_password.php" style="color: var(--verde-oscuro); text-decoration: none; font-size: 14px;">Solicitar un nuevo enlace</a>
-            </p>
-        <?php endif; ?>
+                    <div class="ct-field">
+                        <label for="password">Nueva contraseña</label>
+                        <div class="ct-input-wrap">
+                            <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+                            <button class="ct-toggle" type="button" data-toggle="password" aria-label="Mostrar contraseña" aria-pressed="false" title="Mostrar contraseña">
+                                <svg class="ct-eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.7-6 10-6 10 6 10 6-3.7 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <svg class="ct-eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 6.1A10 10 0 0 1 12 6c6.3 0 10 6 10 6a17 17 0 0 1-3.2 3.8M6.6 6.6C3.8 8.3 2 12 2 12s3.7 6 10 6c1.8 0 3.4-.5 4.8-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+                            </button>
+                        </div>
+                    </div>
 
-        <p style="text-align:center; margin-top:16px;">
-            <a href="login.php" style="color: var(--verde-oscuro); text-decoration: none; font-size: 14px;">Volver a iniciar sesión</a>
-        </p>
-    </div>
+                    <div class="ct-field">
+                        <label for="password_confirmacion">Confirmar contraseña</label>
+                        <div class="ct-input-wrap">
+                            <input id="password_confirmacion" name="password_confirmacion" type="password" autocomplete="new-password" minlength="8" required>
+                            <button class="ct-toggle" type="button" data-toggle="password_confirmacion" aria-label="Mostrar contraseña" aria-pressed="false" title="Mostrar contraseña">
+                                <svg class="ct-eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.7-6 10-6 10 6 10 6-3.7 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <svg class="ct-eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 6.1A10 10 0 0 1 12 6c6.3 0 10 6 10 6a17 17 0 0 1-3.2 3.8M6.6 6.6C3.8 8.3 2 12 2 12s3.7 6 10 6c1.8 0 3.4-.5 4.8-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+                            </button>
+                        </div>
+                    </div>
 
+                    <button class="ct-submit" type="submit">Restablecer contraseña</button>
+                </form>
+            <?php else: ?>
+                <a class="ct-submit ct-submit--link" href="forgot_password.php">Solicitar un nuevo enlace</a>
+            <?php endif; ?>
+
+            <a class="ct-recovery" href="login.php">← Volver a iniciar sesión</a>
+        </section>
+    </main>
+
+    <footer class="ct-footer">Conectando conocimiento, tecnología y aprendizaje para el desarrollo de la Agroindustria</footer>
 </div>
-
+<script>
+    document.querySelectorAll('[data-toggle]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var input = document.getElementById(btn.getAttribute('data-toggle'));
+            var visible = input.type === 'password';
+            input.type = visible ? 'text' : 'password';
+            btn.setAttribute('aria-pressed', String(visible));
+            btn.setAttribute('aria-label', visible ? 'Ocultar contraseña' : 'Mostrar contraseña');
+            btn.title = visible ? 'Ocultar contraseña' : 'Mostrar contraseña';
+        });
+    });
+    var form = document.getElementById('reset-form');
+    if (form) {
+        var conf = document.getElementById('password_confirmacion');
+        var pass = document.getElementById('password');
+        var validar = function () {
+            conf.setCustomValidity(conf.value && conf.value !== pass.value ? 'Las contraseñas no coinciden.' : '');
+        };
+        pass.addEventListener('input', validar);
+        conf.addEventListener('input', validar);
+        form.addEventListener('submit', function (e) {
+            validar();
+            if (!form.checkValidity()) { return; }
+            var btn = form.querySelector('.ct-submit');
+            btn.disabled = true;
+            btn.textContent = 'Guardando…';
+        });
+    }
+</script>
 </body>
 </html>

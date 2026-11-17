@@ -216,7 +216,7 @@ function aula_video_embed($url) {
  * guardado en el aula. Si el enlace no se puede insertar devuelve '' y se muestra el enlace normal.
  * Requiere js/aula_video.js en la pagina.
  */
-function aula_video_html($titulo, $url, $archivoId = null, $mime = '') {
+function aula_video_html($titulo, $url, $archivoId = null, $mime = '', $medir = false) {
     $titulo = (string) $titulo;
     if ($archivoId && $mime === 'video/mp4') {
         $src = 'aula_archivo.php?id=' . (int) $archivoId;
@@ -231,6 +231,8 @@ function aula_video_html($titulo, $url, $archivoId = null, $mime = '') {
     }
     $v = aula_video_embed($url);
     if (!$v) return '';
+    // Modalidad asincronica (js/aula_avance.js): YouTube solo informa el avance con su API de mensajes habilitada.
+    if ($medir && $v['fuente'] === 'YouTube') $v['embed'] .= '&enablejsapi=1';
     ob_start(); ?>
     <div class="aula-player" data-embed="<?= aula_h($v['embed']) ?>" data-titulo="<?= aula_h($titulo) ?>">
         <button type="button" class="aula-player-portada<?= $v['miniatura'] ? '' : ' is-sin-miniatura' ?>" data-aula-play aria-label="Reproducir: <?= aula_h($titulo) ?>"<?= $v['miniatura'] ? ' style="background-image:url(\'' . aula_h($v['miniatura']) . '\')"' : '' ?>>
@@ -267,9 +269,12 @@ function aula_asistencia_oficial(PDO $db, $courseId) {
 /** Boton de estado de asistencia (Presente / Ausente / sin registro) que usa js/aula_asistencia.js. */
 function aula_asistencia_boton($sesionId, $asignacionId, $registro, $futura, $compacto = false) {
     $estado = $registro ? ((int) $registro['presente'] ? 'presente' : 'ausente') : 'vacio';
-    $texto = ['presente' => $compacto ? '✓' : '✓ Presente', 'ausente' => $compacto ? '✗' : '✗ Ausente', 'vacio' => $compacto ? '·' : 'Sin registro'][$estado];
-    $titulo = $futura ? 'Sesión futura' : ($registro ? (((int) $registro['presente'] ? 'Presente' : 'Ausente') . ' · ' . date('d/m H:i', strtotime($registro['registrado'])) . ($registro['origen'] === 'coordinacion' ? ' · por coordinación' : ' · confirmó el estudiante')) : 'Sin registro') . ($futura ? '' : ' — clic para cambiar');
-    return '<button type="button" class="aula-asis-btn is-' . $estado . ($compacto ? ' is-compacto' : '') . '" data-asis-celda data-sesion="' . (int) $sesionId . '" data-asignacion="' . (int) $asignacionId . '" data-estado="' . $estado . '"'
+    // Modalidad asincronica: la sesion completada al ver sus grabaciones se distingue con ▶.
+    $grabacion = $registro && $estado === 'presente' && ($registro['origen'] ?? '') === 'grabacion';
+    $texto = ['presente' => $grabacion ? ($compacto ? '▶' : '▶ Grabación') : ($compacto ? '✓' : '✓ Presente'), 'ausente' => $compacto ? '✗' : '✗ Ausente', 'vacio' => $compacto ? '·' : 'Sin registro'][$estado];
+    $origen = ['coordinacion' => ' · por coordinación', 'grabacion' => ' · vio la grabación (asincrónico)'][$registro['origen'] ?? ''] ?? ' · confirmó el estudiante';
+    $titulo = $futura ? 'Sesión futura' : ($registro ? (((int) $registro['presente'] ? 'Presente' : 'Ausente') . ' · ' . date('d/m H:i', strtotime($registro['registrado'])) . $origen) : 'Sin registro') . ($futura ? '' : ' — clic para cambiar');
+    return '<button type="button" class="aula-asis-btn is-' . $estado . ($grabacion ? ' is-grabacion' : '') . ($compacto ? ' is-compacto' : '') . '" data-asis-celda data-sesion="' . (int) $sesionId . '" data-asignacion="' . (int) $asignacionId . '" data-estado="' . $estado . '"'
         . ($futura ? ' disabled' : '') . ' title="' . aula_h($titulo) . '" aria-label="' . aula_h($titulo) . '">' . $texto . '</button>';
 }
 
