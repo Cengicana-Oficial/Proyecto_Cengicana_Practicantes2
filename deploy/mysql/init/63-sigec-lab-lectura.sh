@@ -7,13 +7,16 @@
 # ser la misma que LAB_DB_PASSWORD en deploy/env/sigec.env.
 set -e
 if [ -z "${SIGEC_LAB_LECTURA_PASSWORD:-}" ]; then
-    echo "[49-sigec-lab-lectura] SIGEC_LAB_LECTURA_PASSWORD vacio: no se crea el usuario de lectura."
+    echo "[63-sigec-lab-lectura] SIGEC_LAB_LECTURA_PASSWORD vacio: no se crea el usuario de lectura."
     exit 0
 fi
-mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" <<SQL
-CREATE USER IF NOT EXISTS 'sigec_lab_lectura'@'%' IDENTIFIED BY '${SIGEC_LAB_LECTURA_PASSWORD}';
-ALTER USER 'sigec_lab_lectura'@'%' IDENTIFIED BY '${SIGEC_LAB_LECTURA_PASSWORD}';
+# Literal SQL: se duplican comillas simples y barras invertidas (igual que 62-permisos-modulos.sh).
+clave=$(printf '%s' "$SIGEC_LAB_LECTURA_PASSWORD" | sed -e 's/\\/\\\\/g' -e "s/'/''/g")
+# La contrasena de root va por MYSQL_PWD, no en la linea de comandos.
+MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" mysql -uroot <<SQL
+CREATE USER IF NOT EXISTS 'sigec_lab_lectura'@'%' IDENTIFIED BY '${clave}';
+ALTER USER 'sigec_lab_lectura'@'%' IDENTIFIED BY '${clave}';
 GRANT SELECT ON laboratorios_prueba.* TO 'sigec_lab_lectura'@'%';
 FLUSH PRIVILEGES;
 SQL
-echo "[49-sigec-lab-lectura] usuario sigec_lab_lectura listo (solo SELECT en laboratorios_prueba)."
+echo "[63-sigec-lab-lectura] usuario sigec_lab_lectura listo (solo SELECT en laboratorios_prueba)."

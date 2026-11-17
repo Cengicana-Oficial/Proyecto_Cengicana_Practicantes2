@@ -24,12 +24,20 @@ if [ -z "$PASS" ]; then
     echo "Se agregaron las variables LAB_DB_* a $ENV_SIGEC."
 fi
 
-docker exec -i -e LAB_PASS="$PASS" -e LAB_BASE="$BASE" "$CONTENEDOR" sh -c '
-mysql -uroot -p"$MYSQL_ROOT_PASSWORD" 2>/dev/null <<SQL
-CREATE USER IF NOT EXISTS '"'"'sigec_lab_lectura'"'"'@'"'"'%'"'"' IDENTIFIED BY '"'"'$LAB_PASS'"'"';
-ALTER USER '"'"'sigec_lab_lectura'"'"'@'"'"'%'"'"' IDENTIFIED BY '"'"'$LAB_PASS'"'"';
-GRANT SELECT ON \`$LAB_BASE\`.* TO '"'"'sigec_lab_lectura'"'"'@'"'"'%'"'"';
+case "$BASE" in
+    *[!A-Za-z0-9_]*|"") echo "LAB_DB_DATABASE invalido: solo letras, numeros y guion bajo." >&2; exit 1 ;;
+esac
+# Literal SQL: se duplican comillas simples y barras invertidas (igual que init/62-permisos-modulos.sh).
+CLAVE_SQL="$(printf '%s' "$PASS" | sed -e 's/\\/\\\\/g' -e "s/'/''/g")"
+
+# La contrasena del usuario viaja por stdin y la de root por MYSQL_PWD dentro del contenedor:
+# ninguna aparece en la linea de comandos.
+mysql_root() { docker exec -i "$CONTENEDOR" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot "$@"' sh "$@" 2>/dev/null; }
+mysql_root <<SQL
+CREATE USER IF NOT EXISTS 'sigec_lab_lectura'@'%' IDENTIFIED BY '${CLAVE_SQL}';
+ALTER USER 'sigec_lab_lectura'@'%' IDENTIFIED BY '${CLAVE_SQL}';
+GRANT SELECT ON \`${BASE}\`.* TO 'sigec_lab_lectura'@'%';
 FLUSH PRIVILEGES;
 SQL
-mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e "SHOW GRANTS FOR '"'"'sigec_lab_lectura'"'"'@'"'"'%'"'"'" 2>/dev/null'
+mysql_root -N -e "SHOW GRANTS FOR 'sigec_lab_lectura'@'%'" </dev/null
 echo "Listo. Reinicie o recargue SIGEC para que lea las variables nuevas del .env."
