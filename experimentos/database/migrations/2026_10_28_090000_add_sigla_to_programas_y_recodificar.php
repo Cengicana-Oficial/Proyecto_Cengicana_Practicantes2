@@ -21,7 +21,8 @@ class AddSiglaToProgramasYRecodificar extends Migration
      *
      * Usa Query Builder (no modelos ni servicios) para que una migracion ya escrita no cambie
      * cuando evolucionen los modelos. Las equivalencias anterior -> nuevo y muestras_lab.id_muestra_anterior
-     * las reconstruye 2026_11_04_090000 desde el log "[codificacion]".
+     * se guardan aqui mismo (las crea 2026_10_27_235900, que corre antes); donde esta migracion ya
+     * habia corrido sin ellas, las reconstruye 2026_11_04_090000 desde el log "[codificacion]".
      */
     public function up()
     {
@@ -121,6 +122,7 @@ class AddSiglaToProgramasYRecodificar extends Migration
             if ($nuevo !== $proyecto->codigo) {
                 $cambios[$proyecto->codigo] = $nuevo;
                 DB::table('proyectos')->where('id', $proyecto->id)->update(['codigo' => $nuevo, 'updated_at' => now()]);
+                $this->equivalencia('proyecto', $proyecto->id, $proyecto->codigo, $nuevo);
                 $proyecto->codigo = $nuevo;
             }
         }
@@ -152,16 +154,22 @@ class AddSiglaToProgramasYRecodificar extends Migration
 
         DB::transaction(function () use ($ensayo, $anterior, $nuevo) {
             DB::table('ensayos')->where('id', $ensayo->id)->update(['codigo' => $nuevo, 'updated_at' => now()]);
+            $this->equivalencia('ensayo', $ensayo->id, $anterior, $nuevo);
             // Solo cambia el tramo del ensayo, en el formato actual {ensayo}-{tipo}{n}
             // y en el anterior SIGEC-{ensayo}-{tipo}-{n}-{aa}.
             $prefijos = ["SIGEC-{$anterior}-" => "SIGEC-{$nuevo}-", "{$anterior}-" => "{$nuevo}-"];
-            foreach (DB::table('muestras_lab')->where('ensayo_id', $ensayo->id)->get(['id', 'id_muestra']) as $m) {
+            // AUD-2026-003/M-4: la etiqueta ya impresa lleva el ID viejo; se conserva para que el Laboratorio la encuentre.
+            $conAnterior = Schema::hasColumn('muestras_lab', 'id_muestra_anterior');
+            foreach (DB::table('muestras_lab')->where('ensayo_id', $ensayo->id)->get($conAnterior ? ['id', 'id_muestra', 'id_muestra_anterior'] : ['id', 'id_muestra']) as $m) {
                 foreach ($prefijos as $viejo => $nuevoPrefijo) {
                     if (Str::startsWith($m->id_muestra, $viejo)) {
-                        DB::table('muestras_lab')->where('id', $m->id)->update([
-                            'id_muestra' => $nuevoPrefijo . substr($m->id_muestra, strlen($viejo)),
-                            'updated_at' => now(),
-                        ]);
+                        $idNuevo = $nuevoPrefijo . substr($m->id_muestra, strlen($viejo));
+                        $cambio = ['id_muestra' => $idNuevo, 'updated_at' => now()];
+                        if ($conAnterior && $m->id_muestra_anterior === null) {
+                            $cambio['id_muestra_anterior'] = $m->id_muestra;
+                        }
+                        DB::table('muestras_lab')->where('id', $m->id)->update($cambio);
+                        $this->equivalencia('muestra', $m->id, $m->id_muestra, $idNuevo);
                         break;
                     }
                 }
@@ -169,5 +177,17 @@ class AddSiglaToProgramasYRecodificar extends Migration
         });
 
         return [$anterior => $nuevo];
+    }
+
+    /** Registra en BD el cambio de codigo (tabla de 2026_10_27_235900; si no existe, queda solo el log). */
+    protected function equivalencia(string $tipo, int $id, string $anterior, string $nuevo): void
+    {
+        if (! Schema::hasTable('codificacion_equivalencias')) {
+            return;
+        }
+        DB::table('codificacion_equivalencias')->insert([
+            'tipo' => $tipo, 'registro_id' => $id, 'codigo_anterior' => $anterior, 'codigo_nuevo' => $nuevo,
+            'origen' => 'recodificacion', 'created_at' => now(),
+        ]);
     }
 }

@@ -17,36 +17,27 @@ class AddIdMuestraAnteriorYEquivalenciasCodigos extends Migration
      *  - Si la recodificacion original ya corrio, se reconstruye lo posible desde las lineas
      *    "[codificacion] ANTERIOR -> NUEVO" de storage/logs. Lo que el log no permita
      *    reconstruir sin ambiguedad (log rotado/borrado, cadenas de cambios) queda sin anterior.
+     *
+     * La columna y la tabla las crea 2026_10_27_235900 (antes de la recodificacion, que en una
+     * instalacion donde aun no corrio las llena directamente). Aqui solo se completan desde el log
+     * los entornos donde la recodificacion ya habia corrido; lo ya registrado no se duplica.
      */
     public function up()
     {
-        Schema::table('muestras_lab', function (Blueprint $table) {
-            $table->string('id_muestra_anterior')->nullable()->after('id_muestra');
-            $table->index('id_muestra_anterior');
-        });
-
-        Schema::create('codificacion_equivalencias', function (Blueprint $table) {
-            $table->id();
-            $table->string('tipo', 20);
-            $table->unsignedBigInteger('registro_id');
-            $table->string('codigo_anterior');
-            $table->string('codigo_nuevo');
-            $table->string('origen', 20)->default('recodificacion');
-            $table->timestamp('created_at')->nullable();
-            $table->index(['tipo', 'codigo_anterior']);
-            $table->index(['tipo', 'registro_id']);
-        });
+        // 2026_10_27_235900 siempre corre antes (orden por nombre); si faltara algo, no hay donde reconstruir.
+        if (! Schema::hasColumn('muestras_lab', 'id_muestra_anterior') || ! Schema::hasTable('codificacion_equivalencias')) {
+            return;
+        }
 
         $this->reconstruirDesdeLog();
     }
 
     public function down()
     {
-        Schema::dropIfExists('codificacion_equivalencias');
-        Schema::table('muestras_lab', function (Blueprint $table) {
-            $table->dropIndex(['id_muestra_anterior']);
-            $table->dropColumn('id_muestra_anterior');
-        });
+        // La columna y la tabla son de 2026_10_27_235900; las filas reconstruidas desde el log se quitan.
+        if (Schema::hasTable('codificacion_equivalencias')) {
+            DB::table('codificacion_equivalencias')->where('origen', 'log')->delete();
+        }
     }
 
     /** [codigo nuevo => ['anterior' => ..., 'cuando' => 'Y-m-d H:i:s']] sin ambiguedades. */
@@ -93,10 +84,13 @@ class AddIdMuestraAnteriorYEquivalenciasCodigos extends Migration
             return;
         }
 
-        $registrar = fn (string $tipo, $id, string $antes, string $despues, string $cuando) => DB::table('codificacion_equivalencias')->insert([
-            'tipo' => $tipo, 'registro_id' => $id, 'codigo_anterior' => $antes, 'codigo_nuevo' => $despues,
-            'origen' => 'log', 'created_at' => $cuando,
-        ]);
+        // No duplica lo que la recodificacion ya registro directamente (instalaciones donde corrio despues de 2026_10_27_235900).
+        $registrar = function (string $tipo, $id, string $antes, string $despues, string $cuando) {
+            $clave = ['tipo' => $tipo, 'registro_id' => $id, 'codigo_anterior' => $antes, 'codigo_nuevo' => $despues];
+            if (! DB::table('codificacion_equivalencias')->where($clave)->exists()) {
+                DB::table('codificacion_equivalencias')->insert($clave + ['origen' => 'log', 'created_at' => $cuando]);
+            }
+        };
 
         foreach (DB::table('proyectos')->whereIn('codigo', array_keys($cambios))->get(['id', 'codigo']) as $p) {
             $registrar('proyecto', $p->id, $cambios[$p->codigo]['anterior'], $p->codigo, $cambios[$p->codigo]['cuando']);
