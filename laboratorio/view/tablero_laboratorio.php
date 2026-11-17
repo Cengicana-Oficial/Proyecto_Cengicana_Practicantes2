@@ -15,6 +15,9 @@
  *
  * Se abre sin iniciar sesión con una clave en la URL:
  *   tablero_laboratorio.php?k=<LAB_TABLERO_TOKEN>
+ * Con clave válida se guarda una cookie (HMAC de la clave, HttpOnly, SameSite=Strict) y se
+ * redirige a la misma URL sin ?k=; las siguientes peticiones usan la cookie. Rotar la clave
+ * invalida también las cookies ya emitidas.
  * La clave vive en laboratorio/.env (deploy/env/laboratorio.env). Si no está
  * configurada (o tiene menos de 16 caracteres) el tablero queda deshabilitado;
  * para revocar un enlace filtrado basta con cambiarla.
@@ -32,7 +35,26 @@ if (strlen($clave) < 16) {
     http_response_code(503);
     exit('Tablero no configurado: defina LAB_TABLERO_TOKEN (mínimo 16 caracteres) en la configuración del laboratorio.');
 }
-if (!hash_equals($clave, (string) ($_GET['k'] ?? ''))) {
+// La cookie guarda un HMAC derivado de la clave (nunca la clave): si se rota LAB_TABLERO_TOKEN, deja de valer.
+$tbCookie = 'lab_tablero';
+$tbSello = hash_hmac('sha256', 'laboratorio-tablero-v1', $clave);
+$tbRuta = (string) (parse_url((string) ($_SERVER['SCRIPT_NAME'] ?? ''), PHP_URL_PATH) ?: '/');
+if (isset($_GET['k'])) {
+    if (!hash_equals($clave, (string) $_GET['k'])) {
+        http_response_code(403);
+        exit('Enlace del tablero no válido.');
+    }
+    // Clave válida en la URL: se pasa a cookie y se redirige sin ella (no queda en historial ni en logs posteriores).
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    setcookie($tbCookie, $tbSello, [
+        'expires' => 0, 'path' => $tbRuta, 'secure' => $https, 'httponly' => true, 'samesite' => 'Strict',
+    ]);
+    $resto = $_GET;
+    unset($resto['k']);
+    header('Location: ' . $tbRuta . ($resto ? '?' . http_build_query($resto) : ''), true, 302);
+    exit;
+}
+if (!hash_equals($tbSello, (string) ($_COOKIE[$tbCookie] ?? ''))) {
     http_response_code(403);
     exit('Enlace del tablero no válido.');
 }
