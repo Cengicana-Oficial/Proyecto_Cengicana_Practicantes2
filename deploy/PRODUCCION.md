@@ -127,6 +127,13 @@ de las funciones de esquema, que solo corren con `ESQUEMA_MIGRANDO`). Con los pe
 - `curl -s -o /dev/null -w "%{http_code}" https://.../uploads/x.php` debe dar 403 o 404.
 - `https://.../uploads/recibos_firmados/<cualquier archivo>` debe dar 403.
 - `curl -s -o /dev/null -w "%{http_code}" -H "Host: otro.ejemplo" http://127.0.0.1:8085/login/` debe dar 403.
+- **IP real del visitante** (AUD-2026-003). El contenedor `app` toma la IP de `X-Forwarded-For` con `mod_remoteip`
+  (`dockerfiles/modulos-app/remoteip.conf`); de ella dependen los límites por IP de login, recuperación de
+  contraseña, buzón de Solicitudes, verificación de Laboratorio y encuesta de eventos. El proxy del servidor debe
+  enviar esa cabecera (nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`; Apache con
+  `ProxyPass` la envía por defecto). Comprobar: abrir el sitio desde un equipo externo y revisar
+  `docker compose -f docker-compose.prod.yml logs --tail 20 app`; la primera columna debe ser la IP pública del
+  equipo, no `172.x.x.x` ni `127.0.0.1`. Si sale la del proxy, los límites se aplican a todos los usuarios a la vez.
 - `docker compose -f docker-compose.prod.yml exec app php cengicursos/cron_recordatorio_pago.php --simular`:
   revisar a quién se escribiría antes de programar el cron.
 - `docker compose -f docker-compose.prod.yml ps recibos-worker comites-correos-worker` en estado `running`;

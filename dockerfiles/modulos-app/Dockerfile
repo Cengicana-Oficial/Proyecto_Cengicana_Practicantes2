@@ -21,7 +21,7 @@ RUN sed -i 's|http://deb.debian.org/debian|https://deb.debian.org/debian|g; s|ht
         zip \
         mbstring \
         gd \
-    && a2enmod rewrite headers proxy proxy_http \
+    && a2enmod rewrite headers proxy proxy_http remoteip \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -31,6 +31,10 @@ RUN a2enconf no-php-uploads
 
 COPY dockerfiles/modulos-app/error-pages.conf /etc/apache2/conf-available/error-pages.conf
 RUN a2enconf error-pages
+
+# IP real del visitante detras del proxy del servidor (ver remoteip.conf).
+COPY dockerfiles/modulos-app/remoteip.conf /etc/apache2/conf-available/remoteip.conf
+RUN a2enconf remoteip
 
 # Reenvia /sigec/* al contenedor "sigec" (docker-compose.prod.yml), sin
 # exponer su puerto publicamente: modulos.cengicana.org/sigec/... se sirve
