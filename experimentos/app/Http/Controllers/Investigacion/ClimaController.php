@@ -236,9 +236,18 @@ class ClimaController extends Controller
 
         $data = $this->validarConexion($request);
         $request->validate(['fecha' => 'nullable|date|before_or_equal:today']);
+        // AUD-2026-003/B-7: el token y la clave guardados solo se usan si la URL a probar es la que
+        // ya esta en uso; con otra URL habria que enviarlos a un destino arbitrario.
+        $normalizar = fn ($u) => strtolower(rtrim(trim((string) $u), '/'));
+        $urlGuardada = Configuracion::grupo('icc')['url'] ?? null;
+        $mismaUrl = $normalizar($data['url']) === $normalizar($urlGuardada !== null && $urlGuardada !== '' ? $urlGuardada : config('services.icc.url'));
         foreach (IccClima::SECRETOS as $k) {
             if (empty($data[$k]) && ! $request->boolean("borrar_{$k}")) {
-                unset($data[$k]); // usa el guardado
+                if ($mismaUrl) {
+                    unset($data[$k]); // usa el guardado
+                } else {
+                    $data[$k] = ''; // otra URL: no se heredan los guardados
+                }
             }
         }
         $data = array_map(fn ($v) => is_bool($v) ? ($v ? '1' : '0') : $v, $data);
