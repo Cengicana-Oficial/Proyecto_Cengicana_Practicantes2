@@ -771,12 +771,12 @@ $urlVista = static function ($v) use ($scope) {
             if (!j.ok) {
                 recEstado("error", esc(j.error || "No se pudo generar el enlace."));
             } else {
-                rec.enlace.value = j.enlace;
-                rec.box.hidden = false;
+                rec.enlace.value = j.enlace || "";
+                rec.box.hidden = !j.enlace;
                 rec.enviar.hidden = true;
                 rec.cerrar.textContent = "Cerrar";
                 recEstado(j.enviado ? "ok" : "warn", j.enviado
-                    ? "Correo enviado a <b>" + esc(j.correo) + "</b>. Si no lo ve, que revise la carpeta de spam. Si hace falta, también puedes compartirle este enlace:"
+                    ? "Correo enviado a <b>" + esc(j.correo) + "</b>. Si no lo ve, que revise la carpeta de spam."
                     : "<b>El correo no se pudo enviar</b> (revisa la configuración SMTP en login/.env). El enlace sí es válido: cópialo y compártelo con la persona por un medio seguro.");
             }
         } catch (err) {
