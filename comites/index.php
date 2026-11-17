@@ -1021,6 +1021,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!can_manage_resource($user, 'publicaciones')) {
                 throw new RuntimeException('No tienes permiso para gestionar redes sociales.');
             }
+            if (!hash_equals((string) ($_SESSION['redes_csrf'] ?? ''), (string) ($_POST['csrf'] ?? ''))) {
+                http_response_code(403);
+                throw new RuntimeException('El formulario expiró. Recarga la página.');
+            }
             try {
                 if ($accion === 'publicacion_importar') {
                     $mensaje = redes_importar_publicaciones($pdo, (string) ($_POST['plataforma'] ?? ''), $_FILES['archivo'] ?? []);
@@ -2098,7 +2102,7 @@ $notificaciones = notif_obtener($pdo, $user);
                                     <a class="modal-close" href="<?= e($urlFiltros()) ?>"><i class="ti ti-x"></i></a>
                                 </div>
                                 <form method="post" class="modal-body" enctype="multipart/form-data">
-                                    <input type="hidden" name="accion" value="publicacion_importar">
+                                    <input type="hidden" name="accion" value="publicacion_importar"><input type="hidden" name="csrf" value="<?= e($_SESSION['redes_csrf'] ?? '') ?>">
                                     <label class="form-group"><span class="form-label">Plataforma del archivo <span class="req">*</span></span>
                                         <select class="form-control" name="plataforma" required>
                                             <?php foreach (redes_plataformas_importables() as $opt): ?><option value="<?= e($opt) ?>" <?= $filtroPlataforma === $opt ? 'selected' : '' ?>><?= e($opt) ?></option><?php endforeach; ?>
@@ -2286,7 +2290,7 @@ $notificaciones = notif_obtener($pdo, $user);
                                                 <div class="row-menu-list" role="menu">
                                                     <a href="index.php?view=publicaciones&tab=web&web_mes=<?= e((string) $w['periodo']) ?>"><i class="ti ti-edit"></i> Editar</a>
                                                     <form method="post" onsubmit="return confirm('¿Eliminar los datos de este mes?');">
-                                                        <input type="hidden" name="accion" value="web_eliminar">
+                                                        <input type="hidden" name="accion" value="web_eliminar"><input type="hidden" name="csrf" value="<?= e($_SESSION['redes_csrf'] ?? '') ?>">
                                                         <input type="hidden" name="periodo" value="<?= e((string) $w['periodo']) ?>">
                                                         <button type="submit" class="is-danger"><i class="ti ti-trash"></i> Eliminar</button>
                                                     </form>
@@ -2309,7 +2313,7 @@ $notificaciones = notif_obtener($pdo, $user);
                                     <a class="modal-close" href="index.php?view=publicaciones&tab=web"><i class="ti ti-x"></i></a>
                                 </div>
                                 <form method="post" class="modal-body" enctype="multipart/form-data">
-                                    <input type="hidden" name="accion" value="web_importar">
+                                    <input type="hidden" name="accion" value="web_importar"><input type="hidden" name="csrf" value="<?= e($_SESSION['redes_csrf'] ?? '') ?>">
                                     <label class="form-group"><span class="form-label">Informe exportado (CSV, XLSX o XLS) <span class="req">*</span></span>
                                         <input class="form-control" type="file" name="archivo" accept=".csv,.xlsx,.xls" required></label>
                                     <div class="red-ayuda">
@@ -2338,7 +2342,7 @@ $notificaciones = notif_obtener($pdo, $user);
                                     <a class="modal-close" href="index.php?view=publicaciones&tab=web"><i class="ti ti-x"></i></a>
                                 </div>
                                 <form method="post" class="modal-body">
-                                    <input type="hidden" name="accion" value="web_guardar">
+                                    <input type="hidden" name="accion" value="web_guardar"><input type="hidden" name="csrf" value="<?= e($_SESSION['redes_csrf'] ?? '') ?>">
                                     <div class="form-grid form-grid-4">
                                         <label class="form-group"><span class="form-label">Mes <span class="req">*</span></span>
                                             <input class="form-control" type="month" name="periodo" required value="<?= e((string) $webEditar['periodo']) ?>" <?= isset($webEditar['id']) ? 'readonly' : '' ?>></label>

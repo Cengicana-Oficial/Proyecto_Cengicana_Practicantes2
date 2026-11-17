@@ -1011,6 +1011,43 @@ const BUZON_FOTO_TIPOS = ['image/jpeg' => 'jpg', 'image/png' => 'png'];
 const BUZON_FOTO_MAX_BYTES = 5 * 1024 * 1024;
 /** Segundos minimos entre dos envios desde la misma sesion (freno basico contra spam). */
 const BUZON_ESPERA_SEGUNDOS = 30;
+/** Limites persistentes del buzon publico (no dependen de la cookie de sesion). */
+const BUZON_MAX_POR_IP_HORA = 5;
+const BUZON_MAX_ACUSES_POR_CORREO_DIA = 3;
+
+/** IP del cliente tal como la ve el servidor (no se confia en cabeceras reenviadas). */
+function buzon_ip_cliente(): string
+{
+    return substr((string) ($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
+}
+
+/** Lanza RuntimeException si la IP o el correo superaron el limite del buzon. */
+function buzon_verificar_limite(PDO $pdo, string $ip, string $correo): void
+{
+    $porIp = $pdo->prepare('SELECT COUNT(*) FROM buzon_envios WHERE ip = ? AND creado_en > (NOW() - INTERVAL 1 HOUR)');
+    $porIp->execute([$ip]);
+    if ((int) $porIp->fetchColumn() >= BUZON_MAX_POR_IP_HORA) {
+        throw new RuntimeException('Recibimos varias ideas desde tu conexion en poco tiempo. Intenta de nuevo mas tarde.');
+    }
+    if ($correo !== '') {
+        $porCorreo = $pdo->prepare('SELECT COUNT(*) FROM buzon_envios WHERE correo = ? AND creado_en > (NOW() - INTERVAL 1 DAY)');
+        $porCorreo->execute([$correo]);
+        if ((int) $porCorreo->fetchColumn() >= BUZON_MAX_ACUSES_POR_CORREO_DIA) {
+            throw new RuntimeException('Ese correo ya recibio varios acuses hoy. Intenta de nuevo manana o envia la idea sin correo.');
+        }
+    }
+}
+
+function buzon_registrar_envio(PDO $pdo, string $ip, string $correo): void
+{
+    $pdo->prepare('INSERT INTO buzon_envios (ip, correo) VALUES (?, ?)')->execute([$ip, $correo !== '' ? $correo : null]);
+    // Depuracion de registros viejos; un fallo aqui no debe afectar el envio.
+    try {
+        $pdo->exec('DELETE FROM buzon_envios WHERE creado_en < (NOW() - INTERVAL 2 DAY)');
+    } catch (Throwable $e) {
+        error_log('[buzon] depuracion de envios: ' . $e->getMessage());
+    }
+}
 
 function can_view_ideas(array $user): bool
 {

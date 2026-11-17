@@ -86,10 +86,15 @@ try {
 $enlace = $base . '/reset_password.php?token=' . urlencode($token);
 $enviado = cengi_login_enviar_correo_reset($usuario['correo'], $usuario['nombre'], $enlace);
 
-rec_responder(200, [
+$respuesta = [
     'ok' => true,
     'enviado' => (bool) $enviado,
     'correo' => $usuario['correo'],
     'nombre' => $usuario['nombre'],
-    'enlace' => $enlace,
-]);
+];
+// El enlace es un secreto de un solo uso: solo se devuelve si el correo fallo,
+// para que quien administra pueda compartirlo por otro medio.
+if (!$enviado) {
+    $respuesta['enlace'] = $enlace;
+}
+rec_responder(200, $respuesta);
