@@ -149,7 +149,7 @@ $lista = static function (array $items, string $dimension, int $limite = 10): st
                     <small><?= e($a['cuando']) ?> · <?= e((string) $a['fuente']) ?></small>
                     <?php if ($puedeGestionarSeccionActual && !$audienciaEjemplo): ?>
                         <form method="post" onsubmit="return confirm('¿Eliminar toda la audiencia guardada de <?= e($plataforma) ?>?');">
-                            <input type="hidden" name="accion" value="audiencia_eliminar"><input type="hidden" name="plataforma" value="<?= e($plataforma) ?>">
+                            <input type="hidden" name="accion" value="audiencia_eliminar"><input type="hidden" name="csrf" value="<?= e($_SESSION['redes_csrf'] ?? '') ?>"><input type="hidden" name="plataforma" value="<?= e($plataforma) ?>">
                             <button type="submit" title="Eliminar audiencia de <?= e($plataforma) ?>"><i class="ti ti-x"></i></button>
                         </form>
                     <?php endif; ?>
@@ -248,7 +248,7 @@ $lista = static function (array $items, string $dimension, int $limite = 10): st
                 <a class="modal-close" href="<?= e($urlAud()) ?>"><i class="ti ti-x"></i></a>
             </div>
             <form method="post" class="modal-body" enctype="multipart/form-data">
-                <input type="hidden" name="accion" value="audiencia_importar">
+                <input type="hidden" name="accion" value="audiencia_importar"><input type="hidden" name="csrf" value="<?= e($_SESSION['redes_csrf'] ?? '') ?>">
                 <div class="form-grid">
                     <label class="form-group"><span class="form-label">Plataforma <span class="req">*</span></span>
                         <select class="form-control" name="plataforma" required>

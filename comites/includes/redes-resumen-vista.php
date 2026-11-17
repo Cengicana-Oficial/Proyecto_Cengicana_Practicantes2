@@ -341,7 +341,7 @@ $cal = $rs['calendario'];
                 <a class="modal-close" href="<?= e($cerrarCuenta) ?>"><i class="ti ti-x"></i></a>
             </div>
             <form method="post" class="modal-body">
-                <input type="hidden" name="accion" value="cuenta_guardar">
+                <input type="hidden" name="accion" value="cuenta_guardar"><input type="hidden" name="csrf" value="<?= e($_SESSION['redes_csrf'] ?? '') ?>">
                 <div class="form-grid">
                     <label class="form-group"><span class="form-label">Plataforma <span class="req">*</span></span>
                         <select class="form-control" name="plataforma" required>
