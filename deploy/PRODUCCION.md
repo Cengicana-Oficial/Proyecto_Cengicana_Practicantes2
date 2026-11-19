@@ -107,6 +107,7 @@ agrega lo que falte. Se detiene en el primer error. Usa la imagen recién constr
 - Esquema que Comités, Solicitudes internas, Laboratorio y la central de usuarios definen en PHP
   (`deploy/mysql/migrar-esquema.php`, con `modulos_migrador`). Las páginas ya no crean tablas al
   abrirse.
+- Inventario de precursores (SICIR, `inventario_precursores/`): base `sistema_inventario`, módulo, permisos `inventario.*` y roles en la central, y catálogo inicial (6 laboratorios, 14 productos) solo si la base está vacía (`migrar-esquema.php inventario`). Prueba: `DB_INVENTARIO_NAME=<base con "prueba"> php inventario_precursores/tests/dominio.php`.
 - SIGEC: `php artisan migrate --force` (estaciones meteorológicas, NDVI…), también con `modulos_migrador`.
 
 **Instalación nueva:** el volumen vacío corre `init/` (incluido el 62), pero las tablas de Comités,

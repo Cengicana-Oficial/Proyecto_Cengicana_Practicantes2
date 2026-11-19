@@ -21,6 +21,7 @@ const CENGI_RM_MODULOS = [
     'cursos' => 'Cursos',
     'laboratorio' => 'Laboratorio',
     'comites' => 'Comites, Transferencia y Comunicacion',
+    'inventario' => 'Inventario de precursores',
     'solicitudes' => 'Solicitudes internas',
     'sigec' => 'Experimentos',
     'visitas' => 'Solicitud de visitas',
