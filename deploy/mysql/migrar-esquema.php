@@ -8,7 +8,7 @@ declare(strict_types=1);
 //
 // Lo llama deploy/mysql/actualizar-bd.sh, un módulo por proceso (Comités y Solicitudes
 // declaran funciones con el mismo nombre):
-//   MIGRADOR_PASS=... php deploy/mysql/migrar-esquema.php comites|solicitudes|laboratorio|login
+//   MIGRADOR_PASS=... php deploy/mysql/migrar-esquema.php comites|solicitudes|laboratorio|inventario|login
 //
 // Es idempotente: solo agrega lo que falta. Cursos no pasa por aquí: su esquema está completo en
 // cengicursos/migrations/*.sql.
@@ -89,6 +89,15 @@ switch ($modulo) {
         lab_informes_esquema($pdo); // incluye lab_documentos_esquema()
         lab_verificacion_esquema($pdo); // códigos y QR de verificación pública (boleta e informe)
         labRecepcionPrepararCatalogo($pdo);
+        break;
+
+    case 'inventario':
+        // Inventario de precursores (SICIR): crea la base y las tablas, registra el modulo, sus
+        // permisos y roles en usuarios_menu y siembra el catalogo inicial si esta vacio.
+        require $raiz . '/inventario_precursores/config/database.php';
+        inv_esquema($pdo);
+        inv_asegurar_menu($menuPdo);
+        inv_sembrar_catalogo($pdo);
         break;
 
     case 'login':

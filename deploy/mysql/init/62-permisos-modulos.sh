@@ -25,7 +25,7 @@ permisos_modulos() {
     echo "ALTER USER '$migrador'@'%' IDENTIFIED BY '$clave';"
     # El entrypoint de MySQL da ALL sobre MYSQL_DATABASE con el "_" escapado.
     echo "REVOKE IF EXISTS ALL PRIVILEGES ON \`usuarios\\_menu\`.* FROM '$app'@'%' IGNORE UNKNOWN USER;"
-    for b in usuarios_menu cengi_cursos laboratorios_prueba cengi_visitas sistema_comites sistema_solicitudes sigec; do
+    for b in usuarios_menu cengi_cursos laboratorios_prueba cengi_visitas sistema_comites sistema_solicitudes sistema_inventario sigec; do
       echo "GRANT ALL PRIVILEGES ON \`$b\`.* TO '$migrador'@'%';"
       echo "REVOKE IF EXISTS ALL PRIVILEGES ON \`$b\`.* FROM '$app'@'%' IGNORE UNKNOWN USER;"
       echo "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE ON \`$b\`.* TO '$app'@'%';"
