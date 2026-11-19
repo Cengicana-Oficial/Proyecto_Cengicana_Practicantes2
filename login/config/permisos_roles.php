@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/permisos_inventario.php';
+
 function asegurar_tablas_permisos(PDO $conn)
 {
     // Las tablas las crea deploy/mysql/init/01-usuarios-menu.sql; aqui solo al desplegar
@@ -291,6 +293,7 @@ function agrupar_permisos(array $permisos)
         'Permisos de laboratorio' => [],
         'Permisos de Experimentos' => [],
         'Permisos de Comités' => [],
+        'Permisos de Inventario' => [],
         'Permisos de pagos' => [],
         'Permisos de usuarios y accesos' => [],
         'Permisos generales' => [],
@@ -309,6 +312,10 @@ function clasificar_grupo_permiso($nombrePermiso)
 
     if (strpos($nombre, 'cengisalas.salas.') === 0) {
         return 'Permisos de CengiSalas';
+    }
+
+    if (strpos($nombre, 'inventario.') === 0) {
+        return 'Permisos de Inventario';
     }
 
     if (strpos($nombre, 'solicitudes_internas.') === 0) {
@@ -360,6 +367,7 @@ function titulo_corto_grupo_permiso($grupo)
         'Permisos de laboratorio' => 'Cengilabs',
         'Permisos de Experimentos' => 'Experimentos',
         'Permisos de Comités' => 'Comités',
+        'Permisos de Inventario' => 'Inventario',
         'Permisos de pagos' => 'Pagos',
         'Permisos de usuarios y accesos' => 'General',
         'Permisos generales' => 'General',
@@ -378,6 +386,7 @@ function descripcion_grupo_permiso($grupo)
         'Permisos de laboratorio' => 'Cengilabs: permisos ordenados por etapa del flujo, de Recepción a la entrega de Reportes. Puede partir de una plantilla de rol y ajustar.',
         'Permisos de Experimentos' => 'Controla el acceso al modulo Experimentos (Sistema de Gestion de Ensayos Experimentales).',
         'Permisos de Comités' => 'Comités, Transferencia y Comunicación: ver o gestionar cada sección del módulo y las aprobaciones de Transferencia y Dirección.',
+        'Permisos de Inventario' => 'Inventario de precursores (SICIR): vales de salida, entradas, lotes, informes, firmas del cierre mensual y administración del catálogo.',
         'Permisos de pagos' => 'Reune permisos relacionados con estados de pago y control de cobros.',
         'Permisos de usuarios y accesos' => 'Incluye gestion de usuarios, roles, modulos y acceso administrativo.',
         'Permisos generales' => 'Permisos transversales que no pertenecen a un solo modulo.',
@@ -488,6 +497,11 @@ function etiqueta_permiso($nombrePermiso)
     $vigentesLab = permisos_laboratorio_vigentes();
     if (isset($vigentesLab[$nombrePermiso])) {
         return $vigentesLab[$nombrePermiso][0];
+    }
+
+    $inventario = permisos_inventario_todos();
+    if (isset($inventario[$nombrePermiso])) {
+        return $inventario[$nombrePermiso][0];
     }
 
     $comites = etiqueta_permiso_comites((string) $nombrePermiso);
