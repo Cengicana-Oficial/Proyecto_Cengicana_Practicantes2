@@ -77,7 +77,7 @@ en_sigec() {
 }
 
 # Esquema definido en PHP, un modulo por proceso (deploy/mysql/migrar-esquema.php).
-MODULOS_PHP=(login comites solicitudes laboratorio)
+MODULOS_PHP=(login comites solicitudes laboratorio inventario)
 
 # base|archivo, en orden. Las bases las crean los propios archivos cuando hace falta.
 PASOS=(
@@ -111,7 +111,7 @@ if [ "$RESPALDO" = 1 ]; then
   mkdir -p respaldos
   archivo="respaldos/antes-de-actualizar-$(date +%Y%m%d-%H%M%S).sql"
   echo "Respaldo completo en $archivo ..."
-  bases=$(mysql_exec mysql -N -e "SELECT GROUP_CONCAT(schema_name SEPARATOR ' ') FROM information_schema.SCHEMATA WHERE schema_name IN ('usuarios_menu','cengi_cursos','laboratorios_prueba','cengi_visitas','sistema_comites','sistema_solicitudes','sigec')")
+  bases=$(mysql_exec mysql -N -e "SELECT GROUP_CONCAT(schema_name SEPARATOR ' ') FROM information_schema.SCHEMATA WHERE schema_name IN ('usuarios_menu','cengi_cursos','laboratorios_prueba','cengi_visitas','sistema_comites','sistema_solicitudes','sistema_inventario','sigec')")
   # shellcheck disable=SC2086
   mysql_exec mysqldump --single-transaction --routines --triggers --databases $bases > "$archivo"
   tail -1 "$archivo" | grep -q "Dump completed" || { echo "El respaldo no termino bien; no se actualiza nada." >&2; exit 1; }
