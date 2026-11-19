@@ -120,24 +120,8 @@ function menu_modulo_meta($nombre)
         // directo a una carpeta hermana como los demas modulos.
         $ruta = 'sso_sigec.php';
         $icono = 'biotech';
-<<<<<<< HEAD
         $nombreVisible = 'CengiInvestiga';
         $logo = 'assets/img/logo-cengiinvestiga.svg';
-    } elseif ($modulo === 'solicitud de visitas') {
-        $ruta = '../Pruebas/public/admin/dashboard_unificado.php?modulo=solicitudes';
-        $icono = 'calendar_today';
-        $nombreVisible = 'CengiVisitas';
-        $logo = 'assets/img/logo-cengivisitas.svg';
-
-        if (!$esSuperadmin && $rolId === 2) {
-            $ruta .= '&estado=aprobado';
-        }
-    } elseif ($modulo === 'servicio tecnico' && $esSuperadmin) {
-        // No existe dashboard_servicio.php en el repo; se reutiliza el
-        // dashboard unificado del modulo Pruebas (mismo que "Solicitud de
-        // visitas") hasta que exista una vista propia de servicio tecnico.
-        $ruta = '../Pruebas/public/admin/dashboard_unificado.php';
-=======
     } elseif ($modulo === 'cengisalas') {
         $ruta = '../cengisalas/index.html?panel=1';
         $icono = 'meeting_room';
@@ -146,7 +130,6 @@ function menu_modulo_meta($nombre)
         $icono = 'tour';
     } elseif (in_array($modulo, ['servicio tecnico','servicios tecnicos'], true) && ($esSuperadmin || !empty($GLOBALS['techModuleAccess']))) {
         $ruta = '../Pruebas/index.php';
->>>>>>> bd371ce26ea5dc9d285731d843ba2da50a6188e8
         $icono = 'build';
     } elseif ($modulo === 'ensayos' && $esSuperadmin) {
         $ruta = '../Pruebas/public/admin/dashboard_ensayos.php';

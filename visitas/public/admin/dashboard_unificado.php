@@ -93,56 +93,15 @@ if ($modulo === 'solicitudes' && $canSolicitudes) {
     <link rel="icon" type="image/svg+xml" href="../../assets/img/logo-cengivisitas.svg">
     <link rel="stylesheet" href="../../assets/dashboard.css">
     <link rel="stylesheet" href="../../assets/inicio.css">
-<<<<<<< HEAD:Pruebas/public/admin/dashboard_unificado.php
-    <link rel="stylesheet" href="../../assets/cengivisitas.css?v=<?= (int) @filemtime(__DIR__ . '/../../assets/cengivisitas.css') ?>">
-=======
     <link rel="stylesheet" href="../../assets/cengisalas-theme.css?v=20260902-2">
 <?php visitas_ui_head(); ?>
->>>>>>> bd371ce26ea5dc9d285731d843ba2da50a6188e8:visitas/public/admin/dashboard_unificado.php
 </head>
 <body class="visits-admin">
 <?php visitas_ui_shell("Panel de Visitas", "Resumen de solicitudes y áreas", "inicio"); ?>
 
 <div class="layout">
-<<<<<<< HEAD:Pruebas/public/admin/dashboard_unificado.php
-    <aside class="sidebar">
-        <a class="cv-brand" href="dashboard_unificado.php?modulo=inicio">
-            <img src="../../assets/img/logo-cengivisitas.svg" alt="" aria-hidden="true">
-            <span><strong>Cengi<b>Visitas</b></strong><small>Solicitud de visitas</small></span>
-        </a>
-
-        <nav>
-            <?php if ($canInicio): ?>
-                <a href="dashboard_unificado.php?modulo=inicio" class="<?= $modulo === 'inicio' ? 'active' : '' ?>">Inicio</a>
-            <?php endif; ?>
-
-            <?php if ($canUsuarios): ?>
-                <a href="dashboard_unificado.php?modulo=usuarios" class="<?= $modulo === 'usuarios' ? 'active' : '' ?>">Usuarios</a>
-            <?php endif; ?>
-
-            <?php if ($canAreas): ?>
-                <a href="dashboard_unificado.php?modulo=areas" class="<?= $modulo === 'areas' ? 'active' : '' ?>">Areas</a>
-            <?php endif; ?>
-
-            <?php if ($canSolicitudes): ?>
-                <a href="dashboard_unificado.php?modulo=solicitudes" class="<?= $modulo === 'solicitudes' && empty($_GET['estado']) ? 'active' : '' ?>">Solicitudes</a>
-                <a href="dashboard_unificado.php?modulo=solicitudes&estado=pendiente" class="<?= ($_GET['estado'] ?? '') === 'pendiente' ? 'active' : '' ?>">Pendientes</a>
-                <a href="dashboard_unificado.php?modulo=solicitudes&estado=aprobado" class="<?= ($_GET['estado'] ?? '') === 'aprobado' ? 'active' : '' ?>">Aprobadas</a>
-                <a href="dashboard_unificado.php?modulo=solicitudes&estado=rechazado" class="<?= ($_GET['estado'] ?? '') === 'rechazado' ? 'active' : '' ?>">Rechazadas</a>
-            <?php endif; ?>
-        </nav>
-
-        <div class="cv-foot">
-            <a href="../../../login/Menu.php" class="cv-menu">Menú principal</a>
-            <a href="logout.php" class="btn-logout">Cerrar sesion</a>
-        </div>
-    </aside>
-
-    <main class="main-content">
-=======
 
     <main class="main-content" id="visits-content" tabindex="-1">
->>>>>>> bd371ce26ea5dc9d285731d843ba2da50a6188e8:visitas/public/admin/dashboard_unificado.php
         <?php if ($sinPermisos): ?>
             <header class="dashboard-header">
                 <h2>Sin permisos asignados</h2>

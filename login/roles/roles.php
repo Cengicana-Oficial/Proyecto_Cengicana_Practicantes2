@@ -6,13 +6,18 @@ require_once __DIR__ . "/_guard.php";
 
 $conn = Conexion::conectar();
 asegurar_tablas_permisos($conn);
+// Las listas de permisos de un rol (Superadmin tiene mas de 100) superan el limite por defecto de GROUP_CONCAT (1024).
+$conn->exec("SET SESSION group_concat_max_len = 1000000");
 
 $stmt = $conn->query("
     SELECT
         r.id,
         r.nombre_rol,
         COUNT(p.id) AS total_permisos,
-        GROUP_CONCAT(p.nombre_permiso ORDER BY p.nombre_permiso SEPARATOR ', ') AS permisos
+        GROUP_CONCAT(p.nombre_permiso ORDER BY p.nombre_permiso SEPARATOR ',') AS permisos,
+        (SELECT GROUP_CONCAT(m.nombre ORDER BY m.nombre SEPARATOR '##')
+           FROM rol_modulo rm INNER JOIN modulos m ON m.id = rm.modulo_id
+          WHERE rm.rol_id = r.id) AS modulos
     FROM roles r
     LEFT JOIN rol_permiso rp ON rp.rol_id = r.id
     LEFT JOIN permisos p ON p.id = rp.permiso_id
@@ -21,6 +26,77 @@ $stmt = $conn->query("
     ORDER BY r.id
 ");
 $roles = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Usuarios por rol: como rol de la plataforma o como rol en algun modulo (sin repetir usuario).
+$usuariosPorRol = [];
+foreach ($conn->query("
+    SELECT rol_id, COUNT(DISTINCT usuario_id) FROM (
+        SELECT rol_id, id AS usuario_id FROM usuarios WHERE rol_id IS NOT NULL
+        UNION ALL
+        SELECT rol_id, usuario_id FROM usuario_modulo WHERE rol_id IS NOT NULL
+    ) x GROUP BY rol_id
+")->fetchAll(PDO::FETCH_NUM) as [$rolId, $total]) {
+    $usuariosPorRol[(int) $rolId] = (int) $total;
+}
+
+$totalPermisosSistema = count(obtener_permisos($conn));
+$opcModulos = [];
+$totalGenerales = 0;
+$totalConUsuarios = 0;
+$totalSinPermisos = 0;
+
+foreach ($roles as &$r) {
+    $r['lista_modulos'] = array_values(array_filter(explode('##', (string) ($r['modulos'] ?? ''))));
+    $r['usuarios'] = $usuariosPorRol[(int) $r['id']] ?? 0;
+    $r['protegido'] = strtolower($r['nombre_rol']) === 'superadmin';
+
+    // Permisos agrupados por modulo, con su etiqueta legible.
+    $r['grupos'] = [];
+    foreach (array_filter(explode(',', (string) ($r['permisos'] ?? ''))) as $nombrePermiso) {
+        $grupo = titulo_corto_grupo_permiso(clasificar_grupo_permiso($nombrePermiso));
+        $r['grupos'][$grupo][] = etiqueta_permiso($nombrePermiso);
+    }
+    ksort($r['grupos']);
+
+    foreach ($r['lista_modulos'] as $m) {
+        $opcModulos[$m] = true;
+    }
+    $totalGenerales += $r['lista_modulos'] ? 0 : 1;
+    $totalConUsuarios += $r['usuarios'] > 0 ? 1 : 0;
+    $totalSinPermisos += (int) $r['total_permisos'] === 0 ? 1 : 0;
+}
+unset($r);
+ksort($opcModulos);
+
+/** Color estable por modulo (el mismo que en la lista de usuarios). */
+function rol_tono_modulo($nombre)
+{
+    $clave = mb_strtolower((string) $nombre);
+    $fijos = ['cursos' => 0, 'laboratorio' => 1, 'solicitudes internas' => 2, 'sigec' => 3, 'experimentos' => 3, 'servicio tecnico' => 4, 'solicitud de visitas' => 5, 'comit' => 6];
+    foreach ($fijos as $patron => $tono) {
+        if (strpos($clave, $patron) !== false) {
+            return $tono;
+        }
+    }
+    return abs(crc32($clave)) % 7;
+}
+
+function rol_icono($nombre)
+{
+    $n = mb_strtolower($nombre);
+    $mapa = [
+        'superadmin' => 'shield_person', 'administrador' => 'admin_panel_settings', 'instructor' => 'co_present',
+        'estudiante' => 'school', 'gestor' => 'manage_accounts', 'laboratorio' => 'biotech', 'analista' => 'science',
+        'recepcion' => 'move_to_inbox', 'cnico' => 'build', 'director' => 'workspace_premium', 'jefe de programa' => 'supervisor_account',
+        'colaborador' => 'group',
+    ];
+    foreach ($mapa as $patron => $icono) {
+        if (strpos($n, $patron) !== false) {
+            return $icono;
+        }
+    }
+    return 'badge';
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -33,7 +109,6 @@ $roles = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/ingenios.css?v=<?= @filemtime(__DIR__ . '/../assets/ingenios.css') ?: '1' ?>">
-<<<<<<< HEAD
     <link rel="stylesheet" href="../assets/menu-cengitech.css?v=<?= @filemtime(__DIR__ . '/../assets/menu-cengitech.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/admin-cengitech.css?v=<?= @filemtime(__DIR__ . '/../assets/admin-cengitech.css') ?: '1' ?>">
     <style>
@@ -183,10 +258,6 @@ $roles = $stmt->fetchAll(PDO::FETCH_ASSOC);
 </head>
 <body class="vista-lista cx-admin">
 <?php require_once __DIR__ . '/../config/admin_layout.php'; cengi_admin_header('roles'); ?>
-=======
-</head>
-<body>
->>>>>>> bd371ce26ea5dc9d285731d843ba2da50a6188e8
 <div class="ingenios-shell">
     <a href="../Menu.php" class="btn-back">
         <span class="material-symbols-outlined">arrow_back</span>
@@ -197,7 +268,7 @@ $roles = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="page-heading">
             <span class="eyebrow">Administración</span>
             <h1>Roles y permisos</h1>
-            <p>Gestiona los roles del sistema y los permisos asignados a cada uno.</p>
+            <p>Define en qué módulos se usa cada rol y qué acciones permite. El rol de un módulo solo da permisos dentro de ese módulo.</p>
         </div>
 
         <a href="crear_rol.php" class="btn-primary">
@@ -206,80 +277,152 @@ $roles = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </a>
     </div>
 
-    <div class="ingenios-card">
-        <div class="ingenios-card-head">
-            <strong>Roles registrados</strong>
-            <span class="ingenios-count"><?= count($roles) ?></span>
+    <div class="rl-kpis">
+        <div class="rl-kpi">
+            <span class="rl-kpi-ico"><span class="material-symbols-outlined">admin_panel_settings</span></span>
+            <div><strong><?= count($roles) ?></strong><span class="lbl">Roles registrados</span></div>
         </div>
+        <button type="button" class="rl-kpi" data-quick="general" title="Mostrar roles generales">
+            <span class="rl-kpi-ico is-gold"><span class="material-symbols-outlined">all_inclusive</span></span>
+            <div><strong><?= $totalGenerales ?></strong><span class="lbl">Generales (todos los módulos)</span></div>
+        </button>
+        <button type="button" class="rl-kpi" data-quick="usuarios" title="Mostrar roles en uso">
+            <span class="rl-kpi-ico is-blue"><span class="material-symbols-outlined">group</span></span>
+            <div><strong><?= $totalConUsuarios ?></strong><span class="lbl">Con usuarios asignados</span></div>
+        </button>
+        <button type="button" class="rl-kpi" data-quick="sinpermisos" title="Mostrar roles sin permisos">
+            <span class="rl-kpi-ico is-gray"><span class="material-symbols-outlined">key_off</span></span>
+            <div><strong><?= $totalSinPermisos ?></strong><span class="lbl">Sin permisos asignados</span></div>
+        </button>
+    </div>
 
-        <?php if (count($roles) === 0): ?>
+    <?php if (count($roles) === 0): ?>
+        <div class="ingenios-card">
             <div class="empty-state">
                 <span class="material-symbols-outlined">admin_panel_settings</span>
                 <strong>Aún no hay roles registrados</strong>
                 <span>Crea el primero con el botón "Crear rol".</span>
             </div>
-        <?php else: ?>
-            <table class="ingenios-table">
-                <tr>
-                    <th>ID</th>
-                    <th>Nombre</th>
-                    <th>Permisos asignados</th>
-                    <th>Acciones</th>
-                </tr>
-
-                <?php foreach ($roles as $r): ?>
-                    <?php
-                    $permisosRol = array_filter(array_map('trim', explode(',', (string) ($r['permisos'] ?? ''))));
-                    $esRolProtegido = strtolower($r['nombre_rol']) === 'superadmin';
-                    ?>
-                    <tr>
-                        <td><span class="id-chip">#<?= (int) $r['id'] ?></span></td>
-                        <td>
-                            <div class="ingenio-name">
-                                <span class="ingenio-icon">
-                                    <span class="material-symbols-outlined">admin_panel_settings</span>
-                                </span>
-                                <?= htmlspecialchars($r['nombre_rol']) ?>
-                            </div>
-                        </td>
-                        <td>
-                            <div class="permisos-count-cell">
-                                <strong><?= (int) $r['total_permisos'] ?> permiso(s)</strong>
-                                <?php if ($permisosRol): ?>
-                                    <div class="module-badges">
-                                        <?php foreach ($permisosRol as $permisoNombre): ?>
-                                            <span class="module-badge"><?= htmlspecialchars(etiqueta_permiso($permisoNombre)) ?></span>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php else: ?>
-                                    <span class="text-muted-small">Sin permisos asignados</span>
-                                <?php endif; ?>
-                            </div>
-                        </td>
-                        <td>
-                            <div class="row-actions">
-                                <a class="action-btn" href="editar_rol.php?id=<?= (int) $r['id'] ?>" title="Editar permisos">
-                                    <span class="material-symbols-outlined">tune</span>
-                                </a>
-
-                                <?php if (!$esRolProtegido): ?>
-                                    <a class="action-btn is-danger btn-delete" href="#"
-                                       data-url="eliminar_rol.php?id=<?= (int) $r['id'] ?>" title="Eliminar">
-                                        <span class="material-symbols-outlined">delete</span>
-                                    </a>
-                                <?php else: ?>
-                                    <span class="badge-protected">
-                                        <span class="material-symbols-outlined">lock</span>
-                                        Protegido
-                                    </span>
-                                <?php endif; ?>
-                            </div>
-                        </td>
-                    </tr>
+        </div>
+    <?php else: ?>
+        <div class="rl-toolbar">
+            <label class="rl-search">
+                <span class="material-symbols-outlined">search</span>
+                <input type="search" id="fBuscar" placeholder="Buscar rol o permiso…" autocomplete="off">
+            </label>
+            <select id="fModulo" aria-label="Filtrar por módulo">
+                <option value="">Todos los módulos</option>
+                <option value="__general">Solo roles generales</option>
+                <?php foreach (array_keys($opcModulos) as $op): ?>
+                    <option value="<?= htmlspecialchars(mb_strtolower($op)) ?>"><?= htmlspecialchars($op) ?></option>
                 <?php endforeach; ?>
-            </table>
-        <?php endif; ?>
-    </div>
+            </select>
+            <select id="fOrden" aria-label="Ordenar">
+                <option value="id">Orden: ID</option>
+                <option value="nombre">Orden: nombre</option>
+                <option value="permisos">Orden: más permisos</option>
+                <option value="usuarios">Orden: más usuarios</option>
+            </select>
+            <button type="button" class="rl-clear" id="fLimpiar">
+                <span class="material-symbols-outlined">filter_alt_off</span> Limpiar filtros
+            </button>
+            <span class="rl-count" id="conteo"></span>
+            <div class="rl-view" role="group" aria-label="Tipo de vista">
+                <button type="button" data-vista="lista" title="Ver como lista"><span class="material-symbols-outlined">view_list</span>Lista</button>
+                <button type="button" data-vista="tarjetas" title="Ver como tarjetas"><span class="material-symbols-outlined">grid_view</span>Tarjetas</button>
+            </div>
+        </div>
+
+        <div class="rl-list-head" aria-hidden="true">
+            <span>Rol y módulos</span><span>Permisos</span><span>Usuarios</span><span>Permisos por módulo</span><span>Acciones</span>
+        </div>
+        <div class="rl-grid is-list" id="gridRoles">
+            <?php foreach ($roles as $r):
+                $pct = $totalPermisosSistema > 0 ? min(100, round((int) $r['total_permisos'] * 100 / $totalPermisosSistema)) : 0;
+                $permisosTxt = mb_strtolower(implode(' ', array_merge(...array_values($r['grupos'] ?: [[]]))));
+            ?>
+                <article class="rl-card<?= $r['protegido'] ? ' is-super' : '' ?>"
+                         data-id="<?= (int) $r['id'] ?>"
+                         data-nombre="<?= htmlspecialchars(mb_strtolower($r['nombre_rol'])) ?>"
+                         data-texto="<?= htmlspecialchars(mb_strtolower($r['nombre_rol']) . ' ' . $permisosTxt) ?>"
+                         data-modulos="|<?= htmlspecialchars(mb_strtolower(implode('|', $r['lista_modulos']))) ?>|"
+                         data-general="<?= $r['lista_modulos'] ? 0 : 1 ?>"
+                         data-permisos="<?= (int) $r['total_permisos'] ?>"
+                         data-usuarios="<?= (int) $r['usuarios'] ?>">
+                    <div class="rl-head">
+                        <span class="rl-ico"><span class="material-symbols-outlined"><?= rol_icono($r['nombre_rol']) ?></span></span>
+                        <div>
+                            <h2><?= htmlspecialchars($r['nombre_rol']) ?><small>#<?= (int) $r['id'] ?></small></h2>
+                            <div class="rl-mods">
+                                <?php if ($r['lista_modulos']): ?>
+                                    <?php foreach ($r['lista_modulos'] as $m): ?>
+                                        <span class="rl-mod t<?= rol_tono_modulo($m) ?>"><?= htmlspecialchars($m) ?></span>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <span class="rl-mod is-general" title="Se puede asignar en cualquier módulo"><span class="material-symbols-outlined">all_inclusive</span>General · todos los módulos</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rl-stats">
+                        <div class="rl-stat">
+                            <strong><?= (int) $r['total_permisos'] ?></strong>
+                            <span>permiso(s) de <?= $totalPermisosSistema ?></span>
+                            <div class="rl-bar"><i style="width: <?= $pct ?>%"></i></div>
+                        </div>
+                        <div class="rl-stat">
+                            <strong><?= (int) $r['usuarios'] ?></strong>
+                            <span>usuario(s) con este rol</span>
+                        </div>
+                    </div>
+
+                    <div class="rl-permcol">
+                    <?php if ($r['grupos']): ?>
+                        <div class="rl-groups">
+                            <?php foreach ($r['grupos'] as $grupo => $lista): ?>
+                                <span class="rl-group"><?= htmlspecialchars($grupo) ?> <b><?= count($lista) ?></b></span>
+                            <?php endforeach; ?>
+                        </div>
+                        <details class="rl-detail">
+                            <summary><span class="material-symbols-outlined">expand_more</span>Ver permisos</summary>
+                            <div class="rl-perms">
+                                <?php foreach ($r['grupos'] as $grupo => $lista): ?>
+                                    <h4><?= htmlspecialchars($grupo) ?></h4>
+                                    <ul>
+                                        <?php foreach ($lista as $etiqueta): ?><li><?= htmlspecialchars($etiqueta) ?></li><?php endforeach; ?>
+                                    </ul>
+                                <?php endforeach; ?>
+                            </div>
+                        </details>
+                    <?php else: ?>
+                        <div class="rl-nogroups"><span class="material-symbols-outlined">info</span>Sin permisos asignados.</div>
+                    <?php endif; ?>
+                    </div>
+
+                    <div class="rl-foot">
+                        <a class="rl-btn" href="editar_rol.php?id=<?= (int) $r['id'] ?>">
+                            <span class="material-symbols-outlined">tune</span>Editar<span class="rl-lbl-extra"> rol y permisos</span>
+                        </a>
+                        <?php if ($r['protegido']): ?>
+                            <span class="rl-btn is-lock" title="El rol Superadmin no se puede eliminar"><span class="material-symbols-outlined">lock</span>Protegido</span>
+                        <?php elseif ($r['usuarios'] > 0): ?>
+                            <span class="rl-btn is-disabled" title="Tiene <?= (int) $r['usuarios'] ?> usuario(s): reasígnalos antes de eliminarlo"><span class="material-symbols-outlined">delete</span>En uso</span>
+                        <?php else: ?>
+                            <a class="rl-btn is-danger btn-delete" href="#" data-url="eliminar_rol.php?id=<?= (int) $r['id'] ?>" data-nombre="<?= htmlspecialchars($r['nombre_rol']) ?>">
+                                <span class="material-symbols-outlined">delete</span>Eliminar
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="rl-empty" id="sinResultados">
+            <span class="material-symbols-outlined">search_off</span>
+            Ningún rol coincide con los filtros.
+        </div>
+    <?php endif; ?>
 </div>
 
 <div id="deleteModal" class="modal">
@@ -288,7 +431,7 @@ $roles = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <span class="material-symbols-outlined">warning</span>
         </div>
         <h3>¿Eliminar rol?</h3>
-        <p>Puede afectar a los usuarios asignados a este rol.</p>
+        <p id="deleteTexto">Esta acción no se puede deshacer.</p>
 
         <div class="modal-buttons">
             <button id="cancelBtn" type="button">Cancelar</button>
@@ -298,23 +441,79 @@ $roles = $stmt->fetchAll(PDO::FETCH_ASSOC);
 </div>
 
 <script>
-const modal = document.getElementById("deleteModal");
-const confirmBtn = document.getElementById("confirmDelete");
-const cancelBtn = document.getElementById("cancelBtn");
+(function () {
+    const grid = document.getElementById("gridRoles");
+    if (grid) {
+        const tarjetas = Array.from(grid.children);
+        const $ = (id) => document.getElementById(id);
+        const buscar = $("fBuscar"), modulo = $("fModulo"), orden = $("fOrden");
+        const quickBtns = document.querySelectorAll("[data-quick]");
 
-document.querySelectorAll(".btn-delete").forEach(btn => {
-  btn.addEventListener("click", function (e) {
-    e.preventDefault();
-    confirmBtn.href = this.getAttribute("data-url");
-    modal.classList.add("active");
-  });
-});
+        // Vista lista / tarjetas (se recuerda en este navegador).
+        function vista(v) {
+            const lista = v !== "tarjetas";
+            grid.classList.toggle("is-list", lista);
+            document.body.classList.toggle("vista-lista", lista);
+            document.querySelectorAll("[data-vista]").forEach((b) => b.classList.toggle("is-on", b.dataset.vista === (lista ? "lista" : "tarjetas")));
+            try { localStorage.setItem("roles.vista", lista ? "lista" : "tarjetas"); } catch (e) {}
+        }
+        document.querySelectorAll("[data-vista]").forEach((b) => b.addEventListener("click", () => vista(b.dataset.vista)));
+        let vistaGuardada = "lista";
+        try { vistaGuardada = localStorage.getItem("roles.vista") || "lista"; } catch (e) {}
+        vista(vistaGuardada);
+        let quick = "";
 
-cancelBtn.onclick = () => modal.classList.remove("active");
+        function pintar() {
+            const q = buscar.value.trim().toLowerCase();
+            const campo = orden.value;
+            tarjetas.sort((a, b) => {
+                if (campo === "nombre") return a.dataset.nombre.localeCompare(b.dataset.nombre, "es");
+                if (campo === "id") return a.dataset.id - b.dataset.id;
+                return (b.dataset[campo] - a.dataset[campo]) || a.dataset.nombre.localeCompare(b.dataset.nombre, "es");
+            }).forEach((t) => grid.appendChild(t));
 
-window.onclick = (e) => {
-  if (e.target === modal) modal.classList.remove("active");
-};
+            let visibles = 0;
+            tarjetas.forEach((t) => {
+                const d = t.dataset;
+                let ok = !q || q.split(/\s+/).every((p) => d.texto.includes(p));
+                if (ok && modulo.value === "__general") ok = d.general === "1";
+                else if (ok && modulo.value) ok = d.modulos.includes("|" + modulo.value + "|");
+                if (ok && quick === "general") ok = d.general === "1";
+                if (ok && quick === "usuarios") ok = d.usuarios > 0;
+                if (ok && quick === "sinpermisos") ok = d.permisos === "0";
+                t.style.display = ok ? "" : "none";
+                visibles += ok ? 1 : 0;
+            });
+
+            $("sinResultados").style.display = visibles ? "none" : "block";
+            $("conteo").textContent = visibles === tarjetas.length ? `${visibles} rol(es)` : `${visibles} de ${tarjetas.length} rol(es)`;
+            $("fLimpiar").classList.toggle("is-visible", !!(buscar.value || modulo.value || quick));
+            quickBtns.forEach((b) => b.classList.toggle("is-on", b.dataset.quick === quick));
+        }
+
+        [buscar, modulo, orden].forEach((el) => el.addEventListener("input", pintar));
+        quickBtns.forEach((b) => b.addEventListener("click", () => { quick = quick === b.dataset.quick ? "" : b.dataset.quick; pintar(); }));
+        $("fLimpiar").addEventListener("click", () => { buscar.value = ""; modulo.value = ""; quick = ""; pintar(); });
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); buscar.focus(); }
+        });
+        pintar();
+    }
+
+    const modal = document.getElementById("deleteModal");
+    const confirmBtn = document.getElementById("confirmDelete");
+    document.querySelectorAll(".btn-delete").forEach((btn) => {
+        btn.addEventListener("click", function (e) {
+            e.preventDefault();
+            confirmBtn.href = this.dataset.url;
+            document.getElementById("deleteTexto").textContent = "Se eliminará el rol " + this.dataset.nombre + " y sus permisos. Esta acción no se puede deshacer.";
+            modal.classList.add("active");
+        });
+    });
+    document.getElementById("cancelBtn").onclick = () => modal.classList.remove("active");
+    window.addEventListener("click", (e) => { if (e.target === modal) modal.classList.remove("active"); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") modal.classList.remove("active"); });
+})();
 </script>
 <?php cengi_admin_footer(); ?>
 </body>
