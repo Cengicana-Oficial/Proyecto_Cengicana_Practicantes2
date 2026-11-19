@@ -108,6 +108,10 @@ function menu_modulo_meta($nombre)
         // Marca visible del modulo; el nombre en BD no cambia (se usa para enlazarlo).
         $nombreVisible = 'CengiConecta';
         $logo = 'assets/img/logo-cengiconecta.svg';
+    } elseif ($modulo === 'inventario de precursores') {
+        $ruta = '../inventario_precursores/index.php';
+        $icono = 'inventory_2';
+        $nombreVisible = 'SICIR · Inventario de precursores';
     } elseif ($modulo === 'solicitudes internas') {
         $ruta = '../sistema_de_solicitudes/index.php';
         $icono = 'assignment';
@@ -162,6 +166,7 @@ function menu_modulo_descripcion($moduloNormalizado)
         'experimentos' => 'Programas, ensayos y evaluaciones',
         'sigec' => 'Programas, ensayos y evaluaciones',
         'comites, transferencia y comunicacion' => 'Comités, transferencia y comunicación',
+        'inventario de precursores' => 'Reactivos, lotes y vales de bodega',
         'solicitudes internas' => 'Requerimientos entre áreas',
         'solicitud de visitas' => 'Programación y aprobación de visitas',
         'servicio tecnico' => 'Atención y seguimiento técnico',
