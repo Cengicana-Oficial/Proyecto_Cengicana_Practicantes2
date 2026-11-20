@@ -39,19 +39,19 @@ function inv_url(array $params = []): string
     return 'index.php' . ($params ? '?' . http_build_query($params) : '');
 }
 
-// Vistas: clave => [titulo del menu, permiso que la habilita, grupo, icono]
+// Vistas: clave => [titulo del menu, permiso que la habilita, grupo, icono Material Symbols]
 $secciones = [
-    'dashboard' => ['Tablero', 'inventario.tablero.ver', 'Operación', '▦'],
-    'vales' => ['Vales de salida', 'inventario.vales.ver', 'Operación', '🧾'],
-    'nuevo' => ['Nuevo vale', 'inventario.vales.crear', 'Operación', '＋'],
-    'entradas' => ['Entradas a bodega', 'inventario.entradas.registrar', 'Operación', '⬇'],
-    'lotes' => ['Control de lotes (FEFO)', 'inventario.lotes.ver', 'Operación', '▤'],
-    'salidas' => ['Control de salidas', 'inventario.informes.salidas', 'Informes', '⬆'],
-    'disponibilidad' => ['Disponibilidad de reactivos', 'inventario.informes.disponibilidad', 'Informes', '◉'],
-    'cierre' => ['Cierre mensual regulatorio', 'inventario.informes.cierre', 'Informes', '✎'],
-    'catalogo' => ['Catálogo y matriz', 'inventario.catalogo.gestionar', 'Configuración', '⚗'],
-    'laboratorios' => ['Laboratorios', 'inventario.laboratorios.gestionar', 'Configuración', '⌂'],
-    'usuarios' => ['Usuarios del módulo', 'inventario.usuarios.gestionar', 'Configuración', '☺'],
+    'dashboard' => ['Tablero', 'inventario.tablero.ver', 'Operación', 'space_dashboard'],
+    'vales' => ['Vales de salida', 'inventario.vales.ver', 'Operación', 'receipt_long'],
+    'nuevo' => ['Nuevo vale', 'inventario.vales.crear', 'Operación', 'note_add'],
+    'entradas' => ['Entradas a bodega', 'inventario.entradas.registrar', 'Operación', 'move_to_inbox'],
+    'lotes' => ['Control de lotes (FEFO)', 'inventario.lotes.ver', 'Operación', 'stacks'],
+    'salidas' => ['Control de salidas', 'inventario.informes.salidas', 'Informes', 'outbox'],
+    'disponibilidad' => ['Disponibilidad de reactivos', 'inventario.informes.disponibilidad', 'Informes', 'donut_large'],
+    'cierre' => ['Cierre mensual regulatorio', 'inventario.informes.cierre', 'Informes', 'event_available'],
+    'catalogo' => ['Catálogo y matriz', 'inventario.catalogo.gestionar', 'Configuración', 'science'],
+    'laboratorios' => ['Laboratorios', 'inventario.laboratorios.gestionar', 'Configuración', 'domain'],
+    'usuarios' => ['Usuarios del módulo', 'inventario.usuarios.gestionar', 'Configuración', 'group'],
 ];
 // Vistas que no aparecen en el menu y heredan el permiso de otra.
 $permisoExtra = ['vale' => 'inventario.vales.ver'];
