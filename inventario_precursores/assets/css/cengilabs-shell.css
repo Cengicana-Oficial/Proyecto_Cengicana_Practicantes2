@@ -1,0 +1,696 @@
+/* Shell CengiLabs para Inventario de precursores (SICIR).
+   Copia fiel de laboratorio/css/lab_shell.css (tokens, menu lateral, topbar, contenido),
+   laboratorio/css/inicio.css (tablero) y laboratorio/css/cengilabs.css (identidad oscura).
+   Si cambia el diseño de CengiLabs, actualizar aquí también. */
+
+:root {
+  --cengi-primary: #73BC25;
+  --cengi-primary-strong: #5E9B1D;
+  --cengi-primary-deep: #3A6312;
+  --cengi-primary-deep-2: #26420C;
+  --cengi-primary-text: #4E8418;
+  --cengi-secondary: #A3D300;
+  --cengi-amarillo: #FFCC00;
+  --cengi-amarillo-soft: #FFF8DB;
+  --cengi-amarillo-text: #8A6E00;
+  --cengi-naranja: #FF6B00;
+  --cengi-naranja-soft: #FFF0E6;
+  --cengi-naranja-text: #B34B00;
+  --cengi-gris: #CED2D5;
+  --cengi-gris-soft: #F3F4F5;
+  --cengi-accent-soft: #F1F8E9;
+  --cengi-border: #CED2D5;
+  --cengi-ink: #30353A;
+  --cengi-muted: #636A6F;
+  --cengi-surface: #ffffff;
+  --cengi-danger: #FF6B00;
+  --cengi-danger-strong: #B34B00;
+  --cengi-sidebar-width: 248px;
+  --cengi-topbar-height: 64px;
+  --cengi-radius: 12px;
+  --cengi-shadow: 0 1px 2px rgba(31, 35, 38, 0.06), 0 4px 16px rgba(31, 35, 38, 0.05);
+}
+
+/*
+ * padding: 0 aqui es a proposito (y no solo un reset "por si acaso"):
+ * varias vistas migradas todavia cargan su CSS propio de antes del shell
+ * (con reglas `body { padding: ...; }`, algunas solo dentro de sus propios
+ * @media). Como este selector usa una clase (.cengi-canvas), su
+ * especificidad (0,1,1) le gana siempre a un `body { padding: ... }` sin
+ * clase (0,0,1) sin importar el orden de los <link>, así que actua como
+ * red de seguridad para que ningun padding heredado desalinee el topbar/
+ * contenido respecto al borde de .cengi-sidebar.
+ */
+body.cengi-canvas {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: #F7F8F8;
+  color: var(--cengi-ink);
+  font-family: 'Inter', Arial, sans-serif;
+}
+
+/* ===== Sidebar (identico en estructura a cengicursos/menu.php) ===== */
+
+/* ===== Menú lateral — paleta oficial CENGICAÑA =====
+ * Fondo blanco con borde Gris #CED2D5; franja de marca con los cuatro colores; íconos en verde;
+ * sección activa en Verde principal #73BC25 con marca Amarillo #FFCC00; contadores en Amarillo;
+ * "Cerrar sesión" en Naranja. Sobre los colores base el texto va en tinta oscura (contraste AA). */
+.cengi-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--cengi-sidebar-width);
+  z-index: 1060;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-right: 1px solid var(--cengi-gris);
+  color: var(--cengi-ink);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cengi-gris) transparent;
+}
+
+.cengi-brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px 19px;
+  background: #ffffff;
+  text-decoration: none;
+  flex: 0 0 auto;
+}
+
+/* Franja de marca: verde principal · verde secundario · amarillo · naranja */
+.cengi-brand::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: linear-gradient(90deg,
+    var(--cengi-primary) 0 40%,
+    var(--cengi-secondary) 40% 65%,
+    var(--cengi-amarillo) 65% 85%,
+    var(--cengi-naranja) 85% 100%);
+}
+
+.cengi-brand:hover,
+.cengi-brand:focus {
+  background: var(--cengi-accent-soft);
+  text-decoration: none;
+}
+
+.cengi-brand-logo {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 64px;
+  object-fit: contain;
+}
+
+.cengi-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--cengi-secondary), var(--cengi-primary));
+}
+
+.cengi-brand-mark .material-symbols-outlined,
+.cengi-brand-mark i {
+  font-size: 19px;
+  color: #1F2326;
+}
+
+.cengi-brand-copy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.cengi-brand-copy strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--cengi-primary-deep);
+  letter-spacing: 0.02em;
+}
+
+.cengi-brand-copy small {
+  margin-top: 2px;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cengi-muted);
+}
+
+.cengi-sidebar-nav {
+  flex: 1 1 auto;
+  padding: 8px 12px 16px;
+}
+
+.cengi-nav-group {
+  padding: 10px 0 6px;
+}
+
+.cengi-nav-group + .cengi-nav-group {
+  border-top: 1px solid var(--cengi-gris-soft);
+}
+
+.cengi-nav-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--cengi-muted);
+}
+
+/* Marca de color por grupo: Flujo (verde), Calidad (amarillo), Sistema (gris) */
+.cengi-nav-label::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--cengi-primary);
+}
+
+.cengi-nav-group:nth-child(2) .cengi-nav-label::before { background: var(--cengi-amarillo); }
+.cengi-nav-group:nth-child(3) .cengi-nav-label::before { background: var(--cengi-gris); }
+
+.cengi-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  margin-bottom: 2px;
+  border-radius: 8px;
+  border-left: 4px solid transparent;
+  color: var(--cengi-ink);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.cengi-nav-item .material-symbols-outlined {
+  font-size: 19px;
+  width: 19px;
+  text-align: center;
+  color: var(--cengi-primary-text);
+}
+
+.cengi-nav-item:hover,
+.cengi-nav-item:focus {
+  background: var(--cengi-accent-soft);
+  border-left-color: var(--cengi-secondary);
+  color: var(--cengi-primary-deep-2);
+  text-decoration: none;
+}
+
+.cengi-nav-item:focus-visible {
+  outline: 2px solid var(--cengi-amarillo);
+  outline-offset: 1px;
+}
+
+.cengi-nav-item.is-active {
+  background: var(--cengi-primary);
+  border-left-color: var(--cengi-amarillo);
+  color: #1F2326;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(115, 188, 37, 0.28);
+}
+
+.cengi-nav-item.is-active .material-symbols-outlined {
+  color: #1F2326;
+}
+
+.cengi-nav-badge {
+  margin-left: auto;
+  min-width: 20px;
+  background: var(--cengi-amarillo);
+  color: #1F2326;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  padding: 0 7px;
+  border-radius: 20px;
+}
+
+.cengi-nav-item.is-active .cengi-nav-badge {
+  background: #ffffff;
+}
+
+.cengi-sidebar-foot {
+  flex: 0 0 auto;
+  padding: 12px 12px 18px;
+  border-top: 1px solid var(--cengi-gris);
+  background: var(--cengi-gris-soft);
+}
+
+.cengi-menu-link {
+  color: var(--cengi-ink);
+}
+
+.cengi-menu-link:hover,
+.cengi-menu-link:focus {
+  background: var(--cengi-accent-soft);
+  color: var(--cengi-primary-deep-2);
+}
+
+.cengi-logout-link,
+.cengi-logout-link .material-symbols-outlined {
+  color: var(--cengi-naranja-text);
+}
+
+.cengi-logout-link:hover,
+.cengi-logout-link:focus {
+  background: var(--cengi-naranja-soft);
+  border-left-color: var(--cengi-naranja);
+  color: var(--cengi-naranja-text);
+}
+
+.cengi-sidebar-version {
+  margin-top: 10px;
+  padding: 0 10px;
+  font-size: 10.5px;
+  color: var(--cengi-muted);
+}
+
+/* ===== Topbar ===== */
+
+.cengi-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1050;
+  min-height: var(--cengi-topbar-height);
+  margin-left: var(--cengi-sidebar-width);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 28px;
+  background: var(--cengi-surface);
+  border-bottom: 1px solid var(--cengi-border);
+}
+
+.cengi-topbar-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cengi-topbar-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--cengi-ink);
+  letter-spacing: -0.01em;
+}
+
+.cengi-topbar-sub {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--cengi-muted);
+}
+
+.cengi-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+
+.cengi-pill {
+  padding: 5px 11px;
+  border-radius: 100px;
+  background: var(--cengi-accent-soft);
+  border: 1px solid #C7E4A8;
+  color: var(--cengi-primary-deep);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cengi-userbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cengi-avatar {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--cengi-primary);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cengi-userbox-u1 {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cengi-ink);
+}
+
+.cengi-userbox-u2 {
+  font-size: 11px;
+  color: var(--cengi-muted);
+}
+
+.cengi-menu-toggle {
+  display: none;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: var(--cengi-accent-soft);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: none;
+  cursor: pointer;
+}
+
+.cengi-menu-toggle span {
+  width: 17px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--cengi-primary-deep);
+}
+
+/* ===== Content wrapper (reemplaza a .main-content del shell anterior) ===== */
+
+.cengi-lab-content {
+  margin-left: var(--cengi-sidebar-width);
+  min-height: calc(100vh - var(--cengi-topbar-height));
+  padding: 26px 28px 60px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1024px) {
+  .cengi-sidebar {
+    left: calc(var(--cengi-sidebar-width) * -1);
+    transition: left 0.2s ease;
+  }
+
+  .cengi-sidebar.is-open {
+    left: 0;
+    box-shadow: 18px 0 40px rgba(31, 35, 38, 0.35);
+  }
+
+  .cengi-topbar,
+  .cengi-lab-content {
+    margin-left: 0;
+  }
+
+  .cengi-menu-toggle {
+    display: flex;
+  }
+}
+
+/* ---- Tablero (laboratorio/css/inicio.css) ---- */
+.ini {
+  --ini-verde: #73BC25;
+  --ini-verde-2: #A3D300;
+  --ini-amarillo: #FFCC00;
+  --ini-naranja: #FF6B00;
+  --ini-gris: #CED2D5;
+  /* Tintes claros de la misma paleta para fondos suaves */
+  --ini-verde-tinte: #EEF7E4;
+  --ini-gris-tinte: #F3F4F5;
+  --ini-naranja-tinte: #FFF0E6;
+  --ini-tinta: #1E2B22;
+  --ini-texto-suave: #4E5A52;
+  display:flex; flex-direction:column; gap:20px; max-width:1280px; margin:0 auto;
+}
+
+/* ---- Bienvenida ---- */
+.ini-hero {
+  position:relative; overflow:hidden; display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap;
+  padding:28px 30px; border-radius:18px; color:var(--ini-tinta);
+  background:linear-gradient(120deg, var(--ini-verde) 0%, var(--ini-verde-2) 100%);
+  box-shadow:0 10px 30px rgba(115,188,37,.25);
+}
+.ini-hero::before { content:""; position:absolute; right:-40px; top:-70px; width:220px; height:220px; border-radius:50%; background:var(--ini-amarillo); opacity:.35; pointer-events:none; }
+.ini-hero::after { content:""; position:absolute; right:120px; bottom:-110px; width:240px; height:240px; border-radius:50%; border:34px solid rgba(255,255,255,.22); pointer-events:none; }
+.ini-hero-copy { position:relative; z-index:1; max-width:640px; }
+.ini-eyebrow { display:inline-block; margin-bottom:6px; font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:rgba(30,43,34,.72); }
+.ini-hero h1 { margin:0 0 6px; font-family:'Space Grotesk', 'Inter', sans-serif; font-size:clamp(24px, 3vw, 32px); font-weight:700; line-height:1.15; }
+.ini-hero p { margin:0; font-size:15px; color:rgba(30,43,34,.85); }
+.ini-hero p b { color:var(--ini-tinta); }
+.ini-hero-actions { position:relative; z-index:1; display:flex; gap:10px; flex-wrap:wrap; }
+.ini-btn { display:inline-flex; align-items:center; gap:8px; min-height:42px; padding:0 16px; border-radius:10px; font-size:14px; font-weight:700; text-decoration:none; color:var(--ini-tinta); transition:transform .15s ease, background .15s ease, box-shadow .15s ease; }
+.ini-btn .material-symbols-outlined { font-size:20px; }
+.ini-btn:hover { transform:translateY(-1px); }
+.ini-btn-primary { background:var(--ini-amarillo); box-shadow:0 4px 12px rgba(30,43,34,.15); }
+.ini-btn-primary:hover { box-shadow:0 6px 16px rgba(30,43,34,.22); }
+.ini-btn-light { background:rgba(255,255,255,.7); border:1px solid rgba(255,255,255,.9); }
+.ini-btn-light:hover { background:#fff; }
+
+/* ---- Indicadores ---- */
+.ini-kpis { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px; }
+.ini-kpi { position:relative; overflow:hidden; display:flex; align-items:center; gap:14px; padding:16px 18px; background:#fff; border:1px solid var(--ini-gris); border-radius:14px; }
+.ini-kpi::after { content:""; position:absolute; left:0; right:0; bottom:0; height:4px; background:var(--kpi-color, var(--ini-verde)); }
+.ini-kpi-icon { flex:none; display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:12px; background:var(--kpi-color, var(--ini-verde)); color:var(--ini-tinta); }
+.ini-kpi:nth-child(1) { --kpi-color: var(--ini-verde); }
+.ini-kpi:nth-child(2) { --kpi-color: var(--ini-verde-2); }
+.ini-kpi:nth-child(3) { --kpi-color: var(--ini-amarillo); }
+.ini-kpi:nth-child(4) { --kpi-color: var(--ini-naranja); }
+.ini-kpi strong { display:block; font-family:'Space Grotesk', 'Inter', sans-serif; font-size:26px; line-height:1.1; color:var(--ini-tinta); }
+.ini-kpi span { font-size:12.5px; color:var(--ini-texto-suave); }
+
+/* ---- Tarjetas ---- */
+.ini-grid { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.15fr); gap:16px; align-items:start; }
+.ini-card { background:#fff; border:1px solid var(--ini-gris); border-radius:16px; padding:18px 18px 10px; }
+.ini-card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; padding-bottom:10px; border-bottom:3px solid var(--ini-verde); }
+.ini-card-head h2, .ini-section-head h2 { margin:0; font-size:16px; font-weight:700; color:var(--ini-tinta); }
+.ini-count { min-width:26px; height:26px; padding:0 8px; border-radius:13px; background:var(--ini-naranja); color:var(--ini-tinta); font-size:12px; font-weight:800; line-height:26px; text-align:center; }
+
+.ini-tasks, .ini-flow { list-style:none; margin:0; padding:0; }
+.ini-task, .ini-step { display:flex; align-items:center; gap:12px; padding:12px 8px; margin:0 -8px; border-radius:10px; color:var(--ini-tinta); text-decoration:none; transition:background .15s ease; }
+.ini-task:hover, .ini-step:hover { background:var(--ini-verde-tinte); }
+.ini-tasks li + li { border-top:1px solid var(--ini-gris-tinte); }
+.ini-task-num { flex:none; min-width:40px; height:40px; padding:0 8px; border-radius:10px; background:var(--ini-verde); color:var(--ini-tinta); font-family:'Space Grotesk', 'Inter', sans-serif; font-size:18px; font-weight:700; line-height:40px; text-align:center; }
+.ini-task.is-alerta .ini-task-num { background:var(--ini-naranja); }
+.ini-task.is-alerta { box-shadow:inset 3px 0 0 var(--ini-naranja); }
+.ini-task-text, .ini-step-text { flex:1; min-width:0; }
+.ini-task-text b, .ini-step-text b { display:block; font-size:14px; font-weight:600; }
+.ini-task-text small, .ini-step-text small { display:block; margin-top:2px; font-size:12.5px; color:var(--ini-texto-suave); }
+.ini-task-go { color:var(--ini-gris); }
+.ini-task:hover .ini-task-go { color:var(--ini-verde); }
+
+.ini-empty { display:flex; align-items:center; gap:14px; padding:18px 4px 14px; color:var(--ini-texto-suave); font-size:13.5px; }
+.ini-empty .material-symbols-outlined { font-size:34px; color:var(--ini-verde); }
+.ini-empty p { margin:0; }
+.ini-empty b { color:var(--ini-tinta); }
+
+/* Flujo por etapas, con línea guía gris entre los íconos */
+.ini-flow { position:relative; }
+.ini-flow::before { content:""; position:absolute; left:19px; top:28px; bottom:28px; width:2px; background:var(--ini-gris); }
+.ini-step-icon { position:relative; z-index:1; flex:none; display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:50%; background:#fff; border:2px solid var(--ini-gris); color:var(--ini-tinta); transition:background .15s ease, border-color .15s ease; }
+.ini-step:hover .ini-step-icon { background:var(--ini-verde); border-color:var(--ini-verde); }
+.ini-step-icon .material-symbols-outlined { font-size:20px; }
+.ini-step-badge { flex:none; padding:4px 10px; border-radius:999px; background:var(--ini-gris-tinte); border:1px solid var(--ini-gris); color:var(--ini-texto-suave); font-size:13px; font-weight:700; white-space:nowrap; }
+.ini-step-badge small { font-size:11px; font-weight:500; }
+.ini-step-badge.is-on { background:var(--ini-verde-2); border-color:var(--ini-verde-2); color:var(--ini-tinta); }
+
+/* ---- Tipos de muestra ---- */
+.ini-section { scroll-margin-top:calc(var(--cengi-topbar-height, 64px) + 12px); }
+.ini-section-head { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:12px; padding-left:12px; border-left:4px solid var(--ini-amarillo); }
+.ini-section-head p { margin:4px 0 0; font-size:13.5px; color:var(--ini-texto-suave); }
+.ini-types { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:16px; }
+.ini-type { display:flex; flex-direction:column; overflow:hidden; background:#fff; border:1px solid var(--ini-gris); border-radius:16px; color:var(--ini-tinta); text-decoration:none; transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.ini-type:hover, .ini-type:focus-visible { transform:translateY(-3px); border-color:var(--ini-verde); box-shadow:0 12px 28px rgba(115,188,37,.22); }
+.ini-type:focus-visible { outline:3px solid var(--ini-amarillo); outline-offset:2px; }
+.ini-type-media { position:relative; height:132px; background:linear-gradient(135deg, var(--ini-verde-tinte), var(--ini-gris-tinte)); border-bottom:4px solid var(--ini-verde-2); }
+.ini-type-media img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .35s ease; }
+.ini-type:hover .ini-type-media img { transform:scale(1.05); }
+.ini-type-prefix { position:absolute; left:12px; bottom:10px; z-index:1; padding:3px 9px; border-radius:6px; background:var(--ini-amarillo); color:var(--ini-tinta); font-size:12px; font-weight:800; letter-spacing:.04em; }
+.ini-type-body { display:flex; flex-direction:column; gap:8px; flex:1; padding:14px 16px 16px; }
+.ini-type-body h3 { margin:0; font-size:16px; font-weight:700; }
+.ini-type-body p { margin:0; font-size:13px; line-height:1.5; color:var(--ini-texto-suave); }
+.ini-type-foot { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; padding-top:8px; border-top:1px solid var(--ini-gris-tinte); font-size:12px; color:var(--ini-texto-suave); }
+.ini-type-cta { display:inline-flex; align-items:center; gap:4px; font-weight:700; color:var(--ini-tinta); }
+.ini-type-cta .material-symbols-outlined { font-size:18px; color:var(--ini-verde); transition:transform .15s ease; }
+.ini-type:hover .ini-type-cta .material-symbols-outlined { transform:translateX(3px); }
+
+/* ---- Responsivo ---- */
+@media (max-width:1100px) { .ini-kpis { grid-template-columns:repeat(2, minmax(0, 1fr)); } .ini-grid { grid-template-columns:1fr; } }
+@media (max-width:600px) {
+  .ini-hero { padding:22px 18px; border-radius:14px; }
+  .ini-hero::after { display:none; }
+  .ini-hero-actions { width:100%; }
+  .ini-btn { flex:1; justify-content:center; }
+  .ini-kpis { grid-template-columns:1fr 1fr; gap:10px; }
+  .ini-kpi { padding:12px; gap:10px; }
+  .ini-kpi strong { font-size:22px; }
+  .ini-step-badge small { display:none; }
+}
+@media (prefers-reduced-motion:reduce) { .ini *, .ini *::before, .ini *::after { transition:none !important; } }
+
+/* ---- Identidad CengiLabs (laboratorio/css/cengilabs.css) ---- */
+/* ---------- Barra lateral oscura ---------- */
+.cengi-sidebar {
+  border-right: 0;
+  color: #fff;
+  background-color: #04330f;
+  background-image:
+    linear-gradient(180deg, rgba(4,51,15,1) 0%, rgba(10,74,28,.97) 55%, rgba(13,90,34,.86) 100%),
+    url('../../../login/assets/img/campo-cana.jpg');
+  background-size: cover, cover;
+  background-position: center, center bottom;
+  scrollbar-color: rgba(188,243,46,.35) transparent;
+}
+.cengi-brand { gap: 12px; padding: 18px 16px; background: transparent; }
+.cengi-brand::after { left: 16px; right: 16px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, #73BC25, #A3D300, #FFCC00, #FF6B00); }
+.cengi-brand:hover, .cengi-brand:focus { background: rgba(255,255,255,.05); }
+.cengi-brand .cgl-logo { width: 56px; height: auto; flex: none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+.cengi-brand:hover .cgl-logo { transform: rotate(-6deg) scale(1.06); }
+.cengi-brand-copy { line-height: 1; }
+.cengi-brand-copy strong { font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 24px; font-weight: 850; letter-spacing: -.055em; color: #fff; }
+.cengi-brand-copy strong b { color: #bcf32e; font-weight: 850; }
+.cengi-brand-copy small { margin-top: 6px; font-weight: 700; color: rgba(255,255,255,.66); }
+
+.cengi-nav-group + .cengi-nav-group { border-top: 1px solid rgba(188,243,46,.14); }
+.cengi-nav-label { color: rgba(220,255,152,.62); }
+.cengi-nav-group:nth-child(3) .cengi-nav-label::before { background: rgba(255,255,255,.45); }
+.cengi-nav-item { color: rgba(255,255,255,.86); transition: background-color .18s, color .18s, transform .18s, border-color .18s; }
+.cengi-nav-item .material-symbols-outlined { color: #dcfa51; }
+.cengi-nav-item:hover, .cengi-nav-item:focus { background: rgba(255,255,255,.09); border-left-color: #A3D300; color: #fff; transform: translateX(2px); }
+.cengi-nav-item.is-active { background: rgba(188,243,46,.16); border-left-color: #bcf32e; color: #e6ff9e; box-shadow: none; }
+.cengi-nav-item.is-active .material-symbols-outlined { color: #e6ff9e; }
+.cengi-nav-badge { color: #073c18; }
+.cengi-nav-item.is-active .cengi-nav-badge { background: #FFCC00; }
+.cengi-sidebar-foot { border-top: 1px solid rgba(188,243,46,.2); background: rgba(0,0,0,.18); }
+.cengi-menu-link { color: rgba(255,255,255,.86); }
+.cengi-menu-link:hover, .cengi-menu-link:focus { background: rgba(255,255,255,.09); color: #fff; }
+.cengi-logout-link, .cengi-logout-link .material-symbols-outlined { color: #ffb4a6; }
+.cengi-logout-link:hover, .cengi-logout-link:focus { background: rgba(255,107,0,.16); border-left-color: #FF6B00; color: #ffd2c9; }
+.cengi-sidebar-version { color: rgba(255,255,255,.55); }
+.cengi-sidebar :focus-visible { outline: 2px solid #bcf32e; outline-offset: 2px; }
+
+/* ---------- Inicio: bienvenida con foto ---------- */
+.ini-hero {
+  isolation: isolate;
+  color: #fff;
+  border: 1px solid rgba(171,235,63,.45);
+  border-radius: 20px;
+  background:
+    linear-gradient(110deg, rgba(4,48,17,.95) 0%, rgba(8,70,26,.87) 55%, rgba(17,96,34,.72) 100%),
+    url('../../../login/assets/img/campo-cana.jpg') center 60% / cover;
+  box-shadow: 0 20px 44px rgba(7,60,24,.22);
+  animation: cgl-entrar .6s cubic-bezier(.2,.8,.2,1) backwards;
+}
+.ini-hero::before { /* destello periódico (reemplaza el círculo decorativo) */
+  right: auto; top: 0; bottom: 0; left: -40%; width: 30%; height: auto; border-radius: 0; opacity: 1; z-index: -1;
+  background: linear-gradient(100deg, transparent, rgba(188,243,46,.12), transparent); transform: skewX(-18deg);
+  animation: cgl-barrido 9s 1.2s ease-in-out infinite;
+}
+.ini-hero::after { border-color: rgba(188,243,46,.08); }
+.ini-eyebrow { padding: 5px 11px; border-radius: 99px; background: rgba(188,243,46,.14); border: 1px solid rgba(188,243,46,.35); color: #e6ff9e; }
+.ini-hero h1 { font-family: Inter, "Segoe UI", Arial, sans-serif; font-weight: 850; letter-spacing: -.035em; color: #fff; }
+.ini-hero h1::after { content: ""; display: block; width: 90px; height: 4px; margin-top: 10px; border-radius: 6px; background: linear-gradient(90deg, #A3D300, #FFCC00); }
+.ini-hero p { margin-top: 10px; color: rgba(255,255,255,.86); }
+.ini-hero p b { color: #e6ff9e; }
+.cgl-hero-brand { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; font-size: 12px; color: rgba(255,255,255,.7); }
+.cgl-hero-brand img { width: 40px; height: auto; }
+.cgl-hero-brand strong { font-size: 19px; font-weight: 850; letter-spacing: -.05em; color: #fff; }
+.cgl-hero-brand strong b { color: #bcf32e; font-weight: 850; }
+.ini-btn-primary { background: linear-gradient(100deg, #bcf32e, #A3D300); color: #073c18; box-shadow: 0 10px 24px rgba(163,211,0,.3); }
+.ini-btn-primary:hover { box-shadow: 0 14px 30px rgba(188,243,46,.42); }
+.ini-btn-light { background: rgba(255,255,255,.12); border: 1px solid rgba(188,243,46,.4); color: #fff; backdrop-filter: blur(6px); }
+.ini-btn-light:hover { background: rgba(255,255,255,.2); }
+
+/* Indicadores: entrada escalonada y elevación */
+.ini-kpi { animation: cgl-entrar .55s cubic-bezier(.2,.8,.2,1) backwards; transition: transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s; }
+.ini-kpi:nth-child(1) { animation-delay: .12s; }
+.ini-kpi:nth-child(2) { animation-delay: .19s; }
+.ini-kpi:nth-child(3) { animation-delay: .26s; }
+.ini-kpi:nth-child(4) { animation-delay: .33s; }
+.ini-kpi:hover { transform: translateY(-4px); box-shadow: 0 16px 30px rgba(7,60,24,.13); }
+.ini-kpi-icon { transition: transform .35s cubic-bezier(.2,.8,.2,1); }
+.ini-kpi:hover .ini-kpi-icon { transform: rotate(-6deg) scale(1.08); }
+
+@keyframes cgl-entrar { from { opacity: 0; transform: translateY(14px); } }
+@keyframes cgl-barrido { 0% { left: -40%; } 22%, 100% { left: 130%; } }
+
+@media print { .ini-hero { background: #1f5632; box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .ini-hero, .ini-hero::before, .ini-kpi { animation: none !important; }
+  .cengi-nav-item, .cengi-brand .cgl-logo, .ini-kpi, .ini-kpi-icon { transition: none !important; }
+}
+
+/* =============================================================
+   Ajustes propios de Inventario (no vienen de CengiLabs)
+   ============================================================= */
+
+/* Paleta CENGICAÑA para los componentes del modulo (tarjetas, tablas, botones, estados). */
+:root {
+  --g: #73BC25; --g2: #5E9B1D; --g3: #3A6312; --gd: #26420C; --gl: #EEF7E4; --gll: #F1F8E9;
+  --ink: #30353A; --mut: #636A6F; --line: #E3E6E8; --bg: #F7F8F8; --card: #fff;
+  --red: #B34B00; --redl: #FFF0E6; --amb: #8A6E00; --ambl: #FFF8DB; --blu: #4E8418; --blul: #F6FBE0;
+  --r: 14px;
+}
+
+/* Marca: sin logo propio, se usa el recuadro de icono con el tamaño del logo de CengiLabs. */
+.cengi-brand .inv-brand-mark { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #bcf32e, #73BC25); box-shadow: 0 6px 14px rgba(0,0,0,.25); transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+.cengi-brand .inv-brand-mark .material-symbols-outlined { font-size: 30px; color: #073c18; }
+.cengi-brand:hover .inv-brand-mark { transform: rotate(-6deg) scale(1.06); }
+.cgl-hero-brand .inv-brand-mark { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #bcf32e, #73BC25); }
+.cgl-hero-brand .inv-brand-mark .material-symbols-outlined { font-size: 20px; color: #073c18; }
+
+/* Contenido: el CSS antiguo del modulo usaba `main {}` y `.layout`; el shell manda. */
+.cengi-lab-content .alert.flash { margin-bottom: 14px; }
+h1.pt { font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 22px; color: var(--cengi-ink); }
+.card { border-radius: var(--r); border-color: var(--cengi-gris); box-shadow: none; }
+.card h3 { color: var(--cengi-ink); }
+th { background: var(--cengi-gris-soft); color: var(--cengi-muted); }
+.btn.p { background: var(--cengi-primary); border-color: var(--cengi-primary); color: #1F2326; }
+.btn.p:hover { background: var(--cengi-secondary); border-color: var(--cengi-secondary); }
+.kpi { border-color: var(--cengi-gris); border-left-color: var(--cengi-primary); }
+.kpi.warn { border-left-color: var(--cengi-amarillo); } .kpi.bad { border-left-color: var(--cengi-naranja); } .kpi.info { border-left-color: var(--cengi-secondary); }
+
+/* Tablero */
+.ini-kpi .ini-kpi-icon .material-symbols-outlined { font-size: 24px; color: var(--ini-tinta); }
+.ini-task .pill { flex: none; }
+.ini-task.is-aviso .ini-task-num { background: var(--ini-amarillo); }
+.ini-task.is-aviso { box-shadow: inset 3px 0 0 var(--ini-amarillo); }
+.inv-task-ico { display: inline-flex; align-items: center; justify-content: center; }
+.inv-task-ico .material-symbols-outlined { font-size: 21px; }
+.inv-detalle { margin: 6px 0 8px; }
+.inv-detalle summary { cursor: pointer; padding: 8px 0; font-size: 13px; font-weight: 700; color: var(--ini-tinta); }
+.inv-detalle summary:hover { color: var(--cengi-primary-text); }
+.inv-detalle-lista { max-height: 340px; overflow-y: auto; padding-right: 4px; }
+.inv-barras { padding: 4px 0 10px; }
+.inv-barra { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.inv-barra-lab { width: 170px; flex: none; font-size: 13px; font-weight: 600; color: var(--ini-tinta); }
+.inv-barra-n { width: 44px; text-align: right; font-weight: 700; font-family: 'Space Grotesk', 'Inter', sans-serif; }
+.inv-barra .bar { height: 12px; }
+.bar i.c0 { background: #73BC25; } .bar i.c1 { background: #A3D300; } .bar i.c2 { background: #FFCC00; } .bar i.c3 { background: #FF6B00; }
+
+@media (max-width: 1024px) { .inv-userbox-copy { display: none; } }
+@media (max-width: 600px) { .cengi-topbar { padding: 0 14px; } .cengi-pill { display: none; } .cengi-lab-content { padding: 18px 14px 50px; } .inv-barra-lab { width: 110px; } }
+@media print {
+  .cengi-sidebar, .cengi-topbar, dialog { display: none !important; }
+  .cengi-lab-content { margin: 0; padding: 0; }
+}

@@ -251,4 +251,22 @@
       })();
     });
   });
+
+  // ---------------------------------------------------------------- Menu lateral en pantallas pequenas
+  (function () {
+    // Mismo comportamiento que el shell de CengiLabs (laboratorio/includes/shell_sidebar.php).
+    var side = document.getElementById('cengiLabSidebar');
+    var toggle = document.getElementById('cengiLabMenuToggle');
+    if (!side || !toggle) { return; }
+    function poner(abierto) {
+      side.classList.toggle('is-open', abierto);
+      toggle.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+    }
+    toggle.addEventListener('click', function () { poner(!side.classList.contains('is-open')); });
+    document.addEventListener('click', function (ev) {
+      if (side.classList.contains('is-open') && !side.contains(ev.target) && !toggle.contains(ev.target)) { poner(false); }
+    });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && side.classList.contains('is-open')) { poner(false); toggle.focus(); } });
+    side.addEventListener('click', function (ev) { if (ev.target.closest('a')) { poner(false); } });
+  })();
 })();
