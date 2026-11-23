@@ -101,6 +101,14 @@ check(!aula_session_window($slot,null,'2026-10-11 09:00:00'),'Cerrar al fin');
 check(!aula_session_window($slot,['habilitada'=>0],'2026-10-11 08:30:00'),'Bloqueo docente');
 try{aula_datetime('2026-02-30T08:30');throw new RuntimeException('Fecha inexistente aceptada');}catch(InvalidArgumentException $e){}
 $_SESSION=['aula_csrf'=>'token'];$_POST=['csrf'=>'incorrecto'];expect_failure('aula_check_csrf','CSRF no validado');
+// Codigo de insercion de Teams / Stream: se guarda solo el embed.aspx con su UniqueId y se reproduce en el aula.
+$streamIframe='<iframe src="https://cengicana.sharepoint.com/sites/Cap/_layouts/15/embed.aspx?UniqueId=0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0&amp;embed=%7B%22ust%22%3Atrue%7D&amp;referrer=StreamWebApp&amp;referrerScenario=EmbedDialog.Create" width="640" height="360" allowfullscreen title="Sesión 1"></iframe>';
+$streamUrl=aula_video_source($streamIframe);
+check($streamUrl==='https://cengicana.sharepoint.com/sites/Cap/_layouts/15/embed.aspx?UniqueId=0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0','Embed Stream normalizado');
+check((aula_video_embed($streamUrl)['fuente']??'')==='Microsoft Stream','Stream se reproduce en el aula');
+check(aula_video_embed('https://cengicana.sharepoint.com/:v:/s/Cap/EaBcDeF?e=x')===null&&aula_video_es_stream_compartido('https://cengicana.sharepoint.com/:v:/s/Cap/EaBcDeF?e=x'),'Enlace compartido de Stream se abre aparte');
+check((aula_video_embed(aula_video_source('<iframe width="560" src="https://www.youtube.com/embed/dQw4w9WgXcQ?si=x" allowfullscreen></iframe>'))['fuente']??'')==='YouTube','Embed YouTube');
+check(aula_video_source('<video src="https://x.test/a.mp4"></video>')===null&&aula_video_source('<iframe src="javascript:alert(1)"></iframe>')===null,'HTML o esquemas no permitidos');
 echo "Calificacion, validacion y CSRF: OK\n";
 if(!in_array('--mysql',$argv,true))exit;
 $env=[];

@@ -547,3 +547,13 @@ body.aula-visor-activo { overflow:hidden; }
 .aula-modalidad-tabla td, .aula-modalidad-tabla th { font-size:12px; vertical-align:middle !important; }
 .aula-asis-btn.is-presente.is-grabacion { background:var(--cg-verde2-soft); color:var(--cg-verde2-text); border-color:var(--cg-verde-2); }
 .aula-async-previa { margin-top:6px; padding:4px 8px; border-radius:6px; background:var(--cg-amarillo-soft); color:var(--cg-amarillo-text) !important; font-weight:600; }
+
+/* Grabaciones: enlace o codigo de insercion (formularios de Gestion y de la vista previa del estudiante). */
+.aula-form textarea[data-video-detectar] { width:100%; font-family:Consolas, monospace; font-size:12px; resize:vertical; }
+.aula-video-detectado { display:block; margin-top:4px; font-size:11px; font-weight:600; }
+.aula-video-detectado.is-ok { color:var(--cg-verde-text); }
+.aula-video-detectado.is-aviso { color:var(--cg-amarillo-text); }
+.aula-video-ayuda { margin-top:4px; font-size:11px; font-weight:400; color:var(--cg-gris-text); }
+.aula-video-ayuda > summary { cursor:pointer; color:var(--cg-verde-text); font-weight:600; }
+.aula-video-ayuda ul { margin:6px 0 0; padding-left:18px; line-height:1.55; }
+.aula-video-ayuda code { font-size:11px; }

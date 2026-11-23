@@ -208,7 +208,31 @@ function aula_video_embed($url) {
     if ($host === 'loom.com' && preg_match('#^/(?:share|embed)/([a-f0-9]{20,})#', $path, $m)) {
         return ['fuente' => 'Loom', 'embed' => 'https://www.loom.com/embed/' . $m[1], 'miniatura' => null];
     }
+    // Grabaciones de Teams en Microsoft Stream (SharePoint / OneDrive de la organizacion): solo el codigo de
+    // insercion (Compartir -> Insertar) se puede reproducir; los enlaces para compartir abren Stream aparte.
+    if (preg_match('/(^|\.)sharepoint\.com$/', $host) && stripos($path, '/_layouts/15/embed.aspx') !== false) {
+        return ['fuente' => 'Microsoft Stream', 'embed' => $url, 'miniatura' => null];
+    }
+    if ($host === 'onedrive.live.com' && $path === '/embed') {
+        return ['fuente' => 'OneDrive', 'embed' => $url, 'miniatura' => null];
+    }
     return null;
+}
+
+/** Enlace de Teams / Stream / OneDrive que se abre aparte porque no es el codigo de insercion. */
+function aula_video_es_stream_compartido($url) {
+    $host = strtolower((string) parse_url((string) $url, PHP_URL_HOST));
+    return (bool) preg_match('/(^|\.)(sharepoint\.com|1drv\.ms|onedrive\.live\.com|stream\.microsoft\.com)$/', $host) && !aula_video_embed($url);
+}
+
+/** Ayuda comun de los formularios de grabacion: de donde sacar el enlace o el codigo de insercion. */
+function aula_video_ayuda_html() {
+    return '<details class="aula-video-ayuda"><summary>¿Qué enlace pego?</summary><ul>'
+        . '<li><b>YouTube</b>: el enlace del video (también «no listado») o Compartir → Insertar.</li>'
+        . '<li><b>Teams / Microsoft Stream</b>: abre la grabación en Stream → <b>Compartir → Insertar código</b> y pega el código completo (<code>&lt;iframe…&gt;</code>). El estudiante debe tener permiso para ver el archivo en SharePoint/OneDrive.</li>'
+        . '<li><b>Google Drive</b>: Compartir → «Cualquier persona con el enlace» y pega el enlace.</li>'
+        . '<li><b>Vimeo o Loom</b>: el enlace del video o su código de inserción.</li>'
+        . '<li>Otros enlaces se publican como botón «Abrir» y no se reproducen dentro del aula.</li></ul></details>';
 }
 
 /**

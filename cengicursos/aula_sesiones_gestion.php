@@ -32,7 +32,7 @@ $edRecurso=static function(array $r,$ancla) use($cid,$sessions,$edVista,$edDt){
         <?php if($reproductor): ?><div class="aula-ed-video"><?= $reproductor ?></div><?php else: ?>
         <details class="aula-ed-previa"><summary>Ver contenido</summary>
             <p><?php if($r['archivo_id']): ?><a href="aula_archivo.php?id=<?= (int)$r['archivo_id'] ?>" target="_blank" rel="noopener">Abrir <?= $r['mime']==='video/mp4'?'video':'documento' ?> ↗</a><?php elseif(aula_url($r['url'])): ?><a href="<?= aula_h($r['url']) ?>" target="_blank" rel="noopener noreferrer"><?= aula_h($r['url']) ?> ↗</a><?php endif; ?></p>
-            <?php if($esVideo&&$r['url']): ?><p class="aula-falta">Este enlace no se puede mostrar como video dentro del aula: usa un enlace de YouTube, Vimeo, Google Drive o Loom, o sube un MP4.</p><?php endif; ?>
+            <?php if($esVideo&&$r['url']): ?><p class="aula-falta"><?= aula_video_es_stream_compartido($r['url'])?'Es un enlace para compartir de Teams/Stream: se abre aparte. Para verlo dentro del aula, en Stream usa Compartir → Insertar código y pégalo en «Editar».':'Este enlace no se puede mostrar como video dentro del aula: usa un enlace de YouTube, Vimeo, Google Drive o Loom, el código de inserción de Teams/Stream, o sube un MP4.' ?></p><?php endif; ?>
         </details>
         <?php endif; ?>
         <?php if($edVista): ?>
@@ -42,7 +42,7 @@ $edRecurso=static function(array $r,$ancla) use($cid,$sessions,$edVista,$edDt){
                 <div class="aula-courses">
                     <label>Título<input name="titulo" maxlength="180" required value="<?= aula_h($r['titulo']) ?>"></label>
                     <label>Sesión<select name="sesion_id"><option value="0">Material general del curso</option><?php foreach($sessions as $s): ?><option value="<?= (int)$s['id'] ?>" <?= (int)$r['sesion_id']===(int)$s['id']?'selected':'' ?>><?= aula_h(date('d/m',strtotime($s['fecha'])).' · '.$s['tema']) ?></option><?php endforeach; ?></select></label>
-                    <?php if($r['contenido_id']): ?><label class="is-ancho">Enlace<?= $esVideo?' del video (YouTube, Vimeo, Google Drive o Loom)':'' ?><input name="url" maxlength="3000" required value="<?= aula_h($r['url']) ?>"></label>
+                    <?php if($r['contenido_id']): ?><label class="is-ancho"><?= $esVideo?'Enlace o código de inserción del video':'Enlace' ?><?php if($esVideo): ?><textarea name="url" rows="2" maxlength="5000" required data-video-detectar><?= aula_h($r['url']) ?></textarea><small data-video-detectado></small><?= aula_video_ayuda_html() ?><?php else: ?><input name="url" maxlength="3000" required value="<?= aula_h($r['url']) ?>"><?php endif; ?></label>
                     <?php elseif($r['archivo_id']): ?><label>Reemplazar archivo (opcional)<input type="file" name="material" accept="<?= $esVideo?'video/mp4':'application/pdf' ?>"><small><?= $esVideo?'MP4 hasta 15 MB':'PDF hasta 5 MB' ?>. Vacío = conservar el actual.</small></label><?php endif; ?>
                     <label>Orden<input type="number" name="orden" value="<?= (int)$r['orden'] ?>"></label>
                     <label>Disponible desde<input type="datetime-local" name="disponible_desde" value="<?= $edDt($r['disponible_desde']??'') ?>"><small>Vacío = de inmediato.</small></label>
@@ -68,7 +68,7 @@ $edNuevo=static function($sid,$ancla){
             <div class="aula-courses">
                 <label>Título<input name="titulo" maxlength="180" required></label>
                 <label>Tipo<select name="tipo_recurso"><option value="video">Grabación (YouTube, Vimeo, Drive o MP4)</option><option value="material">Material (PDF o enlace)</option></select></label>
-                <label class="is-ancho">Enlace del video o recurso<input name="url" maxlength="3000" placeholder="https://youtube.com/watch?v=... · https://vimeo.com/... · https://..."></label>
+                <label class="is-ancho">Enlace o código de inserción<textarea name="url" rows="2" maxlength="5000" data-video-detectar placeholder="https://youtube.com/watch?v=...  ·  &lt;iframe src=&quot;https://...sharepoint.com/.../embed.aspx?UniqueId=...&quot;&gt;&lt;/iframe&gt;"></textarea><small data-video-detectado></small><?= aula_video_ayuda_html() ?></label>
                 <label>O subir archivo<input type="file" name="material" accept="application/pdf,video/mp4"><small>PDF 5 MB · MP4 15 MB</small></label>
                 <label>Disponible desde (opcional)<input type="datetime-local" name="disponible_desde"></label>
                 <label class="aula-ed-check"><input type="checkbox" name="visible" checked> Visible para los estudiantes</label>

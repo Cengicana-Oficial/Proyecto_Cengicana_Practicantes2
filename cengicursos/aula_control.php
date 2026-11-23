@@ -95,10 +95,26 @@ function aula_attendance_correct(PDO $db,$courseId,$assignmentId,$sessionId,$pre
         aula_attendance_sync($db,$assignmentId,$courseId);$db->commit();
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
 }
+/**
+ * Enlace de una grabacion a partir de lo que pega coordinacion: el enlace del video o su codigo de insercion
+ * (<iframe src="...">). Del iframe solo se toma el src; nunca se guarda HTML.
+ * Microsoft Stream / Teams (SharePoint): el embed.aspx se reduce a su UniqueId para que quepa en 500 caracteres.
+ */
 function aula_video_source($input) {
+    $input=trim((string)$input);
+    if(preg_match('/<iframe\b[^>]*\bsrc\s*=\s*["\']([^"\']+)["\']/i',$input,$m))$input=html_entity_decode($m[1],ENT_QUOTES,'UTF-8');
+    elseif(preg_match('/^<.*>$/s',$input))return null; // otro HTML (p. ej. <video> o <div>) no se acepta
     $input=trim($input);
-    if(preg_match('/<iframe\b[^>]*\bsrc=["\']([^"\']+)["\']/i',$input,$m))$input=html_entity_decode($m[1],ENT_QUOTES,'UTF-8');
-    return aula_vimeo($input)?:aula_url($input);
+    if(strpos($input,'//')===0)$input='https:'.$input;
+    if($vimeo=aula_vimeo($input))return $vimeo;
+    $url=aula_url($input);if(!$url)return null;
+    $host=strtolower((string)parse_url($url,PHP_URL_HOST));$path=(string)parse_url($url,PHP_URL_PATH);
+    if(preg_match('/(^|\.)sharepoint\.com$/',$host)&&stripos($path,'/_layouts/15/embed.aspx')!==false) {
+        parse_str((string)parse_url($url,PHP_URL_QUERY),$q);
+        $unique=is_string($q['UniqueId']??null)?trim($q['UniqueId'],'{}'):'';
+        if(preg_match('/^[0-9a-fA-F-]{36}$/',$unique))return 'https://'.$host.$path.'?UniqueId='.$unique;
+    }
+    return $url;
 }
 function aula_preview_context(PDO $db,$seedId,$courseId,$catalog=false) {
     aula_require_teacher();
