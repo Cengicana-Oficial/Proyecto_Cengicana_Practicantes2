@@ -109,6 +109,11 @@ check((aula_video_embed($streamUrl)['fuente']??'')==='Microsoft Stream','Stream 
 check(aula_video_embed('https://cengicana.sharepoint.com/:v:/s/Cap/EaBcDeF?e=x')===null&&aula_video_es_stream_compartido('https://cengicana.sharepoint.com/:v:/s/Cap/EaBcDeF?e=x'),'Enlace compartido de Stream se abre aparte');
 check((aula_video_embed(aula_video_source('<iframe width="560" src="https://www.youtube.com/embed/dQw4w9WgXcQ?si=x" allowfullscreen></iframe>'))['fuente']??'')==='YouTube','Embed YouTube');
 check(aula_video_source('<video src="https://x.test/a.mp4"></video>')===null&&aula_video_source('<iframe src="javascript:alert(1)"></iframe>')===null,'HTML o esquemas no permitidos');
+// Vista previa: formularios del estudiante deshabilitados, el de coordinacion (data-previa-gestion) activo.
+$previa=aula_preview_html('<form method="post"><button>Enviar</button></form><form method="post" action="aula_gestion.php" data-previa-gestion><button>Publicar</button></form>',7);
+check(substr_count($previa,'<fieldset disabled')===1&&strpos($previa,'data-previa-gestion><button>Publicar')!==false,'Vista previa: solo el formulario de coordinacion activo');
+$_POST=['volver'=>'vista_previa=7'];check(aula_volver_previa(3)==='mi_aula.php?curso=3&seccion=sesiones&vista_previa=7','Regreso a la vista previa');
+$_POST=['volver'=>'https://evil.test/'];check(aula_volver_previa(3)===null,'Regreso externo rechazado');$_POST=[];
 echo "Calificacion, validacion y CSRF: OK\n";
 if(!in_array('--mysql',$argv,true))exit;
 $env=[];

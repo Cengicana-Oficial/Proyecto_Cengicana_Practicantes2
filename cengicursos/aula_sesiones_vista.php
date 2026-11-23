@@ -53,6 +53,24 @@ if(!$abrir&&$sessions)$abrir=(int)end($sessions)['id'];
 <?php foreach($evs as $e): $done=!empty($entregadas[$e['id']]); $evAsync=$async?aula_async_eval($db,$assignment,$e):null; ?>
 <div class="aula-row"><div><strong><?= aula_h($e['titulo']) ?></strong><p><?= ($e['tipo_actividad']==='evaluacion'?'Evaluación':'Tarea').($evAsync?($evAsync['ok']?' · Disponible':' · '.aula_h($evAsync['motivo'])):' · Cierre: '.aula_h(aula_fecha_larga($e['cierra'],true).' '.substr($e['cierra'],11,5))) ?></p></div><span class="aula-badge <?= $done?'is-complete':'is-pending' ?>"><?= $done?'✓ Entregada':($evAsync?($evAsync['ok']?'Disponible':'🔒 Bloqueada'):($e['cierra']<=$ahora?'Cerrada':'Pendiente')) ?></span><?php if(isset($tabs['actividades'])): ?><a href="mi_aula.php?curso=<?= $courseId ?>&amp;seccion=actividades#act-<?= (int)$e['id'] ?>">Ver actividad →</a><?php endif; ?></div><?php endforeach; ?>
 <?php if(!$recs&&!$evs): ?><p class="aula-muted"><?= $estado==='proxima'?'Las grabaciones y materiales se publican después de la sesión.':'Todavía no hay recursos o actividades publicados para esta sesión.' ?></p><?php endif; ?>
+<?php if(!empty($preview)&&$ready): // Solo coordinacion (vista previa): publicar la grabacion sin salir de esta vista. ?>
+<details class="aula-previa-gestion"<?= !$recs&&$estado==='realizada'?' open':'' ?>><summary><span class="glyphicon glyphicon-plus" aria-hidden="true"></span> Agregar grabación o material a esta sesión <small>solo coordinación · el estudiante no ve este recuadro</small></summary>
+<form method="post" action="aula_gestion.php?curso=<?= $courseId ?>" enctype="multipart/form-data" class="aula-form" data-previa-gestion>
+    <?= aula_csrf() ?><input type="hidden" name="accion" value="material"><input type="hidden" name="sesion_id" value="<?= $sid ?>"><input type="hidden" name="ancla" value="ses-<?= $sid ?>"><input type="hidden" name="volver" value="vista_previa=<?= (int)$previewId ?>"><input type="hidden" name="orden" value="0">
+    <div class="aula-courses">
+        <label>Título<input name="titulo" maxlength="180" required value="<?= aula_h(mb_substr('Grabación: '.$s['tema'],0,180)) ?>"></label>
+        <label>Tipo<select name="tipo_recurso"><option value="video">Grabación</option><option value="material">Material (PDF o enlace)</option></select></label>
+        <label class="is-ancho">Enlace o código de inserción<textarea name="url" rows="2" maxlength="5000" data-video-detectar placeholder="https://youtube.com/watch?v=...  o el código &lt;iframe ...&gt; de Compartir → Insertar"></textarea><small data-video-detectado></small><?= aula_video_ayuda_html() ?></label>
+        <label>O subir archivo<input type="file" name="material" accept="application/pdf,video/mp4"><small>PDF 5 MB · MP4 15 MB</small></label>
+        <label>Disponible desde (opcional)<input type="datetime-local" name="disponible_desde"><small>Vacío = de inmediato.</small></label>
+        <?php if($async): ?><label>Duración en minutos (opcional)<input type="number" name="duracion_min" min="1" max="720"><small>Para Drive, Stream u otros que no informan el avance.</small></label><?php endif; ?>
+        <label class="aula-ed-check"><input type="checkbox" name="visible" checked> Visible para los estudiantes</label>
+    </div>
+    <div class="aula-ed-acciones"><button class="btn btn-primary btn-sm">Publicar en la sesión</button>
+        <a class="btn btn-link btn-sm" href="aula_gestion.php?curso=<?= $courseId ?>#ses-<?= $sid ?>"><?= $recs?'Editar o eliminar lo publicado en Gestión del aula':'Abrir esta sesión en Gestión del aula' ?> ↗</a></div>
+</form>
+</details>
+<?php endif; ?>
 </div></details><?php endforeach; ?></div><?php if(!$sessions): ?><p>Las sesiones todavía no se han programado.</p><?php endif; ?>
 </section>
 <?php endif; ?>

@@ -20,6 +20,8 @@ $ready = aula_ready($db) && aula_integrada($db) && aula_control_ready($db);
 $vista = aula_vista_config($db, $courseId);
 $ver = static function ($seccion) use ($vista) { return !in_array($seccion, $vista['ocultas'], true); };
 $message = ''; $error = '';
+// Resultado de publicar una grabacion desde la vista previa (aula_gestion.php con volver=vista_previa).
+if ($preview && !empty($_SESSION['aula_previa_flash'])) { [$flashTipo, $flashTexto] = $_SESSION['aula_previa_flash']; unset($_SESSION['aula_previa_flash']); if ($flashTipo === 'ok') $message = (string) $flashTexto; else $error = (string) $flashTexto; }
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         aula_check_csrf();

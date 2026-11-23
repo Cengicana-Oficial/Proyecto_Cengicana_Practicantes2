@@ -129,6 +129,12 @@ function aula_preview_context(PDO $db,$seedId,$courseId,$catalog=false) {
     if(!$a){http_response_code(403);exit('El estudiante no está asignado a este curso.');}
     return ['seed'=>$seed,'courses'=>$courses,'assignment'=>$a,'courseId'=>$courseId];
 }
+/** URL segura de regreso a la vista previa del estudiante (campo `volver` de los formularios), o null. */
+function aula_volver_previa($courseId) {
+    $v=(string)($_POST['volver']??'');
+    if(!preg_match('/^vista_previa=(\d{1,10})$/',$v,$m))return null;
+    return 'mi_aula.php?curso='.(int)$courseId.'&seccion=sesiones&vista_previa='.(int)$m[1];
+}
 function aula_preview_html($html,$seedId) {
     $html=preg_replace_callback('/href="(mi_aula\.php(?:\?[^"<>]*)?)"/',static function($m)use($seedId){$url=$m[1];return 'href="'.$url.(strpos($url,'?')===false?'?catalogo=1&amp;':'&amp;').'vista_previa='.(int)$seedId.'"';},$html);
     $html=preg_replace_callback('/<a\b([^>]*?)href="evaluacion\.php\?[^"<>]*"([^>]*)>/i',static function($m){
@@ -137,6 +143,13 @@ function aula_preview_html($html,$seedId) {
         else $attrs.=' class="aula-preview-disabled"';
         return '<a '.$attrs.' href="#" aria-disabled="true">';
     },$html);
-    $html=preg_replace('/(<form\b[^>]*>)/i','$1<fieldset disabled class="aula-preview-form">',$html);
+    // Los formularios del estudiante quedan deshabilitados; los de coordinacion (data-previa-gestion, envian a
+    // aula_gestion.php con su propio permiso) siguen activos para publicar grabaciones desde esta vista.
+    $out=preg_replace_callback('/(<form\b[^>]*>)(.*?)<\/form>/is',static function($m){
+        if(preg_match('/\bdata-previa-gestion\b/i',$m[1]))return $m[0];
+        return $m[1].'<fieldset disabled class="aula-preview-form">'.$m[2].'</fieldset></form>';
+    },$html);
+    if($out!==null)return $out;
+    $html=preg_replace('/(<form\b[^>]*>)/i','$1<fieldset disabled class="aula-preview-form">',$html); // respaldo si PCRE falla
     return str_replace('</form>','</fieldset></form>',$html);
 }

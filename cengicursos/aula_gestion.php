@@ -355,10 +355,13 @@ if($_SERVER['REQUEST_METHOD']==='POST') {
     // Los formularios del editor por sesion indican a que sesion volver (ancla ses-<id>).
     $ancla=preg_match('/^[a-z0-9-]{1,40}$/',(string)($_POST['ancla']??''))?$_POST['ancla']:($anchors[$action]??'');
     $listaSuffix=(int)($_POST['lista']??0)>0?'&lista='.(int)$_POST['lista']:'';
+    // Publicado desde la vista del estudiante (mi_aula.php?vista_previa=): se vuelve a esa misma sesion.
+    if($volverPrevia=aula_volver_previa($cid)){unset($_SESSION['aula_gestion_mensaje']);$_SESSION['aula_previa_flash']=['ok',$message];header('Location: '.$volverPrevia.'#'.$ancla);exit;}
     header('Location: aula_gestion.php?curso='.$cid.$reviewSuffix.$listaSuffix.'#'.$ancla);exit;
  } catch(Throwable $e) {
     if($db->inTransaction())$db->rollBack();
     if($e instanceof PDOException){error_log('Gestión aula: '.$e->getMessage());$error='No se pudo guardar. Verifica la migración del aula e intenta de nuevo.';}else $error=$e->getMessage();
+    if($volverPrevia=aula_volver_previa($cid)){$_SESSION['aula_previa_flash']=['error',$error];$anclaError=preg_match('/^[a-z0-9-]{1,40}$/',(string)($_POST['ancla']??''))?'#'.$_POST['ancla']:'';header('Location: '.$volverPrevia.$anclaError);exit;}
  }
 }
 if($course&&$ready){aula_expire($db,$cid);aula_sync_course($db,$cid);}

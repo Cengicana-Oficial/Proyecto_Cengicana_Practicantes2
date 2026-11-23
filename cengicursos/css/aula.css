@@ -557,3 +557,11 @@ body.aula-visor-activo { overflow:hidden; }
 .aula-video-ayuda > summary { cursor:pointer; color:var(--cg-verde-text); font-weight:600; }
 .aula-video-ayuda ul { margin:6px 0 0; padding-left:18px; line-height:1.55; }
 .aula-video-ayuda code { font-size:11px; }
+.aula-previa-gestion { margin:12px 0 0; padding:10px 12px; border:1px dashed var(--cg-amarillo); border-radius:10px; background:var(--cg-amarillo-soft); }
+.aula-previa-gestion > summary { cursor:pointer; font-size:12px; font-weight:700; color:var(--cg-amarillo-text); }
+.aula-previa-gestion > summary small { font-weight:400; margin-left:6px; }
+.aula-previa-gestion[open] > summary { margin-bottom:10px; }
+.aula-previa-gestion .aula-form { background:white; padding:12px; border-radius:8px; }
+.aula-previa-gestion .aula-courses .is-ancho { grid-column:1 / -1; }
+.aula-previa-gestion .aula-courses label { font-size:12px; }
+.aula-previa-gestion input:not([type=checkbox]), .aula-previa-gestion select { width:100%; }
