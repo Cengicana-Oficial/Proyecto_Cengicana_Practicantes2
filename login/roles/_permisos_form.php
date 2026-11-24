@@ -73,17 +73,39 @@ $e = static fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
             <?php endforeach; ?>
         </section>
     <?php else: ?>
-        <section class="permiso-section">
+        <?php
+        $esInventario = $grupo === 'Permisos de Inventario';
+        $subgrupos = ['' => $items];
+        if ($esInventario) {
+            $pendientes = array_column($items, null, 'nombre_permiso');
+            $subgrupos = [];
+            foreach (permisos_inventario_catalogo() as $titulo => $permisosCatalogo) {
+                foreach (array_keys($permisosCatalogo) as $nombre) {
+                    if (isset($pendientes[$nombre])) {
+                        $subgrupos[$titulo][] = $pendientes[$nombre];
+                        unset($pendientes[$nombre]);
+                    }
+                }
+            }
+            if ($pendientes) {
+                $subgrupos['Otros permisos registrados'] = $pendientes;
+            }
+        }
+        $asignados = $esInventario ? count(array_intersect(array_column($items, 'nombre_permiso'), $permisosRol)) : 0;
+        ?>
+        <section class="permiso-section"<?= $esInventario ? ' id="permisos-inventario"' : ($grupo === 'Permisos de solicitudes internas' ? ' id="permisos-solicitudes-internas"' : '') ?>>
             <div class="permiso-section-head">
                 <div>
                     <span class="permiso-kicker"><?= $e(titulo_corto_grupo_permiso($grupo)) ?></span>
                     <h4><?= $e($grupo) ?></h4>
                 </div>
-                <span class="permiso-count"><?= count($items) ?> permisos</span>
+                <span class="permiso-count"><?= $esInventario ? $asignados . ' de ' . count($items) . ' asignados' : count($items) . ' permisos' ?></span>
             </div>
             <p class="permiso-section-copy"><?= $e(descripcion_grupo_permiso($grupo)) ?></p>
+            <?php foreach ($subgrupos as $titulo => $permisosDelGrupo): ?>
+            <?php if ($titulo !== ''): ?><div class="permiso-etapa"><div class="permiso-etapa-head"><h5><?= $e($titulo) ?></h5></div><?php endif; ?>
             <div class="permisos-grid">
-                <?php foreach ($items as $permiso): ?>
+                <?php foreach ($permisosDelGrupo as $permiso): ?>
                     <label class="permiso-item">
                         <input type="checkbox" name="permisos[]" value="<?= $e($permiso['nombre_permiso']) ?>"
                             <?= in_array($permiso['nombre_permiso'], $permisosRol, true) ? 'checked' : '' ?>>
@@ -94,6 +116,8 @@ $e = static fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
                     </label>
                 <?php endforeach; ?>
             </div>
+            <?php if ($titulo !== ''): ?></div><?php endif; ?>
+            <?php endforeach; ?>
         </section>
     <?php endif; ?>
 <?php endforeach; ?>

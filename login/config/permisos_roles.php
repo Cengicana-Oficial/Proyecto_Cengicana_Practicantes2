@@ -253,7 +253,11 @@ function permisos_laboratorio_vigentes()
 function descripcion_permiso($nombrePermiso, $descripcionGuardada = '')
 {
     $vigentes = permisos_laboratorio_vigentes();
-    return $vigentes[$nombrePermiso][1] ?? ($descripcionGuardada ?: $nombrePermiso);
+    $inventario = permisos_inventario_todos();
+    if ($nombrePermiso === 'solicitudes_internas.crear') {
+        return 'Disponible para cualquier rol compatible con Solicitudes internas. El usuario necesita acceso al módulo y un programa de origen asignado.';
+    }
+    return $vigentes[$nombrePermiso][1] ?? $inventario[$nombrePermiso][1] ?? ($descripcionGuardada ?: $nombrePermiso);
 }
 
 function obtener_permisos(PDO $conn)
@@ -433,7 +437,7 @@ function etiqueta_permiso($nombrePermiso)
         'validar_pagos_cengi' => 'Validar y registrar pagos de inscripcion y eventos (Administracion)',
         'firmar_liquidaciones_cengi' => 'Firmar liquidaciones de pago a instructores (Jefe de Transferencia)',
         'administrar_cursos_cengi' => 'Administrar todo Cursos y ver todos los ingenios (Coordinador de capacitacion)',
-        'solicitudes_internas.crear' => 'Crear solicitudes (colaborador)',
+        'solicitudes_internas.crear' => 'Crear solicitudes internas',
         'solicitudes_internas.ver' => 'Ver solicitudes recibidas por su programa (jefe)',
         'solicitudes_internas.gestionar' => 'Gestionar solicitudes recibidas por su programa (jefe)',
         'solicitudes_internas.ver_todas' => 'Ver todas las solicitudes entre programas, solo lectura (director)',

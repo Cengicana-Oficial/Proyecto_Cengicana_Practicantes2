@@ -232,7 +232,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($action === 'crear_solicitud') {
             if (!can_create_requests($user)) {
-                throw new RuntimeException('Tu usuario necesita un programa asignado para crear solicitudes.');
+                throw new RuntimeException(has_permission($user, 'solicitudes_internas.crear')
+                    ? 'Tu rol permite crear solicitudes. Pide que te asignen un programa de origen en Usuarios del módulo.'
+                    : 'Tu rol en Solicitudes internas necesita el permiso «Crear solicitudes internas».');
             }
 
             $type = $_POST['tipo'] ?? '';
@@ -1326,7 +1328,7 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                 </section>
                 <p class="roles-note">
                     <i class="ti ti-info-circle"></i>
-                    Los roles son de la plataforma: el rol asignado aplica en todos los modulos del usuario.
+                    La asignación de rol de esta pantalla corresponde a Solicitudes internas. Para crear solicitudes, el rol debe incluir «Crear solicitudes internas» y el usuario debe tener asignado un programa de origen.
                     <?php if (is_superadmin($user)): ?>
                         Puedes ajustar sus permisos o crear otros en <a href="../login/roles/roles.php">Gestion de roles</a>.
                     <?php endif; ?>
@@ -1403,16 +1405,22 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                                 <th>Ingenio</th>
                                 <th>Programa</th>
                                 <th>Rol</th>
+                                <th>Crear solicitudes</th>
                                 <?php if (can_manage_users($user)): ?><th>Acciones</th><?php endif; ?>
                             </tr>
                             </thead>
                             <tbody>
                             <?php if (!$users): ?>
-                                <tr><td colspan="<?= can_manage_users($user) ? 6 : 5 ?>">No hay usuarios para mostrar.</td></tr>
+                                <tr><td colspan="<?= can_manage_users($user) ? 7 : 6 ?>">No hay usuarios para mostrar.</td></tr>
                             <?php endif; ?>
                             <?php foreach ($users as $userItem): ?>
                                 <?php
                                 $formId = 'usuario-programa-form-' . (int) $userItem['id'];
+                                $rolEfectivo = cengi_rm_rol_en_modulo($menuPdo, (int) $userItem['id'], current_module_names()[0]);
+                                $datosAcceso = $userItem;
+                                $datosAcceso['permissions'] = cengi_rm_permisos_rol($menuPdo, $rolEfectivo['rol_id'] ?? 0);
+                                $estadoCrear = can_create_requests($datosAcceso) ? 'Habilitado'
+                                    : (has_permission($datosAcceso, 'solicitudes_internas.crear') ? 'Falta programa de origen' : 'Falta permiso de creación');
                                 $itemRole = module_role($userItem);
                                 ?>
                                 <tr>
@@ -1454,6 +1462,12 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
                                             <?php if ($itemRole === 'ninguno'): ?>
                                                 <div class="role-warning"><i class="ti ti-alert-triangle"></i>No puede crear ni ver solicitudes</div>
                                             <?php endif; ?>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?= e($estadoCrear) ?>
+                                        <?php if (is_superadmin($user) && !is_superadmin($userItem) && $rolEfectivo): ?>
+                                            <div class="form-hint"><a href="../login/roles/editar_rol.php?id=<?= (int) $rolEfectivo['rol_id'] ?>#permisos-solicitudes-internas">Revisar permisos del rol</a></div>
                                         <?php endif; ?>
                                     </td>
                                     <?php if (can_manage_users($user)): ?>
@@ -1850,7 +1864,9 @@ $userInitials = $userInitials !== '' ? $userInitials : 'U';
 
         <?php if ($view === 'nueva'): ?>
             <?php if (!can_create_requests($user)): ?>
-                <div class="alert error">Tu usuario necesita un programa asignado para crear solicitudes.</div>
+                <div class="alert error"><?= e(has_permission($user, 'solicitudes_internas.crear')
+                    ? 'Tu rol permite crear solicitudes. Pide que te asignen un programa de origen en Usuarios del módulo.'
+                    : 'Tu rol en Solicitudes internas necesita el permiso «Crear solicitudes internas».') ?></div>
             <?php else: ?>
                 <div class="section-header">
                     <div>
