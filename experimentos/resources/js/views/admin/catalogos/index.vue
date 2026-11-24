@@ -1,13 +1,43 @@
 <template>
   <div class="cat">
     <div class="cat-tabs" role="tablist">
-      <button v-for="t in TABS" :key="t.id" type="button" role="tab" :class="{ 'is-on': tab === t.id }" :aria-selected="tab === t.id" @click="cambiarTab(t.id)">
+      <button v-for="t in tabsVisibles" :key="t.id" type="button" role="tab" :class="{ 'is-on': tab === t.id }" :aria-selected="tab === t.id" @click="cambiarTab(t.id)">
         <i :class="t.icon"></i> {{ t.label }} <small>{{ cuenta(t.id) }}</small>
       </button>
     </div>
 
+    <!-- ============ Programas (areas tematicas; codifican proyectos y ensayos) ============ -->
+    <section v-if="tab === 'programas'" class="cat-caja">
+      <header class="cat-h">
+        <div>
+          <h5>Programas</h5>
+          <p>Areas tematicas de investigacion. Aparecen en <b>Programas y proyectos</b> y su sigla encabeza el codigo de proyectos y ensayos (cambiarla los recodifica). Solo los administran los roles con el permiso <b>Gestionar el catalogo de programas</b> (Roles y permisos del portal).</p>
+        </div>
+        <button type="button" class="btn btn-sm btn-success" @click="$refs.programaModal.abrirCrear()"><i class="fas fa-plus"></i> Nuevo programa</button>
+      </header>
+      <table class="table cat-tabla">
+        <thead><tr><th>Sigla</th><th>Programa</th><th>Lider</th><th>Descripcion</th><th class="text-right">Proyectos</th><th class="text-right">Ensayos</th><th></th></tr></thead>
+        <tbody>
+          <tr v-for="p in programasItems" :key="p.id">
+            <td><span class="cat-sigla" :style="{ background: p.color || '#CED2D5' }">{{ p.sigla }}</span></td>
+            <td><b>{{ p.nombre }}</b></td>
+            <td>{{ p.lider || '—' }}</td>
+            <td class="cat-muted cat-desc" :title="p.descripcion">{{ p.descripcion || '—' }}</td>
+            <td class="text-right">{{ p.proyectos_count || 0 }}</td>
+            <td class="text-right">{{ p.ensayos_count || 0 }}</td>
+            <td class="text-right cat-nowrap">
+              <button type="button" class="cat-icon" title="Editar" @click="$refs.programaModal.abrirEditar(p)"><i class="fas fa-pen"></i></button>
+              <button type="button" class="cat-icon is-del" :class="{ 'is-locked': p.proyectos_count }" :title="p.proyectos_count ? 'Tiene proyectos: no se puede eliminar' : 'Eliminar'" @click="eliminarPrograma(p)"><i class="fas fa-trash"></i></button>
+            </td>
+          </tr>
+          <tr v-if="!programasItems.length"><td colspan="7" class="cat-muted text-center">Sin programas. Use "Nuevo programa".</td></tr>
+        </tbody>
+      </table>
+      <programa-modal ref="programaModal" :programas="programasItems" :paleta="paleta" @guardado="programaGuardado"></programa-modal>
+    </section>
+
     <!-- ============ Disenos experimentales (se administran aqui) ============ -->
-    <section v-if="tab === 'disenos'" class="cat-caja">
+    <section v-else-if="tab === 'disenos'" class="cat-caja">
       <header class="cat-h">
         <div>
           <h5>Disenos experimentales</h5>
@@ -167,7 +197,11 @@
 </template>
 
 <script>
+import ProgramaModal from '../../investigacion/programas/programa-modal.vue';
+
+// "programas" la ve quien tiene sigec.programas.gestionar; el resto, solo el administrador.
 const TABS = [
+  { id: 'programas', label: 'Programas', icon: 'fas fa-layer-group', permiso: 'programas' },
   { id: 'disenos', label: 'Disenos experimentales', icon: 'fas fa-th' },
   { id: 'tipos', label: 'Tipos de muestra', icon: 'fas fa-vial' },
   { id: 'ingenios', label: 'Ingenios', icon: 'fas fa-industry' },
@@ -176,7 +210,12 @@ const TABS = [
 
 export default {
   name: 'CatalogosIndex',
+  components: { ProgramaModal },
   props: {
+    puedeAdmin: { type: Boolean, default: false },
+    puedeProgramas: { type: Boolean, default: false },
+    programas: { type: Array, default: () => [] },
+    paleta: { type: Array, default: () => [] },
     disenos: { type: Array, default: () => [] },
     tiposMuestra: { type: Array, default: () => [] },
     tiposLaboratorio: { type: Array, default: () => [] }, // catalogo del modulo Laboratorio
@@ -189,9 +228,11 @@ export default {
   },
   data() {
     const t = new URLSearchParams(window.location.search).get('tab');
+    const visibles = TABS.filter((x) => (x.permiso === 'programas' ? this.puedeProgramas : this.puedeAdmin));
     return {
-      TABS,
-      tab: TABS.some((x) => x.id === t) ? t : 'disenos',
+      tabsVisibles: visibles,
+      tab: visibles.some((x) => x.id === t) ? t : (visibles[0] || {}).id,
+      programasItems: this.programas.slice(),
       disenosItems: this.disenos.slice(),
       tiposItems: this.tiposMuestra.slice(),
       formTipo: null,
@@ -215,7 +256,29 @@ export default {
     },
   },
   methods: {
-    cuenta(id) { return { disenos: this.disenosItems.length, tipos: this.tiposItems.length, ingenios: this.ingeniosItems.length, responsables: this.responsablesItems.length }[id]; },
+    programaGuardado(data) {
+      const fila = { ...data, proyectos_count: data.proyectos_count || 0, ensayos_count: data.ensayos_count || 0 };
+      const i = this.programasItems.findIndex((x) => x.id === data.id);
+      if (i >= 0) this.$set(this.programasItems, i, fila); else this.programasItems.push(fila);
+      this.programasItems.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+      this.toast(i >= 0 ? (data.recodificados ? `Programa actualizado · ${data.recodificados} codigo(s) actualizados` : 'Programa actualizado') : 'Programa agregado');
+    },
+    eliminarPrograma(p) {
+      if (p.proyectos_count) {
+        this.$swal.fire({ icon: 'info', title: 'No se puede eliminar', text: `${p.nombre} tiene ${p.proyectos_count} proyecto(s). Reasigne o elimine esos proyectos primero.`, confirmButtonColor: '#73BC25' });
+        return;
+      }
+      this.$swal.fire({
+        title: `Eliminar "${p.nombre}"`, text: 'Esta accion no se puede deshacer.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Eliminar', cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FF6B00', cancelButtonColor: '#CED2D5', focusCancel: true,
+      }).then((r) => {
+        if (!r.isConfirmed) return;
+        window.axios.delete(`/investigacion/programas/${p.id}`)
+          .then(() => { this.programasItems = this.programasItems.filter((x) => x.id !== p.id); this.toast('Programa eliminado'); })
+          .catch((e) => this.$swal.fire({ icon: 'error', title: 'No se pudo eliminar', text: this.mensaje(e) }));
+      });
+    },
+    cuenta(id) { return { programas: this.programasItems.length, disenos: this.disenosItems.length, tipos: this.tiposItems.length, ingenios: this.ingeniosItems.length, responsables: this.responsablesItems.length }[id]; },
     nuevoTipo() {
       this.error = null;
       this.formTipo = { id: null, nombre: '', codigo: '', tipo_lab: null, formato_informe: null, icono: null, activo: true };
@@ -345,5 +408,7 @@ export default {
 .cat-cod { max-width: 80px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .cat-cod-v { padding: 1px 6px; border-radius: 5px; background: #f0f2f0; color: #1f5632; font-weight: 700; }
 .cat-tipo-ico { width: 16px; color: var(--verde); text-align: center; }
+.cat-sigla { display: inline-block; min-width: 44px; padding: 2px 8px; border-radius: 7px; color: #fff; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-align: center; text-shadow: 0 1px 1px rgba(0, 0, 0, .25); }
+.cat-desc { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat-aviso { display: block; margin-top: 3px; color: #b84d00; font-size: 11px; }
 </style>

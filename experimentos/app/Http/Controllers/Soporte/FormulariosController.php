@@ -12,6 +12,7 @@ use App\Models\Proyecto;
 use App\Models\Respuesta;
 use App\Models\User;
 use App\Models\Variable;
+use App\Services\RolesPortal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -37,6 +38,10 @@ class FormulariosController extends Controller
         $user = Auth::user();
 
         if ($user->can('manage_formularios')) {
+            // Los muestreadores se dan de alta en el portal: se traen a SIGEC aunque aun no hayan
+            // entrado, para que aparezcan en "Nueva asignacion".
+            app(RolesPortal::class)->sincronizarUsuariosLocales();
+
             $ensayoIds = Ensayo::visiblesPara($user)->pluck('id');
 
             $formularios = Formulario::with(['creadoPor:id,name', 'asignaciones.usuario:id,name'])

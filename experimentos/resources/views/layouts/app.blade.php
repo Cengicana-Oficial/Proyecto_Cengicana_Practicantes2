@@ -89,57 +89,72 @@
                 </a>
             </div>
 
-            @can('menu_general')
+            {{-- Cada opcion depende del permiso sigec.menu.<clave> del rol en Experimentos (Roles y permisos del portal; config/sso.php "menu"). --}}
+            @canany(['menu.proyectos', 'menu.ensayos', 'menu.clima', 'menu.variables', 'menu.evaluaciones'])
                 <div class="cengi-nav-group">
                     <div class="cengi-nav-label">Investigacion</div>
-                    <a href="{{ route('investigacion.proyectos.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.proyectos.*', 'investigacion.programas.*') ? ' is-active' : '' }}">
-                        <i class="fas fa-layer-group"></i><span>Programas y proyectos</span>
-                    </a>
-                    <a href="{{ route('investigacion.ensayos.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.ensayos.*') ? ' is-active' : '' }}">
-                        @include('components.icono-cana', ['marca' => false])<span>Ensayos</span>
-                    </a>
-                    <a href="{{ route('investigacion.clima.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.clima.index') ? ' is-active' : '' }}">
-                        <i class="fas fa-cloud-sun-rain"></i><span>Clima y estaciones</span>
-                    </a>
-                    <a href="{{ route('investigacion.variables.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.variables.*') ? ' is-active' : '' }}">
-                        <i class="fas fa-chart-line"></i><span>Variables</span>
-                    </a>
-                    <a href="{{ route('investigacion.evaluaciones.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.evaluaciones.*') ? ' is-active' : '' }}">
-                        <i class="fas fa-clipboard-check"></i><span>Evaluaciones y Análisis</span>
-                    </a>
+                    @can('menu.proyectos')
+                        <a href="{{ route('investigacion.proyectos.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.proyectos.*', 'investigacion.programas.*') ? ' is-active' : '' }}">
+                            <i class="fas fa-layer-group"></i><span>Programas y proyectos</span>
+                        </a>
+                    @endcan
+                    @can('menu.ensayos')
+                        <a href="{{ route('investigacion.ensayos.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.ensayos.*') ? ' is-active' : '' }}">
+                            @include('components.icono-cana', ['marca' => false])<span>Ensayos</span>
+                        </a>
+                    @endcan
+                    @can('menu.clima')
+                        <a href="{{ route('investigacion.clima.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.clima.index') ? ' is-active' : '' }}">
+                            <i class="fas fa-cloud-sun-rain"></i><span>Clima y estaciones</span>
+                        </a>
+                    @endcan
+                    @can('menu.variables')
+                        <a href="{{ route('investigacion.variables.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.variables.*') ? ' is-active' : '' }}">
+                            <i class="fas fa-chart-line"></i><span>Variables</span>
+                        </a>
+                    @endcan
+                    @can('menu.evaluaciones')
+                        <a href="{{ route('investigacion.evaluaciones.index') }}" class="cengi-nav-item{{ request()->routeIs('investigacion.evaluaciones.*') ? ' is-active' : '' }}">
+                            <i class="fas fa-clipboard-check"></i><span>Evaluaciones y Análisis</span>
+                        </a>
+                    @endcan
                 </div>
-            @endcan
+            @endcanany
 
-            @can('menu_general')
+            @canany(['menu.muestras', 'menu.imagenes_geo', 'menu.archivos', 'menu.formularios', 'menu.reportes'])
                 <div class="cengi-nav-group">
                     <div class="cengi-nav-label">Soporte</div>
                     {{-- El trabajo de laboratorio se hace en el modulo Laboratorio del portal; aqui se generan las muestras y se consultan sus resultados. --}}
-                    @canany(['create_muestra', 'view_lab'])
+                    @can('menu.muestras')
                         {{-- Generar etiquetas + Seguimiento en una sola pagina; los resultados se analizan en Evaluaciones (categoria Laboratorio). --}}
                         <a href="{{ route('soporte.muestras.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.muestras.*', 'soporte.muestras-gen.*', 'soporte.muestras-consulta.*', 'soporte.laboratorio.*') ? ' is-active' : '' }}">
                             <i class="fas fa-flask"></i><span>Muestras</span>
                         </a>
-                    @endcanany
-                    <a href="{{ route('soporte.imagenes-geo.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.imagenes-geo.*') ? ' is-active' : '' }}">
-                        <i class="fas fa-satellite"></i><span>Imagenes geoespaciales</span>
-                    </a>
-                    <a href="{{ route('soporte.archivos.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.archivos.*') ? ' is-active' : '' }}">
-                        <i class="fas fa-paperclip"></i><span>Archivos</span>
-                    </a>
-                    @canany(['manage_formularios', 'ver_formulario_asignado'])
+                    @endcan
+                    @can('menu.imagenes_geo')
+                        <a href="{{ route('soporte.imagenes-geo.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.imagenes-geo.*') ? ' is-active' : '' }}">
+                            <i class="fas fa-satellite"></i><span>Imagenes geoespaciales</span>
+                        </a>
+                    @endcan
+                    @can('menu.archivos')
+                        <a href="{{ route('soporte.archivos.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.archivos.*') ? ' is-active' : '' }}">
+                            <i class="fas fa-paperclip"></i><span>Archivos</span>
+                        </a>
+                    @endcan
+                    @can('menu.formularios')
                         <a href="{{ route('soporte.formularios.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.formularios.*') ? ' is-active' : '' }}">
                             <i class="fab fa-wpforms"></i><span>Formularios de campo</span>
                         </a>
-                    @endcanany
-                    @can('view_reports_menu')
+                    @endcan
+                    @can('menu.reportes')
                         <a href="{{ route('soporte.reportes.index') }}" class="cengi-nav-item{{ request()->routeIs('soporte.reportes.*') ? ' is-active' : '' }}">
                             <i class="fas fa-file-alt"></i><span>Reportes</span>
                         </a>
                     @endcan
                 </div>
-            @endcan
+            @endcanany
 
-            @can('run_analysis')
+            @can('menu.importacion')
                 <div class="cengi-nav-group">
                     <div class="cengi-nav-label">Datos y analisis</div>
                     <a href="{{ route('analisis.index') }}" class="cengi-nav-item{{ request()->routeIs('analisis.*') ? ' is-active' : '' }}">
@@ -148,17 +163,20 @@
                 </div>
             @endcan
 
-            @can('admin_only')
+            {{-- Catalogos: administrador, o quien tenga sigec.programas.gestionar (solo ve Programas). --}}
+            @canany(['admin_only', 'programas'])
                 <div class="cengi-nav-group">
                     <div class="cengi-nav-label">Sistema</div>
-                    <a href="{{ route('admin.usuarios.index') }}" class="cengi-nav-item{{ request()->routeIs('admin.usuarios.*') ? ' is-active' : '' }}">
-                        <i class="fas fa-users-cog"></i><span>Usuarios y permisos</span>
-                    </a>
+                    @can('admin_only')
+                        <a href="{{ route('admin.usuarios.index') }}" class="cengi-nav-item{{ request()->routeIs('admin.usuarios.*') ? ' is-active' : '' }}">
+                            <i class="fas fa-users-cog"></i><span>Usuarios y permisos</span>
+                        </a>
+                    @endcan
                     <a href="{{ route('admin.catalogos.index') }}" class="cengi-nav-item{{ request()->routeIs('admin.catalogos.*') ? ' is-active' : '' }}">
                         <i class="fas fa-list-alt"></i><span>Catalogos</span>
                     </a>
                 </div>
-            @endcan
+            @endcanany
         </nav>
 
         <div class="cengi-sidebar-foot">

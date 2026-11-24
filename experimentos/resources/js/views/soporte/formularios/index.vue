@@ -568,7 +568,7 @@
                 <option :value="null">Seleccione...</option>
                 <option v-for="u in usuarios" :key="u.id" :value="u.id">{{ u.name }}{{ u.rol ? ' · ' + u.rol : '' }}</option>
               </select>
-              <small v-if="!usuarios.some((u) => u.rol === 'muestreador')" class="fm-muted">No hay usuarios con rol muestreador; puede asignar a otros usuarios de investigacion.</small>
+              <small class="fm-muted">Aparecen las personas con el modulo <b>Experimentos</b> y un rol en el portal (Administracion › Usuarios); el muestreador debe tener el rol <b>Muestreador</b>.<template v-if="!usuarios.some((u) => u.rol === 'muestreador')"> Por ahora no hay ninguno: puede asignar a otros usuarios de investigacion.</template></small>
             </div>
             <div class="form-row">
               <div class="col-6 form-group"><label>Desde</label><input type="date" class="form-control" v-model="asignForm.fecha_inicio"></div>

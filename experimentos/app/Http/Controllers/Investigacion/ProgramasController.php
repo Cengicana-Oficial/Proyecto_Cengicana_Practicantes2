@@ -47,7 +47,7 @@ class ProgramasController extends Controller
 
     public function store(Request $request)
     {
-        Gate::authorize('admin_only');
+        Gate::authorize('programas');
 
         $data = $this->validar($request);
         $data['color'] = $data['color'] ?? $this->paleta[Programa::count() % count($this->paleta)];
@@ -59,7 +59,7 @@ class ProgramasController extends Controller
 
     public function update(Request $request, Programa $programa)
     {
-        Gate::authorize('admin_only');
+        Gate::authorize('programas');
 
         $data = $this->validar($request, $programa);
         if (empty($data['color'])) {
@@ -90,7 +90,7 @@ class ProgramasController extends Controller
 
     public function destroy(Programa $programa)
     {
-        Gate::authorize('admin_only');
+        Gate::authorize('programas');
 
         // proyectos.programa_id (y ensayos.proyecto_id) son cascadeOnDelete:
         // borrar un programa con proyectos arrastraria proyectos y ensayos.

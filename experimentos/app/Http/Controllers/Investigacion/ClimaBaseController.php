@@ -66,6 +66,8 @@ class ClimaBaseController extends Controller
 
     public function bitacora()
     {
+        Gate::authorize('clima_api');
+
         return response()->json(DB::table('clima_sync_log')->leftJoin('users', 'users.id', '=', 'clima_sync_log.user_id')
             ->orderByDesc('clima_sync_log.id')->limit(60)->get(['clima_sync_log.*', 'users.name as usuario']));
     }

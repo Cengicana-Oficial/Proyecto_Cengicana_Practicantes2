@@ -188,8 +188,14 @@ class ClimaController extends Controller
     public function iccEstado(IccClima $icc)
     {
         $cob = DB::table('clima_icc_fechas')->selectRaw('MIN(fecha) desde, MAX(fecha) hasta, COUNT(*) dias, MAX(consultado_en) ultima')->first();
+        $resumen = $icc->resumen();
+        // Sin el permiso de la API solo se informa si esta configurada (actualizacion automatica
+        // y origen de los datos), no el servidor ni sus parametros.
+        if (! Gate::allows('clima_api')) {
+            $resumen = ['configurada' => $resumen['configurada'], 'servidor' => null];
+        }
 
-        return response()->json(array_merge($icc->resumen(), [
+        return response()->json(array_merge($resumen, [
             'cobertura' => $cob && $cob->dias ? (array) $cob : null,
             // Dias ya consultados a la API por año (para la descarga del historial).
             'por_anio' => DB::table('clima_icc_fechas')->selectRaw('YEAR(fecha) anio, COUNT(*) dias, SUM(estaciones > 0) con_datos')
@@ -203,7 +209,7 @@ class ClimaController extends Controller
     /** Configuracion de la conexion (sin secretos). */
     public function iccConfig(IccClima $icc)
     {
-        Gate::authorize('admin_only');
+        Gate::authorize('clima_api');
 
         return response()->json($icc->configuracionPublica());
     }
@@ -211,7 +217,7 @@ class ClimaController extends Controller
     /** Guarda la conexion; token/clave vacios conservan los guardados. */
     public function iccConfigGuardar(Request $request)
     {
-        Gate::authorize('admin_only');
+        Gate::authorize('clima_api');
 
         $data = $this->validarConexion($request);
         foreach (IccClima::CAMPOS as $k) {
@@ -232,7 +238,7 @@ class ClimaController extends Controller
     /** Prueba una configuracion (la del formulario, sin guardarla) pidiendo un dia de datos. */
     public function iccProbar(Request $request)
     {
-        Gate::authorize('admin_only');
+        Gate::authorize('clima_api');
 
         $data = $this->validarConexion($request);
         $request->validate(['fecha' => 'nullable|date|before_or_equal:today']);
@@ -303,7 +309,7 @@ class ClimaController extends Controller
                 abort(403);
             }
         } else {
-            Gate::authorize('gestionar_clima');
+            Gate::authorize('clima_api');
         }
         if ($desde->diffInDays($hasta) > 1100) {
             return response()->json(['message' => 'Sincronice como maximo 3 años por vez.'], 422);
@@ -329,6 +335,8 @@ class ClimaController extends Controller
             'params' => [
                 'puedeSincronizar' => $user->can('gestionar_clima'),
                 'puedeGestionar' => $user->can('admin_only'),
+                // Conexion API ICC (pestaña, estado, sincronizacion y bitacora): permiso del portal.
+                'puedeApi' => $user->can('clima_api'),
             ],
         ]);
     }

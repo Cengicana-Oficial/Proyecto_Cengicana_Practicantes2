@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Investigacion\ProgramasController;
 use App\Models\DisenoExperimental;
 use App\Models\Ensayo;
 use App\Models\Ingenio;
+use App\Models\Programa;
 use App\Models\TipoMuestra;
 use App\Models\User;
 use App\Services\CatalogosPortal;
@@ -22,19 +24,26 @@ class CatalogosController extends Controller
 {
     public function index(CatalogosPortal $portal)
     {
-        Gate::authorize('admin_only');
-        $sync = $portal->sincronizarSiCorresponde(0);
+        // Administrador: todos los catalogos. Con sigec.programas.gestionar: solo Programas.
+        abort_unless(Gate::any(['admin_only', 'programas']), 403);
+        $admin = Gate::allows('admin_only');
+        $programas = Gate::allows('programas');
+        $sync = $admin ? $portal->sincronizarSiCorresponde(0) : null;
 
         return view('component', [
             'title' => 'Catalogos',
             'component' => 'catalogos-index',
             'params' => [
-                'disenos' => $this->disenos(),
-                'tiposMuestra' => $this->tiposMuestra(),
-                'tiposLaboratorio' => $this->tiposLaboratorio(),
+                'puedeAdmin' => $admin,
+                'puedeProgramas' => $programas,
+                'programas' => $programas ? $this->programas() : [],
+                'paleta' => app(ProgramasController::class)->paleta(),
+                'disenos' => $admin ? $this->disenos() : [],
+                'tiposMuestra' => $admin ? $this->tiposMuestra() : [],
+                'tiposLaboratorio' => $admin ? $this->tiposLaboratorio() : [],
                 'formatosInforme' => array_keys(config('laboratorio.formatos', [])),
-                'ingenios' => $this->ingenios(),
-                'responsables' => $this->responsables(),
+                'ingenios' => $admin ? $this->ingenios() : [],
+                'responsables' => $admin ? $this->responsables() : [],
                 'sincronizacion' => $sync,
                 'portalIngeniosUrl' => '/login/ingenios/ingenios.php',
                 'portalUsuariosUrl' => '/login/usuarios/usuarios.php',
@@ -158,6 +167,13 @@ class CatalogosController extends Controller
         } catch (\Throwable $e) {
             return [];
         }
+    }
+
+    /** Todos los programas (catalogo): sus datos y cuantos proyectos y ensayos tienen. */
+    protected function programas()
+    {
+        return Programa::withCount(['proyectos', 'ensayos'])->orderBy('nombre')->get()
+            ->map(fn ($p) => $p->only(['id', 'nombre', 'sigla', 'descripcion', 'lider', 'color', 'proyectos_count', 'ensayos_count']));
     }
 
     protected function disenos()

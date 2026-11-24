@@ -204,6 +204,101 @@ class RolesPortal
         return ['mensaje' => "{$usuario->nombre} ya no tiene acceso a Experimentos."];
     }
 
+    /**
+     * Crea o pone al dia en SIGEC a los usuarios que en el portal tienen el modulo Experimentos
+     * con un rol (p. ej. Muestreador asignado en login/usuarios), aunque aun no hayan entrado,
+     * para que aparezcan al asignar formularios, proyectos o ensayos. Solo escribe en la base
+     * local (no en el portal) y solo cuando falta el usuario o cambio su rol. Si el portal no
+     * responde no hace nada. Devuelve cuantos usuarios se crearon o actualizaron.
+     */
+    public function sincronizarUsuariosLocales(): int
+    {
+        try {
+            $modulo = $this->moduloId();
+            if (! $modulo) {
+                return 0;
+            }
+            $filas = $this->portal()->table('usuario_modulo as um')
+                ->join('usuarios as u', 'u.id', '=', 'um.usuario_id')
+                ->join('roles as r', 'r.id', '=', 'um.rol_id')
+                ->where('um.modulo_id', $modulo)
+                ->where(fn ($q) => $q->whereNull('u.es_superadmin')->orWhere('u.es_superadmin', '<>', 1))
+                ->get(['u.id', 'u.nombre', 'u.correo', 'u.ingenio_id', 'r.nombre_rol']);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return 0;
+        }
+
+        $locales = User::with('roles:id,name')->get()->keyBy(fn ($u) => mb_strtolower(trim($u->email)));
+        $cambios = 0;
+        foreach ($filas as $f) {
+            $rol = self::rolSigec($f->nombre_rol);
+            $correo = mb_strtolower(trim((string) $f->correo));
+            if (! $rol || $correo === '') {
+                continue;
+            }
+            $local = $locales[$correo] ?? null;
+            if ($local && $local->roles->pluck('name')->all() === [$rol]) {
+                continue;
+            }
+            $local = $local ?: $this->usuarioLocal($f);
+            $local->syncRoles([$rol]);
+            $cambios++;
+        }
+
+        return $cambios;
+    }
+
+    /**
+     * Permisos "sigec.*" del rol del usuario EN EXPERIMENTOS (usuario_modulo.rol_id ->
+     * rol_permiso), que se editan en login/roles. ['*'] para el superadmin del portal, [] si no
+     * esta en el portal y null si el portal no responde. Una consulta por usuario y peticion.
+     */
+    public function permisosSigec(User $user): ?array
+    {
+        static $cache = [];
+        if (array_key_exists($user->id, $cache)) {
+            return $cache[$user->id];
+        }
+
+        try {
+            $portal = $this->portal();
+            $usuario = $portal->table('usuarios')->whereRaw('LOWER(TRIM(correo)) = ?', [mb_strtolower(trim($user->email))])
+                ->first(['id', 'es_superadmin']);
+            if (! $usuario) {
+                return $cache[$user->id] = [];
+            }
+            if ((int) $usuario->es_superadmin === 1) {
+                return $cache[$user->id] = ['*'];
+            }
+            $modulo = $this->moduloId();
+            $lista = $modulo ? $portal->table('usuario_modulo as um')
+                ->join('rol_permiso as rp', 'rp.rol_id', '=', 'um.rol_id')
+                ->join('permisos as p', 'p.id', '=', 'rp.permiso_id')
+                ->where('um.usuario_id', $usuario->id)
+                ->where('um.modulo_id', $modulo)
+                ->where('p.nombre_permiso', 'like', 'sigec.%')
+                ->pluck('p.nombre_permiso')->all() : [];
+        } catch (\Throwable $e) {
+            report($e);
+            $lista = null;
+        }
+
+        return $cache[$user->id] = $lista;
+    }
+
+    /** Si el rol del usuario en Experimentos tiene un permiso del portal; null si el portal no responde. */
+    public function tienePermiso(User $user, string $permiso): ?bool
+    {
+        $lista = $this->permisosSigec($user);
+        if ($lista === null) {
+            return null;
+        }
+
+        return in_array('*', $lista, true) || in_array($permiso, $lista, true);
+    }
+
     protected function usuarioPortal(int $portalId, User $actor)
     {
         $usuario = $this->portal()->table('usuarios')->where('id', $portalId)->first(['id', 'nombre', 'correo', 'es_superadmin', 'ingenio_id']);

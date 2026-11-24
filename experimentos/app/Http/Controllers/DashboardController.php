@@ -33,10 +33,14 @@ class DashboardController extends Controller
         $hace30 = $hoy->copy()->subDays(30);
 
         $permisos = [
-            'investigacion' => $user->can('menu_general'),
-            'formularios' => $user->can('manage_formularios') || $user->can('ver_formulario_asignado'),
-            'muestras' => $user->can('create_muestra') || $user->can('view_lab'),
-            'generar' => $user->can('create_muestra'),
+            // Segun las opciones del menu (Roles y permisos del portal, ver config/sso.php "menu").
+            'ensayos' => $user->can('menu.ensayos'),
+            'evaluaciones' => $user->can('menu.evaluaciones'),
+            'clima' => $user->can('menu.clima'),
+            'clima_api' => $user->can('clima_api'),
+            'formularios' => $user->can('menu.formularios'),
+            'muestras' => $user->can('menu.muestras'),
+            'generar' => $user->can('menu.muestras') && $user->can('create_muestra'),
             'admin' => $user->can('admin_only'),
         ];
 
@@ -71,7 +75,7 @@ class DashboardController extends Controller
                 'clave' => 'ensayos', 'titulo' => 'Ensayos en campo', 'icono' => 'fas fa-seedling',
                 'valor' => $ensayos->where('estado', 'En campo')->count(),
                 'detalle' => $ensayos->count() . ' en total · ' . $ensayos->where('estado', 'Planificado')->count() . ' planificados · ' . $ensayos->where('estado', 'Finalizado')->count() . ' finalizados',
-                'url' => $permisos['investigacion'] ? route('investigacion.ensayos.index') : null,
+                'url' => $permisos['ensayos'] ? route('investigacion.ensayos.index') : null,
                 'serie' => null,
             ],
             [
@@ -86,7 +90,7 @@ class DashboardController extends Controller
                 'clave' => 'evaluaciones', 'titulo' => 'Valores evaluados', 'icono' => 'fas fa-clipboard-check',
                 'valor' => (clone $evals)->where('v.fecha', '>=', $hace30)->count(),
                 'detalle' => 'En 30 dias · ' . number_format((clone $evals)->count()) . ' en total · ' . (clone $evals)->distinct()->count('v.variable_id') . ' variables',
-                'url' => $permisos['investigacion'] ? route('investigacion.evaluaciones.index') : null,
+                'url' => $permisos['evaluaciones'] ? route('investigacion.evaluaciones.index') : null,
                 'serie' => $serie($evals, 'v.fecha'),
                 'serieNombre' => 'Valores',
             ],
@@ -110,7 +114,7 @@ class DashboardController extends Controller
                 'clave' => 'clima', 'titulo' => 'Estaciones de clima', 'icono' => 'fas fa-cloud-sun-rain',
                 'valor' => EstacionMeteo::where('activa', true)->count(),
                 'detalle' => $ultimoClima ? 'Ultimo dato: ' . Carbon::parse($ultimoClima)->format('d/m/Y') : 'Sin datos diarios',
-                'url' => $permisos['investigacion'] ? route('investigacion.clima.index') : null,
+                'url' => $permisos['clima'] ? route('investigacion.clima.index') : null,
                 'serie' => null,
             ],
         ];
@@ -152,7 +156,7 @@ class DashboardController extends Controller
             $out[] = compact('nivel', 'icono', 'texto', 'detalle', 'url');
         };
         $nombres = fn ($c) => $c->take(4)->map(fn ($e) => $e->codigo)->implode(', ') . ($c->count() > 4 ? '…' : '');
-        $ensayosUrl = $p['investigacion'] ? route('investigacion.ensayos.index') : null;
+        $ensayosUrl = $p['ensayos'] ? route('investigacion.ensayos.index') : null;
 
         $enCampo = $ensayos->where('estado', 'En campo');
         $quietos = $enCampo->filter(function ($e) use ($hoy) {
@@ -197,8 +201,9 @@ class DashboardController extends Controller
             $add('info', 'fas fa-th', $sinParcelas->count() . ' ensayo(s) sin parcelas definidas', 'No se pueden registrar evaluaciones ni generar muestras por parcela: ' . $nombres($sinParcelas), $ensayosUrl);
         }
 
-        if ($ultimoClima && Carbon::parse($ultimoClima)->lt($hoy->copy()->subDays(3))) {
-            $add('aviso', 'fas fa-cloud', 'Los datos de clima no se actualizan desde el ' . Carbon::parse($ultimoClima)->format('d/m/Y'), 'Revise la sincronizacion con la API de estaciones', $p['investigacion'] ? route('investigacion.clima.index', ['vista' => 'api']) : null);
+        // Aviso de la API: solo para quien puede revisar la conexion (permiso sigec.clima_api.gestionar).
+        if ($p['clima_api'] && $ultimoClima && Carbon::parse($ultimoClima)->lt($hoy->copy()->subDays(3))) {
+            $add('aviso', 'fas fa-cloud', 'Los datos de clima no se actualizan desde el ' . Carbon::parse($ultimoClima)->format('d/m/Y'), 'Revise la sincronizacion con la API de estaciones', route('investigacion.clima.index', ['vista' => 'api']));
         }
 
         if ($p['admin']) {
@@ -233,10 +238,10 @@ class DashboardController extends Controller
                 'ultima_actividad' => $ultima,
                 'sin_actividad' => ! $ultima || Carbon::parse($ultima)->lt($hoy->copy()->subDays(self::DIAS_SIN_ACTIVIDAD)),
                 'urls' => [
-                    'detalle' => $p['investigacion'] ? route('investigacion.ensayos.index', ['ensayo' => $e->id]) : null,
-                    'evaluaciones' => $p['investigacion'] ? route('investigacion.evaluaciones.index', ['ensayo' => $e->id]) : null,
+                    'detalle' => $p['ensayos'] ? route('investigacion.ensayos.index', ['ensayo' => $e->id]) : null,
+                    'evaluaciones' => $p['evaluaciones'] ? route('investigacion.evaluaciones.index', ['ensayo' => $e->id]) : null,
                     'muestras' => $p['muestras'] ? route('soporte.muestras-consulta.index', ['buscar' => $e->codigo]) : null,
-                    'clima' => $p['investigacion'] ? route('investigacion.ensayos.index', ['ensayo' => $e->id, 'tab' => 'clima']) : null,
+                    'clima' => $p['ensayos'] ? route('investigacion.ensayos.index', ['ensayo' => $e->id, 'tab' => 'clima']) : null,
                 ],
             ];
         })->sortBy(fn ($e) => ($e['sin_actividad'] ? '0' : '1') . $e['codigo'])->values();
@@ -247,7 +252,7 @@ class DashboardController extends Controller
     {
         $eventos = collect();
         $ensayo = fn ($id) => optional($porId->get($id))->codigo ?? '—';
-        $ensayosUrl = fn ($id, $tab = null) => $p['investigacion'] ? route('investigacion.ensayos.index', array_filter(['ensayo' => $id, 'tab' => $tab])) : null;
+        $ensayosUrl = fn ($id, $tab = null) => $p['ensayos'] ? route('investigacion.ensayos.index', array_filter(['ensayo' => $id, 'tab' => $tab])) : null;
 
         Bitacora::whereIn('ensayo_id', $ids)->latest('fecha')->latest('id')->limit(8)->get()
             ->each(fn ($b) => $eventos->push([
@@ -262,7 +267,7 @@ class DashboardController extends Controller
                 'tipo' => 'evaluacion', 'icono' => 'fas fa-clipboard-check', 'cuando' => $r->cuando ?? $r->fecha . ' 12:00:00',
                 'titulo' => "{$r->n} valores evaluados", 'detalle' => "{$r->vars} variable(s), evaluacion del " . Carbon::parse($r->fecha)->format('d/m/Y'),
                 'ensayo' => $ensayo($r->ensayo_id),
-                'url' => $p['investigacion'] ? route('investigacion.evaluaciones.index', ['ensayo' => $r->ensayo_id]) : null,
+                'url' => $p['evaluaciones'] ? route('investigacion.evaluaciones.index', ['ensayo' => $r->ensayo_id]) : null,
             ]));
 
         Respuesta::whereIn('ensayo_id', $ids)->with('formulario:id,nombre')

@@ -17,7 +17,7 @@
           <i class="pp-tab-dot"></i><b>{{ pg.sigla || '?' }}</b><span class="pp-tab-n">{{ pg.nombre }}</span>
           <small>{{ proyectosDe(pg.id) }}</small><i v-if="enCampo(pg)" class="fas fa-seedling pp-tab-campo" :title="`${enCampo(pg)} ensayo(s) en campo`"></i>
         </button>
-        <button v-if="puedeGestionarProgramas" type="button" class="pp-tab is-nuevo" title="Nuevo programa" @click="$refs.programaModal.abrirCrear()"><i class="fas fa-plus"></i></button>
+        <a v-if="puedeGestionarProgramas && catalogoProgramasUrl" :href="catalogoProgramasUrl" class="pp-tab is-nuevo" title="Administrar programas en Sistema › Catalogos"><i class="fas fa-cog"></i></a>
       </div>
 
       <!-- Ficha del programa elegido -->
@@ -34,10 +34,7 @@
           <p v-if="programaFiltrado.descripcion" :title="programaFiltrado.descripcion">{{ programaFiltrado.descripcion }}</p>
         </div>
         <div class="pp-ficha-acc">
-          <template v-if="puedeGestionarProgramas">
-            <button type="button" class="pry-icon" title="Editar programa" @click="$refs.programaModal.abrirEditar(programaFiltrado)"><i class="fas fa-pen"></i></button>
-            <button type="button" class="pry-icon is-danger" :class="{ 'is-locked': proyectosDe(programaFiltrado.id) }" :title="proyectosDe(programaFiltrado.id) ? 'Tiene proyectos: no se puede eliminar' : 'Eliminar programa'" @click="eliminarPrograma(programaFiltrado)"><i class="fas fa-trash"></i></button>
-          </template>
+          <a v-if="puedeGestionarProgramas && catalogoProgramasUrl" class="pry-icon" title="Editar el programa en Sistema › Catalogos" :href="catalogoProgramasUrl"><i class="fas fa-pen"></i></a>
           <button v-if="puedeCrear" type="button" class="btn btn-sm btn-success" @click="abrirCrear(programaFiltrado.id)">
             <i class="fas fa-plus"></i> Nuevo proyecto<small v-if="programaFiltrado.proximo_codigo"> · {{ programaFiltrado.proximo_codigo }}</small>
           </button>
@@ -378,25 +375,24 @@
       </div>
     </div>
 
-    <programa-modal v-if="puedeGestionarProgramas" ref="programaModal" :programas="programasItems" :paleta="paleta" @guardado="programaGuardado"></programa-modal>
   </div>
 </template>
 
 <script>
-import ProgramaModal, { TONOS } from '../programas/programa-modal.vue';
+import { TONOS } from '../programas/programa-modal.vue';
 import { zafraDe, zafraActual, zafrasEntre, periodoProyecto, situacionEnZafra, SITUACIONES } from '../../../zafra';
 
 const DIA = 86400000;
 
 export default {
   name: 'ProyectosIndex',
-  components: { ProgramaModal },
   props: {
     proyectos: { type: Array, default: () => [] },
     // Programas con conteos y resumen (ProgramasController::listado).
     programas: { type: Array, default: () => [] },
     paleta: { type: Array, default: () => Object.keys(TONOS) },
     puedeGestionarProgramas: { type: Boolean, default: false },
+    catalogoProgramasUrl: { type: String, default: '' },
     responsables: { type: Array, default: () => [] },
     rolesEquipo: { type: Array, default: () => [] },
     diasSinActividad: { type: Number, default: 30 },
@@ -558,36 +554,6 @@ export default {
     },
     enCampo(pg) { return (pg.ensayos_estado || {})['En campo'] || 0; },
     elegirPrograma(id) { this.filtroPrograma = this.filtroPrograma === id ? null : id; },
-    programaGuardado(data, editado) {
-      // Cambio de sigla: se recodificaron proyectos, ensayos y muestras; se recarga para verlos.
-      if (data.recodificados) { window.location.reload(); return; }
-      const idx = this.programasItems.findIndex((x) => x.id === data.id);
-      if (idx >= 0) this.$set(this.programasItems, idx, data); else this.programasItems.push(data);
-      // Los proyectos traen su programa embebido (nombre/sigla del detalle).
-      if (editado) this.items.forEach((p) => { if (p.programa_id === data.id && p.programa) Object.assign(p.programa, { nombre: data.nombre, sigla: data.sigla, color: data.color }); });
-      else this.filtroPrograma = data.id;
-    },
-    eliminarPrograma(pg) {
-      const n = this.proyectosDe(pg.id) || pg.proyectos_count || 0;
-      if (n) {
-        this.$swal.fire({ icon: 'info', title: 'No se puede eliminar', html: `<b>${this.escapar(pg.nombre)}</b> tiene ${n} proyecto(s).<br>Reasigne o elimine esos proyectos primero.`, confirmButtonColor: '#73BC25' });
-        return;
-      }
-      this.$swal.fire({
-        title: 'Eliminar programa', html: `Se eliminara <b>${this.escapar(pg.nombre)}</b>. Esta accion no se puede deshacer.`, icon: 'warning',
-        showCancelButton: true, confirmButtonText: 'Si, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#FF6B00', cancelButtonColor: '#CED2D5', focusCancel: true,
-      }).then((res) => {
-        if (!res.isConfirmed) return;
-        window.axios.delete(`/investigacion/programas/${pg.id}`)
-          .then(() => {
-            this.programasItems = this.programasItems.filter((x) => x.id !== pg.id);
-            if (this.filtroPrograma === pg.id) this.filtroPrograma = null;
-            this.$swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Programa eliminado', timer: 2000, showConfirmButton: false });
-          })
-          .catch((err) => this.$swal.fire({ icon: 'error', title: 'No se pudo eliminar', text: (err.response && err.response.data && err.response.data.message) || 'Ocurrio un error.' }));
-      });
-    },
-    escapar(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; },
     estiloEstado(estado) { const s = this.ESTADOS_ENSAYO.find((x) => x.id === estado); return s ? { background: s.color, color: s.texto } : {}; },
     // Porcentaje del periodo (inicio-fin) ya transcurrido.
     avance(p) {

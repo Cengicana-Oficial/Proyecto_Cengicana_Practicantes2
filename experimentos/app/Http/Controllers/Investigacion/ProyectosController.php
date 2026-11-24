@@ -55,7 +55,9 @@ class ProyectosController extends Controller
                 'proyectos' => $proyectos,
                 'programas' => $programas->listado($user),
                 'paleta' => $programas->paleta(),
-                'puedeGestionarProgramas' => $user->can('admin_only'),
+                // Los programas se administran en Sistema › Catalogos (permiso sigec.programas.gestionar).
+                'puedeGestionarProgramas' => $user->can('programas'),
+                'catalogoProgramasUrl' => route('admin.catalogos.index', ['tab' => 'programas']),
                 'responsables' => User::orderBy('name')->get(['id', 'name']),
                 'rolesEquipo' => self::ROLES_EQUIPO,
                 'diasSinActividad' => self::DIAS_SIN_ACTIVIDAD,

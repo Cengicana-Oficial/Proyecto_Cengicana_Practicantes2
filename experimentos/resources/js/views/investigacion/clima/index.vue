@@ -1,13 +1,13 @@
 <template>
   <div class="ci">
-    <!-- Estado de la API -->
-    <div class="ci-api" :class="{ 'is-off': !icc.configurada }">
+    <!-- Estado de la API (solo con el permiso de la conexion API) -->
+    <div v-if="puedeApi" class="ci-api" :class="{ 'is-off': !icc.configurada }">
       <i class="fas fa-plug"></i>
       <span v-if="icc.configurada">
         API agromet del ICC conectada · <b>{{ icc.servidor }}</b>
         <template v-if="icc.cobertura"> · {{ icc.cobertura.dias }} dias descargados entre {{ fmt(icc.cobertura.desde) }} y {{ fmt(icc.cobertura.hasta) }} · {{ icc.estaciones }} estaciones</template>
       </span>
-      <span v-else>API del ICC sin configurar: se muestran solo los datos ya guardados en SIGEC.<a v-if="puedeGestionar" href="#" @click.prevent="vista = 'api'"> Configurar la conexion</a></span>
+      <span v-else>API del ICC sin configurar: se muestran solo los datos ya guardados en SIGEC.<a href="#" @click.prevent="vista = 'api'"> Configurar la conexion</a></span>
     </div>
 
     <div class="ci-tabs">
@@ -19,15 +19,15 @@
         <i class="fas fa-tags"></i> Estaciones y categorias
         <span v-if="sinUbicacion" class="ci-badge" :title="`${sinUbicacion} estacion(es) sin coordenadas`">{{ sinUbicacion }}</span>
       </button>
-      <button v-if="puedeGestionar" type="button" :class="{ 'is-active': vista === 'api' }" @click="vista = 'api'">
+      <button v-if="puedeApi" type="button" :class="{ 'is-active': vista === 'api' }" @click="vista = 'api'">
         <i class="fas fa-plug"></i> Conexion API ICC
       </button>
     </div>
 
-    <clima-api-config v-if="vista === 'api'" @guardado="cargarIcc"></clima-api-config>
+    <clima-api-config v-if="puedeApi && vista === 'api'" @guardado="cargarIcc"></clima-api-config>
     <!-- Fuera del v-if: la descarga del historial continua aunque se cambie de pestaña. -->
     <!-- v-show (no v-if): la descarga del historial sigue aunque se cambie de pestaña. -->
-    <clima-base-datos v-show="vista === 'base'" :configurada="icc.configurada" :puede-sincronizar="puedeSincronizar" :puede-gestionar="puedeGestionar" @actualizado="cargarIcc(); cargarEstaciones()"></clima-base-datos>
+    <clima-base-datos v-show="vista === 'base'" :configurada="icc.configurada" :puede-sincronizar="puedeSincronizar" :puede-gestionar="puedeGestionar" :puede-api="puedeApi" @actualizado="cargarIcc(); cargarEstaciones()"></clima-base-datos>
     <clima-analisis v-if="vista === 'analisis'" :estaciones="estaciones"></clima-analisis>
     <clima-comparar v-if="vista === 'comparar'" :estaciones="estaciones"></clima-comparar>
     <clima-estaciones v-if="vista === 'estaciones'" :estaciones="estaciones" :puede-gestionar="puedeGestionar" :puede-cargar-datos="puedeSincronizar" @recargar="cargarEstaciones"></clima-estaciones>
@@ -199,11 +199,12 @@ export default {
   props: {
     puedeSincronizar: { type: Boolean, default: false },
     puedeGestionar: { type: Boolean, default: false },
+    puedeApi: { type: Boolean, default: false },
   },
   data() {
     const hoy = iso(new Date());
     return {
-      vista: ['estaciones', 'api', 'analisis', 'comparar', 'base'].includes(new URLSearchParams(window.location.search).get('vista')) ? new URLSearchParams(window.location.search).get('vista') : 'consulta',
+      vista: ['estaciones', ...(this.puedeApi ? ['api'] : []), 'analisis', 'comparar', 'base'].includes(new URLSearchParams(window.location.search).get('vista')) ? new URLSearchParams(window.location.search).get('vista') : 'consulta',
       MAX_FILAS: 1000,
       hoy,
       icc: { configurada: false },

@@ -54,12 +54,12 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/notificaciones/vistas', [NotificacionesController::class, 'vistas'])->name('notificaciones.vistas');
 
     Route::group(['as' => 'investigacion.', 'prefix' => 'investigacion'], function () {
-        Route::get('programas', [ProgramasController::class, 'index'])->name('programas.index');
+        Route::get('programas', [ProgramasController::class, 'index'])->name('programas.index')->middleware('can:menu.proyectos');
         Route::post('programas', [ProgramasController::class, 'store'])->name('programas.store');
         Route::put('programas/{programa}', [ProgramasController::class, 'update'])->name('programas.update');
         Route::delete('programas/{programa}', [ProgramasController::class, 'destroy'])->name('programas.destroy');
 
-        Route::get('proyectos', [ProyectosController::class, 'index'])->name('proyectos.index');
+        Route::get('proyectos', [ProyectosController::class, 'index'])->name('proyectos.index')->middleware('can:menu.proyectos');
         Route::get('proyectos/codigo', [ProyectosController::class, 'codigo'])->name('proyectos.codigo');
         Route::post('proyectos', [ProyectosController::class, 'store'])->name('proyectos.store');
         Route::put('proyectos/{proyecto}', [ProyectosController::class, 'update'])->name('proyectos.update');
@@ -67,7 +67,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('proyectos/{proyecto}/equipo', [ProyectosController::class, 'guardarIntegrante'])->name('proyectos.equipo.store');
         Route::delete('proyectos/{proyecto}/equipo/{asignacion}', [ProyectosController::class, 'quitarIntegrante'])->name('proyectos.equipo.destroy');
 
-        Route::get('ensayos', [EnsayosController::class, 'index'])->name('ensayos.index');
+        Route::get('ensayos', [EnsayosController::class, 'index'])->name('ensayos.index')->middleware('can:menu.ensayos');
         Route::get('ensayos/codigo', [EnsayosController::class, 'codigo'])->name('ensayos.codigo');
         Route::post('ensayos', [EnsayosController::class, 'store'])->name('ensayos.store');
         Route::put('ensayos/{ensayo}', [EnsayosController::class, 'update'])->name('ensayos.update');
@@ -116,7 +116,7 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('clima/estaciones/{estacion}', [ClimaController::class, 'destroy'])->name('clima.estaciones.destroy');
         Route::get('clima/estaciones/{estacion}/datos', [ClimaController::class, 'datos'])->name('clima.estaciones.datos');
         Route::post('clima/estaciones/{estacion}/importar', [ClimaController::class, 'importar'])->name('clima.estaciones.importar');
-        Route::get('clima', [ClimaController::class, 'pagina'])->name('clima.index');
+        Route::get('clima', [ClimaController::class, 'pagina'])->name('clima.index')->middleware('can:menu.clima');
         Route::get('clima/consulta', [ClimaController::class, 'consulta'])->name('clima.consulta');
         Route::get('clima/analisis', [ClimaController::class, 'analisis'])->name('clima.analisis');
         Route::get('clima/serie', [ClimaController::class, 'serie'])->name('clima.serie');
@@ -136,14 +136,14 @@ Route::middleware(['auth'])->group(function () {
         Route::put('clima/icc/config', [ClimaController::class, 'iccConfigGuardar'])->name('clima.icc.config.guardar');
         Route::post('clima/icc/probar', [ClimaController::class, 'iccProbar'])->name('clima.icc.probar');
 
-        Route::get('variables', [VariablesController::class, 'index'])->name('variables.index');
+        Route::get('variables', [VariablesController::class, 'index'])->name('variables.index')->middleware('can:menu.variables');
         Route::post('variables', [VariablesController::class, 'store'])->name('variables.store');
         Route::put('variables/{variable}', [VariablesController::class, 'update'])->name('variables.update');
         Route::delete('variables/{variable}', [VariablesController::class, 'destroy'])->name('variables.destroy');
         Route::get('variables/{variable}/resumen', [VariablesController::class, 'resumen'])->name('variables.resumen');
         Route::post('variables/lote', [VariablesController::class, 'lote'])->name('variables.lote');
 
-        Route::get('evaluaciones', [EvaluacionesController::class, 'index'])->name('evaluaciones.index');
+        Route::get('evaluaciones', [EvaluacionesController::class, 'index'])->name('evaluaciones.index')->middleware('can:menu.evaluaciones');
         Route::post('evaluaciones', [EvaluacionesController::class, 'store'])->name('evaluaciones.store');
         Route::post('evaluaciones/lote', [EvaluacionesController::class, 'lote'])->name('evaluaciones.lote');
         Route::get('evaluaciones/laboratorio', [EvaluacionesController::class, 'laboratorio'])->name('evaluaciones.laboratorio');
@@ -155,16 +155,16 @@ Route::middleware(['auth'])->group(function () {
         // El trabajo de laboratorio vive en el modulo Laboratorio del portal; SIGEC solo consulta sus resultados.
         Route::get('laboratorio', fn () => redirect()->route('soporte.muestras.index', ['tab' => 'seguimiento']))->name('laboratorio.index');
         // Muestras: pestañas Generar etiquetas y Seguimiento (las rutas antiguas redirigen aqui).
-        Route::get('muestras', [MuestrasController::class, 'index'])->name('muestras.index');
+        Route::get('muestras', [MuestrasController::class, 'index'])->name('muestras.index')->middleware('can:menu.muestras');
 
-        Route::get('muestras/generar', [MuestrasGenController::class, 'index'])->name('muestras-gen.index');
+        Route::get('muestras/generar', [MuestrasGenController::class, 'index'])->name('muestras-gen.index')->middleware('can:menu.muestras');
         Route::post('muestras/generar', [MuestrasGenController::class, 'store'])->name('muestras-gen.store');
         Route::get('muestras/generar/lote', [MuestrasGenController::class, 'lote'])->name('muestras-gen.lote');
         Route::post('muestras/campos', [MuestrasGenController::class, 'guardarCampo'])->name('muestras-campos.store');
         Route::put('muestras/campos/{campo}', [MuestrasGenController::class, 'guardarCampo'])->name('muestras-campos.update');
         Route::delete('muestras/campos/{campo}', [MuestrasGenController::class, 'eliminarCampo'])->name('muestras-campos.destroy');
 
-        Route::get('muestras/consulta', [MuestrasConsultaController::class, 'index'])->name('muestras-consulta.index');
+        Route::get('muestras/consulta', [MuestrasConsultaController::class, 'index'])->name('muestras-consulta.index')->middleware('can:menu.muestras');
         Route::put('muestras/consulta/{muestra}', [MuestrasConsultaController::class, 'update'])->name('muestras-consulta.update');
         Route::post('muestras/consulta/lote', [MuestrasConsultaController::class, 'lote'])->name('muestras-consulta.lote');
         Route::post('muestras/consulta/sincronizar-laboratorio', [MuestrasConsultaController::class, 'sincronizarLaboratorio'])->name('muestras-consulta.sincronizar');
@@ -172,14 +172,14 @@ Route::middleware(['auth'])->group(function () {
         Route::get('muestras/consulta/envios-laboratorio', [MuestrasConsultaController::class, 'enviosLaboratorio'])->name('muestras-consulta.envios');
         Route::post('muestras/consulta/vincular', [MuestrasConsultaController::class, 'vincular'])->name('muestras-consulta.vincular');
         Route::post('muestras/consulta/{muestra}/desvincular', [MuestrasConsultaController::class, 'desvincular'])->name('muestras-consulta.desvincular');
-        Route::get('imagenes-geo', [ImagenesGeoController::class, 'index'])->name('imagenes-geo.index');
+        Route::get('imagenes-geo', [ImagenesGeoController::class, 'index'])->name('imagenes-geo.index')->middleware('can:menu.imagenes_geo');
         Route::post('imagenes-geo', [ImagenesGeoController::class, 'store'])->name('imagenes-geo.store');
         Route::delete('imagenes-geo/{imagen}', [ImagenesGeoController::class, 'destroy'])->name('imagenes-geo.destroy');
 
         // Las graficas se integraron: campo y laboratorio en Evaluaciones › Graficos; clima en Ensayos › Clima.
         Route::get('graficas', fn () => redirect()->route('investigacion.evaluaciones.index', ['tab' => 'graficos', 'vista' => 'tiempo']))->name('graficas.index');
 
-        Route::get('archivos', [ArchivosController::class, 'index'])->name('archivos.index');
+        Route::get('archivos', [ArchivosController::class, 'index'])->name('archivos.index')->middleware('can:menu.archivos');
         Route::post('archivos', [ArchivosController::class, 'store'])->name('archivos.store');
         Route::put('archivos/{archivo}', [ArchivosController::class, 'update'])->name('archivos.update');
         Route::delete('archivos/{archivo}', [ArchivosController::class, 'destroy'])->name('archivos.destroy');
@@ -189,7 +189,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('bitacora', [BitacoraController::class, 'store'])->name('bitacora.store');
         Route::put('bitacora/{bitacora}', [BitacoraController::class, 'update'])->name('bitacora.update');
         Route::delete('bitacora/{bitacora}', [BitacoraController::class, 'destroy'])->name('bitacora.destroy');
-        Route::get('formularios', [FormulariosController::class, 'index'])->name('formularios.index');
+        Route::get('formularios', [FormulariosController::class, 'index'])->name('formularios.index')->middleware('can:menu.formularios');
         Route::post('formularios', [FormulariosController::class, 'store'])->name('formularios.store');
         Route::put('formularios/{formulario}', [FormulariosController::class, 'update'])->name('formularios.update');
         Route::delete('formularios/{formulario}', [FormulariosController::class, 'destroy'])->name('formularios.destroy');
@@ -203,7 +203,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('formularios/respuestas/promover', [FormulariosController::class, 'promover'])->name('formularios.respuestas.promover');
         Route::delete('formularios/respuestas/{respuesta}', [FormulariosController::class, 'destroyRespuesta'])->name('formularios.respuestas.destroy');
 
-        Route::get('reportes', [ReportesController::class, 'index'])->name('reportes.index');
+        Route::get('reportes', [ReportesController::class, 'index'])->name('reportes.index')->middleware('can:menu.reportes');
         Route::get('reportes/exportar/evaluaciones', [ReportesController::class, 'exportarEvaluaciones'])->name('reportes.exportar-evaluaciones');
         Route::get('reportes/exportar/muestras-lab', [ReportesController::class, 'exportarMuestrasLab'])->name('reportes.exportar-muestras-lab');
         Route::get('reportes/exportar/ensayos', [ReportesController::class, 'exportarEnsayos'])->name('reportes.exportar-ensayos');
@@ -216,7 +216,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('analisis', fn () => redirect()->route('analisis.index'));
     Route::group(['as' => 'analisis.', 'prefix' => 'importar'], function () {
-        Route::get('/', [AnalisisController::class, 'index'])->name('index');
+        Route::get('/', [AnalisisController::class, 'index'])->name('index')->middleware('can:menu.importacion');
         Route::get('plantilla', [AnalisisController::class, 'plantilla'])->name('plantilla');
         Route::post('importar', [AnalisisController::class, 'importar'])->name('importar');
     });

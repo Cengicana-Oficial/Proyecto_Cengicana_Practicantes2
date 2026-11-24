@@ -1,7 +1,7 @@
 <template>
   <div class="bd">
     <div class="bd-sub">
-      <button v-for="s in secciones" :key="s.id" type="button" :class="{ 'is-on': seccion === s.id }" @click="seccion = s.id">
+      <button v-for="s in seccionesVisibles" :key="s.id" type="button" :class="{ 'is-on': seccion === s.id }" @click="seccion = s.id">
         <i :class="s.icon"></i> {{ s.label }}
         <span v-if="s.id === 'calidad' && est && est.calidad.pendientes" class="bd-badge">{{ est.calidad.pendientes.toLocaleString('es-GT') }}</span>
       </button>
@@ -57,13 +57,13 @@
     </section>
 
     <!-- ===================== SINCRONIZACION ===================== -->
-    <section v-show="seccion === 'sync'">
+    <section v-if="puedeApi" v-show="seccion === 'sync'">
       <div v-if="!configurada" class="bd-aviso"><i class="fas fa-plug"></i> Configure primero la conexion en la pestaña <b>Conexion API ICC</b>.</div>
       <div class="bd-acciones">
         <div class="bd-accion">
           <h6><i class="fas fa-sync-alt"></i> Actualizar ahora</h6>
           <p>Vuelve a pedir los ultimos {{ diasActualizar }} dias (el ICC los sigue completando) y aplica el control de calidad. Se hace solo al abrir Clima si pasaron mas de 3 horas.</p>
-          <button type="button" class="btn btn-success btn-sm" :disabled="!configurada || ocupado || !puedeSincronizar" @click="actualizar">
+          <button type="button" class="btn btn-success btn-sm" :disabled="!configurada || ocupado || !puedeApi" @click="actualizar">
             <i :class="ocupado === 'actualizar' ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i> Actualizar ultimos {{ diasActualizar }} dias
           </button>
         </div>
@@ -73,14 +73,14 @@
           <div class="bd-fila">
             <input type="date" class="form-control form-control-sm" v-model="rd.desde" :max="hoy">
             <input type="date" class="form-control form-control-sm" v-model="rd.hasta" :min="rd.desde" :max="hoy">
-            <button type="button" class="btn btn-secondary btn-sm" :disabled="!configurada || ocupado || !rd.desde || !rd.hasta || !puedeSincronizar" @click="redescargar">
+            <button type="button" class="btn btn-secondary btn-sm" :disabled="!configurada || ocupado || !rd.desde || !rd.hasta || !puedeApi" @click="redescargar">
               <i :class="ocupado === 'redescarga' ? 'fas fa-spinner fa-spin' : 'fas fa-redo'"></i> Descargar
             </button>
           </div>
         </div>
       </div>
 
-      <clima-historial v-if="puedeSincronizar" class="mt-3" :configurada="configurada" @actualizado="recargar"></clima-historial>
+      <clima-historial v-if="puedeApi" class="mt-3" :configurada="configurada" @actualizado="recargar"></clima-historial>
 
       <div class="bd-head mt-3">
         <h6><i class="fas fa-list"></i> Bitacora de sincronizaciones</h6>
@@ -250,6 +250,7 @@ export default {
     configurada: { type: Boolean, default: false },
     puedeSincronizar: { type: Boolean, default: false },
     puedeGestionar: { type: Boolean, default: false },
+    puedeApi: { type: Boolean, default: false },
   },
   data() {
     const hoy = new Date();
@@ -291,6 +292,8 @@ export default {
     };
   },
   computed: {
+    // La sincronizacion con la API solo la ve quien tiene el permiso de la conexion API.
+    seccionesVisibles() { return this.secciones.filter((s) => s.id !== 'sync' || this.puedeApi); },
     aniosCob() {
       const y = new Date().getFullYear();
       const desde = this.est && this.est.desde ? Math.min(2009, Number(this.est.desde.slice(0, 4))) : 2009;
@@ -324,7 +327,7 @@ export default {
     this.cargarEstado();
   },
   methods: {
-    recargar() { this.cargarEstado(); this.cargarBitacora(); this.$emit('actualizado'); },
+    recargar() { this.cargarEstado(); if (this.puedeApi) this.cargarBitacora(); this.$emit('actualizado'); },
     cargarEstado() { return window.axios.get('/investigacion/clima/base/estado').then(({ data }) => { this.est = data; }); },
     cargarBitacora() { return window.axios.get('/investigacion/clima/base/bitacora').then(({ data }) => { this.bitacora = data; }); },
     cargarRangos() {

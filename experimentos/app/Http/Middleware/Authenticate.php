@@ -14,8 +14,15 @@ class Authenticate extends Middleware
      */
     protected function redirectTo($request)
     {
+        // Sin sesion (expirada o cerrada) se vuelve al login del portal: a SIGEC solo se
+        // entra por el SSO del menu principal, su formulario propio no se usa.
         if (! $request->expectsJson()) {
-            return route('login');
+            $app = parse_url((string) config('app.url'));
+            $origen = isset($app['host'])
+                ? ($app['scheme'] ?? 'https') . '://' . $app['host'] . (isset($app['port']) ? ':' . $app['port'] : '')
+                : $request->getSchemeAndHttpHost();
+
+            return $origen . config('sso.login_url');
         }
     }
 }

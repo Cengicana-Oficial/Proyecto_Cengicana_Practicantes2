@@ -79,7 +79,45 @@ return [
         ],
     ],
 
+    // A donde va "Cerrar sesion" de SIGEC: el logout del portal, que cierra su sesion y
+    // muestra login/login.php. Ruta del mismo host (sin dominio).
+    'logout_url' => env('SIGEC_LOGOUT_URL', '/Pruebas/public/admin/logout.php'),
+
+    // A donde va quien entra a SIGEC sin sesion (expirada o cerrada): el login del portal.
+    'login_url' => env('SIGEC_LOGIN_URL', '/login/login.php'),
+
     // Nombre del modulo en usuarios_menu.modulos.
     'modulo_portal' => 'Experimentos',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Opciones del menu segun Roles y permisos del portal
+    |--------------------------------------------------------------------------
+    |
+    | Cada opcion del menu lateral (y su pagina) se controla con un permiso del
+    | portal "sigec.menu.<clave>" que se asigna al rol del usuario EN
+    | Experimentos desde login/roles/roles.php. Gate: "menu.<clave>" (ver
+    | AuthServiceProvider). Administrador/Superadmin ven todo.
+    |  - roles: roles spatie que reciben el permiso por defecto, una sola vez
+    |    (migracion 2026_11_24_120000_sembrar_permisos_menu_portal); equivale
+    |    a lo que cada rol veia antes del cambio.
+    |  - respaldo: abilities spatie que se usan solo si el portal no responde.
+    | Las etiquetas visibles en el portal estan en login/config/permisos_roles.php
+    | (permisos_sigec_catalogo); mantener ambas listas sincronizadas.
+    |
+    */
+    'menu' => [
+        'proyectos' => ['roles' => ['encargado', 'experto', 'investigador', 'ingenio'], 'respaldo' => ['menu_general']],
+        'ensayos' => ['roles' => ['encargado', 'experto', 'investigador', 'ingenio'], 'respaldo' => ['menu_general']],
+        'clima' => ['roles' => ['encargado', 'experto', 'investigador', 'ingenio'], 'respaldo' => ['menu_general']],
+        'variables' => ['roles' => ['encargado', 'experto', 'investigador', 'ingenio'], 'respaldo' => ['menu_general']],
+        'evaluaciones' => ['roles' => ['encargado', 'experto', 'investigador', 'ingenio'], 'respaldo' => ['menu_general']],
+        'muestras' => ['roles' => ['encargado', 'experto', 'investigador', 'ingenio'], 'respaldo' => ['create_muestra', 'view_lab']],
+        'imagenes_geo' => ['roles' => ['encargado', 'experto', 'investigador', 'ingenio'], 'respaldo' => ['menu_general']],
+        'archivos' => ['roles' => ['encargado', 'experto', 'investigador', 'ingenio'], 'respaldo' => ['menu_general']],
+        'formularios' => ['roles' => ['encargado', 'experto', 'muestreador'], 'respaldo' => ['manage_formularios', 'ver_formulario_asignado']],
+        'reportes' => ['roles' => ['encargado', 'experto'], 'respaldo' => ['view_reports_menu']],
+        'importacion' => ['roles' => ['encargado', 'experto'], 'respaldo' => ['run_analysis']],
+    ],
 
 ];
