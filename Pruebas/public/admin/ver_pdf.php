@@ -1,6 +1,7 @@
 <?php
 // Verificar que la sesión está iniciada y el usuario está autenticado
 session_start();
+require_once("../../config/auth.php"); visitas_exigir_permiso(["ver_solicitudes", "gestionar_solicitudes", "ver_solicitudes_aprobadas"]);
 
 if (!isset($_SESSION['usuario'])) {
     header("HTTP/1.0 403 Forbidden");

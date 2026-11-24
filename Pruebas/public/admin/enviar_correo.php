@@ -3,6 +3,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 session_start();
 require_once("../../config/conexion.php");
+require_once("../../config/auth.php"); visitas_exigir_permiso(["gestionar_solicitudes", "enviar_correos"], true);
 require_once("../../vendor/autoload.php");
 
 use PHPMailer\PHPMailer\PHPMailer;

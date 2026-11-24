@@ -2,6 +2,7 @@
 // DEBUG: Listar todos los archivos en la carpeta de cartas
 
 session_start();
+require_once("../../config/auth.php"); visitas_exigir_permiso([]); // Solo superadmin: lista archivos del servidor.
 
 if (!isset($_SESSION['usuario'])) {
     die("No autorizado");

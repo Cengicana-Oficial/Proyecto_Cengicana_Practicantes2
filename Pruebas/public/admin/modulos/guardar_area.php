@@ -1,5 +1,6 @@
 <?php
 require_once("../../../config/conexion.php");
+require_once("../../../config/auth.php"); visitas_exigir_permiso(["gestionar_areas", "gestionar_solicitudes"]);
 
 $conn = conexion::conectar();
 

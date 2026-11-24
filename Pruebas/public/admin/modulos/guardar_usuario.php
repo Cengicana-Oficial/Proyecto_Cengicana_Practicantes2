@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once("../../../config/conexion.php");
+require_once("../../../config/auth.php"); visitas_exigir_permiso(["gestionar_usuarios"]);
 
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
