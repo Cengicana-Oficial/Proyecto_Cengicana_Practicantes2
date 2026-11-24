@@ -13,6 +13,10 @@ lab_require_module_access();
 
 $usuario = lab_current_user();
 $esSuperadmin = (bool) $usuario['es_superadmin'];
+// Igual que el menú: la pantalla es de administración, no de consulta para todos los roles.
+if (!$esSuperadmin && !lab_can('laboratorio.usuarios.gestionar')) {
+    lab_forbidden('Solo quien administra los usuarios del laboratorio puede ver los roles y permisos.');
+}
 $_SESSION['roles_csrf'] ??= bin2hex(random_bytes(32));
 
 function roles_e($v): string

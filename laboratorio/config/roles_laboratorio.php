@@ -24,12 +24,11 @@ if (!function_exists('lab_roles_definicion')) {
         ];
         $analista = [
             'laboratorio.lotes.ver', 'laboratorio.analisis.ver', 'laboratorio.formularios_pendientes.ver',
-            'laboratorio.blanco_control.ver', 'laboratorio.kanban.ver', 'laboratorio.trazabilidad.ver',
+            'laboratorio.kanban.ver', 'laboratorio.trazabilidad.ver',
         ];
         $tecnico = array_values(array_unique(array_merge($analista, [
-            'laboratorio.solicitudes.ver', 'laboratorio.blanco_control.gestionar', 'laboratorio.validacion_tecnica.ver',
-            'laboratorio.validacion_tecnica.aprobar', 'laboratorio.consolidacion.ver', 'laboratorio.consolidacion.aprobar',
-            'laboratorio.formularios_erroneos.ver', 'laboratorio.formularios.guardar_corregidos', 'laboratorio.formularios.guardar_errores',
+            'laboratorio.solicitudes.ver', 'laboratorio.validacion_tecnica.ver',
+            'laboratorio.validacion_tecnica.aprobar', 'laboratorio.consolidacion.ver',
             'laboratorio.informes.ver', 'laboratorio.documentos.ver', 'laboratorio.catalogo_analisis.ver', 'laboratorio.catalogo_muestras.ver',
         ])));
         $jefe = array_values(array_diff($todosLab, ['laboratorio.usuarios.gestionar', 'laboratorio.roles.gestionar']));
@@ -81,7 +80,7 @@ if (!function_exists('lab_roles_definicion')) {
             ['Entrega', 'Reportes: ver, descargar y enviar al cliente', 'laboratorio.documentos.ver'],
             ['Entrega', 'Historial de versiones', 'laboratorio.trazabilidad.ver'],
             ['Sistema', 'Catálogo de análisis y de muestras', 'laboratorio.catalogo_analisis.ver'],
-            ['Sistema', 'Editar catálogo de análisis', 'laboratorio.analisis.editar'],
+            ['Sistema', 'Editar catálogos (análisis, métodos, equipos y tipos de muestra)', 'laboratorio.catalogos.editar'],
             ['Sistema', 'Asignar usuarios y roles del laboratorio', 'laboratorio.usuarios.gestionar'],
         ];
     }
@@ -96,6 +95,9 @@ if (!function_exists('lab_roles_definicion')) {
     function lab_roles_estado(PDO $central): array
     {
         $estado = [];
+        // GROUP_CONCAT corta a 1024 caracteres por defecto: con ~35 permisos la lista llegaba
+        // incompleta y la pantalla marcaba como faltantes permisos que sí estaban asignados.
+        $central->exec('SET SESSION group_concat_max_len = 65535');
         $stmt = $central->prepare("
             SELECT r.id,
                    (SELECT COUNT(*) FROM usuario_modulo um INNER JOIN modulos m ON m.id = um.modulo_id AND LOWER(m.nombre) = 'laboratorio'

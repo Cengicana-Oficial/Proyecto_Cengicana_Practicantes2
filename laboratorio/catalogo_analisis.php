@@ -88,7 +88,7 @@ function catalogoAnalisisSvg(string $icono): string
         . ($trazos[$icono] ?? $trazos['info']) . '</svg>';
 }
 
-$canEdit = lab_can('laboratorio.analisis.editar');
+$canEdit = lab_can('laboratorio.catalogos.editar');
 $usuarioActual = lab_current_user();
 $nombreUsuario = trim((string) ($usuarioActual['nombre'] ?? $usuarioActual['correo'] ?? '')) ?: 'Usuario';
 $mensaje = '';
@@ -130,7 +130,7 @@ try {
 
 $seccionPost = (string) ($_POST['seccion'] ?? 'analisis');
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    lab_require_permission('laboratorio.analisis.editar');
+    lab_require_permission('laboratorio.catalogos.editar');
     $token = (string) ($_POST['csrf_token'] ?? '');
     if (!hash_equals((string) $_SESSION['catalogo_analisis_csrf'], $token)) {
         $errorMensaje = 'La sesión del editor expiró. Recarga la página e inténtalo nuevamente.';

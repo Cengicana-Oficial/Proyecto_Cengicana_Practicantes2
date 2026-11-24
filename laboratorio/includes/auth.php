@@ -293,6 +293,7 @@ function lab_all_permissions(): array
         'laboratorio.informes.ver',
         'laboratorio.catalogo_analisis.ver',
         'laboratorio.catalogo_muestras.ver',
+        'laboratorio.catalogos.editar',
     ];
 }
 
@@ -339,7 +340,8 @@ function lab_analysis_assignments(): ?array
 
 function lab_can_analysis(string $analysisKey): bool
 {
-    if (!lab_can('laboratorio.formularios_labc.ver') && !lab_can('laboratorio.analisis.ver')) {
+    // Captura en hojas de trabajo: "analisis.ver". El antiguo "formularios_labc.ver" es obsoleto.
+    if (!lab_can('laboratorio.analisis.ver')) {
         return false;
     }
 

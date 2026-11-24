@@ -2,6 +2,14 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/shell_sidebar.php';
 
+// Esta vista la incluye su controlador, que valida permisos y carga los datos: abierta
+// directamente se envía al controlador.
+if (realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
+    $qs = (string) ($_SERVER['QUERY_STRING'] ?? '');
+    header('Location: ../controllers/formularios_erroneos_controller.php' . ($qs !== '' ? '?' . $qs : ''));
+    exit;
+}
+
 function eErrorForm($value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');

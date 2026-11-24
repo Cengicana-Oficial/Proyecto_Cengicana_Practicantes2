@@ -204,12 +204,6 @@ lab_shell_open('validacion_tecnica_view.php');
 ?>
 <section class="vt-wrap">
 
-<?php if ($puedeVerErroneos): ?>
-    <a href="../controllers/formularios_erroneos_controller.php" class="cengi-btn cengi-btn-ghost cengi-btn-sm" style="margin-bottom:14px;">
-        <span class="material-symbols-outlined" style="font-size:15px;">report</span>
-        Ver formularios originales con errores
-    </a>
-<?php endif; ?>
 
 <div class="cengi-kpi-grid vt-kpis">
     <article class="cengi-kpi">

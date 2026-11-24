@@ -70,7 +70,8 @@ if (!function_exists('lab_shell_nav_items')) {
         require_once __DIR__ . '/nav_badges_helper.php';
 
         $canDashboard = lab_has_module_access();
-        $canRecepcion = lab_can('laboratorio.solicitudes.crear') || lab_has_module_access();
+        // Recepción exige "solicitudes.crear" (view/solicitud_formulario.php): sin él la pantalla da 403.
+        $canRecepcion = lab_can('laboratorio.solicitudes.crear');
         $canLotes = lab_can('laboratorio.lotes.ver');
         $canKanban = lab_can('laboratorio.kanban.ver');
         $canBandeja = lab_can('laboratorio.formularios_pendientes.ver') || lab_is_technician();
@@ -143,7 +144,8 @@ if (!function_exists('lab_shell_nav_items')) {
         if ($canCatalogoAnalisis) {
             $sistema[] = ['href' => 'catalogo_analisis.php', 'icon' => 'table_view', 'label' => 'Catalogo de analisis', 'match' => ['catalogo_analisis.php', 'catalogo_muestras.php']];
         }
-        if ($canDashboard) {
+        if ($canUsuarios) {
+            // Roles y permisos: solo quien administra el acceso al laboratorio (y el superadmin).
             $sistema[] = ['href' => 'view/roles_view.php', 'icon' => 'admin_panel_settings', 'label' => 'Roles y permisos', 'match' => ['roles_view.php']];
         }
         if ($canUsuarios) {

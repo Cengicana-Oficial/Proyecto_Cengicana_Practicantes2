@@ -8,6 +8,8 @@ require_once __DIR__ . '/includes/shell_sidebar.php';
 
 lab_require_module_access();
 lab_require_permission('laboratorio.catalogo_muestras.ver');
+// Ver el catálogo no basta para renombrar o activar/desactivar tipos de muestra.
+$canEdit = lab_can('laboratorio.catalogos.editar');
 
 lab_ensure_schema_safe(fn() => labCatalogoMuestrasAsegurarEsquema($conexion), 'catalogo_muestras');
 
@@ -34,6 +36,7 @@ $query = trim((string) ($_GET['q'] ?? ''));
 $editId = isset($_GET['edit']) ? (int) $_GET['edit'] : 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    lab_require_permission('laboratorio.catalogos.editar');
     $action = (string) ($_POST['action'] ?? 'save');
     $idTipo = isset($_POST['id_tipo']) ? (int) $_POST['id_tipo'] : 0;
 
@@ -87,7 +90,7 @@ $activos = count(array_filter($filas, static fn(array $fila): bool => (int) ($fi
 $inactivos = $total - $activos;
 $analisisVinculados = array_sum(array_map(static fn(array $fila): int => (int) ($fila['analisis_activos'] ?? 0), $filas));
 
-if ($editId > 0) {
+if ($editId > 0 && $canEdit) {
     $editingRow = labCatalogoMuestrasObtenerPorId($conexion, $editId);
 }
 
@@ -748,6 +751,7 @@ $sampleVisuals = [
                                             <?php endif; ?>
                                         </td>
                                         <td>
+                                            <?php if ($canEdit): ?>
                                             <div class="actions">
                                                 <a class="action" href="catalogo_muestras.php?edit=<?= (int) $fila['id_tipo'] ?>">
                                                     <i class="fa-solid fa-pen-to-square"></i>
@@ -763,6 +767,9 @@ $sampleVisuals = [
                                                     </button>
                                                 </form>
                                             </div>
+                                            <?php else: ?>
+                                            <span class="pill">Solo consulta</span>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -826,7 +833,9 @@ $sampleVisuals = [
                     </form>
                 <?php else: ?>
                     <div class="notice">
-                        Selecciona un tipo de muestra de la tabla para editar su nombre o cambiar su estado.
+                        <?= $canEdit
+                            ? 'Selecciona un tipo de muestra de la tabla para editar su nombre o cambiar su estado.'
+                            : 'Tu rol puede consultar este catálogo, pero no modificarlo.' ?>
                     </div>
                     <div class="meta-list">
                         <div class="meta-item">
