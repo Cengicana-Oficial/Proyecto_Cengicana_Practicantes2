@@ -1,6 +1,9 @@
 <?php
 
 require_once __DIR__ . '/permisos_inventario.php';
+require_once __DIR__ . '/permisos_comites.php';
+require_once __DIR__ . '/permisos_sigec.php';
+require_once __DIR__ . '/permisos_menus.php';
 
 function asegurar_tablas_permisos(PDO $conn)
 {
@@ -155,6 +158,11 @@ function sembrar_permisos_base(PDO $conn)
             $actualizar->execute([$nombre, $descripcion]);
         }
     }
+
+    // Experimentos: menu por rol y conexion API de Clima (login/config/permisos_sigec.php).
+    foreach (permisos_sigec_todos() as $nombre => [, $descripcion]) {
+        $actualizar->execute([$nombre, $descripcion]);
+    }
 }
 
 /**
@@ -208,21 +216,11 @@ function permisos_laboratorio_catalogo()
         ]],
         'catalogos' => ['titulo' => 'Catálogos', 'permisos' => [
             'laboratorio.catalogo_analisis.ver' => ['Ver catálogo de análisis', 'Consultar análisis, métodos analíticos, equipos y su calibración, campos por tipo de muestra y auditoría.'],
-            'laboratorio.analisis.editar' => ['Editar catálogo de análisis', 'Agregar o modificar análisis (método, equipo, unidad, rango y duración en días), métodos analíticos, equipos y campos (requiere ver el catálogo).'],
-            'laboratorio.catalogo_muestras.ver' => ['Catálogo de tipos de muestra', 'Consultar y configurar los tipos de muestra.'],
+            'laboratorio.catalogo_muestras.ver' => ['Ver catálogo de tipos de muestra', 'Consultar los tipos de muestra y sus análisis vinculados.'],
+            'laboratorio.catalogos.editar' => ['Editar catálogos', 'Agregar o modificar análisis (método, equipo, unidad, rango y duración en días), métodos analíticos, equipos, campos y tipos de muestra (requiere ver el catálogo correspondiente).'],
         ]],
         'administracion' => ['titulo' => 'Administración', 'permisos' => [
             'laboratorio.usuarios.gestionar' => ['Asignar usuarios y roles del laboratorio', 'En Roles y permisos: dar o quitar acceso al laboratorio y asignar el rol de cada usuario (no puede asignar Superadmin).'],
-        ]],
-        'anteriores' => ['titulo' => 'Pantallas anteriores (LABC)', 'permisos' => [
-            'laboratorio.labc.ver' => ['Panel LABC', 'Panel de la versión anterior con los formularios por análisis.'],
-            'laboratorio.formularios_labc.ver' => ['Formularios por análisis (LABC)', 'Formularios de captura de la versión anterior; también habilita capturar en la Bandeja.'],
-            'laboratorio.blanco_control.ver' => ['Ver blancos y controles (LABC)', 'Pantalla anterior de blancos y controles generales; en el flujo actual van dentro de cada hoja de trabajo.'],
-            'laboratorio.blanco_control.gestionar' => ['Registrar blancos y controles (LABC)', 'Crear y modificar blancos y controles en la pantalla anterior.'],
-            'laboratorio.consolidacion.aprobar' => ['Aprobar formularios (LABC)', 'Aprobar formularios en la revisión de los formularios anteriores.'],
-            'laboratorio.formularios_erroneos.ver' => ['Ver formularios con errores (LABC)', 'Ver los formularios anteriores marcados con errores para su corrección.'],
-            'laboratorio.formularios.guardar_corregidos' => ['Guardar formularios corregidos (LABC)', 'Guardar la corrección de un formulario anterior marcado con errores.'],
-            'laboratorio.formularios.guardar_errores' => ['Marcar formularios con errores (LABC)', 'Marcar un formulario anterior con errores durante la revisión.'],
         ]],
     ];
 }
@@ -233,9 +231,22 @@ function permisos_laboratorio_obsoletos()
     return [
         'laboratorio.acceder',
         'laboratorio.analisis.crear',
+        // Antes habilitaba editar el catálogo, pero la migración inicial se lo dio a técnicos y
+        // analistas ("Editar análisis"); el catálogo usa ahora laboratorio.catalogos.editar.
+        'laboratorio.analisis.editar',
         'laboratorio.analisis.editar_finalizado',
         'laboratorio.roles.gestionar',
         'laboratorio.configuracion.gestionar',
+        // Pantallas anteriores (LABC): el flujo actual captura en hojas de trabajo (Bandeja del
+        // analista), con blancos y controles dentro de cada hoja, y revisa en Validación técnica.
+        'laboratorio.labc.ver',
+        'laboratorio.formularios_labc.ver',
+        'laboratorio.blanco_control.ver',
+        'laboratorio.blanco_control.gestionar',
+        'laboratorio.consolidacion.aprobar',
+        'laboratorio.formularios_erroneos.ver',
+        'laboratorio.formularios.guardar_corregidos',
+        'laboratorio.formularios.guardar_errores',
     ];
 }
 
@@ -254,10 +265,10 @@ function descripcion_permiso($nombrePermiso, $descripcionGuardada = '')
 {
     $vigentes = permisos_laboratorio_vigentes();
     $inventario = permisos_inventario_todos();
-    if ($nombrePermiso === 'solicitudes_internas.crear') {
-        return 'Disponible para cualquier rol compatible con Solicitudes internas. El usuario necesita acceso al módulo y un programa de origen asignado.';
-    }
-    return $vigentes[$nombrePermiso][1] ?? $inventario[$nombrePermiso][1] ?? ($descripcionGuardada ?: $nombrePermiso);
+    $sigec = permisos_sigec_todos();
+    $menus = permisos_menus_todos();
+    return $vigentes[$nombrePermiso][1] ?? $inventario[$nombrePermiso][1] ?? $sigec[$nombrePermiso][1] ?? $menus[$nombrePermiso][1]
+        ?? ($descripcionGuardada ?: $nombrePermiso);
 }
 
 function obtener_permisos(PDO $conn)
@@ -314,8 +325,25 @@ function clasificar_grupo_permiso($nombrePermiso)
         return 'Permisos de Inventario';
     }
 
+    // Antes que la regla de cursos: "sigec.menu.evaluaciones" contiene "evaluacion".
+    if (strpos($nombre, 'sigec.') === 0) {
+        return 'Permisos de Experimentos';
+    }
+
     if (strpos($nombre, 'solicitudes_internas.') === 0) {
         return 'Permisos de solicitudes internas';
+    }
+
+    // Antes que la regla de cursos, que atrapa cualquier nombre con "cengi" o "ingenio".
+    if (strpos($nombre, 'cengisalas.') === 0) {
+        return 'Permisos generales';
+    }
+    if ($nombre === 'gestionar_ingenios') {
+        return 'Permisos de usuarios y accesos';
+    }
+    // Opción Inicio del panel de Visitas (Pruebas/public/admin/dashboard_unificado.php).
+    if ($nombre === 'ver_dashboard') {
+        return 'Permisos de visitas';
     }
 
     if (strpos($nombre, 'curso') !== false || strpos($nombre, 'participante') !== false || strpos($nombre, 'asistencia') !== false || strpos($nombre, 'evaluacion') !== false || strpos($nombre, 'ingenio') !== false || strpos($nombre, 'cengi') !== false || strpos($nombre, 'nota') !== false) {
@@ -378,7 +406,7 @@ function descripcion_grupo_permiso($grupo)
         'Permisos de cursos' => 'Agrupa acciones para cursos, participantes, notas, ingenios y asignaciones.',
         'Permisos de solicitudes internas' => 'Controla acceso a solicitudes, usuarios y programas del modulo Sistema de solicitudes.',
         'Permisos de laboratorio' => 'Cengilabs: permisos ordenados por etapa del flujo, de Recepción a la entrega de Reportes. Puede partir de una plantilla de rol y ajustar.',
-        'Permisos de Experimentos' => 'Controla el acceso al modulo Experimentos (Sistema de Gestion de Ensayos Experimentales).',
+        'Permisos de Experimentos' => 'Acceso al modulo Experimentos, que opciones del menu ve el rol (y sus paginas) y quien gestiona la conexion API del ICC en Clima. Aplica al rol que el usuario tiene en Experimentos; Administrador y Superadmin ven todo.',
         'Permisos de Comités' => 'Comités, Transferencia y Comunicación: ver o gestionar cada sección del módulo y las aprobaciones de Transferencia y Dirección.',
         'Permisos de Inventario' => 'Inventario de precursores (SICIR): vales de salida, entradas, lotes, informes, firmas del cierre mensual y administración del catálogo.',
         'Permisos de pagos' => 'Reune permisos relacionados con estados de pago y control de cobros.',
@@ -490,9 +518,19 @@ function etiqueta_permiso($nombrePermiso)
         return $vigentesLab[$nombrePermiso][0];
     }
 
+    $menus = permisos_menus_todos();
+    if (isset($menus[$nombrePermiso])) {
+        return $menus[$nombrePermiso][0];
+    }
+
     $inventario = permisos_inventario_todos();
     if (isset($inventario[$nombrePermiso])) {
         return $inventario[$nombrePermiso][0];
+    }
+
+    $sigec = permisos_sigec_todos();
+    if (isset($sigec[$nombrePermiso])) {
+        return $sigec[$nombrePermiso][0];
     }
 
     $comites = etiqueta_permiso_comites((string) $nombrePermiso);
@@ -516,29 +554,14 @@ function etiqueta_permiso_comites($nombrePermiso)
     if (strpos($nombrePermiso, 'comites.') !== 0) {
         return null;
     }
-    $especiales = [
-        'comites.documentos.revisar_transferencia' => 'Revisar documentos para ingenios (Transferencia)',
-        'comites.documentos.aprobar_direccion' => 'Aprobar documentos para ingenios (Dirección)',
-        'comites.informes.revisar' => 'Revisar informes cuatrimestrales (Dirección)',
-        'comites.memorias.entregar' => 'Entregar artículos a la memoria de resultados',
-        'comites.memorias.diagramar' => 'Diagramar la memoria de resultados',
-        'comites.memorias.aprobar_transferencia' => 'Aprobar memoria de resultados (Transferencia)',
-        'comites.memorias.aprobar_direccion' => 'Aprobar memoria de resultados (Dirección)',
-        'comites.memorias.ver_todos' => 'Ver todos los artículos de la memoria',
-    ];
+    $especiales = permisos_comites_especiales();
     if (isset($especiales[$nombrePermiso])) {
-        return $especiales[$nombrePermiso];
+        return $especiales[$nombrePermiso][0];
     }
-    $secciones = [
-        'contactos' => 'directorio de contactos', 'reuniones' => 'reuniones', 'eventos' => 'eventos de transferencia',
-        'acuerdos' => 'seguimiento a próximos pasos', 'documentos' => 'biblioteca para ingenios',
-        'biblioteca_interna' => 'biblioteca interna', 'correos' => 'correos y envíos', 'tableros' => 'tableros',
-        'informes' => 'informes cuatrimestrales', 'memorias' => 'memoria de resultados', 'publicaciones' => 'redes sociales',
-        'estadisticas' => 'estadísticas', 'configuracion' => 'comités y configuración', 'usuarios' => 'usuarios y programas',
-    ];
+    $secciones = permisos_comites_secciones();
     $partes = explode('.', $nombrePermiso);
     if (count($partes) === 3 && isset($secciones[$partes[1]]) && in_array($partes[2], ['ver', 'gestionar'], true)) {
-        return ($partes[2] === 'ver' ? 'Ver ' : 'Gestionar ') . $secciones[$partes[1]];
+        return ($partes[2] === 'ver' ? 'Ver: ' : 'Gestionar: ') . $secciones[$partes[1]];
     }
     return null;
 }

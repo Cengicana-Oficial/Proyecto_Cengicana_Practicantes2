@@ -84,8 +84,8 @@ if ($_POST) {
         <div class="permisos-toolbar">
             <h3>Permisos del rol</h3>
             <div class="permisos-toolbar-actions">
-                <button type="button" class="btn-light" onclick="marcarPermisos(true)">Seleccionar todos</button>
-                <button type="button" class="btn-light" onclick="marcarPermisos(false)">Limpiar</button>
+                <button type="button" class="btn-light" onclick="marcarPermisos(true)" title="Marca los permisos que se ven con el filtro actual">Marcar visibles</button>
+                <button type="button" class="btn-light" onclick="marcarPermisos(false)" title="Desmarca los permisos que se ven con el filtro actual">Limpiar visibles</button>
             </div>
         </div>
 
@@ -115,7 +115,8 @@ if ($_POST) {
 function marcarPermisos(checked) {
     setTimeout(() => document.dispatchEvent(new Event("permisos:cambio")));
     document.querySelectorAll('input[name="permisos[]"]').forEach(input => {
-        if (input.type === "checkbox") input.checked = checked;
+        // Solo lo visible: con el filtro por módulo no se tocan permisos ocultos de otros módulos.
+        if (input.type === "checkbox" && input.offsetParent !== null) input.checked = checked;
     });
 }
 </script>

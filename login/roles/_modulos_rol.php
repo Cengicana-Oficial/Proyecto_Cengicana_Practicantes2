@@ -41,14 +41,39 @@ function rol_mod_guardar(PDO $conn, $rolId, array $moduloIds)
     }
 }
 
+/**
+ * Grupo de permisos (titulo_corto_grupo_permiso()) que corresponde a un modulo, para el filtro
+ * de permisos de crear/editar rol. '' si el modulo no tiene un grupo propio.
+ */
+function rol_mod_grupo_permisos($nombreModulo)
+{
+    $n = mb_strtolower((string) $nombreModulo, 'UTF-8');
+    // Orden importa: "Inventario de precursores" contiene "curso".
+    $mapa = [
+        'inventario' => 'Inventario',
+        'laborator' => 'Cengilabs',
+        'curso' => 'Cengicursos',
+        'comit' => 'Comités',
+        'experiment' => 'Experimentos',
+        'solicitudes internas' => 'Solicitudes internas',
+        'visita' => 'Visitas',
+    ];
+    foreach ($mapa as $clave => $grupo) {
+        if (strpos($n, $clave) !== false) {
+            return $grupo;
+        }
+    }
+    return '';
+}
+
 function rol_mod_render(array $modulos, array $marcados)
 {
     ?>
     <div class="form-field">
         <label>Módulos donde se usa este rol</label>
         <div class="module-picker">
-            <?php foreach ($modulos as $m): $on = in_array((int) $m['id'], $marcados, true); ?>
-                <label class="module-chip<?= $on ? ' is-checked' : '' ?>">
+            <?php foreach ($modulos as $m): $on = in_array((int) $m['id'], $marcados, true); $grupoPermisos = rol_mod_grupo_permisos($m['nombre']); ?>
+                <label class="module-chip<?= $on ? ' is-checked' : '' ?>"<?= $grupoPermisos !== '' ? ' data-grupo-permisos="' . htmlspecialchars($grupoPermisos) . '"' : '' ?>>
                     <input type="checkbox" name="rol_modulos[]" value="<?= (int) $m['id'] ?>" <?= $on ? 'checked' : '' ?>>
                     <span class="material-symbols-outlined">widgets</span>
                     <?= htmlspecialchars($m['nombre']) ?>
