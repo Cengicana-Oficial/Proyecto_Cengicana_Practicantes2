@@ -77,9 +77,9 @@ if ($bajos) {
           : 'Está al día: no tiene vales pendientes de su acción.' ?>
         Tablero de <b><?= e($ubicacion) ?></b><?= $alcance > 0 ? ' (vista limitada a su laboratorio)' : ' · consolidado de todos los laboratorios' ?>.</p>
       <div class="cgl-hero-brand">
-        <span class="cengi-brand-mark inv-brand-mark" aria-hidden="true"><span class="material-symbols-outlined">inventory_2</span></span>
-        <strong>SI<b>CIR</b></strong>
-        <span>· Control de Inventario de Precursores y Reactivos</span>
+        <img src="assets/img/logo-cengibodega.svg" alt="" aria-hidden="true">
+        <strong>Cengi<b>Bodega</b></strong>
+        <span>· SICIR, parte del ecosistema Cengitech</span>
       </div>
     </div>
     <div class="ini-hero-actions">

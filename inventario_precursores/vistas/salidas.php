@@ -8,13 +8,6 @@ $hasta = inv_fecha_valida($_GET['hasta'] ?? '') ?? inv_hoy();
 $filas = $alcance === -1 ? [] : inv_salidas($pdo, ['laboratorio_id' => $labSel, 'producto_id' => $prodSel, 'desde' => $desde, 'hasta' => $hasta]);
 $puedeExportar = inv_puede($user, 'inventario.informes.exportar');
 
-if (($_GET['export'] ?? '') === 'csv' && $puedeExportar) {
-    $csv = [['No. vale', 'Fecha', 'Laboratorio', 'ID lote', 'Código', 'Producto', 'Cantidad', 'Unidad', 'Analista', 'Proyecto', 'Despachado por', 'Recibido por']];
-    foreach ($filas as $s) {
-        $csv[] = [$s['numero'], $s['fecha_entrega'], $s['lab_nombre'], $s['lote'], $s['prod_codigo'], $s['prod_nombre'], inv_dec($s['cantidad']), $s['unidad'], $s['solicitante'], $s['proyecto'], $s['despacho'], $s['recibe']];
-    }
-    inv_enviar_csv('salidas_' . $desde . '_' . $hasta, $csv);
-}
 $totales = [];
 $vales = [];
 foreach ($filas as $s) {
@@ -25,9 +18,41 @@ foreach ($filas as $s) {
 $labs = inv_laboratorios($pdo);
 $productos = inv_productos($pdo);
 $qs = ['view' => 'salidas', 'lab' => $labSel, 'producto' => $prodSel, 'desde' => $desde, 'hasta' => $hasta];
+
+if (in_array($_GET['export'] ?? '', ['excel', 'pdf'], true)) {
+    $nombreLab = 'Todos';
+    foreach ($labs as $l) {
+        $nombreLab = (int) $l['id'] === $labSel ? $l['nombre'] : $nombreLab;
+    }
+    $nombreProd = 'Todos';
+    foreach ($productos as $p) {
+        $nombreProd = (int) $p['id'] === $prodSel ? $p['codigo'] . ' · ' . $p['nombre'] : $nombreProd;
+    }
+    inv_exportar_si_pide([
+        'archivo' => 'salidas_' . $desde . '_' . $hasta,
+        'hoja' => 'Salidas',
+        'titulo' => 'BODEGA CENTRAL - REGISTRO DE DESCARGAS / SALIDAS',
+        'subtitulo' => 'Periodo ' . inv_fecha($desde) . ' al ' . inv_fecha($hasta),
+        'emisor' => $user['nombre'],
+        'meta' => [['Laboratorio', $nombreLab], ['Producto', $nombreProd], ['Periodo', inv_fecha($desde) . ' al ' . inv_fecha($hasta)],
+            ['Vales despachados', (string) count($vales)], ['Líneas de descarga', (string) count($filas)], ['Productos distintos', (string) count($totales)]],
+        'bloques' => [
+            ['titulo' => 'Detalle de descargas', 'vacio' => 'Sin salidas en el periodo',
+             // En Excel cantidad y unidad van separadas (para sumar); en el PDF van juntas ("0.75 L").
+             'columnas' => [['No. vale', 't'], ['Fecha despacho', 'f'], ['Laboratorio', 't'], ['ID lote', 't'], ['Código', 't'], ['Producto', 't'], ['Cantidad', 'n', true], ['Unidad', 't', true], ['Cantidad', 'nu', 'pdf'], ['Analista', 't'], ['Proyecto / ensayo', 't'], ['Despachado por', 't'], ['Recibido por', 't', true]],
+             'anchos_pdf' => [9.5, 7.5, 9.5, 9, 6.5, 15, 7, 12, 14, 10],
+             'filas' => array_map(static fn(array $s): array => [$s['numero'], $s['fecha_entrega'], $s['lab_nombre'], $s['lote'], $s['prod_codigo'], $s['prod_nombre'], (int) $s['cantidad'], $s['unidad'], [(int) $s['cantidad'], $s['unidad']], $s['solicitante'], $s['proyecto'], $s['despacho'], $s['recibe']], $filas)],
+            ['titulo' => 'Totales descargados por producto', 'vacio' => 'Sin salidas en el periodo',
+             'ancho_tabla_pdf' => 60, 'anchos_pdf' => [18, 52, 18, 12],
+             'columnas' => [['Código', 't'], ['Producto', 't'], ['Total', 'n'], ['Unidad', 't']],
+             'filas' => array_map(static fn($codigo, array $t): array => [(string) $codigo, $t['nombre'], (int) $t['total'], $t['unidad']], array_keys($totales), $totales)],
+        ],
+        'compacto' => true,
+    ], $puedeExportar);
+}
 ?>
 <div class="row noprint"><div class="grow"><h1 class="pt">Informe de control de salidas</h1><p class="sub">Registro de descargas por vale, laboratorio y lote.</p></div>
-  <?php if ($puedeExportar): ?><a class="btn" href="<?= e(inv_url($qs + ['export' => 'csv'])) ?>">⤓ Exportar CSV</a><?php endif; ?><button class="btn" type="button" data-imprimir>🖨 Imprimir</button></div>
+  <?= inv_menu_documentos($qs, $puedeExportar) ?></div>
 <div class="card noprint"><form method="get" class="row" data-autosubmit><input type="hidden" name="view" value="salidas">
   <label class="f">Laboratorio<select name="lab" <?= $alcance !== 0 ? 'disabled' : '' ?>><option value="">Todos</option><?php foreach ($labs as $l): ?><option value="<?= (int) $l['id'] ?>" <?= $labSel === (int) $l['id'] ? 'selected' : '' ?>><?= e($l['nombre']) ?></option><?php endforeach; ?></select></label>
   <label class="f">Producto<select name="producto"><option value="">Todos</option><?php foreach ($productos as $p): ?><option value="<?= (int) $p['id'] ?>" <?= $prodSel === (int) $p['id'] ? 'selected' : '' ?>><?= e($p['codigo'] . ' · ' . $p['nombre']) ?></option><?php endforeach; ?></select></label>

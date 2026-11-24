@@ -20,8 +20,18 @@
   $$('form[data-autosubmit-post]').forEach(function (f) { f.addEventListener('change', function () { f.submit(); }); });
   $$('[data-ir-lab]').forEach(function (s) {
     s.addEventListener('change', function () {
+      var lineasConDatos = $$('#lineas .linea select, #lineas .linea input').some(function (campo) {
+        return campo.value.trim() !== '';
+      });
+      if (lineasConDatos && !window.confirm('Al cambiar de laboratorio se quitarán los reactivos de esta solicitud. ¿Desea continuar?')) {
+        s.value = s.form.elements.laboratorio_id.value;
+        return;
+      }
       var base = s.getAttribute('data-ir-lab');
-      window.location.href = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'lab=' + encodeURIComponent(s.value);
+      // Conserva el proyecto ya escrito al cambiar de laboratorio (las lineas dependen del laboratorio).
+      var proyecto = s.form && s.form.elements.proyecto ? s.form.elements.proyecto.value.trim() : '';
+      window.location.href = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'lab=' + encodeURIComponent(s.value)
+        + (proyecto ? '&proyecto=' + encodeURIComponent(proyecto) : '');
     });
   });
   $$('form[data-confirmar]').forEach(function (f) {
@@ -43,16 +53,46 @@
     lista.forEach(function (p) {
       if (!p.activo && String(p.id) !== String(elegido)) { return; }
       var o = document.createElement('option'); o.value = p.id; o.textContent = p.texto + (p.activo ? '' : ' [inactivo]');
+      o.setAttribute('data-unidad', p.unidad || '');
       if (String(p.id) === String(elegido)) { o.selected = true; }
       selProd.appendChild(o);
     });
     if (!selProd.options.length) { selProd.innerHTML = '<option value="">Este laboratorio no tiene productos asignados</option>'; }
+    selProd.dispatchEvent(new Event('change'));
   }
   $$('[data-matriz-lab]').forEach(function (selLab) {
     var selProd = $(selLab.getAttribute('data-matriz-lab'));
-    llenarProductos(selLab, selProd, '');
+    llenarProductos(selLab, selProd, selProd.getAttribute('data-elegido') || '');
     selLab.addEventListener('change', function () { llenarProductos(selLab, selProd, ''); });
   });
+
+  // Registrar ingreso: lote que se generara, unidad de la cantidad y aviso de caducidad.
+  var formEnt = $('#formEntrada');
+  if (formEnt) {
+    var previo = $('#entLotePrevio'), siguientes = datos(previo, 'data-siguientes');
+    var entLab = $('#entLab'), entProd = $('#entProducto'), entFecha = $('#entFecha'), entCad = $('#entCaducidad'), aviso = $('#entCadAviso');
+    var mostrarLote = function () { $('b', previo).textContent = siguientes[entLab.value] || '—'; };
+    var mostrarUnidad = function () { var op = entProd.options[entProd.selectedIndex]; $('#entUnidad').textContent = op ? op.getAttribute('data-unidad') || '' : ''; };
+    var revisarCaducidad = function () {
+      entCad.min = entFecha.value || '';
+      aviso.textContent = ''; aviso.className = 'hint';
+      if (!entCad.value) { return; }
+      var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      var dias = Math.round((new Date(entCad.value + 'T00:00:00') - hoy) / 86400000);
+      if (entFecha.value && entCad.value < entFecha.value) { aviso.textContent = 'La caducidad no puede ser anterior al ingreso.'; aviso.className = 'hint inv-aviso-mal'; }
+      else if (dias < 0) { aviso.textContent = 'Este lote ya está vencido; no podrá despacharse.'; aviso.className = 'hint inv-aviso-mal'; }
+      else if (dias <= 60) { aviso.textContent = 'Próximo a vencer: ' + dias + ' días.'; aviso.className = 'hint inv-aviso-alerta'; }
+      else { aviso.textContent = 'Vence en ' + dias + ' días.'; }
+    };
+    entLab.addEventListener('change', mostrarLote);
+    entProd.addEventListener('change', mostrarUnidad);
+    entFecha.addEventListener('change', revisarCaducidad);
+    entCad.addEventListener('change', revisarCaducidad);
+    entCad.addEventListener('input', revisarCaducidad);
+    mostrarLote(); mostrarUnidad(); revisarCaducidad();
+  }
+  // Formularios que vuelven con datos (error al guardar o "registrar otro") se reabren solos.
+  $$('dialog[data-abrir-al-cargar]').forEach(abrir);
 
   // Corregir / anular entradas
   $$('[data-corregir]').forEach(function (b) {
@@ -140,41 +180,85 @@
     var libres = datos(lineas, 'data-libres');
     var plantilla = $('#plantillaLinea');
     var texto = function (n) { return (Math.round(n) / 1000).toLocaleString('es-GT', { maximumFractionDigits: 3 }); };
+    var filas = function () { return $$('.linea', lineas); };
     var numerar = function () {
-      $$('tr.linea', lineas).forEach(function (tr, i) {
+      filas().forEach(function (tr, i) {
         $('.num', tr).textContent = i + 1;
+        $('.quitar', tr).setAttribute('aria-label', 'Quitar reactivo ' + (i + 1));
         $$('[name]', tr).forEach(function (c) { c.name = c.name.replace(/items\[[^\]]*\]/, 'items[' + i + ']'); });
       });
     };
     var refrescar = function (tr) {
       var sel = $('.prod', tr), op = sel.options[sel.selectedIndex], id = sel.value;
-      $('.unidad', tr).textContent = id && op ? op.getAttribute('data-unidad') : '';
-      var libre = id ? (libres[id] || 0) : 0;
-      $('.libre', tr).textContent = id ? texto(libre) : '';
-      var cant = parseFloat(($('.cant', tr).value || '').replace(',', '.')), exceso = $('.exceso', tr);
-      var fuera = id && cant * 1000 > libre + 0.5;
-      exceso.hidden = !fuera; exceso.textContent = fuera ? 'Excede lo libre (' + texto(libre) + ')' : '';
-      $('.cant', tr).style.borderColor = fuera ? 'var(--red)' : '';
-      // Un producto solo puede estar en una linea.
-      $$('tr.linea', lineas).forEach(function (otra) {
-        $$('option', $('.prod', otra)).forEach(function (o) {
-          var usado = o.value && $$('tr.linea .prod', lineas).some(function (s) { return s !== $('.prod', otra) && s.value === o.value; });
-          o.disabled = !!usado;
+      var unidad = id && op ? op.getAttribute('data-unidad') : '';
+      $('.unidad', tr).textContent = unidad;
+      var libre = id ? (libres[id] || 0) : 0, chip = $('.libre', tr);
+      chip.textContent = id ? 'Existencia libre: ' + texto(libre) + ' ' + unidad : '';
+      var campo = $('.cant', tr), bruto = campo.value.trim(), cant = Number(bruto.replace(',', '.')), exceso = $('.exceso', tr);
+      var msg = '';
+      if (id && bruto === '') { msg = 'Indique la cantidad.'; }
+      else if (bruto !== '' && (!/^\d{1,10}(?:[.,]\d{1,3})?$/.test(bruto) || !(cant > 0))) { msg = 'Use una cantidad positiva con hasta 3 decimales.'; }
+      else if (id && Math.round(cant * 1000) > libre) { msg = 'Excede la existencia libre.'; }
+      campo.setCustomValidity(msg);
+      sel.setCustomValidity(!id && (bruto || $('.obs', tr).value.trim()) ? 'Seleccione el reactivo de esta línea.' : '');
+      var mostrar = msg !== '' && bruto !== '';
+      exceso.hidden = !mostrar;
+      exceso.textContent = mostrar ? msg : '';
+      campo.classList.toggle('is-error', mostrar);
+    };
+    var actualizarOpciones = function () {
+      var selectores = $$('.prod', lineas);
+      var elegidos = new Set(selectores.map(function (sel) { return sel.value; }));
+      selectores.forEach(function (sel) {
+        $$('option', sel).forEach(function (op) {
+          op.disabled = !op.selected && (op.hasAttribute('data-agotado') || (op.value !== '' && elegidos.has(op.value)));
         });
       });
     };
-    lineas.addEventListener('input', function (ev) { var tr = ev.target.closest('tr.linea'); if (tr) { refrescar(tr); } });
-    lineas.addEventListener('change', function (ev) { var tr = ev.target.closest('tr.linea'); if (tr) { refrescar(tr); } });
+    lineas.addEventListener('input', function (ev) {
+      var tr = ev.target.closest('.linea');
+      if (tr) { refrescar(tr); }
+    });
+    lineas.addEventListener('change', function (ev) {
+      if (!ev.target.matches('.prod')) { return; }
+      filas().forEach(refrescar);
+      actualizarOpciones();
+    });
+    var agregar = $('#agregarLinea');
     lineas.addEventListener('click', function (ev) {
       if (!ev.target.closest('.quitar')) { return; }
-      var tr = ev.target.closest('tr.linea');
-      if ($$('tr.linea', lineas).length > 1) { tr.remove(); } else { $('.prod', tr).value = ''; $('.cant', tr).value = ''; }
-      numerar(); $$('tr.linea', lineas).forEach(refrescar);
+      var tr = ev.target.closest('.linea');
+      var siguiente = tr.nextElementSibling || tr.previousElementSibling;
+      if (siguiente) { tr.remove(); }
+      else { $$('input, select', tr).forEach(function (campo) { campo.value = ''; }); }
+      numerar(); filas().forEach(refrescar); actualizarOpciones();
+      $('.prod', siguiente || tr).focus();
     });
-    $('#agregarLinea').addEventListener('click', function () {
-      lineas.appendChild(plantilla.content.cloneNode(true)); numerar(); $$('tr.linea', lineas).forEach(refrescar);
+    agregar.addEventListener('click', function () {
+      var ultima = lineas.lastElementChild;
+      if (ultima && !$('.prod', ultima).value) { $('.prod', ultima).focus(); return; }
+      lineas.appendChild(plantilla.content.cloneNode(true));
+      numerar(); actualizarOpciones();
+      $('.prod', lineas.lastElementChild).focus();
     });
-    $$('tr.linea', lineas).forEach(refrescar);
+    numerar(); filas().forEach(refrescar); actualizarOpciones();
+
+    var form = lineas.closest('form');
+    form.addEventListener('submit', function () {
+      filas().forEach(refrescar);
+      var primera = $('.prod', lineas);
+      if (primera && !$$('.prod', lineas).some(function (sel) { return sel.value; })) {
+        primera.setCustomValidity('Agregue al menos un reactivo.');
+      }
+    }, true);
+
+    // La ruta de firmas muestra el jefe elegido.
+    var jefe = form.elements.jefe_id, ruta = $('#rutaJefe');
+    if (jefe && ruta) {
+      jefe.addEventListener('change', function () {
+        ruta.textContent = jefe.value ? jefe.options[jefe.selectedIndex].textContent : 'el jefe inmediato';
+      });
+    }
   }
 
   // ---------------------------------------------------------------- Firma electronica
@@ -222,7 +306,9 @@
         fin({ nombre: n.value.trim(), img: pad.toDataURL('image/png'), guardar: $('#firmaGuardar').checked });
       };
       $$('[data-firma-cancelar]').forEach(function (b) { b.onclick = function () { fin(null); }; });
-      dlg.onclose = function () { resolve(null); };
+      // El evento close llega despues de dlg.close(): si al llegar la firma siguiente ya abrio el
+      // dialogo, ese evento es de la firma anterior y no debe cancelar esta.
+      dlg.onclose = function () { if (!dlg.open) { resolve(null); } };
     });
   }
   function campo(f, nombre, valor) {

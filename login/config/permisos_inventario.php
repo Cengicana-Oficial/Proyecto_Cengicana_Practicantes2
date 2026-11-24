@@ -23,7 +23,7 @@ function permisos_inventario_catalogo()
             'inventario.informes.salidas' => ['Informe de control de salidas', 'Registro de descargas por vale, laboratorio y lote.'],
             'inventario.informes.disponibilidad' => ['Informe de disponibilidad', 'Balance por laboratorio: ingresado, consumido, comprometido y existencia libre.'],
             'inventario.informes.cierre' => ['Informe de cierre mensual', 'Informe mensual de control de precursores químicos para declaración regulatoria.'],
-            'inventario.informes.exportar' => ['Exportar informes (CSV)', 'Descargar los informes de salidas, disponibilidad y cierre mensual en CSV.'],
+            'inventario.informes.exportar' => ['Descargar documentos en Excel', 'Descargar en Excel los informes y vales disponibles en las páginas a las que tiene acceso.'],
         ],
         'Vales de salida' => [
             'inventario.vales.crear' => ['Crear vale y firmar "Solicitado por"', 'Solicitar reactivos de la matriz de su laboratorio y firmar como solicitante.'],
@@ -33,7 +33,7 @@ function permisos_inventario_catalogo()
             'inventario.vales.ver_todos' => ['Ver todos los laboratorios', 'Ver y operar la información de todos los laboratorios, no solo la del propio.'],
         ],
         'Inventario' => [
-            'inventario.entradas.registrar' => ['Registrar entradas / compras', 'Registrar ingresos a Bodega Central (cada ingreso genera un lote).'],
+            'inventario.entradas.registrar' => ['Ver y registrar entradas a bodega', 'Consultar ingresos y registrar compras. Cada ingreso genera un lote. Corregir y anular requieren sus propios permisos.'],
             'inventario.entradas.corregir' => ['Corregir entradas (con justificación)', 'Corregir una entrada ya registrada con motivo y firma; el historial conserva el valor original.'],
             'inventario.entradas.anular' => ['Anular entradas sin consumo', 'Anular una entrada cuyo lote aún no tiene consumo.'],
         ],
@@ -45,7 +45,7 @@ function permisos_inventario_catalogo()
         'Administración' => [
             'inventario.catalogo.gestionar' => ['Catálogo y matriz de reactivos', 'Crear y editar productos y definir qué laboratorios pueden solicitarlos.'],
             'inventario.laboratorios.gestionar' => ['Laboratorios', 'Crear, editar, desactivar o eliminar laboratorios propietarios de inventario.'],
-            'inventario.usuarios.gestionar' => ['Laboratorio de cada usuario', 'Asignar a cada usuario del modulo su laboratorio. El acceso y el rol se dan en Usuarios de la plataforma.'],
+            'inventario.usuarios.gestionar' => ['Gestionar usuarios del módulo', 'Consultar usuarios y asignarles un laboratorio. Solo el superadministrador puede cambiar el rol de Inventario.'],
         ],
     ];
 }

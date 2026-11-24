@@ -111,7 +111,8 @@ function menu_modulo_meta($nombre)
     } elseif ($modulo === 'inventario de precursores') {
         $ruta = '../inventario_precursores/index.php';
         $icono = 'inventory_2';
-        $nombreVisible = 'SICIR · Inventario de precursores';
+        $nombreVisible = 'CengiBodega';
+        $logo = 'assets/img/logo-cengibodega.svg';
     } elseif ($modulo === 'solicitudes internas') {
         $ruta = '../sistema_de_solicitudes/index.php';
         $icono = 'assignment';

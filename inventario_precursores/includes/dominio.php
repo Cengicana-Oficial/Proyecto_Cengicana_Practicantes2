@@ -400,6 +400,37 @@ function inv_usuarios_con_permiso(PDO $menuPdo, string $permiso): array
     return $out;
 }
 
+/**
+ * Quienes pueden dar el visto bueno a un vale del laboratorio: [id => nombre]. Misma regla que
+ * inv_puede_autorizar_vale(): permiso de autorizar y alcance sobre el laboratorio (asignados a
+ * el, o sin laboratorio pero con "ver todos" o superadmin). El solicitante no puede autorizar
+ * su propio vale, salvo que sea superadmin.
+ */
+function inv_jefes_candidatos(PDO $menuPdo, PDO $pdo, int $laboratorioId, array $solicitante): array
+{
+    $autorizan = inv_usuarios_con_permiso($menuPdo, 'inventario.vales.autorizar');
+    if (!$autorizan) {
+        return [];
+    }
+    $verTodos = inv_usuarios_con_permiso($menuPdo, 'inventario.vales.ver_todos'); // incluye superadmins
+    $labDe = [];
+    foreach ($pdo->query('SELECT usuario_id, laboratorio_id FROM usuario_laboratorio')->fetchAll() as $f) {
+        $labDe[(int) $f['usuario_id']] = (int) $f['laboratorio_id'];
+    }
+    $out = [];
+    foreach ($autorizan as $id => $nombre) {
+        $alcanceTodos = isset($verTodos[$id]);
+        if (!$alcanceTodos && ($labDe[$id] ?? 0) !== $laboratorioId) {
+            continue;
+        }
+        if ($id === $solicitante['id'] && $solicitante['es_superadmin'] !== 1) {
+            continue;
+        }
+        $out[$id] = $nombre;
+    }
+    return $out;
+}
+
 /** Dependencias que impiden dar de baja o eliminar un laboratorio. */
 function inv_lab_dependencias(PDO $pdo, int $laboratorioId): array
 {

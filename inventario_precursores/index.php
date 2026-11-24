@@ -12,6 +12,8 @@ require __DIR__ . '/config/database.php';
 require __DIR__ . '/includes/functions.php';
 require __DIR__ . '/includes/dominio.php';
 require __DIR__ . '/includes/acciones.php';
+require __DIR__ . '/includes/exportar.php';
+require __DIR__ . '/includes/vale_pdf.php';
 
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
@@ -92,13 +94,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'lab_baja': $resultado = inv_lab_baja($pdo, $user, $_POST); break;
             case 'lab_reactivar': $resultado = inv_lab_reactivar($pdo, $user, $_POST); break;
             case 'lab_eliminar': $resultado = inv_lab_eliminar($pdo, $user, $_POST); break;
+            case 'usuario_rol_guardar': $resultado = inv_usuario_rol_guardar($menuPdo, $user, $_POST); break;
             case 'usuario_lab_guardar': $resultado = inv_usuario_lab_guardar($pdo, $menuPdo, $user, $_POST); break;
             case 'cierre_firmar': $resultado = inv_cierre_firmar($pdo, $user, $_POST); break;
             default: throw new InvError('Acción no reconocida.');
         }
         inv_flash('ok', (string) $resultado['mensaje']);
         parse_str((string) $resultado['ir'], $destino);
-        unset($_SESSION['inventario_borrador']);
+        unset($_SESSION['inventario_borrador'], $_SESSION['inventario_entrada_borrador']);
+        if ($accion === 'entrada_registrar' && !empty($_POST['otro'])) {
+            // "Registrar otro de la misma factura": reabre el formulario con los datos del documento.
+            $_SESSION['inventario_entrada_borrador'] = inv_entrada_borrador($_POST, false);
+        }
     } catch (InvError $e) {
         inv_flash('error', $e->getMessage());
         if ($accion === 'vale_crear') {
@@ -106,9 +113,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['inventario_borrador'] = [
                 'laboratorio_id' => (int) ($_POST['laboratorio_id'] ?? 0),
                 'proyecto' => (string) ($_POST['proyecto'] ?? ''),
+                'jefe_id' => (int) ($_POST['jefe_id'] ?? 0),
                 'items' => array_values(array_filter((array) ($_POST['items'] ?? []), 'is_array')),
             ];
             $destino = ['view' => 'nuevo'];
+        } elseif ($accion === 'entrada_registrar') {
+            $_SESSION['inventario_entrada_borrador'] = inv_entrada_borrador($_POST, true);
+            $destino = ['view' => 'entradas'];
         } elseif (in_array($accion, ['vale_autorizar', 'vale_rechazar', 'vale_anular', 'vale_despachar'], true)) {
             $destino = ['view' => 'vale', 'id' => (int) ($_POST['id'] ?? 0)];
         } elseif (isset($_POST['volver_cierre'])) {
@@ -130,7 +141,7 @@ if (!preg_match('/^[a-z_]+$/', $view) || !is_file($archivoVista)) {
 }
 
 ob_start();
-require $archivoVista; // Las vistas de exportacion CSV terminan aqui con exit.
+require $archivoVista; // Las exportaciones (Excel/PDF) terminan aqui con exit.
 $contenido = (string) ob_get_clean();
 
 $pendientes = 0;

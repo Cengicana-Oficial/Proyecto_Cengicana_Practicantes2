@@ -16,10 +16,11 @@ $cssVer = static fn(string $f): int => (int) @filemtime(__DIR__ . '/../assets/cs
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= e($tituloVista) ?> · SICIR · CENGICAÑA</title>
+<title><?= e($tituloVista) ?> · CengiBodega · CENGICAÑA</title>
+<link rel="icon" type="image/svg+xml" href="assets/img/logo-cengibodega.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/inventario.css?v=<?= $cssVer('inventario.css') ?>">
 <link rel="stylesheet" href="assets/css/cengilabs-shell.css?v=<?= $cssVer('cengilabs-shell.css') ?>">
@@ -28,10 +29,10 @@ $cssVer = static fn(string $f): int => (int) @filemtime(__DIR__ . '/../assets/cs
 <div class="cengi-sidebar-wrap">
 <aside class="cengi-sidebar" id="cengiLabSidebar">
   <a class="cengi-brand" href="<?= e(inv_url(['view' => 'dashboard'])) ?>">
-    <span class="cengi-brand-mark inv-brand-mark" aria-hidden="true"><span class="material-symbols-outlined">inventory_2</span></span>
+    <img class="cgl-logo" src="assets/img/logo-cengibodega.svg" alt="" aria-hidden="true">
     <div class="cengi-brand-copy">
-      <strong>SI<b>CIR</b></strong>
-      <small>Bodega de precursores</small>
+      <strong>Cengi<b>Bodega</b></strong>
+      <small>Precursores · SICIR</small>
     </div>
   </a>
 
@@ -59,7 +60,7 @@ $cssVer = static fn(string $f): int => (int) @filemtime(__DIR__ . '/../assets/cs
       <span class="material-symbols-outlined" aria-hidden="true">logout</span>
       <span>Cerrar sesión</span>
     </a>
-    <div class="cengi-sidebar-version">SICIR &middot; <?= e($ubicacion) ?></div>
+    <div class="cengi-sidebar-version">CengiBodega &middot; SICIR &middot; <?= e($ubicacion) ?></div>
   </div>
 </aside>
 

@@ -131,6 +131,14 @@ function inv_vale_crear(PDO $pdo, PDO $menuPdo, array $u, array $post): array
         throw new InvError('Seleccione un laboratorio activo.');
     }
     $proyecto = inv_texto($post['proyecto'] ?? '', 200, true, 'El proyecto o ensayo');
+    $candidatos = inv_jefes_candidatos($menuPdo, $pdo, $labId, $u);
+    $jefeId = (int) ($post['jefe_id'] ?? 0);
+    if (!isset($candidatos[$jefeId])) {
+        throw new InvError($candidatos
+            ? 'Seleccione el jefe o supervisor inmediato que dará el visto bueno.'
+            : 'Nadie puede dar el visto bueno a vales del laboratorio ' . $lab['nombre'] . '. Pida a Administración asignar el permiso «Autorizar vales».');
+    }
+    $jefe = $candidatos[$jefeId];
 
     $matriz = [];
     foreach (inv_productos_de_lab($pdo, $labId) as $p) {
@@ -160,7 +168,7 @@ function inv_vale_crear(PDO $pdo, PDO $menuPdo, array $u, array $post): array
     }
     $firma = inv_firma_leer($post, 'sol', $u['nombre']);
 
-    return inv_tx($pdo, static function () use ($pdo, $menuPdo, $u, $lab, $labId, $proyecto, $items, $matriz, $firma): array {
+    return inv_tx($pdo, static function () use ($pdo, $u, $labId, $proyecto, $jefe, $items, $matriz, $firma): array {
         // Serializa los vales nuevos de un mismo laboratorio para que no se comprometa dos veces la misma existencia.
         $pdo->prepare('SELECT id FROM laboratorios WHERE id = ? FOR UPDATE')->execute([$labId]);
         $lotes = inv_lotes($pdo, ['laboratorio_id' => $labId]);
@@ -175,7 +183,6 @@ function inv_vale_crear(PDO $pdo, PDO $menuPdo, array $u, array $post): array
         $anio = (int) date('Y');
         $correlativo = inv_siguiente($pdo, 'vale-' . $anio);
         $numero = sprintf('VAL-%d-%04d', $anio, $correlativo);
-        $jefe = inv_nombre_usuario($menuPdo, (int) $lab['jefe_usuario_id']);
         $pdo->prepare('INSERT INTO vales (numero, anio, correlativo, fecha, laboratorio_id, solicitante_id, solicitante, proyecto, jefe, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
             ->execute([$numero, $anio, $correlativo, inv_hoy(), $labId, $u['id'], $u['nombre'], $proyecto, $jefe, 'Pendiente']);
         $valeId = (int) $pdo->lastInsertId();
@@ -381,6 +388,22 @@ function inv_validar_producto_en_lab(PDO $pdo, int $productoId, int $labId): arr
     return $p;
 }
 
+/**
+ * Datos del formulario de ingreso para reabrirlo: completos si fallo el guardado, o solo los
+ * del documento (fecha, laboratorio, proveedor, factura) para registrar otro de la misma factura.
+ */
+function inv_entrada_borrador(array $post, bool $completo): array
+{
+    $claves = $completo
+        ? ['fecha_ingreso', 'laboratorio_id', 'producto_id', 'cantidad', 'caducidad', 'proveedor', 'factura', 'lote_proveedor', 'coa', 'otro']
+        : ['fecha_ingreso', 'laboratorio_id', 'proveedor', 'factura', 'otro'];
+    $out = [];
+    foreach ($claves as $k) {
+        $out[$k] = mb_substr(trim((string) ($post[$k] ?? '')), 0, 160);
+    }
+    return $out;
+}
+
 function inv_entrada_registrar(PDO $pdo, array $u, array $post): array
 {
     if (!inv_puede($u, 'inventario.entradas.registrar')) {
@@ -394,6 +417,15 @@ function inv_entrada_registrar(PDO $pdo, array $u, array $post): array
     $campos = inv_entrada_campos($pdo, $post);
 
     return inv_tx($pdo, static function () use ($pdo, $u, $lab, $producto, $campos): array {
+        // Evita registrar dos veces la misma compra (doble envio o captura repetida).
+        if ($campos['factura'] !== '' && $campos['lote_proveedor'] !== '') {
+            $dup = $pdo->prepare('SELECT id, lote FROM entradas WHERE anulada = 0 AND producto_id = ? AND factura = ? AND lote_proveedor = ? LIMIT 1');
+            $dup->execute([$producto['id'], $campos['factura'], $campos['lote_proveedor']]);
+            if ($previa = $dup->fetch()) {
+                throw new InvError(sprintf('Ya existe el ingreso ING-%03d (%s) de %s con la factura %s y el lote de proveedor %s. Si es otra compra, revise los datos.',
+                    (int) $previa['id'], $previa['lote'], $producto['nombre'], $campos['factura'], $campos['lote_proveedor']));
+            }
+        }
         $lote = inv_nuevo_lote($pdo, $lab);
         $pdo->prepare(
             'INSERT INTO entradas (fecha_ingreso, laboratorio_id, producto_id, lote, proveedor, factura, lote_proveedor, coa, caducidad, cantidad, recibido_por_id, recibido_por)
@@ -777,6 +809,32 @@ function inv_lab_eliminar(PDO $pdo, array $u, array $post): array
 }
 
 /** Asigna (o quita) el laboratorio de un usuario del modulo. */
+function inv_usuario_rol_guardar(PDO $menuPdo, array $u, array $post): array
+{
+    if (($u['es_superadmin'] ?? 0) !== 1) {
+        throw new InvError('Solo un superadministrador puede cambiar el rol de Inventario.');
+    }
+
+    $usuarioId = (int) ($post['usuario_id'] ?? 0);
+    $rolId = (int) ($post['rol_id'] ?? 0);
+    if (!isset(inv_roles_asignables_modulo($menuPdo)[$rolId])) {
+        throw new InvError('Seleccione un rol vinculado a Inventario de precursores.');
+    }
+
+    $stmt = $menuPdo->prepare(
+        'UPDATE usuario_modulo um
+         JOIN usuarios u ON u.id = um.usuario_id AND u.es_superadmin = 0
+         JOIN rol_modulo rm ON rm.modulo_id = um.modulo_id AND rm.rol_id = ?
+         SET um.rol_id = rm.rol_id
+         WHERE um.usuario_id = ? AND um.modulo_id = ?'
+    );
+    $stmt->execute([$rolId, $usuarioId, inv_modulo_id($menuPdo)]);
+    if ($stmt->rowCount() === 0) {
+        throw new InvError('No se cambió el rol. Verifique que el usuario tenga acceso a Inventario y seleccione un rol diferente.');
+    }
+    return ['mensaje' => 'Rol de Inventario actualizado.', 'ir' => 'view=usuarios'];
+}
+
 function inv_usuario_lab_guardar(PDO $pdo, PDO $menuPdo, array $u, array $post): array
 {
     if (!inv_puede($u, 'inventario.usuarios.gestionar')) {

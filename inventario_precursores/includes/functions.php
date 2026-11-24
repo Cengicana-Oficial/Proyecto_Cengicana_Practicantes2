@@ -79,6 +79,15 @@ function inv_usuario_actual(PDO $menuPdo, PDO $pdo): array
     return $usuario;
 }
 
+/** Roles de la central vinculados explícitamente a Inventario de precursores. */
+function inv_roles_asignables_modulo(PDO $menuPdo): array
+{
+    return array_column(array_filter(
+        cengi_rm_roles_asignables($menuPdo, inv_modulo_id($menuPdo)),
+        static fn(array $rol): bool => (bool) $rol['del_modulo']
+    ), null, 'id');
+}
+
 function inv_tiene_acceso(array $usuario): bool
 {
     return $usuario['es_superadmin'] === 1 || !empty($usuario['tiene_modulo']);
@@ -252,20 +261,6 @@ function inv_csv_celda($valor): string
         $texto = "'" . $texto;
     }
     return '"' . str_replace('"', '""', $texto) . '"';
-}
-
-/** Envia un CSV (UTF-8 con BOM) y termina. */
-function inv_enviar_csv(string $nombre, array $filas): void
-{
-    $nombre = preg_replace('/[^A-Za-z0-9_.-]/', '_', $nombre) ?: 'informe';
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . $nombre . '.csv"');
-    header('X-Content-Type-Options: nosniff');
-    echo "\xEF\xBB\xBF";
-    foreach ($filas as $fila) {
-        echo implode(',', array_map('inv_csv_celda', $fila)) . "\r\n";
-    }
-    exit;
 }
 
 function inv_iniciales(string $nombre): string

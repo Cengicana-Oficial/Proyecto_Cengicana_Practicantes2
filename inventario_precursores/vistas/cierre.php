@@ -25,14 +25,32 @@ $datos = $congelado ? $cierre['datos'] : inv_cierre_datos($pdo, $anio, $mes, $la
 $firmas = $cierre['firmas'] ?? [];
 $puedeExportar = inv_puede($user, 'inventario.informes.exportar');
 
-if (($_GET['export'] ?? '') === 'csv' && $puedeExportar) {
-    $csv = [['Código', 'Precursor', 'CAS', 'Unidad', 'Inventario inicial', 'Ingresos', 'Egresos', 'Inventario final']];
-    foreach ($datos['filas'] as $r) {
-        $csv[] = [$r['codigo'], $r['nombre'], $r['cas'], $r['unidad'], inv_dec($r['inicial']), inv_dec($r['ingresos']), inv_dec($r['egresos']), inv_dec($r['final'])];
-    }
-    inv_enviar_csv(sprintf('cierre_%04d-%02d%s', $anio, $mes, $labSel > 0 ? '-' . $lab['codigo'] : ''), $csv);
-}
 $estadoCierre = isset($firmas['apr']) ? 'Aprobado' : (isset($firmas['elab']) ? 'En revisión' : 'Borrador');
+if (in_array($_GET['export'] ?? '', ['excel', 'pdf'], true)) {
+    $firmasInforme = [];
+    foreach (['elab' => ['Elaborado por', 'Encargado de Bodega Central'], 'rev' => ['Revisado por', 'Responsable de Bodega Central'], 'apr' => ['Aprobado por', 'Director General']] as $tipo => [$rol, $cargo]) {
+        $f = $firmas[$tipo] ?? null;
+        $firmasInforme[] = ['rol' => $rol, 'cargo' => $cargo, 'nombre' => $f ? (string) $f['nombre'] : '', 'fecha' => $f ? (string) $f['firmado_en'] : '', 'imagen' => $f ? (string) $f['imagen'] : null];
+    }
+    inv_exportar_si_pide([
+        'archivo' => sprintf('cierre_%04d-%02d%s', $anio, $mes, $labSel > 0 ? '-' . $lab['codigo'] : ''),
+        'hoja' => sprintf('Cierre %02d-%04d', $mes, $anio),
+        'titulo' => 'INFORME MENSUAL DE CONTROL DE PRECURSORES QUÍMICOS',
+        'subtitulo' => 'Formato de balance oficial para declaración e inspección regulatoria (Ministerio de Salud)',
+        'emisor' => $user['nombre'],
+        'meta' => [['Mes declarado', INV_MESES[$mes - 1] . ' ' . $anio], ['Periodo', inv_fecha($datos['inicio']) . ' al ' . inv_fecha($datos['fin'])], ['Estado', $estadoCierre],
+            ['Alcance', $lab ? 'Laboratorio ' . $lab['nombre'] : 'Consolidado Bodega Central'],
+            ['Productos', $soloFisc ? 'Solo precursores fiscalizados' : 'Todos']],
+        'bloques' => [[
+            'titulo' => null, 'vacio' => 'Sin productos en el alcance elegido',
+            'anchos_pdf' => [9, 25, 10, 6, 12.5, 12.5, 12.5, 12.5],
+            'columnas' => [['Código', 't'], ['Precursor químico', 't'], ['No. CAS', 't'], ['Unidad', 't'], ['Inventario inicial (saldo mes anterior)', 'n'], ['Ingresos del mes (cargas)', 'n'], ['Egresos del mes (consumo total)', 'n'], ['Inventario final (saldo para el mes siguiente)', 'n']],
+            'filas' => array_map(static fn(array $r): array => [$r['codigo'], $r['nombre'], $r['cas'], $r['unidad'], (int) $r['inicial'], (int) $r['ingresos'], (int) $r['egresos'], (int) $r['final']], $datos['filas']),
+        ]],
+        'firmas' => $firmasInforme,
+        'compacto' => true,
+    ], $puedeExportar);
+}
 $qs = ['view' => 'cierre', 'anio' => $anio, 'mes' => $mes, 'lab' => $labSel, 'fisc' => $soloFisc ? 1 : 0];
 $labs = inv_laboratorios($pdo);
 
@@ -57,7 +75,7 @@ $caja = static function (string $tipo, string $rol, string $cargo) use ($firmas,
 };
 ?>
 <div class="row noprint"><div class="grow"><h1 class="pt">Informe mensual de control de precursores químicos</h1><p class="sub">Formato de balance oficial para declaración e inspección regulatoria (Ministerio de Salud).</p></div>
-  <?php if ($puedeExportar): ?><a class="btn" href="<?= e(inv_url($qs + ['export' => 'csv'])) ?>">⤓ CSV</a><?php endif; ?><button class="btn p" type="button" data-imprimir>🖨 Imprimir informe</button></div>
+  <?= inv_menu_documentos($qs, $puedeExportar) ?></div>
 <div class="card noprint"><form method="get" class="row" data-autosubmit><input type="hidden" name="view" value="cierre">
   <label class="f">Mes<select name="mes"><?php foreach (INV_MESES as $i => $m): ?><option value="<?= $i + 1 ?>" <?= $mes === $i + 1 ? 'selected' : '' ?>><?= e($m) ?></option><?php endforeach; ?></select></label>
   <label class="f">Año<select name="anio"><?php for ($y = (int) date('Y') - 3; $y <= (int) date('Y') + 1; $y++): ?><option <?= $anio === $y ? 'selected' : '' ?>><?= $y ?></option><?php endfor; ?></select></label>

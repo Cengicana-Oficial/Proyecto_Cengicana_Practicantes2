@@ -28,6 +28,41 @@ $bitacora->execute([$valeId]);
 $bitacora = $bitacora->fetchAll();
 $estado = $vale['estado'];
 $entregado = $estado === 'Entregado';
+$puedeExportar = inv_puede($user, 'inventario.informes.exportar');
+
+if (($_GET['export'] ?? '') === 'excel' && $puedeExportar) {
+    inv_enviar_excel([
+        'archivo' => 'vale_' . $vale['numero'],
+        'hoja' => 'Vale',
+        'titulo' => 'Vale ' . $vale['numero'],
+        'subtitulo' => 'Solicitud y descarga de reactivos',
+        'emisor' => $user['nombre'],
+        'meta' => [
+            ['Laboratorio', $vale['lab_nombre']], ['Estado', $estado], ['Fecha', inv_fecha($vale['fecha'])],
+            ['Solicitante', $vale['solicitante']], ['Supervisor', $vale['jefe']], ['Proyecto', $vale['proyecto']],
+        ],
+        'bloques' => [[
+            'titulo' => 'Reactivos', 'vacio' => 'Sin reactivos registrados',
+            'columnas' => [['Código', 't'], ['Reactivo', 't'], ['Concentración', 't'], ['Unidad', 't'],
+                ['Solicitado', 'n'], ['Entregado', 'n'], ['Lotes', 't'], ['Observaciones', 't']],
+            'filas' => array_map(static function (array $item) use ($asign, $entregado): array {
+                $lotes = array_map(static fn(array $a): string => $a['lote'] . ' (' . inv_fmt(inv_milli($a['cantidad'])) . ')',
+                    $asign[(int) $item['id']] ?? []);
+                return [$item['codigo'], $item['nombre'], $item['concentracion'], $item['unidad'],
+                    inv_milli($item['cantidad']), $entregado ? inv_milli($item['entregado']) : null,
+                    implode(', ', $lotes), $item['observaciones']];
+            }, $items),
+        ], [
+            'titulo' => 'Historial', 'vacio' => 'Sin movimientos',
+            'columnas' => [['Fecha', 't'], ['Usuario', 't'], ['Acción', 't']],
+            'filas' => array_map(static fn(array $b): array => [inv_fecha($b['creado_en']), $b['usuario_nombre'], $b['accion']], $bitacora),
+        ]],
+    ]);
+}
+
+if (($_GET['export'] ?? '') === 'pdf') {
+    inv_vale_pdf($vale, $items, $asign, $firmas, $bitacora, $user);
+}
 
 $puedeAutorizar = inv_puede_autorizar_vale($user, $vale);
 $puedeAnular = $estado === 'Autorizado' && inv_puede($user, 'inventario.vales.anular');
@@ -67,9 +102,9 @@ foreach ($pasos as $i => $p) {
     }
 }
 ?>
-<div class="row noprint"><a class="btn" href="<?= e(inv_url(['view' => 'vales'])) ?>">← Vales</a><h1 class="pt grow" style="margin:0">Vale <?= e($vale['numero']) ?></h1><?= inv_pill_vale($estado) ?><button class="btn" type="button" data-imprimir>🖨 Imprimir vale</button></div>
+<div class="inv-vale-head noprint"><a class="btn" href="<?= e(inv_url(['view' => 'vales'])) ?>">← Vales</a><h1 class="pt">Vale <?= e($vale['numero']) ?></h1><?= inv_pill_vale($estado) ?><?= inv_menu_documentos(['view' => 'vale', 'id' => $valeId], $puedeExportar, true) ?></div>
 
-<div class="card noprint" style="margin-top:14px">
+<div class="card noprint inv-vale-flujo">
   <div class="flow">
   <?php foreach ($pasos as $i => $p):
       $f = $firmas[$p[2]] ?? null;
@@ -77,7 +112,8 @@ foreach ($pasos as $i => $p) {
     <div class="step <?= $clase ?>"><div class="dot"><?= $f ? '✓' : ($clase === 'rej' ? '✕' : $i + 1) ?></div><b><?= e($p[0]) ?></b><span><?= $f ? e($f['nombre']) . ' · ' . e(inv_fecha($f['firmado_en'])) : e($p[1]) ?></span></div>
   <?php endforeach; ?>
   </div>
-  <div class="row" style="justify-content:flex-end">
+  <?php if (in_array($estado, ['Pendiente', 'Autorizado'], true)): ?>
+  <div class="inv-vale-acciones">
   <?php if ($estado === 'Pendiente'): ?>
     <?php if ($puedeAutorizar): ?>
       <button type="button" class="btn d" data-abrir="dlgRechazar">✕ Rechazar</button>
@@ -90,13 +126,18 @@ foreach ($pasos as $i => $p) {
     <?php else: ?><span class="hint">Autorizado. Presentarse a Bodega Central para el despacho.</span><?php endif; ?>
   <?php endif; ?>
   </div>
+  <?php endif; ?>
 </div>
 
 <div class="doc">
   <div class="dh"><img src="../login/assets/img/logo-cengicana.png" alt="CENGICAÑA"><div class="t"><b>BODEGA CENTRAL DE PRECURSORES</b><span>VALE DE SOLICITUD Y DESCARGA DE REACTIVOS FISCALIZADOS</span></div><div class="no">No. DE VALE<b><?= e($vale['numero']) ?></b>Fecha: <?= e(inv_fecha($vale['fecha'])) ?></div></div>
-  <div class="sh">1. DATOS DEL LABORATORIO Y ANALISTA SOLICITANTE</div>
-  <div class="kv"><div>Laboratorio solicitante</div><div>Laboratorio <?= e($vale['lab_nombre']) ?></div><div>Analista responsable</div><div><?= e($vale['solicitante']) ?></div>
-    <div>Proyecto / ensayo</div><div><?= e($vale['proyecto']) ?></div><div>Jefe / supervisor inmediato</div><div><?= e($vale['jefe'] !== '' ? $vale['jefe'] : '—') ?></div></div>
+  <div class="sh">1. LABORATORIO Y SOLICITANTE</div>
+  <dl class="inv-vale-datos">
+    <div><dt>Laboratorio</dt><dd><?= e($vale['lab_nombre']) ?></dd></div>
+    <div><dt>Analista responsable</dt><dd><?= e($vale['solicitante']) ?></dd></div>
+    <div><dt>Proyecto / ensayo</dt><dd><?= e($vale['proyecto']) ?></dd></div>
+    <div><dt>Jefe / supervisor</dt><dd><?= e($vale['jefe'] !== '' ? $vale['jefe'] : '—') ?></dd></div>
+  </dl>
   <div class="sh">2. DETALLE DE REACTIVOS PRECURSORES SOLICITADOS</div>
   <table><thead><tr><th>Ítem</th><th>Código</th><th>Precursor químico / concentración</th><th>Unidad</th><th class="n">Cant. solicitada</th><th class="n">Cant. entregada</th><th>ID lote asignado (uso bodega)</th><th>Observaciones / uso</th></tr></thead><tbody>
   <?php foreach ($items as $k => $i): ?>
@@ -112,7 +153,7 @@ foreach ($pasos as $i => $p) {
   <div class="note">Nota: Este documento es un comprobante oficial auditable de descarga de sustancias fiscalizadas. La bodega central no entregará ningún precursor sin las firmas de autorización requeridas.</div>
 </div>
 
-<div class="card noprint" style="margin-top:16px"><h3>Bitácora del vale</h3><table><tbody>
+<div class="card noprint" style="margin-top:16px"><h3>Bitácora del vale</h3><table class="inv-bitacora"><tbody>
 <?php foreach ($bitacora as $b): ?><tr><td style="width:150px"><?= e(inv_fecha($b['creado_en'])) ?></td><td style="width:220px"><?= e($b['usuario_nombre']) ?></td><td><?= e($b['accion']) ?></td></tr><?php endforeach; ?>
 </tbody></table></div>
 
@@ -147,6 +188,6 @@ foreach ($pasos as $i => $p) {
   <?php endforeach; ?>
   </tbody></table></div>
   <div class="fg" style="margin-top:14px"><label class="f">Persona que retira<input name="recibe" value="<?= e($vale['solicitante']) ?>" maxlength="160" required></label><label class="f">Fecha de despacho<input value="<?= e(inv_fecha(inv_hoy())) ?>" disabled></label></div>
-  <div class="alert warn" style="margin-top:12px">Al confirmar se solicitará la firma de <b>Entregado por</b> (bodega) y <b>Recibido conforme</b> (quien retira); luego se descuenta el inventario de los lotes asignados.</div></div>
+  <div class="alert warn" style="margin-top:12px"><span>Al confirmar se pedirán dos firmas seguidas: <b>Entregado por</b> (bodega) y <b>Recibido conforme</b> (quien retira); luego se descuenta el inventario de los lotes asignados.</span></div></div>
   <footer><button type="button" class="btn" data-cerrar>Cancelar</button><button class="btn p" type="submit">✍ Firmar entrega</button></footer></form></dialog>
 <?php endif; ?>
