@@ -10,7 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && str_starts_with((string) ($_POST['a
     $accionCorreo = (string) $_POST['accion'];
     $volverCorreo = 'index.php?view=notificaciones' . (preg_match('/^[a-z_]+$/', (string) ($_POST['tab'] ?? '')) ? '&tab=' . $_POST['tab'] : '');
     try {
-        if (!can_manage_resource($user, 'configuracion')) {
+        if (!can_manage_resource($user, 'notificaciones')) {
             throw new RuntimeException('Solo quien administra la configuración puede cambiar las notificaciones.');
         }
         if (!hash_equals($_SESSION['correo_csrf'], (string) ($_POST['csrf'] ?? ''))) {
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && str_starts_with((string) ($_POST['a
     exit;
 }
 
-if (can_view_resource($user, 'configuracion')) {
+if (can_view_resource($user, 'notificaciones')) {
     $correoCfg = correo_config($pdo);
     $correoAjustes = [
         'activo' => correo_ajuste($pdo, 'activo', '1') === '1',

@@ -131,7 +131,8 @@ function comites_permisos_por_programa(string $rol, ?string $programa): array
     $rol = normalize_text($rol);
     if ($programa !== null && in_array($rol, ['jefe de programa', 'jefe de transferencia'], true) && str_contains(normalize_text($programa), 'transferencia')) {
         $permisos = ['comites.documentos.revisar_transferencia', 'comites.memorias.aprobar_transferencia', 'comites.memorias.ver_todos', 'comites.memorias.entregar', 'comites.usuarios.ver'];
-        foreach (['contactos', 'reuniones', 'eventos', 'acuerdos', 'documentos', 'biblioteca_interna', 'correos', 'tableros', 'informes', 'memorias', 'publicaciones', 'estadisticas', 'configuracion'] as $seccion) {
+        require_once __DIR__ . '/../../login/config/permisos_comites.php';
+        foreach (array_diff(array_keys(permisos_comites_secciones()), ['usuarios']) as $seccion) {
             $permisos[] = "comites.$seccion.ver";
             $permisos[] = "comites.$seccion.gestionar";
         }

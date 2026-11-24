@@ -10,7 +10,7 @@ El script solo admite CLI. Usa tablas temporales de MySQL que desaparecen al cer
 
 Cubre creación, edición, líder e integrantes, duplicados por correo y nombre, activación, eliminación protegida por historial e importación CSV/XLSX.
 
-La vista se abre en `/comites/index.php?view=comites`. Reutiliza los permisos `comites.configuracion.ver` y `comites.configuracion.gestionar` existentes. Las operaciones de escritura verifican un token CSRF. Las demás secciones conservan sus rutas y diseño.
+La vista se abre en `/comites/index.php?view=comites`. Usa los permisos `comites.grupos.ver` y `comites.grupos.gestionar` (al crearse los recibieron los roles que tenían `comites.configuracion.*`). Las operaciones de escritura verifican un token CSRF. Las demás secciones conservan sus rutas y diseño.
 
 ## Directorio de contactos (referencia v38)
 

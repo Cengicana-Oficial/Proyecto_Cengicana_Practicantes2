@@ -632,44 +632,36 @@ function app_bootstrap_menu_data(PDO $menuPdo): void
         return;
     }
 
-    $recursos = [
-        'contactos' => 'directorio de contactos',
-        'reuniones' => 'reuniones de comites',
-        'eventos' => 'eventos de transferencia de tecnologia',
-        'acuerdos' => 'acuerdos y seguimiento',
-        'documentos' => 'biblioteca documental para ingenios',
-        'biblioteca_interna' => 'biblioteca documental interna',
-        'correos' => 'correos y envios',
-        'tableros' => 'tableros',
-        'informes' => 'informes cuatrimestrales',
-        'memorias' => 'memoria de resultados',
-        'publicaciones' => 'redes sociales y publicaciones',
-        'estadisticas' => 'estadisticas',
-        'configuracion' => 'configuracion del modulo',
-        'usuarios' => 'usuarios, roles y programas',
-    ];
-
-    $permissions = [
-        'comites.informes.revisar' => 'Revision de informes cuatrimestrales por Direccion',
-        'comites.memorias.entregar' => 'Entregar articulos propios para memoria de resultados',
-        'comites.memorias.diagramar' => 'Diagramacion de articulos y consolidado MPR',
-        'comites.memorias.aprobar_transferencia' => 'Aprobacion de version final del consolidado MPR',
-        'comites.memorias.aprobar_direccion' => 'Aprobacion de liberacion del consolidado MPR',
-        'comites.memorias.ver_todos' => 'Consultar todos los articulos de memoria de resultados',
-        'comites.documentos.revisar_transferencia' => 'Primera y segunda revision de documentos para ingenios',
-        'comites.documentos.aprobar_direccion' => 'Aprobacion final de documentos para ingenios',
-    ];
-    foreach ($recursos as $recurso => $descripcion) {
-        $permissions["comites.{$recurso}.ver"] = "Permite ver {$descripcion} del modulo Comites, Transferencia y Comunicacion";
-        $permissions["comites.{$recurso}.gestionar"] = "Permite gestionar {$descripcion} del modulo Comites, Transferencia y Comunicacion";
+    // Secciones y permisos: login/config/permisos_comites.php (la misma lista que usa Roles y permisos).
+    require_once __DIR__ . '/../../login/config/permisos_comites.php';
+    $permissions = [];
+    foreach (permisos_comites_especiales() as $name => $info) {
+        $permissions[$name] = $info[1];
+    }
+    foreach (permisos_comites_secciones() as $recurso => $etiqueta) {
+        $permissions["comites.{$recurso}.ver"] = "Permite ver {$etiqueta} en Comites, Transferencia y Comunicacion";
+        $permissions["comites.{$recurso}.gestionar"] = "Permite gestionar {$etiqueta} en Comites, Transferencia y Comunicacion";
     }
 
     $stmt = $menuPdo->prepare(
         'INSERT IGNORE INTO permisos (nombre_permiso, descripcion) VALUES (?, ?)'
     );
+    // Un permiso que antes era parte de otro (p. ej. Notificaciones salia de Configuracion), al
+    // crearse lo reciben los roles que ya tenian el de origen: nadie pierde acceso. Solo pasa esa
+    // vez; lo que despues se quite en Roles y permisos se respeta.
+    $heredados = permisos_comites_heredados();
+    $heredar = app_table_exists($menuPdo, 'rol_permiso') ? $menuPdo->prepare(
+        'INSERT IGNORE INTO rol_permiso (rol_id, permiso_id)
+         SELECT rp.rol_id, nuevo.id FROM rol_permiso rp
+         JOIN permisos origen ON origen.id = rp.permiso_id AND origen.nombre_permiso = ?
+         JOIN permisos nuevo ON nuevo.nombre_permiso = ?'
+    ) : null;
 
     foreach ($permissions as $name => $description) {
         $stmt->execute([$name, $description]);
+        if ($heredar && isset($heredados[$name]) && $stmt->rowCount() === 1) {
+            $heredar->execute([$heredados[$name], $name]);
+        }
     }
 
     comites_bootstrap_roles($menuPdo, array_keys($permissions));
@@ -683,21 +675,13 @@ function app_bootstrap_menu_data(PDO $menuPdo): void
  */
 function comites_roles_definicion(array $todos): array
 {
-    $ver = static fn(array $secciones): array => array_map(static fn($s) => "comites.$s.ver", $secciones);
+    // Mismas plantillas que ofrece Roles y permisos (login/config/permisos_comites.php).
+    $plantillas = permisos_comites_plantillas();
     return [
         'Superadmin' => $todos,
-        'Director' => array_merge(
-            $ver(['contactos', 'reuniones', 'eventos', 'acuerdos', 'documentos', 'biblioteca_interna', 'correos', 'tableros', 'informes', 'memorias', 'publicaciones', 'estadisticas', 'configuracion', 'usuarios']),
-            ['comites.documentos.aprobar_direccion', 'comites.informes.revisar', 'comites.memorias.aprobar_direccion', 'comites.memorias.ver_todos']
-        ),
-        'Jefe de programa' => array_merge(
-            $ver(['contactos', 'reuniones', 'eventos', 'acuerdos', 'documentos', 'biblioteca_interna', 'tableros', 'informes', 'memorias', 'estadisticas']),
-            ['comites.acuerdos.gestionar', 'comites.memorias.entregar', 'comites.memorias.ver_todos']
-        ),
-        'Colaborador de programa' => array_merge(
-            $ver(['reuniones', 'acuerdos', 'documentos', 'biblioteca_interna', 'memorias']),
-            ['comites.memorias.entregar']
-        ),
+        'Director' => $plantillas['Director'],
+        'Jefe de programa' => $plantillas['Jefe de programa'],
+        'Colaborador de programa' => $plantillas['Colaborador de programa'],
     ];
 }
 

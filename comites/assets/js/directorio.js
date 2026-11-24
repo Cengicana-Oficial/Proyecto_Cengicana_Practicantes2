@@ -349,12 +349,14 @@
     else if(event.target.dataset.bulk&&event.target.value) mutate('masivo',{ids:[...selection],campo:event.target.dataset.bulk,valor:event.target.value});
   });
   root.addEventListener('submit',event=>{
-    const form=event.target;if(!['dir-edit','dir-import','dir-segment-form','dir-email'].includes(form.id))return;event.preventDefault();
+    // getAttribute y no form.id: el formulario de contacto tiene un campo name="id" y form.id
+    // devolvería ese campo; el envío no se interceptaba y el navegador iba al Dashboard sin guardar.
+    const form=event.target,formId=form.getAttribute('id');if(!['dir-edit','dir-import','dir-segment-form','dir-email'].includes(formId))return;event.preventDefault();
     const values=formValues(form);
-    if(form.id==='dir-edit') mutate('guardar',{...values,comites:new FormData(form).getAll('comites')});
-    if(form.id==='dir-import') mutate('importar',values,form.elements.lista.files[0]);
-    if(form.id==='dir-segment-form') mutate('segmento_guardar',{...values,filtros:{...filters}});
-    if(form.id==='dir-email') mutate('enviar',{...share,...values});
+    if(formId==='dir-edit') mutate('guardar',{...values,comites:new FormData(form).getAll('comites')});
+    if(formId==='dir-import') mutate('importar',values,form.elements.lista.files[0]);
+    if(formId==='dir-segment-form') mutate('segmento_guardar',{...values,filtros:{...filters}});
+    if(formId==='dir-email') mutate('enviar',{...share,...values});
   });
   render();
   if(params.has('nuevo')&&data.gestionar)edit();

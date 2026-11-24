@@ -173,12 +173,8 @@ function usuarios_permisos_efectivos(PDO $menuPdo, array $usuario): array
     $derivados = comites_permisos_por_programa((string) $usuario['nombre_rol'], $usuario['programa'] ?? null);
     $permisos = array_unique(array_merge($stmt->fetchAll(PDO::FETCH_COLUMN), $derivados['permisos']));
     $tiene = static fn(string $p): bool => $esSuper || in_array($p, $permisos, true);
-    $secciones = [
-        'reuniones' => 'Reuniones', 'eventos' => 'Eventos de transferencia', 'acuerdos' => 'Seguimiento a próximos pasos',
-        'contactos' => 'Directorio de contactos', 'documentos' => 'Biblioteca para ingenios', 'biblioteca_interna' => 'Biblioteca interna',
-        'correos' => 'Correos y envíos', 'tableros' => 'Tableros', 'informes' => 'Informes cuatrimestrales', 'memorias' => 'Memoria de resultados',
-        'publicaciones' => 'Redes sociales', 'estadisticas' => 'Estadísticas', 'configuracion' => 'Comités y configuración', 'usuarios' => 'Usuarios y programas',
-    ];
+    require_once __DIR__ . '/../../login/config/permisos_comites.php';
+    $secciones = permisos_comites_secciones();
     $niveles = [];
     foreach ($secciones as $clave => $nombre) {
         $niveles[$clave] = ['nombre' => $nombre, 'nivel' => $tiene("comites.$clave.gestionar") ? 'gestionar' : ($tiene("comites.$clave.ver") ? 'ver' : 'no')];

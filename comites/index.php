@@ -84,7 +84,7 @@ if (!array_key_exists($view, $sections)) {
 
 // Nombre del recurso de permisos (comites.<recurso>.ver / .gestionar) por vista.
 $recursoPorVista = [
-    'comites' => 'configuracion',
+    'comites' => 'grupos',
     'contactos' => 'contactos',
     'reuniones' => 'reuniones',
     'eventos' => 'eventos',
@@ -97,9 +97,9 @@ $recursoPorVista = [
     'memorias' => 'memorias',
     'publicaciones' => 'publicaciones',
     'estadisticas' => 'estadisticas',
-    'cifras' => 'estadisticas', // mismos permisos: ver = consultar, gestionar = administrar alianzas
+    'cifras' => 'cifras',
     'config' => 'configuracion',
-    'notificaciones' => 'configuracion',
+    'notificaciones' => 'notificaciones',
     'usuarios' => 'usuarios',
 ];
 
@@ -210,7 +210,7 @@ if ($view === 'comites') {
     $_SESSION['catalogo_csrf'] ??= bin2hex(random_bytes(32));
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && str_starts_with((string) ($_POST['accion'] ?? ''), 'grupo_')) {
         try {
-            if (!can_manage_resource($user, 'configuracion')) {
+            if (!can_manage_resource($user, 'grupos')) {
                 throw new RuntimeException('No tienes permiso para gestionar comités.');
             }
             if (!hash_equals($_SESSION['catalogo_csrf'], (string) ($_POST['csrf'] ?? ''))) {
@@ -1297,8 +1297,13 @@ foreach (preg_split('/\s+/', trim((string) $user['nombre']), -1, PREG_SPLIT_NO_E
 $userInitials = $userInitials !== '' ? $userInitials : 'U';
 
 $currentSection = $sections[$view];
+// Menu lateral: solo las secciones que el rol puede ver (Roles y permisos > Comités). Un grupo
+// sin secciones visibles (p. ej. Administración) no se muestra.
 $groups = [];
 foreach ($sections as $key => $section) {
+    if ($key !== 'dashboard' && isset($recursoPorVista[$key]) && !can_view_resource($user, $recursoPorVista[$key])) {
+        continue;
+    }
     $groups[$section['group']][$key] = $section['label'];
 }
 

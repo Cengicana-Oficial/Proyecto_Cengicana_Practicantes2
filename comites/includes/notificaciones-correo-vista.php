@@ -1,6 +1,6 @@
 <?php
 // Vista de Configuración > Notificaciones por correo (datos en notificaciones-correo-controlador.php).
-$ncPuede = can_manage_resource($user, 'configuracion');
+$ncPuede = can_manage_resource($user, 'notificaciones');
 $ncTab = ($_GET['tab'] ?? '') === 'historial' ? 'historial' : 'eventos';
 $ncGrupos = [];
 foreach ($correoCfg as $clave => $c) {
